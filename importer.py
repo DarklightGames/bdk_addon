@@ -25,6 +25,8 @@ class MaterialCache:
         return None
 
     def load_material(self, reference: UReference) -> typing.Optional[UMaterial]:
+        if reference is None:
+            return None
         key = str(reference)
         if key in self.__materials__:
             return self.__materials__[str(reference)]
@@ -50,6 +52,9 @@ class MaterialSocketInputs:
 # TODO: needs to accept
 def import_texture(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, texture: UTexture, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     outputs = MaterialSocketOutputs()
+
+    if texture.Reference is None:
+        return outputs
 
     image_node = typing.cast(ShaderNodeTexImage, node_tree.nodes.new('ShaderNodeTexImage'))
     image_path = material_cache.resolve_path_for_reference(texture.Reference)
@@ -134,16 +139,13 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         mix_node.blend_type = blend_type
         mix_node.inputs['Fac'].default_value = 1.0
 
-        # TODO:
-        material1_index = 6
-        material2_index = 7
-
         if combiner.InvertMask:
-            node_tree.links.new(mix_node.inputs[material2_index], material1_outputs.color_socket)
-            node_tree.links.new(mix_node.inputs[material1_index], material2_outputs.color_socket)
+            node_tree.links.new(mix_node.inputs['Color2'], material1_outputs.color_socket)
+            node_tree.links.new(mix_node.inputs['Color1'], material2_outputs.color_socket)
         else:
-            node_tree.links.new(mix_node.inputs[material1_index], material1_outputs.color_socket)
-            node_tree.links.new(mix_node.inputs[material2_index], material2_outputs.color_socket)
+            node_tree.links.new(mix_node.inputs['Color1'], material1_outputs.color_socket)
+            node_tree.links.new(mix_node.inputs['Color2'], material2_outputs.color_socket)
+
         return mix_node
 
     # Color Operation
@@ -160,7 +162,7 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
             node_tree.links.new(modulate_node.inputs['Vector'], mix_node.outputs[2])
             outputs.color_socket = modulate_node.outputs['Vector']
         else:
-            outputs.color_socket = mix_node.outputs[2]
+            outputs.color_socket = mix_node.outputs[0]
     elif combiner.CombineOperation == EColorOperation.CO_Add:
         mix_node = create_color_combiner_mix_node('ADD')
         outputs.color_socket = mix_node.outputs[2]
@@ -170,6 +172,7 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
     elif combiner.CombineOperation == EColorOperation.CO_AlphaBlend_With_Mask:
         mix_node = create_color_combiner_mix_node('MIX')
         node_tree.links.new(mix_node.inputs['Fac'], mask_outputs.alpha_socket)
+        outputs.color_socket = mix_node.outputs[0]
     elif combiner.CombineOperation == EColorOperation.CO_Add_With_Mask_Modulation:
         mix_node = create_color_combiner_mix_node('ADD')
         outputs.color_socket = mix_node.outputs[2]
@@ -184,7 +187,7 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
 
     # Alpha Operation
     if combiner.AlphaOperation == EAlphaOperation.AO_Use_Mask:
-        outputs.alpha_socket = mask_outputs.alpha_socket
+        outputs.alpha_socket = mask_outputs.alpha_socket if mask_outputs else None
     elif combiner.AlphaOperation == EAlphaOperation.AO_Multiply:
         mix_node = node_tree.nodes.new('ShaderNodeMixRGB')
         mix_node.blend_type = 'MULTIPLY'
@@ -207,9 +210,8 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
 
 def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, umaterial: UMaterial, inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     if isinstance(umaterial, UTexture):
-        print('importing TEXTURE')
         return import_texture(material_cache, node_tree, umaterial, inputs)
-    if isinstance(umaterial, UCombiner):
+    elif isinstance(umaterial, UCombiner):
         return import_combiner(material_cache, node_tree, umaterial, inputs)
     else:
         print(f'Unhandled material type {type(umaterial)}')
