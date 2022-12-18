@@ -1,10 +1,9 @@
 import enum
-import os.path
 import typing
 from pathlib import Path
-from typing import get_type_hints, Any, Dict, Optional
+from typing import get_type_hints, Any, Dict
 
-from .data import UMaterial, URotator, get_material_type_from_string, UReference
+from .data import UMaterial, URotator, get_material_type_from_string, UReference, UColor
 
 
 def transform_value(property_type: type, value: Any):
@@ -17,6 +16,7 @@ def transform_value(property_type: type, value: Any):
     elif property_type == str:
         return value
     elif property_type.__class__ == enum.EnumMeta:
+        key = str(value).split(' ')[0]
         return property_type[str(value).split(' ')[0]]
     elif property_type.__class__ == typing._UnionGenericAlias and len(property_type.__args__) == 2 and \
             property_type.__args__[1] == type(None):
@@ -27,6 +27,8 @@ def transform_value(property_type: type, value: Any):
         return URotator.from_string(value)
     elif property_type == UReference:
         return UReference.from_string(value)
+    elif property_type == UColor:
+        return UColor.from_string(value)
     else:
         raise RuntimeError(f'Unhandled type: {property_type}')
 
@@ -50,10 +52,6 @@ def read_material(path: str) -> UMaterial:
     properties = read_props_txt(path)
 
     reference = UReference.from_path(Path(path))
-
-    print('-----')
-    print(path)
-    print(reference)
 
     material = material_type(reference)
     material_type_hints = get_type_hints(type(material))

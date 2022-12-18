@@ -1,8 +1,33 @@
+import math
 import typing
 import re
 from enum import Enum
 from pathlib import Path
 from typing import Optional, List
+
+
+class UColor:
+    R: int
+    G: int
+    B: int
+    A: int
+
+    def __init__(self, r: int, g: int, b: int, a: int):
+        self.R = r
+        self.G = g
+        self.B = b
+        self.A = a
+
+    @staticmethod
+    def from_string(string: str):
+        pattern = r'{ R=(\d+), G=(\d+), B=(\d+), A=(\d+) }'
+        match = re.match(pattern, string)
+        return UColor(
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3)),
+            int(match.group(4)),
+        )
 
 
 class UReference:
@@ -61,6 +86,13 @@ class URotator:
         self.Roll = int(match.group(3))
         return self
 
+    def get_radians(self) -> (float, float, float):
+        return (
+                float(self.Roll) / 32768.0 * math.pi,
+                float(self.Pitch) / 32768.0 * math.pi,
+                float(self.Yaw) / 32768.0 * math.pi,
+        )
+
     def __repr__(self):
         return f'{{ Yaw={self.Yaw}, Pitch={self.Pitch}, Roll={self.Roll} }}'
 
@@ -108,10 +140,6 @@ class UMaterial:
             lines.append(f'{key} = {getattr(self, key)}')
         return '\n'.join(lines)
 
-    def __ref__(self):
-        yield self.FallbackMaterial
-        yield self.DefaultMaterial
-
 
 class URenderedMaterial(UMaterial):
     pass
@@ -122,7 +150,7 @@ class UConstantMaterial(URenderedMaterial):
 
 
 class UConstantColor(UConstantMaterial):
-    Color: (0, 0, 0, 0)
+    Color: UColor = UColor(0, 0, 0, 255)
 
 
 class ETextureFormat(Enum):
@@ -145,8 +173,8 @@ class ETextureFormat(Enum):
 
 class UBitmapMaterial(URenderedMaterial):
     Format: ETextureFormat = ETextureFormat.TEXF_P8
-    UClampMode = ETexClampMode.TC_Wrap
-    VClampMode = ETexClampMode.TC_Wrap
+    UClampMode: ETexClampMode = ETexClampMode.TC_Wrap
+    VClampMode: ETexClampMode = ETexClampMode.TC_Wrap
     UBits: int = 0
     VBits: int = 0
     UClamp: int = 0
@@ -159,10 +187,6 @@ class UTexture(UBitmapMaterial):
     bMasked: bool = False
     bAlphaTexture: bool = False
     bTwoSided: bool = False
-
-    def __ref__(self):
-        yield from super().__ref__()
-        yield self.Detail
 
 
 class UCubemap(UTexture):
@@ -195,23 +219,9 @@ class UShader(URenderedMaterial):
     PerformLightingOnSpecularPass: bool = False
     ModulateSpecular2X: bool = False
 
-    def __ref__(self):
-        yield from super().__ref__()
-        yield self.Diffuse
-        yield self.Opacity
-        yield self.Specular
-        yield self.SpecularityMask
-        yield self.SelfIllumination
-        yield self.SelfIlluminationMask
-        yield self.Detail
-
 
 class UModifier(UMaterial):
     Material: Optional[UReference] = None
-
-    def __ref__(self):
-        yield from super().__ref__()
-        yield self.Material
 
 
 class UFinalBlend(UModifier):
@@ -251,12 +261,6 @@ class UCombiner(UMaterial):
     InvertMask: bool = False
     Modulate2x: bool = False
     Modulate4x: bool = False
-
-    def __ref__(self):
-        yield from super().__ref__()
-        yield self.Material1
-        yield self.Material2
-        yield self.Mask
 
 
 class ETexCoordSrc(Enum):
@@ -331,8 +335,8 @@ class ETexRotationType(Enum):
 class UTexRotator(UTexModifier):
     TexRotationType: ETexRotationType = ETexRotationType.TR_FixedRotation
     Rotation: URotator = URotator()
-    URotation: float = 0.0
-    VRotation: float = 0.0
+    UOffset: float = 0.0
+    VOffset: float = 0.0
     OscillationRate: URotator = URotator()
     OscillationAmplitude: URotator = URotator()
     OscillationPhase: URotator = URotator()
@@ -352,6 +356,7 @@ __material_type_map__: typing.Dict[str, type] = {
     'TexOscillator': UTexOscillator,
     'TexPanner': UTexPanner,
     'TexScaler': UTexScaler,
+    'TexRotator': UTexRotator,
     'Texture': UTexture,
     'ConstantColor': UConstantColor
 }

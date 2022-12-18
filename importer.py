@@ -1,30 +1,32 @@
+import math
 import os
+from typing import Optional, Dict, cast, Tuple
 from pathlib import Path
 
 from bpy.types import ShaderNodeTexImage
 import bpy.types
-import typing
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
-from bpy_types import Operator, Node
+from bpy_types import Operator
 
-from .data import UMaterial, UTexture, ETexClampMode, UReference, UCombiner, EColorOperation, EAlphaOperation
+from .data import UMaterial, UTexture, ETexClampMode, UReference, UCombiner, EColorOperation, EAlphaOperation, \
+    UConstantColor, UTexRotator, ETexRotationType
 from .reader import read_material
 
 
 class MaterialCache:
     def __init__(self, root_directory: str):
         self.__root_directory__ = root_directory
-        self.__materials__: typing.Dict[str, UMaterial] = {}
+        self.__materials__: Dict[str, UMaterial] = {}
 
-    def resolve_path_for_reference(self, reference: UReference) -> typing.Optional[Path]:
+    def resolve_path_for_reference(self, reference: UReference) -> Optional[Path]:
         try:
             return Path(os.path.join(self.__root_directory__, reference.package_name, reference.type_name, f'{reference.object_name}.props.txt')).resolve()
         except RuntimeError:
             pass
         return None
 
-    def load_material(self, reference: UReference) -> typing.Optional[UMaterial]:
+    def load_material(self, reference: UReference) -> Optional[UMaterial]:
         if reference is None:
             return None
         key = str(reference)
@@ -41,22 +43,86 @@ class MaterialCache:
 class MaterialSocketOutputs:
     color_socket: bpy.types.NodeSocket = None
     alpha_socket: bpy.types.NodeSocket = None
-    has_alpha: bool = False
+    blend_method: str = 'OPAQUE'
     use_backface_culling: bool = False
+    size: Tuple[int, int] = (1, 1)
 
 
 class MaterialSocketInputs:
     uv_socket: bpy.types.NodeSocket = None
 
 
-# TODO: needs to accept
+def import_tex_rotator(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_rotator: UTexRotator, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    outputs = MaterialSocketOutputs()
+
+    tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
+    vector_rotate_node = node_tree.nodes.new('ShaderNodeVectorRotate')
+    vector_rotate_node.rotation_type = 'EULER_XYZ'
+
+    socket_inputs.uv_socket = vector_rotate_node.outputs['Vector']
+
+    material = material_cache.load_material(tex_rotator.Material)
+    material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
+
+    u = tex_rotator.UOffset / material_outputs.size[0]
+    v = tex_rotator.VOffset / material_outputs.size[1]
+    vector_rotate_node.inputs['Center'].default_value = (u, v, 0.0)
+    vector_rotate_node.inputs['Axis'].default_value = (0.0, 0.0, -1.0)
+
+    rotation_radians = tex_rotator.Rotation.get_radians()
+
+    def add_driver_to_vector_rotate_rotation_input(expression: str, index: int):
+        fcurve = vector_rotate_node.inputs['Rotation'].driver_add('default_value', index)
+        fcurve.driver.expression = expression
+
+    if tex_rotator.TexRotationType == ETexRotationType.TR_FixedRotation:
+        vector_rotate_node.inputs['Rotation'].default_value = rotation_radians
+    elif tex_rotator.TexRotationType == ETexRotationType.TR_OscillatingRotation:
+        amplitude_radians = tex_rotator.OscillationAmplitude.get_radians()
+        rate_radians = tex_rotator.OscillationRate.get_radians()
+        for i, amplitude, rate in enumerate(zip(amplitude_radians, rate_radians)):
+            if amplitude != 0 or rate != 0:
+                add_driver_to_vector_rotate_rotation_input(
+                    f'sin(frame / bpy.context.scene.render.fps * {rate}) * {amplitude}', i)
+    elif tex_rotator.TexRotationType == ETexRotationType.TR_ConstantlyRotating:
+        for i, radians in enumerate(rotation_radians):
+            if radians != 0:
+                add_driver_to_vector_rotate_rotation_input(f'(frame / bpy.context.scene.render.fps) * {radians}', i)
+
+    node_tree.links.new(vector_rotate_node.inputs['Vector'], tex_coord_node.outputs['UV'])
+
+    outputs.color_socket = material_outputs.color_socket
+    outputs.alpha_socket = material_outputs.alpha_socket
+    outputs.size = material_outputs.size
+    outputs.blend_method = material_outputs.blend_method
+    outputs.use_backface_culling = material_outputs.use_backface_culling
+
+    return outputs
+
+
+def import_constant_color(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, constant_color: UConstantColor, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    outputs = MaterialSocketOutputs()
+
+    rgb_node = node_tree.nodes.new('ShaderNodeRGB')
+    rgb_node.outputs[0].default_value = (
+        float(constant_color.Color.R) / 255.0,
+        float(constant_color.Color.G) / 255.0,
+        float(constant_color.Color.B) / 255.0,
+        float(constant_color.Color.A) / 255.0
+    )
+
+    outputs.color_socket = rgb_node.outputs[0]
+
+    return outputs
+
+
 def import_texture(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, texture: UTexture, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     outputs = MaterialSocketOutputs()
 
     if texture.Reference is None:
         return outputs
 
-    image_node = typing.cast(ShaderNodeTexImage, node_tree.nodes.new('ShaderNodeTexImage'))
+    image_node = cast(ShaderNodeTexImage, node_tree.nodes.new('ShaderNodeTexImage'))
     image_path = material_cache.resolve_path_for_reference(texture.Reference)
     image_path = str(image_path)
     image_path = image_path.replace('.props.txt', '.tga')
@@ -115,8 +181,16 @@ def import_texture(material_cache: MaterialCache, node_tree: bpy.types.NodeTree,
     outputs.use_backface_culling = not texture.bTwoSided
 
     if texture.bAlphaTexture or texture.bMasked:
-        outputs.has_alpha = True
         outputs.alpha_socket = image_node.outputs['Alpha']
+
+    if texture.bMasked:
+        outputs.blend_method = 'CLIP'
+    elif texture.bAlphaTexture:
+        outputs.blend_method = 'BLEND'
+    else:
+        outputs.blend_method = 'OPAQUE'
+
+    outputs.size = (texture.UClamp, texture.VClamp)
 
     return outputs
 
@@ -205,6 +279,14 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
     elif combiner.AlphaOperation == EAlphaOperation.AO_Use_Alpha_From_Material2:
         outputs.alpha_socket = material2_outputs.alpha_socket
 
+    # NOTE: This is a bit of guess. Maybe investigate how this is actually determined.
+    if material1_outputs is not None:
+        outputs.size = material1_outputs.size
+    elif material2_outputs is not None:
+        outputs.size = material2_outputs.size
+    elif mask_outputs is not None:
+        outputs.size = mask_outputs.size
+
     return outputs
 
 
@@ -213,6 +295,10 @@ def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         return import_texture(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UCombiner):
         return import_combiner(material_cache, node_tree, umaterial, inputs)
+    elif isinstance(umaterial, UConstantColor):
+        return import_constant_color(material_cache, node_tree, umaterial, inputs)
+    elif isinstance(umaterial, UTexRotator):
+        return import_tex_rotator(material_cache, node_tree, umaterial, inputs)
     else:
         print(f'Unhandled material type {type(umaterial)}')
 
@@ -249,18 +335,14 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
         socket_inputs = MaterialSocketInputs()
         outputs = import_material(material_cache, node_tree, umaterial, socket_inputs)
         material.use_backface_culling = outputs.use_backface_culling
-
-        if outputs.has_alpha:
-            material.blend_method = 'CLIP'
-        else:
-            material.blend_method = 'OPAQUE'
+        material.blend_method = outputs.blend_method
 
         output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
         diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')
 
         node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
 
-        if outputs.has_alpha:
+        if outputs.blend_method in ['CLIP', 'BLEND']:
             transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
             mix_node = node_tree.nodes.new('ShaderNodeMixShader')
             node_tree.links.new(mix_node.inputs['Fac'], outputs.alpha_socket)
