@@ -292,6 +292,10 @@ class UTexModifier(UModifier):
     TexCoordProjected: bool = False
 
 
+class UTexCoordSource(UTexModifier):
+    SourceChannel: int = 1
+
+
 class ETexEnvMapType(Enum):
     EM_WorldSpace = 0,
     EM_CameraSpace = 1
@@ -318,7 +322,7 @@ class UTexOscillator(UTexModifier):
     UOscillationType: ETexOscillationType = ETexOscillationType.OT_Pan
     VOscillationType: ETexOscillationType = ETexOscillationType.OT_Pan
     UOffset: float = 0.0
-    VUOffset: float = 0.0
+    VOffset: float = 0.0
 
 
 class UTexPanner(UTexModifier):
@@ -358,7 +362,8 @@ __material_type_map__: typing.Dict[str, type] = {
     'TexScaler': UTexScaler,
     'TexRotator': UTexRotator,
     'Texture': UTexture,
-    'ConstantColor': UConstantColor
+    'ConstantColor': UConstantColor,
+    'TexCoordSource': UTexCoordSource,
 }
 
 

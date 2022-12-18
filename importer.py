@@ -10,7 +10,7 @@ from bpy_extras.io_utils import ImportHelper
 from bpy_types import Operator
 
 from .data import UMaterial, UTexture, ETexClampMode, UReference, UCombiner, EColorOperation, EAlphaOperation, \
-    UConstantColor, UTexRotator, ETexRotationType
+    UConstantColor, UTexRotator, ETexRotationType, UTexOscillator, ETexOscillationType, UTexCoordSource
 from .reader import read_material
 
 
@@ -52,9 +52,87 @@ class MaterialSocketInputs:
     uv_socket: bpy.types.NodeSocket = None
 
 
-def import_tex_rotator(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_rotator: UTexRotator, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-    outputs = MaterialSocketOutputs()
+# TODO: test this
+def import_tex_coord_source(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_coord_source: UTexCoordSource, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    uv_map_node = node_tree.nodes.new('ShaderNodeUVMap')
+    if tex_coord_source.SourceChannel == 0:
+        uv_map_node.uv_map = 'VTXW0000'
+    elif tex_coord_source.SourceChannel > 0:
+        uv_map_node.uv_map = f'EXTRAUV{tex_coord_source.SourceChannel - 1}'
+    else:
+        raise RuntimeError('SourceChannel cannot be < 0')
 
+    socket_inputs.uv_socket = uv_map_node.outputs['UV']
+
+    material = material_cache.load_material(tex_coord_source.Material)
+    material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
+
+    return material_outputs
+
+
+def import_tex_oscillator(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_oscillator: UTexOscillator, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
+    vector_subtract_node = node_tree.nodes.new('ShaderNodeVectorMath')
+    vector_subtract_node.operation = 'SUBTRACT'
+    vector_add_node = node_tree.nodes.new('ShaderNodeVectorMath')
+    vector_add_node.operation = 'ADD'
+    vector_transform_node = node_tree.nodes.new('ShaderNodeVectorMath')
+
+    offset_node = node_tree.nodes.new('ShaderNodeCombineXYZ')
+
+    node_tree.links.new(vector_subtract_node.inputs[0], tex_coord_node.outputs['UV'])
+    node_tree.links.new(vector_add_node.inputs[0], vector_transform_node.outputs[0])
+    node_tree.links.new(vector_transform_node.inputs[0], vector_subtract_node.outputs[0])
+    node_tree.links.new(vector_subtract_node.inputs[1], offset_node.outputs['Vector'])
+    node_tree.links.new(vector_add_node.inputs[1], offset_node.outputs['Vector'])
+
+    socket_inputs.uv_socket = vector_add_node.outputs['Vector']
+
+    material = material_cache.load_material(tex_oscillator.Material)
+    material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
+
+    offset_node.inputs['X'].default_value = tex_oscillator.UOffset / material_outputs.size[0]
+    offset_node.inputs['Y'].default_value = tex_oscillator.VOffset / material_outputs.size[1]
+
+    def get_driver_expression_for_pan(rate, amplitude):
+        return f'sin((frame / bpy.context.scene.render.fps) * {rate * math.pi * 2}) * {amplitude}'
+
+    def get_driver_expression_for_stretch(rate, amplitude):
+        return f'1.0 + sin((frame / bpy.context.scene.render.fps) * {rate * math.pi * 2}) * {amplitude}'
+
+    def add_driver_to_vector_transform_input(expression: str, index: int):
+        fcurve = vector_transform_node.inputs[1].driver_add('default_value', index)
+        fcurve.driver.expression = expression
+
+    if tex_oscillator.UOscillationType == ETexOscillationType.OT_Pan:
+        vector_transform_node.operation = 'ADD'
+        if tex_oscillator.UOscillationRate != 0 and tex_oscillator.UOscillationAmplitude != 0:
+            add_driver_to_vector_transform_input(
+                get_driver_expression_for_pan(tex_oscillator.UOscillationRate, tex_oscillator.UOscillationAmplitude), 0)
+        if tex_oscillator.VOscillationRate != 0 and tex_oscillator.VOscillationAmplitude != 0:
+            add_driver_to_vector_transform_input(
+                get_driver_expression_for_pan(tex_oscillator.VOscillationRate, tex_oscillator.VOscillationAmplitude), 1)
+    elif tex_oscillator.UOscillationType == ETexOscillationType.OT_Jitter:
+        vector_transform_node.operation = 'ADD'
+        # same as add, but weird
+        pass
+    elif tex_oscillator.UOscillationType == ETexOscillationType.OT_Stretch:
+        vector_transform_node.operation = 'MULTIPLY'
+        if tex_oscillator.UOscillationRate != 0 and tex_oscillator.UOscillationAmplitude != 0:
+            add_driver_to_vector_transform_input(
+                get_driver_expression_for_stretch(tex_oscillator.UOscillationRate, tex_oscillator.UOscillationAmplitude), 0)
+        if tex_oscillator.VOscillationRate != 0 and tex_oscillator.VOscillationAmplitude != 0:
+            add_driver_to_vector_transform_input(
+                get_driver_expression_for_stretch(tex_oscillator.VOscillationRate, tex_oscillator.VOscillationAmplitude), 1)
+    elif tex_oscillator.UOscillationType == ETexOscillationType.OT_StretchRepeat:
+        vector_transform_node.operation = 'MULTIPLY'
+        # same as stretch, but weird...
+        pass
+
+    return material_outputs
+
+
+def import_tex_rotator(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_rotator: UTexRotator, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
     vector_rotate_node = node_tree.nodes.new('ShaderNodeVectorRotate')
     vector_rotate_node.rotation_type = 'EULER_XYZ'
@@ -91,13 +169,7 @@ def import_tex_rotator(material_cache: MaterialCache, node_tree: bpy.types.NodeT
 
     node_tree.links.new(vector_rotate_node.inputs['Vector'], tex_coord_node.outputs['UV'])
 
-    outputs.color_socket = material_outputs.color_socket
-    outputs.alpha_socket = material_outputs.alpha_socket
-    outputs.size = material_outputs.size
-    outputs.blend_method = material_outputs.blend_method
-    outputs.use_backface_culling = material_outputs.use_backface_culling
-
-    return outputs
+    return material_outputs
 
 
 def import_constant_color(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, constant_color: UConstantColor, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
@@ -265,14 +337,16 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
     elif combiner.AlphaOperation == EAlphaOperation.AO_Multiply:
         mix_node = node_tree.nodes.new('ShaderNodeMixRGB')
         mix_node.blend_type = 'MULTIPLY'
-        node_tree.links.new(mix_node.inputs[6], material1_outputs.alpha_socket)
-        node_tree.links.new(mix_node.inputs[7], material2_outputs.alpha_socket)
-        outputs.alpha_socket = mix_node.outputs[2]
+        if material1_outputs.alpha_socket:
+            node_tree.links.new(mix_node.inputs[1], material1_outputs.alpha_socket)
+            node_tree.links.new(mix_node.inputs[2], material2_outputs.alpha_socket)
+        outputs.alpha_socket = mix_node.outputs[0]
     elif combiner.AlphaOperation == EAlphaOperation.AO_Add:
         mix_node = node_tree.nodes.new('ShaderNodeMixRGB')
         mix_node.blend_type = 'ADD'
-        node_tree.links.new(mix_node.inputs[6], material1_outputs.alpha_socket)
-        node_tree.links.new(mix_node.inputs[7], material2_outputs.alpha_socket)
+        if material1_outputs.alpha_socket:
+            node_tree.links.new(mix_node.inputs[6], material1_outputs.alpha_socket)
+            node_tree.links.new(mix_node.inputs[7], material2_outputs.alpha_socket)
         outputs.alpha_socket = mix_node.outputs[2]
     elif combiner.AlphaOperation == EAlphaOperation.AO_Use_Alpha_From_Material1:
         outputs.alpha_socket = material1_outputs.alpha_socket
@@ -299,6 +373,10 @@ def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         return import_constant_color(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UTexRotator):
         return import_tex_rotator(material_cache, node_tree, umaterial, inputs)
+    elif isinstance(umaterial, UTexOscillator):
+        return import_tex_oscillator(material_cache, node_tree, umaterial, inputs)
+    elif isinstance(umaterial, UTexCoordSource):
+        return import_tex_coord_source(material_cache, node_tree, umaterial, inputs)
     else:
         print(f'Unhandled material type {type(umaterial)}')
 
