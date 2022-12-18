@@ -10,7 +10,7 @@ from bpy_extras.io_utils import ImportHelper
 from bpy_types import Operator
 
 from .data import UMaterial, UTexture, ETexClampMode, UReference, UCombiner, EColorOperation, EAlphaOperation, \
-    UConstantColor, UTexRotator, ETexRotationType, UTexOscillator, ETexOscillationType, UTexCoordSource
+    UConstantColor, UTexRotator, ETexRotationType, UTexOscillator, ETexOscillationType, UTexCoordSource, UTexPanner
 from .reader import read_material
 
 
@@ -52,7 +52,6 @@ class MaterialSocketInputs:
     uv_socket: bpy.types.NodeSocket = None
 
 
-# TODO: test this
 def import_tex_coord_source(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_coord_source: UTexCoordSource, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     uv_map_node = node_tree.nodes.new('ShaderNodeUVMap')
     if tex_coord_source.SourceChannel == 0:
@@ -65,6 +64,32 @@ def import_tex_coord_source(material_cache: MaterialCache, node_tree: bpy.types.
     socket_inputs.uv_socket = uv_map_node.outputs['UV']
 
     material = material_cache.load_material(tex_coord_source.Material)
+    material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
+
+    return material_outputs
+
+
+def import_tex_panner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_panner: UTexPanner, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+
+    tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
+
+    vector_rotate_node = node_tree.nodes.new('ShaderNodeVectorRotate')
+    vector_rotate_node.rotation_type = 'EULER_XYZ'
+    vector_rotate_node.inputs['Rotation'].default_value = tex_panner.PanDirection.get_radians()
+
+    vector_add_node = node_tree.nodes.new('ShaderNodeVectorMath')
+    vector_add_node.operation = 'ADD'
+
+    fcurve = vector_add_node.inputs[1].driver_add('default_value', 0)
+    fcurve.driver.expression = f'(frame / bpy.context.scene.render.fps) * {tex_panner.PanRate}'
+
+    # TODO: there are strange interactions with stacking multiple UV modifiers, handle this later
+    node_tree.links.new(vector_add_node.inputs[0], vector_rotate_node.outputs['Vector'])
+    node_tree.links.new(vector_rotate_node.inputs[0], tex_coord_node.outputs['UV'])
+
+    socket_inputs.uv_socket = vector_add_node.outputs['Vector']
+
+    material = material_cache.load_material(tex_panner.Material)
     material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
 
     return material_outputs
@@ -377,6 +402,8 @@ def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         return import_tex_oscillator(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UTexCoordSource):
         return import_tex_coord_source(material_cache, node_tree, umaterial, inputs)
+    elif isinstance(umaterial, UTexPanner):
+        return import_tex_panner(material_cache, node_tree, umaterial, inputs)
     else:
         print(f'Unhandled material type {type(umaterial)}')
 
