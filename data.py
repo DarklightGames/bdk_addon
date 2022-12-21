@@ -18,17 +18,6 @@ class UColor:
         self.B = b
         self.A = a
 
-    @staticmethod
-    def from_string(string: str):
-        pattern = r'{ R=(\d+), G=(\d+), B=(\d+), A=(\d+) }'
-        match = re.match(pattern, string)
-        return UColor(
-            int(match.group(1)),
-            int(match.group(2)),
-            int(match.group(3)),
-            int(match.group(4)),
-        )
-
 
 class UReference:
     type_name: str
@@ -75,16 +64,7 @@ class UReference:
 class URotator:
     Pitch: int = 0
     Yaw: int = 0
-    Roll: int = 0.
-
-    @staticmethod
-    def from_string(string: str):
-        self = URotator()
-        match = re.match(r'\{ Yaw=(-?\d+), Pitch=(-?\d+), Roll=(-?\d+) }', string)
-        self.Yaw = int(match.group(1))
-        self.Pitch = int(match.group(2))
-        self.Roll = int(match.group(3))
-        return self
+    Roll: int = 0
 
     def get_radians(self) -> (float, float, float):
         return (
@@ -288,7 +268,7 @@ class ETexCoordCount(Enum):
 
 class UTexModifier(UModifier):
     TexCoordSource: ETexCoordSrc = ETexCoordSrc.TCS_Stream0,
-    TexCoordCount: ETexCoordSrc = ETexCoordCount.TCN_2DCoords
+    TexCoordCount: ETexCoordCount = ETexCoordCount.TCN_2DCoords
     TexCoordProjected: bool = False
 
 
@@ -364,6 +344,8 @@ __material_type_map__: typing.Dict[str, type] = {
     'Texture': UTexture,
     'ConstantColor': UConstantColor,
     'TexCoordSource': UTexCoordSource,
+    'TexEnvMap': UTexEnvMap,
+    'Cubemap': UCubemap,
 }
 
 
