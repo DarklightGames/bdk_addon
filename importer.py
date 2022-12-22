@@ -11,7 +11,7 @@ from bpy_types import Operator
 
 from .data import UMaterial, UTexture, ETexClampMode, UReference, UCombiner, EColorOperation, EAlphaOperation, \
     UConstantColor, UTexRotator, ETexRotationType, UTexOscillator, ETexOscillationType, UTexCoordSource, UTexPanner, \
-    UTexScaler, UCubemap, UShader, UTexEnvMap, ETexEnvMapType, ETexCoordSrc
+    UTexScaler, UCubemap, UShader, UTexEnvMap, ETexEnvMapType, ETexCoordSrc, UFinalBlend, UVertexColor
 from .reader import read_material
 
 
@@ -53,14 +53,35 @@ class MaterialSocketInputs:
     uv_socket: bpy.types.NodeSocket = None
 
 
+def import_vertex_color(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, vertex_color: UVertexColor, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    vertex_color_node = node_tree.nodes.new('ShaderNodeAttribute')
+    vertex_color_node.attribute_type = 'GEOMETRY'
+    vertex_color_node.attribute_name = 'VERTEXCOLOR'
+
+    outputs = MaterialSocketOutputs()
+    outputs.color_socket = vertex_color_node.outputs['Color']
+    outputs.alpha_socket = vertex_color_node.outputs['Alpha']
+
+    return outputs
+
+
+def import_final_blend(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, final_blend: UFinalBlend, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    material = material_cache.load_material(final_blend.Material)
+    material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
+
+    outputs = MaterialSocketOutputs()
+    outputs.use_backface_culling = not final_blend.TwoSided
+
+    if material_outputs:
+        outputs.color_socket = material_outputs.color_socket
+        outputs.alpha_socket = material_outputs.alpha_socket
+        outputs.size = material_outputs.size
+
+    return outputs
+
+
 def import_shader(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, shader: UShader, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     outputs = MaterialSocketOutputs()
-
-    # Final Add Node
-    add_node = node_tree.nodes.new('ShaderNodeMix')
-    add_node.data_type = 'RGBA'
-    add_node.blend_type = 'ADD'
-    add_node.inputs['Factor'].default_value = 1.0
 
     # Opacity
     if shader.Opacity is not None:
@@ -76,30 +97,37 @@ def import_shader(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, 
         detail_material = material_cache.load_material(shader.Detail) if shader.Detail is not None else None
         if detail_material is not None:
             import_detail_material(material_cache, node_tree, detail_material, shader.DetailScale, diffuse_material_outputs.color_socket)
+        outputs.color_socket = diffuse_material_outputs.color_socket
         outputs.use_backface_culling = diffuse_material_outputs.use_backface_culling
-        node_tree.links.new(add_node.inputs[6], diffuse_material_outputs.color_socket)
-
-    # Specular Multiply
-    multiply_node = node_tree.nodes.new('ShaderNodeMix')
-    multiply_node.data_type = 'RGBA'
-    multiply_node.blend_type = 'MULTIPLY'
-    multiply_node.inputs['Factor'].default_value = 1.0
 
     # Specular
-    inputs = MaterialSocketInputs()
     specular_material = material_cache.load_material(shader.Specular)
-    specular_material_outputs = import_material(material_cache, node_tree, specular_material, inputs)
+    if specular_material:
+        # Final Add Node
+        add_node = node_tree.nodes.new('ShaderNodeMix')
+        add_node.data_type = 'RGBA'
+        add_node.blend_type = 'ADD'
+        add_node.inputs['Factor'].default_value = 1.0
 
-    # Specular Mask
-    specular_mask_material = material_cache.load_material(shader.SpecularityMask)
-    if specular_mask_material is not None:
-        specular_mask_material_outputs = import_material(material_cache, node_tree, specular_mask_material, socket_inputs)
-        node_tree.links.new(multiply_node.inputs[7], specular_mask_material_outputs.color_socket)
+        # Specular Multiply
+        multiply_node = node_tree.nodes.new('ShaderNodeMix')
+        multiply_node.data_type = 'RGBA'
+        multiply_node.blend_type = 'MULTIPLY'
+        multiply_node.inputs['Factor'].default_value = 1.0
 
-    node_tree.links.new(multiply_node.inputs[6], specular_material_outputs.color_socket)
-    node_tree.links.new(add_node.inputs[7], multiply_node.outputs[2])
+        specular_material_outputs = import_material(material_cache, node_tree, specular_material, socket_inputs)
+        node_tree.links.new(multiply_node.inputs[6], specular_material_outputs.color_socket)
 
-    outputs.color_socket = add_node.outputs[2]
+        # Specular Mask
+        specular_mask_material = material_cache.load_material(shader.SpecularityMask)
+        if specular_mask_material is not None:
+            specular_mask_material_outputs = import_material(material_cache, node_tree, specular_mask_material, socket_inputs)
+            node_tree.links.new(multiply_node.inputs[7], specular_mask_material_outputs.color_socket)
+
+        node_tree.links.new(add_node.inputs[7], multiply_node.outputs[2])
+        node_tree.links.new(add_node.inputs[6], outputs.color_socket)
+
+        outputs.color_socket = add_node.outputs[2]
 
     return outputs
 
@@ -482,7 +510,8 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         outputs.color_socket = mix_node.outputs[2]
     elif combiner.CombineOperation == EColorOperation.CO_AlphaBlend_With_Mask:
         mix_node = create_color_combiner_mix_node('MIX')
-        node_tree.links.new(mix_node.inputs['Fac'], mask_outputs.alpha_socket)
+        if mask_outputs:
+            node_tree.links.new(mix_node.inputs['Fac'], mask_outputs.alpha_socket)
         outputs.color_socket = mix_node.outputs[0]
     elif combiner.CombineOperation == EColorOperation.CO_Add_With_Mask_Modulation:
         mix_node = create_color_combiner_mix_node('ADD')
@@ -533,6 +562,10 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
 def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, umaterial: UMaterial, inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     if isinstance(umaterial, UCubemap):
         return import_cubemap(material_cache, node_tree, umaterial, inputs)
+    if isinstance(umaterial, UVertexColor):
+        return import_vertex_color(material_cache, node_tree, umaterial, inputs)
+    if isinstance(umaterial, UFinalBlend):
+        return import_final_blend(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UTexture):
         return import_texture(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UCombiner):
@@ -556,7 +589,7 @@ def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
 
 
 class UMATERIAL_OT_import(Operator, ImportHelper):
-    bl_idname = 'import.umaterial'
+    bl_idname = 'import_material.umaterial'
     bl_label = 'Import Unreal Material'
     filename_ext = '.props.txt'
     filepath: StringProperty()
@@ -574,7 +607,7 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
         reference = UReference.from_path(Path(self.filepath))
 
         umaterial = material_cache.load_material(reference)
-        material_name = os.path.basename(self.filepath).strip('.props.txt')
+        material_name = os.path.basename(self.filepath).replace('.props.txt', '')
 
         material = bpy.data.materials.new(material_name)
         material.use_nodes = True
@@ -584,25 +617,25 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
         # Add custom property with Unreal reference string.
         material['bdk_reference'] = str(reference)
 
-        socket_inputs = MaterialSocketInputs()
-        outputs = import_material(material_cache, node_tree, umaterial, socket_inputs)
-        material.use_backface_culling = outputs.use_backface_culling
-        material.blend_method = outputs.blend_method
-
         output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
         diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')
 
-        node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
+        socket_inputs = MaterialSocketInputs()
+        outputs = import_material(material_cache, node_tree, umaterial, socket_inputs)
 
-        if outputs.blend_method in ['CLIP', 'BLEND']:
-            transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
-            mix_node = node_tree.nodes.new('ShaderNodeMixShader')
-            node_tree.links.new(mix_node.inputs['Fac'], outputs.alpha_socket)
-            node_tree.links.new(mix_node.inputs[1], transparent_node.outputs['BSDF'])
-            node_tree.links.new(mix_node.inputs[2], diffuse_node.outputs['BSDF'])
-            node_tree.links.new(output_node.inputs['Surface'], mix_node.outputs['Shader'])
-        else:
-            node_tree.links.new(output_node.inputs['Surface'], diffuse_node.outputs['BSDF'])
+        if outputs:
+            material.use_backface_culling = outputs.use_backface_culling
+            material.blend_method = outputs.blend_method
+            node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
+            if outputs.blend_method in ['CLIP', 'BLEND']:
+                transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
+                mix_node = node_tree.nodes.new('ShaderNodeMixShader')
+                node_tree.links.new(mix_node.inputs['Fac'], outputs.alpha_socket)
+                node_tree.links.new(mix_node.inputs[1], transparent_node.outputs['BSDF'])
+                node_tree.links.new(mix_node.inputs[2], diffuse_node.outputs['BSDF'])
+                node_tree.links.new(output_node.inputs['Surface'], mix_node.outputs['Shader'])
+            else:
+                node_tree.links.new(output_node.inputs['Surface'], diffuse_node.outputs['BSDF'])
 
         return {'FINISHED'}
 

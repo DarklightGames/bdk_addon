@@ -173,6 +173,10 @@ class UCubemap(UTexture):
     Faces: List[Optional[UReference]] = []
 
 
+class UVertexColor(URenderedMaterial):
+    pass
+
+
 class EOutputBlending(Enum):
     OB_Normal = 0,
     OB_Masked = 1,
@@ -346,6 +350,7 @@ __material_type_map__: typing.Dict[str, type] = {
     'TexCoordSource': UTexCoordSource,
     'TexEnvMap': UTexEnvMap,
     'Cubemap': UCubemap,
+    'VertexColor': UVertexColor,
 }
 
 

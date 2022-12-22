@@ -1,7 +1,7 @@
 import enum
 import typing
 from pathlib import Path
-from typing import get_type_hints, Any, Dict
+from typing import get_type_hints, Any
 
 from .convert_props_txt_to_json import parse_props_txt_file_content
 from .data import UMaterial, URotator, get_material_type_from_string, UReference, UColor
