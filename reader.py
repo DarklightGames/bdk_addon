@@ -37,40 +37,11 @@ def transform_value(property_type: type, value: Any):
         raise RuntimeError(f'Unhandled type: {property_type}')
 
 
-# def read_props_txt(path: str) -> Dict[str, str]:
-#     import re
-#     props = {}
-#     lines = list(reversed(Path(path).read_text().splitlines()))
-#     print(lines)
-#     while len(lines) > 0:
-#         line = lines.pop()
-#         # array indicator
-#         array_match = re.match(r'([\w\d]+)\[(\d)] =', line)
-#         if array_match:
-#             array = []
-#             nextline = lines.pop()
-#             print(f'"{nextline}" : "{nextline}"')
-#             if nextline != "{":
-#                 raise RuntimeError('Expected \"{\", found ' + nextline)
-#             while True:
-#                 line = lines.pop()
-#                 if line == '}':
-#                     break
-#                 _, value = line.split(' = ', maxsplit=1)
-#                 array.append(value)
-#         else:
-#             key, value = line.split(' = ', maxsplit=1)
-#             props[key] = value
-#     return props
-
-
 def read_material(path: str) -> UMaterial:
     # We are assuming that the file structure is laid out as it is by default in umodel exports.
     material_type = get_material_type_from_string(Path(path).parts[-2])
     if not issubclass(material_type, UMaterial):
         raise TypeError(f'{material_type} is not a material type')
-
-    from pprint import pprint
 
     # Read the .props.txt file into a property dictionary
     with open(path, 'r') as file:

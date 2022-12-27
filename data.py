@@ -338,16 +338,16 @@ class UTexScaler(UTexModifier):
 
 
 __material_type_map__: typing.Dict[str, type] = {
+    'ConstantColor': UConstantColor,
     'Combiner': UCombiner,
     'FinalBlend': UFinalBlend,
     'Shader': UShader,
+    'TexCoordSource': UTexCoordSource,
     'TexOscillator': UTexOscillator,
     'TexPanner': UTexPanner,
     'TexScaler': UTexScaler,
     'TexRotator': UTexRotator,
     'Texture': UTexture,
-    'ConstantColor': UConstantColor,
-    'TexCoordSource': UTexCoordSource,
     'TexEnvMap': UTexEnvMap,
     'Cubemap': UCubemap,
     'VertexColor': UVertexColor,

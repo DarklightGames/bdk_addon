@@ -1,5 +1,9 @@
+import fnmatch
+import glob
+import json
 import math
 import os
+import pprint
 from typing import Optional, Dict, cast, Tuple
 from pathlib import Path
 
@@ -17,12 +21,41 @@ from .reader import read_material
 
 class MaterialCache:
     def __init__(self, root_directory: str):
-        self.__root_directory__ = root_directory
-        self.__materials__: Dict[str, UMaterial] = {}
+        self._root_directory = root_directory
+        self._materials: Dict[str, UMaterial] = {}
+        self._package_paths: Dict[str, str] = {}
+
+        self._build_package_paths()
+
+    def _build_package_paths(self):
+        # NOTE: we make the simplifying assumption that all .utx files are in a 'Textures' subdirectory.
+
+        manifest = {'packages': {}}
+        try:
+            with open(os.path.join(self._root_directory, '.bdkmanifest'), 'r') as fp:
+                manifest = json.load(fp)
+        except IOError as e:
+            print(e)
+            pass
+        except UnicodeDecodeError as e:
+            print(e)
+            pass
+
+        # Build list of texture packages.
+        package_paths = manifest['packages'].keys()
+        texture_package_paths = fnmatch.filter(package_paths, '*.utx') + fnmatch.filter(package_paths, '*.rom')
+
+        # Register package name with package directory
+        for package_path in texture_package_paths:
+            package_name = os.path.splitext(os.path.basename(package_path))[0]
+            # Just like in UE2, the root folder takes precedence when there is a conflict.
+            if package_name not in self._package_paths:
+                self._package_paths[package_name] = package_path
 
     def resolve_path_for_reference(self, reference: UReference) -> Optional[Path]:
         try:
-            return Path(os.path.join(self.__root_directory__, reference.package_name, reference.type_name, f'{reference.object_name}.props.txt')).resolve()
+            package_path = self._package_paths[reference.package_name]
+            return Path(os.path.join(self._root_directory, os.path.splitext(package_path)[0], reference.type_name, f'{reference.object_name}.props.txt')).resolve()
         except RuntimeError:
             pass
         return None
@@ -31,13 +64,13 @@ class MaterialCache:
         if reference is None:
             return None
         key = str(reference)
-        if key in self.__materials__:
-            return self.__materials__[str(reference)]
+        if key in self._materials:
+            return self._materials[str(reference)]
         path = self.resolve_path_for_reference(reference)
         if path is None:
             return None
         material = read_material(str(path))
-        self.__materials__[key] = material
+        self._materials[key] = material
         return material
 
 
@@ -76,6 +109,7 @@ def import_final_blend(material_cache: MaterialCache, node_tree: bpy.types.NodeT
         outputs.color_socket = material_outputs.color_socket
         outputs.alpha_socket = material_outputs.alpha_socket
         outputs.size = material_outputs.size
+        outputs.blend_method = material_outputs.blend_method
 
     return outputs
 
@@ -385,8 +419,12 @@ def import_constant_color(material_cache: MaterialCache, node_tree: bpy.types.No
 def load_image(material_cache: MaterialCache, reference: UReference):
     image_path = material_cache.resolve_path_for_reference(reference)
     image_path = str(image_path)
-    image_path = image_path.replace('.props.txt', '.tga')
-    return bpy.data.images.load(str(image_path), check_existing=True)
+    extensions = ['.tga', '.hdr']   # A little dicey :think:
+    for extension in extensions:
+        file_path = image_path.replace('.props.txt', extension)
+        if os.path.isfile(file_path):
+            return bpy.data.images.load(str(file_path), check_existing=True)
+    raise RuntimeError(f'Could not find file for reference {reference}')
 
 
 def import_texture(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, texture: UTexture, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
@@ -479,11 +517,15 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         mix_node.inputs['Fac'].default_value = 1.0
 
         if combiner.InvertMask:
-            node_tree.links.new(mix_node.inputs['Color2'], material1_outputs.color_socket)
-            node_tree.links.new(mix_node.inputs['Color1'], material2_outputs.color_socket)
+            if material1_outputs is not None:
+                node_tree.links.new(mix_node.inputs['Color2'], material1_outputs.color_socket)
+            if material2_outputs is not None:
+                node_tree.links.new(mix_node.inputs['Color1'], material2_outputs.color_socket)
         else:
-            node_tree.links.new(mix_node.inputs['Color1'], material1_outputs.color_socket)
-            node_tree.links.new(mix_node.inputs['Color2'], material2_outputs.color_socket)
+            if material1_outputs is not None:
+                node_tree.links.new(mix_node.inputs['Color1'], material1_outputs.color_socket)
+            if material2_outputs is not None:
+                node_tree.links.new(mix_node.inputs['Color2'], material2_outputs.color_socket)
 
         return mix_node
 
@@ -515,7 +557,7 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         outputs.color_socket = mix_node.outputs[0]
     elif combiner.CombineOperation == EColorOperation.CO_Add_With_Mask_Modulation:
         mix_node = create_color_combiner_mix_node('ADD')
-        outputs.color_socket = mix_node.outputs[2]
+        outputs.color_socket = mix_node.outputs[0]
         # This doesn't use the Mask, but instead uses the alpha channel of Material 2, or if it hasn't got one,
         # modulates it on Material1.
         if material2_outputs.alpha_socket is not None:
@@ -562,9 +604,9 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
 def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, umaterial: UMaterial, inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     if isinstance(umaterial, UCubemap):
         return import_cubemap(material_cache, node_tree, umaterial, inputs)
-    if isinstance(umaterial, UVertexColor):
+    elif isinstance(umaterial, UVertexColor):
         return import_vertex_color(material_cache, node_tree, umaterial, inputs)
-    if isinstance(umaterial, UFinalBlend):
+    elif isinstance(umaterial, UFinalBlend):
         return import_final_blend(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UTexture):
         return import_texture(material_cache, node_tree, umaterial, inputs)
@@ -584,6 +626,8 @@ def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         return import_shader(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UTexEnvMap):
         return import_tex_env_map(material_cache, node_tree, umaterial, inputs)
+    elif isinstance(umaterial, UTexScaler):
+        return import_tex_scaler(material_cache, node_tree, umaterial, inputs)
     else:
         print(f'Unhandled material type {type(umaterial)}')
 

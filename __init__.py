@@ -42,6 +42,8 @@ def register():
 
 
 def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
     bpy.types.TOPBAR_MT_file_import.remove(umaterial_import_menu_func)
 
 
