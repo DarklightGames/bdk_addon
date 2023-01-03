@@ -54,7 +54,7 @@ class UReference:
         return UReference(type_name, package_name, object_name)
 
     def __str__(self):
-        string = f"{self.type_name}'{self.package_name}'"
+        string = f"{self.type_name}'{self.package_name}"
         if self.group_name is not None:
             string += f'.{self.group_name}'
         string += f".{self.object_name}'"
@@ -173,6 +173,7 @@ class UCubemap(UTexture):
     Faces: List[Optional[UReference]] = []
 
 
+
 class UVertexColor(URenderedMaterial):
     pass
 
@@ -206,6 +207,12 @@ class UShader(URenderedMaterial):
 
 class UModifier(UMaterial):
     Material: Optional[UReference] = None
+
+
+class UColorModifier(UModifier):
+    Color: UColor = UColor(255, 255, 255, 255)
+    RenderTwoSided: bool = False
+    AlphaBlend: bool = False
 
 
 class UFinalBlend(UModifier):
@@ -338,6 +345,7 @@ class UTexScaler(UTexModifier):
 
 
 __material_type_map__: typing.Dict[str, type] = {
+    'ColorModifier': UColorModifier,
     'ConstantColor': UConstantColor,
     'Combiner': UCombiner,
     'FinalBlend': UFinalBlend,

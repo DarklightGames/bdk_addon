@@ -1,11 +1,7 @@
-import fnmatch
-import glob
+import copy
 import json
-import math
 import os
-import pprint
-from typing import Optional, Dict, cast, Tuple
-from pathlib import Path
+from typing import Dict, cast, Tuple
 
 from bpy.types import ShaderNodeTexImage
 import bpy.types
@@ -13,9 +9,7 @@ from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 from bpy_types import Operator
 
-from .data import UMaterial, UTexture, ETexClampMode, UReference, UCombiner, EColorOperation, EAlphaOperation, \
-    UConstantColor, UTexRotator, ETexRotationType, UTexOscillator, ETexOscillationType, UTexCoordSource, UTexPanner, \
-    UTexScaler, UCubemap, UShader, UTexEnvMap, ETexEnvMapType, ETexCoordSrc, UFinalBlend, UVertexColor
+from .data import *
 from .reader import read_material
 
 
@@ -28,9 +22,8 @@ class MaterialCache:
         self._build_package_paths()
 
     def _build_package_paths(self):
-        # NOTE: we make the simplifying assumption that all .utx files are in a 'Textures' subdirectory.
-
-        manifest = {'packages': {}}
+        # Read the list of packages managed by BDK in the manifest.
+        manifest = {'files': {}}
         try:
             with open(os.path.join(self._root_directory, '.bdkmanifest'), 'r') as fp:
                 manifest = json.load(fp)
@@ -42,13 +35,15 @@ class MaterialCache:
             pass
 
         # Build list of texture packages.
-        package_paths = manifest['packages'].keys()
-        texture_package_paths = fnmatch.filter(package_paths, '*.utx') + fnmatch.filter(package_paths, '*.rom')
+        file_paths = manifest['files'].keys()
+
+        package_paths = filter(lambda x: os.path.splitext(x)[1] in ['.utx', '.usx'], file_paths)
 
         # Register package name with package directory
-        for package_path in texture_package_paths:
+        for package_path in package_paths:
             package_name = os.path.splitext(os.path.basename(package_path))[0]
             # Just like in UE2, the root folder takes precedence when there is a conflict.
+            # TODO: technically not working here, would need to sort and put mod folders later in the list.
             if package_name not in self._package_paths:
                 self._package_paths[package_name] = package_path
 
@@ -86,6 +81,13 @@ class MaterialSocketInputs:
     uv_socket: bpy.types.NodeSocket = None
 
 
+# class MaterialImporter:
+#
+#     def __init__(self, material_cache: MaterialCache, node_tree: bpy.types.NodeTree):
+#         self.material_cache = material_cache
+#         self.node_tree = node_tree
+
+
 def import_vertex_color(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, vertex_color: UVertexColor, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     vertex_color_node = node_tree.nodes.new('ShaderNodeAttribute')
     vertex_color_node.attribute_type = 'GEOMETRY'
@@ -120,14 +122,14 @@ def import_shader(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, 
     # Opacity
     if shader.Opacity is not None:
         opacity_material = material_cache.load_material(shader.Opacity)
-        opacity_material_outputs = import_material(material_cache, node_tree, opacity_material, socket_inputs)
+        opacity_material_outputs = import_material(material_cache, node_tree, opacity_material, copy.copy(socket_inputs))
         outputs.alpha_socket = opacity_material_outputs.alpha_socket
         outputs.blend_method = opacity_material_outputs.blend_method
 
     # Diffuse
     diffuse_material = material_cache.load_material(shader.Diffuse)
     if diffuse_material is not None:
-        diffuse_material_outputs = import_material(material_cache, node_tree, diffuse_material, socket_inputs)
+        diffuse_material_outputs = import_material(material_cache, node_tree, diffuse_material, copy.copy(socket_inputs))
         detail_material = material_cache.load_material(shader.Detail) if shader.Detail is not None else None
         if detail_material is not None:
             import_detail_material(material_cache, node_tree, detail_material, shader.DetailScale, diffuse_material_outputs.color_socket)
@@ -149,21 +151,48 @@ def import_shader(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, 
         multiply_node.blend_type = 'MULTIPLY'
         multiply_node.inputs['Factor'].default_value = 1.0
 
-        specular_material_outputs = import_material(material_cache, node_tree, specular_material, socket_inputs)
+        specular_material_outputs = import_material(material_cache, node_tree, specular_material, copy.copy(socket_inputs))
         node_tree.links.new(multiply_node.inputs[6], specular_material_outputs.color_socket)
 
         # Specular Mask
         specular_mask_material = material_cache.load_material(shader.SpecularityMask)
         if specular_mask_material is not None:
-            specular_mask_material_outputs = import_material(material_cache, node_tree, specular_mask_material, socket_inputs)
+            specular_mask_material_outputs = import_material(material_cache, node_tree, specular_mask_material, copy.copy(socket_inputs))
             node_tree.links.new(multiply_node.inputs[7], specular_mask_material_outputs.color_socket)
 
         node_tree.links.new(add_node.inputs[7], multiply_node.outputs[2])
-        node_tree.links.new(add_node.inputs[6], outputs.color_socket)
+        if outputs.color_socket is not None:
+            node_tree.links.new(add_node.inputs[6], outputs.color_socket)
 
         outputs.color_socket = add_node.outputs[2]
 
     return outputs
+
+
+def import_color_modifier(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, color_modifier: UColorModifier, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    material = material_cache.load_material(color_modifier.Material)
+    material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
+
+    if material_outputs and material_outputs.color_socket is not None:
+        mix_node = node_tree.nodes.new('ShaderNodeMix')
+        mix_node.data_type = 'RGBA'
+        mix_node.blend_type = 'MULTIPLY'
+        mix_node.inputs['Factor'].default_value = 1.0
+
+        rgb_node = node_tree.nodes.new('ShaderNodeRGB')
+        rgb_node.outputs[0].default_value = (
+            float(color_modifier.Color.R) / 255.0,
+            float(color_modifier.Color.G) / 255.0,
+            float(color_modifier.Color.B) / 255.0,
+            float(color_modifier.Color.A) / 255.0
+        )
+
+        node_tree.links.new(mix_node.inputs[6], material_outputs.color_socket)
+        node_tree.links.new(mix_node.inputs[7], rgb_node.outputs[0])
+
+        material_outputs.color_socket = mix_node.outputs[2]
+
+    return material_outputs
 
 
 def import_cubemap(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, cubemap: UCubemap, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
@@ -178,9 +207,6 @@ def import_cubemap(material_cache: MaterialCache, node_tree: bpy.types.NodeTree,
 
 def import_tex_env_map(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, tex_env_map: UTexEnvMap, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
     inputs = MaterialSocketInputs()
-
-    print('importing tex env map')
-    print(tex_env_map)
 
     if tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream0:
         uv_map_node = node_tree.nodes.new('ShaderNodeUVMap')
@@ -240,7 +266,7 @@ def import_tex_coord_source(material_cache: MaterialCache, node_tree: bpy.types.
     socket_inputs.uv_socket = uv_map_node.outputs['UV']
 
     material = material_cache.load_material(tex_coord_source.Material)
-    material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
+    material_outputs = import_material(material_cache, node_tree, material, copy.copy(socket_inputs))
 
     return material_outputs
 
@@ -319,8 +345,9 @@ def import_tex_oscillator(material_cache: MaterialCache, node_tree: bpy.types.No
     material = material_cache.load_material(tex_oscillator.Material)
     material_outputs = import_material(material_cache, node_tree, material, socket_inputs)
 
-    offset_node.inputs['X'].default_value = tex_oscillator.UOffset / material_outputs.size[0]
-    offset_node.inputs['Y'].default_value = tex_oscillator.VOffset / material_outputs.size[1]
+    if material_outputs is not None:
+        offset_node.inputs['X'].default_value = tex_oscillator.UOffset / material_outputs.size[0]
+        offset_node.inputs['Y'].default_value = tex_oscillator.VOffset / material_outputs.size[1]
 
     def get_driver_expression_for_pan(rate, amplitude):
         return f'sin((frame / bpy.context.scene.render.fps) * {rate * math.pi * 2}) * {amplitude}'
@@ -386,7 +413,7 @@ def import_tex_rotator(material_cache: MaterialCache, node_tree: bpy.types.NodeT
     elif tex_rotator.TexRotationType == ETexRotationType.TR_OscillatingRotation:
         amplitude_radians = tex_rotator.OscillationAmplitude.get_radians()
         rate_radians = tex_rotator.OscillationRate.get_radians()
-        for i, amplitude, rate in enumerate(zip(amplitude_radians, rate_radians)):
+        for i, (amplitude, rate) in enumerate(zip(amplitude_radians, rate_radians)):
             if amplitude != 0 or rate != 0:
                 add_driver_to_vector_rotate_rotation_input(
                     f'sin(frame / bpy.context.scene.render.fps * {rate}) * {amplitude}', i)
@@ -458,10 +485,8 @@ def import_texture(material_cache: MaterialCache, node_tree: bpy.types.NodeTree,
     if texture.bAlphaTexture or texture.bMasked:
         outputs.alpha_socket = image_node.outputs['Alpha']
 
-    if texture.bMasked:
-        outputs.blend_method = 'CLIP'
-    elif texture.bAlphaTexture:
-        outputs.blend_method = 'BLEND'
+    if texture.bMasked or texture.bAlphaTexture:
+        outputs.blend_method = 'CLIP'  # TODO: using 'BLEND' looks like ass, maybe figure this out later.
     else:
         outputs.blend_method = 'OPAQUE'
 
@@ -472,11 +497,11 @@ def import_texture(material_cache: MaterialCache, node_tree: bpy.types.NodeTree,
 
 def import_detail_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, detail_material: UMaterial, detail_scale: float, color_socket: bpy.types.NodeSocket) -> bpy.types.NodeSocket:
     # Create UV scaling sockets.
-    texcoord_node = node_tree.nodes.new('ShaderNodeTexCoord')
+    tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
     scale_node = node_tree.nodes.new('ShaderNodeVectorMath')
     scale_node.operation = 'SCALE'
     scale_node.inputs['Scale'].default_value = detail_scale
-    node_tree.links.new(scale_node.inputs[0], texcoord_node.outputs['UV'])
+    node_tree.links.new(scale_node.inputs[0], tex_coord_node.outputs['UV'])
     detail_socket_inputs = MaterialSocketInputs()
     detail_socket_inputs.uv_socket = scale_node.outputs['Vector']
 
@@ -507,11 +532,11 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
     material2 = material_cache.load_material(combiner.Material2)
     mask_material = material_cache.load_material(combiner.Mask)
 
-    material1_outputs = import_material(material_cache, node_tree, material1, inputs)
-    material2_outputs = import_material(material_cache, node_tree, material2, inputs)
-    mask_outputs = import_material(material_cache, node_tree, mask_material, inputs)
+    material1_outputs = import_material(material_cache, node_tree, material1, copy.copy(inputs))
+    material2_outputs = import_material(material_cache, node_tree, material2, copy.copy(inputs))
+    mask_outputs = import_material(material_cache, node_tree, mask_material, copy.copy(inputs))
 
-    def create_color_combiner_mix_node(blend_type: str) -> bpy.types.ShaderNode:
+    def create_color_combiner_mix_node(blend_type: str) -> bpy.types.Node:
         mix_node = node_tree.nodes.new('ShaderNodeMixRGB')
         mix_node.blend_type = blend_type
         mix_node.inputs['Fac'].default_value = 1.0
@@ -546,13 +571,13 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
             outputs.color_socket = mix_node.outputs[0]
     elif combiner.CombineOperation == EColorOperation.CO_Add:
         mix_node = create_color_combiner_mix_node('ADD')
-        outputs.color_socket = mix_node.outputs[2]
+        outputs.color_socket = mix_node.outputs[0]
     elif combiner.CombineOperation == EColorOperation.CO_Subtract:
         mix_node = create_color_combiner_mix_node('SUBTRACT')
         outputs.color_socket = mix_node.outputs[2]
     elif combiner.CombineOperation == EColorOperation.CO_AlphaBlend_With_Mask:
         mix_node = create_color_combiner_mix_node('MIX')
-        if mask_outputs:
+        if mask_outputs and mask_outputs.alpha_socket:
             node_tree.links.new(mix_node.inputs['Fac'], mask_outputs.alpha_socket)
         outputs.color_socket = mix_node.outputs[0]
     elif combiner.CombineOperation == EColorOperation.CO_Add_With_Mask_Modulation:
@@ -560,9 +585,9 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
         outputs.color_socket = mix_node.outputs[0]
         # This doesn't use the Mask, but instead uses the alpha channel of Material 2, or if it hasn't got one,
         # modulates it on Material1.
-        if material2_outputs.alpha_socket is not None:
+        if material2_outputs is not None and material2_outputs.alpha_socket is not None:
             node_tree.links.new(mix_node.inputs['Fac'], material2_outputs.alpha_socket)
-        else:
+        elif material1_outputs is not None and material1_outputs.alpha_socket is not None:
             node_tree.links.new(mix_node.inputs['Fac'], material1_outputs.alpha_socket)
     elif combiner.CombineOperation == EColorOperation.CO_Use_Color_From_Mask:   # dropped in UE3, apparently
         outputs.color_socket = mask_outputs.color_socket
@@ -573,21 +598,24 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
     elif combiner.AlphaOperation == EAlphaOperation.AO_Multiply:
         mix_node = node_tree.nodes.new('ShaderNodeMixRGB')
         mix_node.blend_type = 'MULTIPLY'
-        if material1_outputs.alpha_socket:
+        if material1_outputs is not None and material1_outputs.alpha_socket:
             node_tree.links.new(mix_node.inputs[1], material1_outputs.alpha_socket)
+        if material2_outputs is not None and material2_outputs.alpha_socket:
             node_tree.links.new(mix_node.inputs[2], material2_outputs.alpha_socket)
         outputs.alpha_socket = mix_node.outputs[0]
     elif combiner.AlphaOperation == EAlphaOperation.AO_Add:
         mix_node = node_tree.nodes.new('ShaderNodeMixRGB')
         mix_node.blend_type = 'ADD'
         if material1_outputs.alpha_socket:
-            node_tree.links.new(mix_node.inputs[6], material1_outputs.alpha_socket)
-            node_tree.links.new(mix_node.inputs[7], material2_outputs.alpha_socket)
+            if material1_outputs is not None and material1_outputs.alpha_socket:
+                node_tree.links.new(mix_node.inputs[6], material1_outputs.alpha_socket)
+            if material2_outputs is not None and material2_outputs.alpha_socket:
+                node_tree.links.new(mix_node.inputs[7], material2_outputs.alpha_socket)
         outputs.alpha_socket = mix_node.outputs[2]
     elif combiner.AlphaOperation == EAlphaOperation.AO_Use_Alpha_From_Material1:
-        outputs.alpha_socket = material1_outputs.alpha_socket
+        outputs.alpha_socket = material1_outputs.alpha_socket if material1_outputs else None
     elif combiner.AlphaOperation == EAlphaOperation.AO_Use_Alpha_From_Material2:
-        outputs.alpha_socket = material2_outputs.alpha_socket
+        outputs.alpha_socket = material2_outputs.alpha_socket if material2_outputs else None
 
     # NOTE: This is a bit of guess. Maybe investigate how this is actually determined.
     if material1_outputs is not None:
@@ -601,8 +629,13 @@ def import_combiner(material_cache: MaterialCache, node_tree: bpy.types.NodeTree
 
 
 # TODO: wrap this whole thing into a "MaterialBuilder", put matcache & node tree as members so they don't have to be passed around everywhere
-def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, umaterial: UMaterial, inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-    if isinstance(umaterial, UCubemap):
+def import_material(material_cache: MaterialCache, node_tree: bpy.types.NodeTree, umaterial: UMaterial, inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
+    if umaterial is None:
+        # No material, no sockets, simple as.
+        return None
+    elif isinstance(umaterial, UColorModifier):
+        return import_color_modifier(material_cache, node_tree, umaterial, inputs)
+    elif isinstance(umaterial, UCubemap):
         return import_cubemap(material_cache, node_tree, umaterial, inputs)
     elif isinstance(umaterial, UVertexColor):
         return import_vertex_color(material_cache, node_tree, umaterial, inputs)
@@ -645,6 +678,7 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
         default='')
 
     def execute(self, context: bpy.types.Context):
+        # TODO: This path needs to be part of the preferences for the addon.
         cache_path = 'C:\\dev\\bdk-git\\bdk-build'
         material_cache = MaterialCache(cache_path)
 
@@ -653,7 +687,7 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
         umaterial = material_cache.load_material(reference)
         material_name = os.path.basename(self.filepath).replace('.props.txt', '')
 
-        material = bpy.data.materials.new(material_name)
+        material = bpy.data.materials.new(reference.object_name)
         material.use_nodes = True
         node_tree = material.node_tree
         node_tree.nodes.clear()
@@ -669,12 +703,15 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
 
         if outputs:
             material.use_backface_culling = outputs.use_backface_culling
+            material.show_transparent_back = not outputs.use_backface_culling
             material.blend_method = outputs.blend_method
-            node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
+            if outputs.color_socket:
+                node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
             if outputs.blend_method in ['CLIP', 'BLEND']:
                 transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
                 mix_node = node_tree.nodes.new('ShaderNodeMixShader')
-                node_tree.links.new(mix_node.inputs['Fac'], outputs.alpha_socket)
+                if outputs.alpha_socket:
+                    node_tree.links.new(mix_node.inputs['Fac'], outputs.alpha_socket)
                 node_tree.links.new(mix_node.inputs[1], transparent_node.outputs['BSDF'])
                 node_tree.links.new(mix_node.inputs[2], diffuse_node.outputs['BSDF'])
                 node_tree.links.new(output_node.inputs['Surface'], mix_node.outputs['Shader'])
