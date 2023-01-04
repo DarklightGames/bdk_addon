@@ -11,7 +11,6 @@ bl_info = {
     "category": "Import-Export"
 }
 
-
 if 'bpy' in locals():
     import importlib
 
@@ -24,13 +23,12 @@ else:
     from . import reader as umaterial_reader
     from . import importer as umaterial_importer
 
-
 import bpy
 
 classes = umaterial_importer.classes
 
 
-def umaterial_import_menu_func(self, context: bpy.types.Context):
+def umaterial_import_menu_func(self, _context: bpy.types.Context):
     self.layout.operator(umaterial_importer.UMATERIAL_OT_import.bl_idname, text='Unreal Material (.props.txt)')
     pass
 

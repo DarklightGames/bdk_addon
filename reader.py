@@ -2,12 +2,11 @@ import enum
 import typing
 from pathlib import Path
 from typing import get_type_hints, Any
-
 from .convert_props_txt_to_json import parse_props_txt_file_content
-from .data import UMaterial, URotator, get_material_type_from_string, UReference, UColor
+from .data import UMaterial, URotator, MaterialTypeRegistry, UReference, UColor
 
 
-def transform_value(property_type: type, value: Any):
+def transform_value(property_type: type, value: Any) -> typing.Optional[Any]:
     if property_type == int:
         return int(value)
     elif property_type == bool:
@@ -39,25 +38,24 @@ def transform_value(property_type: type, value: Any):
 
 def read_material(path: str) -> UMaterial:
     # We are assuming that the file structure is laid out as it is by default in umodel exports.
-    material_type = get_material_type_from_string(Path(path).parts[-2])
+    material_type = MaterialTypeRegistry.get_type_from_string(Path(path).parts[-2])
+
     if not issubclass(material_type, UMaterial):
-        raise TypeError(f'{material_type} is not a material type')
+        raise TypeError(f'{material_type} is not a subclass of UMaterial')
 
     # Read the .props.txt file into a property dictionary
     with open(path, 'r') as file:
         properties = parse_props_txt_file_content(file.read())
+        reference = UReference.from_path(Path(path))
+        material = material_type(reference)
+        material_type_hints = get_type_hints(type(material))
 
-    reference = UReference.from_path(Path(path))
+        for name, value in properties.items():
+            try:
+                property_type = material_type_hints[name]
+                value = transform_value(property_type, value)
+                setattr(material, name, value)
+            except KeyError:
+                continue
 
-    material = material_type(reference)
-
-    material_type_hints = get_type_hints(type(material))
-    for name, value in properties.items():
-        try:
-            property_type = material_type_hints[name]
-            value = transform_value(property_type, value)
-            setattr(material, name, value)
-        except KeyError:
-            continue
-
-    return material
+        return material

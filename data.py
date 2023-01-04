@@ -7,11 +7,6 @@ from typing import Optional, List
 
 
 class UColor:
-    R: int
-    G: int
-    B: int
-    A: int
-
     def __init__(self, r: int, g: int, b: int, a: int):
         self.R = r
         self.G = g
@@ -20,11 +15,6 @@ class UColor:
 
 
 class UReference:
-    type_name: str
-    package_name: str
-    group_name: Optional[str]
-    object_name: str
-
     def __init__(self, type_name: str, package_name: str, object_name: str, group_name: Optional[str] = None):
         self.type_name = type_name
         self.package_name = package_name
@@ -62,9 +52,10 @@ class UReference:
 
 
 class URotator:
-    Pitch: int = 0
-    Yaw: int = 0
-    Roll: int = 0
+    def __init__(self, pitch: int = 0, yaw: int = 0, roll: int = 0):
+        self.Pitch = pitch
+        self.Yaw = yaw
+        self.Roll = roll
 
     def get_radians(self) -> (float, float, float):
         return (
@@ -171,7 +162,6 @@ class UTexture(UBitmapMaterial):
 
 class UCubemap(UTexture):
     Faces: List[Optional[UReference]] = []
-
 
 
 class UVertexColor(URenderedMaterial):
@@ -344,23 +334,25 @@ class UTexScaler(UTexModifier):
     VOffset: float = 0.0
 
 
-__material_type_map__: typing.Dict[str, type] = {
-    'ColorModifier': UColorModifier,
-    'ConstantColor': UConstantColor,
-    'Combiner': UCombiner,
-    'FinalBlend': UFinalBlend,
-    'Shader': UShader,
-    'TexCoordSource': UTexCoordSource,
-    'TexOscillator': UTexOscillator,
-    'TexPanner': UTexPanner,
-    'TexScaler': UTexScaler,
-    'TexRotator': UTexRotator,
-    'Texture': UTexture,
-    'TexEnvMap': UTexEnvMap,
-    'Cubemap': UCubemap,
-    'VertexColor': UVertexColor,
-}
+class MaterialTypeRegistry:
 
+    _material_type_map: typing.Dict[str, type] = {
+        'ColorModifier': UColorModifier,
+        'Combiner': UCombiner,
+        'ConstantColor': UConstantColor,
+        'Cubemap': UCubemap,
+        'FinalBlend': UFinalBlend,
+        'Shader': UShader,
+        'TexCoordSource': UTexCoordSource,
+        'TexEnvMap': UTexEnvMap,
+        'TexOscillator': UTexOscillator,
+        'TexPanner': UTexPanner,
+        'TexRotator': UTexRotator,
+        'TexScaler': UTexScaler,
+        'Texture': UTexture,
+        'VertexColor': UVertexColor,
+    }
 
-def get_material_type_from_string(string: str):
-    return __material_type_map__[string]
+    @classmethod
+    def get_type_from_string(cls, string: str) -> type:
+        return cls._material_type_map.get(string)
