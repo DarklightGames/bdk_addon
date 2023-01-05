@@ -106,6 +106,7 @@ class MaterialBuilder:
             UTexScaler: self._import_tex_scaler,
             UTexture: self._import_texture,
             UShader: self._import_shader,
+            UVariableTexPanner: self._import_variable_tex_panner,
             UVertexColor: self._import_vertex_color,
         }
 
@@ -468,6 +469,7 @@ class MaterialBuilder:
         def get_driver_expression_for_stretch(rate, amplitude):
             return f'1.0 + sin((frame / bpy.context.scene.render.fps) * {rate * math.pi * 2}) * {amplitude}'
 
+        # TODO: make this generic for the whole thing (just a socket + expression)
         def add_driver_to_vector_transform_input(expression: str, index: int):
             fcurve = vector_transform_node.inputs[1].driver_add('default_value', index)
             fcurve.driver.expression = expression
@@ -575,6 +577,8 @@ class MaterialBuilder:
         vector_add_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         vector_add_node.operation = 'ADD'
         vector_transform_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
+        vector_transform_node.operation = 'MULTIPLY'
+        vector_transform_node.inputs[1].default_value = (1.0 / tex_scaler.UScale, 1.0 / tex_scaler.VScale, 0.0)
 
         offset_node = self._node_tree.nodes.new('ShaderNodeCombineXYZ')
 
@@ -634,6 +638,48 @@ class MaterialBuilder:
 
         return outputs
 
+    def _import_variable_tex_panner(self, variable_tex_panner: UVariableTexPanner, socket_inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
+        vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
+        vector_rotate_node.rotation_type = 'EULER_XYZ'
+        vector_rotate_node.inputs['Rotation'].default_value = variable_tex_panner.PanDirection.get_radians()
+
+        combine_xyz_node = self._node_tree.nodes.new('ShaderNodeCombineXYZ')
+
+        multiply_node = self._node_tree.nodes.new('ShaderNodeMath')
+        multiply_node.operation = 'MULTIPLY'
+        multiply_node.inputs[1].default_value = variable_tex_panner.PanRate
+
+        value_node = self._node_tree.nodes.new('ShaderNodeValue')
+
+        fcurve = value_node.outputs[0].driver_add('default_value')
+        fcurve.driver.expression = 'frame / bpy.context.scene.render.fps'
+
+        self._node_tree.links.new(multiply_node.inputs[0], value_node.outputs['Value'])
+        self._node_tree.links.new(combine_xyz_node.inputs['X'], multiply_node.outputs['Value'])
+        self._node_tree.links.new(vector_rotate_node.inputs['Vector'], combine_xyz_node.outputs['Vector'])
+
+        if socket_inputs.uv_socket is not None:
+            # TODO: a generic way to handle this would be better, since it's possible to chain these UV modifiers
+            #  together ad infinitum.
+            #  Maybe just add UV socket outputs to a list and add them together whenever they're being used?
+
+            # Add the two UV modifiers together.
+            add_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
+            add_node.operation = 'ADD'
+
+            self._node_tree.links.new(add_node.inputs[0], socket_inputs.uv_socket)
+            self._node_tree.links.new(add_node.inputs[1], vector_rotate_node.outputs['Vector'])
+
+            socket_inputs.uv_socket = add_node.outputs['Vector']
+
+        if variable_tex_panner.Material is not None:
+            material = self._material_cache.load_material(variable_tex_panner.Material)
+            material_outputs = self._import_material(material, copy.copy(socket_inputs))
+            return material_outputs
+
+        return None
+
+
     def _import_vertex_color(self, vertex_color: UVertexColor,
                              socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
         vertex_color_node = self._node_tree.nodes.new('ShaderNodeAttribute')
@@ -647,7 +693,9 @@ class MaterialBuilder:
         return outputs
 
     def _import_material(self, material: UMaterial, inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
-        callable = self._material_type_importers.get(type(material), default=None)
+        if material is None:
+            return None
+        callable = self._material_type_importers.get(type(material), None)
         if callable is None:
             raise NotImplementedError(f'No importer registered for type "{type(material)}"')
         return callable(material, inputs)

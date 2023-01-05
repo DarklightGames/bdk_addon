@@ -334,6 +334,11 @@ class UTexScaler(UTexModifier):
     VOffset: float = 0.0
 
 
+class UVariableTexPanner(UTexModifier):
+    PanDirection: URotator = URotator()
+    PanRate: float = 0.0
+
+
 class MaterialTypeRegistry:
 
     _material_type_map: typing.Dict[str, type] = {
@@ -350,6 +355,7 @@ class MaterialTypeRegistry:
         'TexRotator': UTexRotator,
         'TexScaler': UTexScaler,
         'Texture': UTexture,
+        'VariableTexPanner': UVariableTexPanner,
         'VertexColor': UVertexColor,
     }
 
