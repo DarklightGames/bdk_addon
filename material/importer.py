@@ -29,10 +29,8 @@ class MaterialCache:
                 manifest = json.load(fp)
         except IOError as e:
             print(e)
-            pass
         except UnicodeDecodeError as e:
             print(e)
-            pass
 
         # Build list of texture packages.
         file_paths = manifest['files'].keys()
@@ -704,8 +702,8 @@ class MaterialBuilder:
         return self._import_material(material, inputs=MaterialSocketInputs())
 
 
-class UMATERIAL_OT_import(Operator, ImportHelper):
-    bl_idname = 'import_material.umaterial'
+class BDK_OT_material_import(Operator, ImportHelper):
+    bl_idname = 'bdk.material_import'
     bl_label = 'Import Unreal Material'
     filename_ext = '.props.txt'
     filepath: StringProperty()
@@ -717,6 +715,17 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
         default='')
 
     def execute(self, context: bpy.types.Context):
+        bdk_build_path = context.preferences.addons['bdk_addon'].preferences.build_path
+
+        if bdk_build_path == '':
+            self.report({'ERROR_INVALID_CONTEXT'}, 'The BDK build path has not been set in the addon preferences.')
+            return {'CANCELLED'}
+
+        if not os.path.isdir(bdk_build_path):
+            self.report({'ERROR_INVALID_CONTEXT'}, f'The BDK build path ({bdk_build_path}) is not a directory that '
+                                                   f'could be found.')
+            return {'CANCELLED'}
+
         # Get an Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))
 
@@ -729,13 +738,6 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
         # Add custom property with Unreal reference.
         material_data['bdk_reference'] = str(reference)
 
-        # TODO: This path needs to be part of the preferences for the addon. (maybe this should just be the BDK addon?)
-        # Reason being, this whole workflow effectively depends on our custom build of UE Viewer, and the only
-        # realistic reason you would have access to that is if you were using the BDK.
-        # I think it would reduce the amount of redundancy if we combined the material import addon with the BDK addon.
-        # The PSK addon can stay separate since teams outside of ours use it and it is self-contained. It checks for
-        # the BDK addon to import the materials, if it's available, but otherwise doesn't rely on anything else.
-        bdk_build_path = 'C:\\dev\\bdk-git\\bdk-build'
         material_cache = MaterialCache(bdk_build_path)
         reference = UReference.from_path(Path(self.filepath))
         unreal_material = material_cache.load_material(reference)
@@ -767,5 +769,5 @@ class UMATERIAL_OT_import(Operator, ImportHelper):
 
 
 classes = (
-    UMATERIAL_OT_import,
+    BDK_OT_material_import,
 )

@@ -1,4 +1,4 @@
-# io_import_umaterial
+# bdk_addon
 Blender addon for importing Unreal Engine 1 & 2 materials as Blender materials.
 
 This is accomplished by reading material property files from UEViewer and programmatically generating materials based on the settings.
