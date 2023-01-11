@@ -51,7 +51,7 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(terrain_operators.BDK_OT_TerrainInfoAdd.bl_idname, text='Terrain Info')
+    self.layout.operator(terrain_operators.BDK_OT_TerrainInfoAdd.bl_idname, text='Terrain Info', icon='GRID')
 
 
 def register():
@@ -68,7 +68,9 @@ def register():
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
+
     bpy.types.TOPBAR_MT_file_import.remove(material_import_menu_func)
+    bpy.types.VIEW3D_MT_add.remove(bdk_add_menu_func)
 
     del bpy.types.Object.terrain_info
 

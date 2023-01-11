@@ -1,16 +1,20 @@
-import math
-import typing
 import numpy as np
-
+import uuid
+import re
 import bpy.types
 import bmesh
+from typing import Tuple, cast
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, PointerProperty, \
     EnumProperty, CollectionProperty
-from bpy.types import Operator, Panel, PropertyGroup, UIList, Context, UILayout, AnyType, Mesh, Material, Object
+from bpy.types import Operator, Panel, PropertyGroup, UIList, Context, UILayout, AnyType, Mesh, Object, Image
 
 
 def build_terrain_material(active_object: Object):
     TerrainMaterialBuilder().build(active_object)
+
+
+def on_material_update(self, context: Context):
+    TerrainMaterialBuilder().build(self.terrain_info_object)
 
 
 class BDK_PG_TerrainLayerPropertyGroup(PropertyGroup):
@@ -18,20 +22,43 @@ class BDK_PG_TerrainLayerPropertyGroup(PropertyGroup):
     u_scale: FloatProperty(name='UScale')
     v_scale: FloatProperty(name='VScale')
     texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE')
+    image: PointerProperty(name='Image', type=Image, update=on_material_update)
     color_attribute_name: StringProperty(options={'HIDDEN'})
+    terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
+
+
+def on_terrain_layer_index_update(self, context):
+    print(on_terrain_layer_index_update, self, context)
+    if not self.terrain_info_object or self.terrain_info_object.type != 'MESH':
+        return
+    mesh_data: Mesh = self.terrain_info_object.data
+    terrain_layer: BDK_PG_TerrainLayerPropertyGroup = self.terrain_layers[self.terrain_layers_index]
+    color_attribute_index = -1
+    for i, color_attribute in enumerate(mesh_data.color_attributes):
+        if color_attribute.name == terrain_layer.color_attribute_name:
+            color_attribute_index = i
+            break
+    mesh_data.color_attributes.active_color_index = color_attribute_index
 
 
 class BDK_PG_TerrainInfoPropertyGroup(PropertyGroup):
+    terrain_info_object: PointerProperty(type=bpy.types.Object)
+    is_terrain_info: BoolProperty(default=False, options={'HIDDEN'})
     terrain_scale: FloatProperty(name='TerrainScale')
     terrain_layers: CollectionProperty(name='TerrainLayers', type=BDK_PG_TerrainLayerPropertyGroup)
-    terrain_layers_index: IntProperty(options={'HIDDEN'})
+    terrain_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_layer_index_update)
 
 
 class BDK_UL_TerrainLayersUIList(UIList):
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
         row = layout.row()
-        row.label(text=str(getattr(item, 'name')), icon='VPAINT_HLT')
+
+        icon = row.icon(item.image) if item.image else None
+        if icon:
+            row.prop(item, 'name', text='', emboss=False, icon_value=icon)
+        else:
+            row.prop(item, 'name', text='', emboss=False, icon='IMAGE')
 
 
 class BDK_PT_TerrainLayersPanel(Panel):
@@ -44,17 +71,19 @@ class BDK_PT_TerrainLayersPanel(Panel):
     @classmethod
     def poll(cls, context: Context):
         active_object = context.active_object
-        if active_object is not None and active_object.type == 'MESH':
-            # TODO: imbue the thing with the knowledge of whether or not it is a TerrainInfo ojbect
+        if active_object is not None and active_object.terrain_info.is_terrain_info:
             return True
         return False
 
     def draw(self, context):
         active_object = context.active_object
-        terrain_info = getattr(active_object, 'terrain_info')
+        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
+        terrain_layers = terrain_info.terrain_layers
+        terrain_layers_index = terrain_info.terrain_layers_index
 
         row = self.layout.row()
-        row.template_list('BDK_UL_TerrainLayersUIList', '', terrain_info, 'terrain_layers', terrain_info, 'terrain_layers_index')
+        row.template_list('BDK_UL_TerrainLayersUIList', '', terrain_info, 'terrain_layers', terrain_info,
+                          'terrain_layers_index', sort_lock=True)
 
         col = row.column(align=True)
         col.operator(BDK_OT_TerrainLayerAdd.bl_idname, icon='ADD', text='')
@@ -64,6 +93,26 @@ class BDK_PT_TerrainLayersPanel(Panel):
         operator.direction = 'UP'
         operator = col.operator(BDK_OT_TerrainLayerMove.bl_idname, icon='TRIA_DOWN', text='')
         operator.direction = 'DOWN'
+        col.separator()
+
+        if 0 <= terrain_layers_index < len(terrain_layers):
+            col.separator()
+            row = self.layout.row(align=True)
+
+            terrain_layer = terrain_layers[terrain_layers_index]
+
+            row.prop(terrain_layer, 'image')
+
+            row = self.layout.row(align=True)
+
+            row.label(text='Scale')
+            col = row.column(align=True)
+            col.prop(terrain_layer, 'u_scale', text='U')
+            col.prop(terrain_layer, 'v_scale', text='V')
+
+            row = self.layout.row(align=True)
+            row.label(text='Rotation')
+            row.prop(terrain_layer, 'texture_rotation', text='')
 
 
 class BDK_OT_TerrainLayerRemove(Operator):
@@ -81,12 +130,13 @@ class BDK_OT_TerrainLayerRemove(Operator):
     def execute(self, context: Context):
         active_object = context.active_object
         terrain_info = getattr(active_object, 'terrain_info')
-        terrain_layers: typing.List[BDK_PG_TerrainLayerPropertyGroup] = getattr(terrain_info, 'terrain_layers')
+        terrain_layers = getattr(terrain_info, 'terrain_layers')
         index = getattr(terrain_info, 'terrain_layers_index')
+
         if index >= 0:
             # Remove color attribute.
             terrain_object = context.active_object
-            mesh_data = typing.cast(Mesh, terrain_object.data)
+            mesh_data = cast(Mesh, terrain_object.data)
             color_attribute_name = terrain_layers[index].color_attribute_name
             if color_attribute_name in mesh_data.color_attributes:
                 color_attribute = mesh_data.color_attributes[color_attribute_name]
@@ -131,57 +181,70 @@ class BDK_OT_TerrainLayerMove(Operator):
         return {'FINISHED'}
 
 
+def add_terrain_layer(terrain_info_object: Object, name: str,
+                      fill: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)):
+    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+
+    if terrain_info is None or not terrain_info.is_terrain_info:
+        raise RuntimeError('Invalid object for operation')
+
+    # Auto-increment the names if there is a conflict.
+    while name in map(lambda x: x.name, terrain_info.terrain_layers):
+        match = re.match(r'(.+)\.(\d+)', name)
+        if match:
+            name = match.group(1)
+            number = int(match.group(2))
+            number += 1
+            name = f'{name}.{number:03d}'
+        else:
+            name = f'{name}.001'
+
+    terrain_layer: BDK_PG_TerrainLayerPropertyGroup = terrain_info.terrain_layers.add()
+    terrain_layer.terrain_info_object = terrain_info_object
+    terrain_layer.name = name
+
+    mesh_data = cast(Mesh, terrain_info_object.data)
+
+    # Create the associated color attribute.
+    # TODO: in future, we will be able to paint non-color attributes, so use those once that's possible (probably 2023/2024)
+    color_attribute = mesh_data.color_attributes.new(uuid.uuid4().hex, type='FLOAT_COLOR', domain='POINT')
+
+    vertex_count = len(color_attribute.data)
+
+    color_data = np.ndarray(shape=(vertex_count, 4), dtype=float)
+    color_data[:] = tuple(fill)
+
+    color_attribute.data.foreach_set('color', color_data.flatten())
+    terrain_layer.color_attribute_name = color_attribute.name
+
+    # Regenerate the material.
+    build_terrain_material(terrain_info_object)
+
+    for region in filter(lambda r: r.type == 'WINDOW', bpy.context.area.regions):
+        region.tag_redraw()
+
+    return terrain_layer
+
+
 class BDK_OT_TerrainLayerAdd(Operator):
     bl_idname = 'bdk.terrain_layer_add'
     bl_label = 'Add Terrain Layer'
     bl_options = {'REGISTER', 'UNDO'}
 
     name: StringProperty(name='Name')
-    alpha_fill: FloatVectorProperty(name='Alpha Fill', subtype='COLOR', min=0.0, max=1.0, size=4, default=(0.0, 0.0, 0.0, 1.0))
-    u_scale: FloatProperty(name='UScale', default=32.0)
-    v_scale: FloatProperty(name='VScale', default=32.0)
-    texture_rotation: FloatProperty(name='TextureRotation', default=0.0, subtype='ANGLE')
-
-    def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
-        return context.window_manager.invoke_props_dialog(self)
+    alpha_fill: FloatVectorProperty(name='Alpha Fill', subtype='COLOR', min=0.0, max=1.0, size=4,
+                                    default=(0.0, 0.0, 0.0, 1.0))
+    u_scale: FloatProperty(name='UScale', default=1.0)
+    v_scale: FloatProperty(name='VScale', default=1.0)
 
     def execute(self, context: bpy.types.Context):
-        if self.name == '':
-            self.report({'ERROR'}, 'Terrain layers must have a name')
-            return {'CANCELLED'}
-
         active_object = context.active_object
-        terrain_info = getattr(active_object, 'terrain_info')
-        terrain_layers = getattr(terrain_info, 'terrain_layers')
 
-        if self.name in map(lambda x: x.name, terrain_layers):
-            self.report({'ERROR'}, f'There is already a terrain layer named \'{self.name}\'')
+        try:
+            add_terrain_layer(active_object, name='TerrainLayer', fill=self.alpha_fill)
+        except RuntimeError as e:
+            self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
-
-        terrain_layer: BDK_PG_TerrainLayerPropertyGroup = terrain_layers.add()
-        terrain_layer.name = self.name
-        terrain_layer.u_scale = self.u_scale
-        terrain_layer.v_scale = self.v_scale
-
-        for region in filter(lambda r: r.type == 'WINDOW', bpy.context.area.regions):
-            region.tag_redraw()
-
-        terrain_object = context.active_object
-        mesh_data = typing.cast(Mesh, terrain_object.data)
-
-        # Create the associated color attribute.
-        color_attribute = mesh_data.color_attributes.new(self.name, type='FLOAT_COLOR', domain='POINT')
-
-        vertex_count = len(color_attribute.data)
-
-        color_data = np.ndarray(shape=(vertex_count, 4), dtype=float)
-        color_data[:] = tuple(self.alpha_fill)
-
-        color_attribute.data.foreach_set('color', color_data.flatten())
-        terrain_layer.color_attribute_name = color_attribute.name
-
-        # Regenerate the material.
-        build_terrain_material(active_object)
 
         return {'FINISHED'}
 
@@ -193,20 +256,27 @@ class TerrainMaterialBuilder:
     @staticmethod
     def _build_or_get_terrain_layer_uv_group_node() -> bpy.types.NodeTree:
         group_name = 'BDK TerrainLayerUV'
+        version = 1  # increment this if we need to regenerate this (for example, if we update this code)
 
+        should_create = False
         if group_name in bpy.data.node_groups:
             node_tree = bpy.data.node_groups[group_name]
+            if 'version' not in node_tree or version >= node_tree['version']:
+                node_tree['version'] = version
+                should_create = True
         else:
-            node_tree = bpy.data.node_groups.new(group_name, 'ShaderNodeTree')
+            should_create = True
 
-        node_tree.nodes.clear()
-        node_tree.inputs.clear()
-        node_tree.inputs.new('NodeSocketFloat', 'UScale')
-        node_tree.inputs.new('NodeSocketFloat', 'VScale')
-        node_tree.inputs.new('NodeSocketFloat', 'TextureRotation')
-        node_tree.inputs.new('NodeSocketFloat', 'TerrainScale')
-        node_tree.outputs.clear()
-        node_tree.outputs.new('NodeSocketVector', 'UV')
+        if should_create:
+            node_tree = bpy.data.node_groups.new(group_name, 'ShaderNodeTree')
+            node_tree.nodes.clear()
+            node_tree.inputs.clear()
+            node_tree.inputs.new('NodeSocketFloat', 'UScale')
+            node_tree.inputs.new('NodeSocketFloat', 'VScale')
+            node_tree.inputs.new('NodeSocketFloat', 'TextureRotation')
+            node_tree.inputs.new('NodeSocketFloat', 'TerrainScale')
+            node_tree.outputs.clear()
+            node_tree.outputs.new('NodeSocketVector', 'UV')
 
         group_input_node = node_tree.nodes.new('NodeGroupInput')
 
@@ -258,23 +328,43 @@ class TerrainMaterialBuilder:
         terrain_info = getattr(terrain_info_object, 'terrain_info')
         terrain_layers = getattr(terrain_info, 'terrain_layers')
 
-        mesh_data = typing.cast(Mesh, terrain_info_object.data)
-        material = mesh_data.materials[0]
+        mesh_data = cast(Mesh, terrain_info_object.data)
+
+        if len(mesh_data.materials) == 0:
+            material = bpy.data.materials.new(uuid.uuid4().hex)
+            material.use_nodes = True
+            mesh_data.materials.append(material)
+        else:
+            material = mesh_data.materials[0]
+
         node_tree = material.node_tree
         node_tree.nodes.clear()
 
         last_shader_socket = None
 
-        for terrain_layer in terrain_layers:
+        for terrain_layer_index, terrain_layer in enumerate(terrain_layers):
             terrain_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
             terrain_layer_uv_node.node_tree = self._build_or_get_terrain_layer_uv_group_node()
 
-            terrain_layer_uv_node.inputs['UScale'].default_value = terrain_layer.u_scale
-            terrain_layer_uv_node.inputs['VScale'].default_value = terrain_layer.v_scale
-            terrain_layer_uv_node.inputs['TextureRotation'].default_value = terrain_layer.texture_rotation
+            def add_terrain_layer_input_driver(input_prop: str, terrain_layer_prop: str):
+                fcurve = terrain_layer_uv_node.inputs[input_prop].driver_add('default_value')
+                fcurve.driver.type = 'AVERAGE'
+                variable = fcurve.driver.variables.new()
+                variable.type = 'SINGLE_PROP'
+                variable.name = 'u_scale'
+                target = variable.targets[0]
+                target.id_type = 'OBJECT'
+                target.id = terrain_info_object
+                target.data_path = f'terrain_info.terrain_layers[{terrain_layer_index}].{terrain_layer_prop}'
+
+            add_terrain_layer_input_driver('UScale', 'u_scale')
+            add_terrain_layer_input_driver('VScale', 'v_scale')
+            add_terrain_layer_input_driver('TextureRotation', 'texture_rotation')
+
             terrain_layer_uv_node.inputs['TerrainScale'].default_value = terrain_info.terrain_scale
 
             image_node = node_tree.nodes.new('ShaderNodeTexImage')
+            image_node.image = terrain_layer.image
             # TODO: fill this in with something eventually (or better yet, recreate/reuse the materials!)
 
             color_attribute_node = node_tree.nodes.new('ShaderNodeVertexColor')
@@ -301,14 +391,23 @@ class TerrainMaterialBuilder:
             node_tree.links.new(output_node.inputs['Surface'], last_shader_socket)
 
 
-class BDK_OT_TerrainInfoAdd(Operator):
+def quad_size_get(self):
+    return self.size / self.resolution
 
+
+def quad_size_set(self, value):
+    self.size = (value / value)
+
+
+class BDK_OT_TerrainInfoAdd(Operator):
     bl_idname = 'bdk.create_terrain_info'
-    bl_label = 'Create TerrainInfo'
+    bl_label = 'Add Terrain Info'
     bl_options = {'REGISTER', 'UNDO'}
 
-    resolution: IntProperty(name='Resolution', default=512, min=2, max=512)
-    size: FloatProperty(name='Size', default=1000*60.352, subtype='DISTANCE')
+    resolution: IntProperty(name='Resolution', default=512, min=2, max=512, description='The number of quads')
+    size: FloatProperty(name='Size', default=500 * 60.352, subtype='DISTANCE',
+                        description='The length and width of the terrain')
+    quad_size: FloatProperty(name='Quad Size', get=quad_size_get, set=None, subtype='DISTANCE')
     location: FloatVectorProperty(name='Location', unit='LENGTH')
     lock_transforms: BoolProperty(name='Lock Transforms', default=True)
 
@@ -360,8 +459,13 @@ class BDK_OT_TerrainInfoAdd(Operator):
             mesh_object.lock_rotations_4d = True
 
         # Custom properties
-        terrain_info = getattr(mesh_object, 'terrain_info')
-        setattr(terrain_info, 'terrain_scale', self.size / self.resolution)
+        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(mesh_object, 'terrain_info')
+        terrain_info.is_terrain_info = True
+        terrain_info.terrain_info_object = mesh_object
+        terrain_info.terrain_scale = self.size / self.resolution
+
+        # Add a base layer to start with.
+        add_terrain_layer(mesh_object, name='Base', fill=(1.0, 1.0, 1.0, 1.0))
 
         context.scene.collection.objects.link(mesh_object)
 
