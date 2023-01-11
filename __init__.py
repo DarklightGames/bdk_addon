@@ -21,12 +21,16 @@ if 'bpy' in locals():
     importlib.reload(material_importer)
 
     importlib.reload(terrain_operators)
+
+    importlib.reload(bdk_panel)
 else:
     from .material import data as material_data
     from .material import reader as material_reader
     from .material import importer as material_importer
 
     from .terrain import operators as terrain_operators
+
+    from .panel import panel as bdk_panel
 
 import bpy
 
@@ -40,7 +44,7 @@ class BdkAddonPreferences(AddonPreferences):
         self.layout.prop(self, 'build_path')
 
 
-classes = material_importer.classes + terrain_operators.classes + (
+classes = material_importer.classes + terrain_operators.classes + bdk_panel.classes + (
     BdkAddonPreferences,
 )
 
