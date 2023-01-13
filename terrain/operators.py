@@ -183,6 +183,7 @@ class BDK_OT_TerrainLayerMove(Operator):
             terrain_info.terrain_layers_index -= 1
             build_terrain_material(active_object)
         elif self.direction == 'DOWN' and terrain_layers_index < len(terrain_layers) - 1:
+            terrain_layers.move(terrain_layers_index, terrain_layers_index + 1)
             terrain_info.terrain_layers_index += 1
             build_terrain_material(active_object)
 
