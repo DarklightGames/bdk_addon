@@ -54,7 +54,8 @@ class BDK_OP_CopyObject(Operator):
         map = UMap()
 
         for obj in copy_objects:
-            map.add_actor(UStaticMeshActor(obj))
+            if obj.type == 'MESH' and obj.data is not None:
+                map.add_actor(UStaticMeshActor(obj))
 
         bpy.context.window_manager.clipboard = map.to_text()
         print(map.to_text())
