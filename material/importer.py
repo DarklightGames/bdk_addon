@@ -248,8 +248,7 @@ class MaterialBuilder:
 
         return outputs
 
-    def _import_constant_color(self, constant_color: UConstantColor,
-                               socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    def _import_constant_color(self, constant_color: UConstantColor, _: MaterialSocketInputs) -> MaterialSocketOutputs:
         outputs = MaterialSocketOutputs()
 
         rgb_node = self._node_tree.nodes.new('ShaderNodeRGB')
@@ -386,8 +385,7 @@ class MaterialBuilder:
 
         return material_outputs
 
-    def _import_tex_env_map(self, tex_env_map: UTexEnvMap,
-                            socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    def _import_tex_env_map(self, tex_env_map: UTexEnvMap, _: MaterialSocketInputs) -> MaterialSocketOutputs:
         inputs = MaterialSocketInputs()
 
         if tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream0:
@@ -636,7 +634,8 @@ class MaterialBuilder:
 
         return outputs
 
-    def _import_variable_tex_panner(self, variable_tex_panner: UVariableTexPanner, socket_inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
+    def _import_variable_tex_panner(self, variable_tex_panner: UVariableTexPanner,
+                                    socket_inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
         vector_rotate_node.inputs['Rotation'].default_value = variable_tex_panner.PanDirection.get_radians()
@@ -677,9 +676,7 @@ class MaterialBuilder:
 
         return None
 
-
-    def _import_vertex_color(self, vertex_color: UVertexColor,
-                             socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+    def _import_vertex_color(self, _: UVertexColor, __: MaterialSocketInputs) -> MaterialSocketOutputs:
         vertex_color_node = self._node_tree.nodes.new('ShaderNodeAttribute')
         vertex_color_node.attribute_type = 'GEOMETRY'
         vertex_color_node.attribute_name = 'VERTEXCOLOR'
@@ -693,17 +690,17 @@ class MaterialBuilder:
     def _import_material(self, material: UMaterial, inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
         if material is None:
             return None
-        callable = self._material_type_importers.get(type(material), None)
-        if callable is None:
+        material_import_function = self._material_type_importers.get(type(material), None)
+        if material_import_function is None:
             raise NotImplementedError(f'No importer registered for type "{type(material)}"')
-        return callable(material, inputs)
+        return material_import_function(material, inputs)
 
     def build(self, material: UMaterial) -> Optional[MaterialSocketOutputs]:
         return self._import_material(material, inputs=MaterialSocketInputs())
 
 
 class BDK_OT_material_import(Operator, ImportHelper):
-    bl_idname = 'bdk.material_import'
+    bl_idname = 'bdk.import_material'
     bl_label = 'Import Unreal Material'
     filename_ext = '.props.txt'
     filepath: StringProperty()
@@ -715,7 +712,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
         default='')
 
     def execute(self, context: bpy.types.Context):
-        bdk_build_path = context.preferences.addons['bdk_addon'].preferences.build_path
+        bdk_build_path = getattr(context.preferences.addons['bdk_addon'].preferences, 'build_path')
 
         if bdk_build_path == '':
             self.report({'ERROR_INVALID_CONTEXT'}, 'The BDK build path has not been set in the addon preferences.')
@@ -747,6 +744,8 @@ class BDK_OT_material_import(Operator, ImportHelper):
         diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')
 
         if outputs:
+            material_data['UClamp'] = outputs.size[0]
+            material_data['VClamp'] = outputs.size[1]
             material_data.use_backface_culling = outputs.use_backface_culling
             material_data.show_transparent_back = not outputs.use_backface_culling
             material_data.blend_method = outputs.blend_method

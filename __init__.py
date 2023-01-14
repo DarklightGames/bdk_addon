@@ -20,13 +20,21 @@ if 'bpy' in locals():
     importlib.reload(material_reader)
     importlib.reload(material_importer)
 
+    importlib.reload(g16)
+    importlib.reload(terrain_types)
+    importlib.reload(terrain_builder)
     importlib.reload(terrain_operators)
+    importlib.reload(terrain_exporter)
 else:
     from .material import data as material_data
     from .material import reader as material_reader
     from .material import importer as material_importer
 
+    from .terrain import types as terrain_types
+    from .terrain import builder as terrain_builder
     from .terrain import operators as terrain_operators
+    from .terrain import exporter as terrain_exporter
+    from .terrain import g16
 
 import bpy
 
@@ -36,13 +44,16 @@ class BdkAddonPreferences(AddonPreferences):
 
     build_path: StringProperty(subtype='DIR_PATH', name='Build Path')
 
-    def draw(self, context: bpy.types.Context):
+    def draw(self, _: bpy.types.Context):
         self.layout.prop(self, 'build_path')
 
 
-classes = material_importer.classes + terrain_operators.classes + (
-    BdkAddonPreferences,
-)
+classes = material_importer.classes + \
+          terrain_types.classes + \
+          terrain_operators.classes + \
+          terrain_exporter.classes + (
+                BdkAddonPreferences,
+          )
 
 
 def material_import_menu_func(self, _context: bpy.types.Context):
