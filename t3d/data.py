@@ -1,8 +1,5 @@
-import bpy
-import bmesh
 from bpy.types import Object
 from mathutils import Vector, Euler, Quaternion
-from typing import Sequence
 
 
 def rad_to_unreal(value: float) -> int:
