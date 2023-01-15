@@ -1,13 +1,17 @@
+import os
 import bpy
 import numpy as np
+from bpy.props import StringProperty
 from bpy.types import Object, Mesh, Context, Operator
 from typing import cast
+
+from bpy_extras.io_utils import ExportHelper
 
 from .types import BDK_PG_TerrainInfoPropertyGroup
 from .g16 import write_bmp_g16
 
 
-def export_terrain_layers(terrain_info_object: Object):
+def export_terrain_layers(terrain_info_object: Object, directory: str):
     terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')\
 
     if terrain_info is None or not terrain_info.is_terrain_info:
@@ -40,13 +44,14 @@ def export_terrain_layers(terrain_info_object: Object):
 
         # Assign the image pixels.
         image.pixels[:] = data.flatten()
-        image.save(filepath=f'C:/Users/Owner/Desktop/DH TERRAIN TEST/{terrain_layer.color_attribute_name}.tga')
+        filepath = os.path.join(directory, f'{terrain_layer.color_attribute_name}.tga')
+        image.save(filepath=filepath)
 
         # Now remove the image, since we don't actually need to save this.
         bpy.data.images.remove(image)
 
 
-def export_terrain_heightmap(terrain_info_object: Object):
+def export_terrain_heightmap(terrain_info_object: Object, directory: str):
     terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
 
     if terrain_info is None or not terrain_info.is_terrain_info:
@@ -61,8 +66,7 @@ def export_terrain_heightmap(terrain_info_object: Object):
     heightmap, terrain_scale_z = normalize_and_quantize_heights(heightmap)
     heightmap.reshape(shape)
 
-    # TODO: user-defined area
-    path = 'C:\\Users\\Owner\\Desktop\\DH TERRAIN TEST\\heightmap.bmp'
+    path = os.path.join(directory, f'{terrain_info_object.name}.bmp')
     write_bmp_g16(path, pixels=heightmap, shape=shape)
 
 
@@ -81,14 +85,22 @@ def normalize_and_quantize_heights(heightmap: np.array) -> (np.array, float):
     return heightmap, terrain_scale_z
 
 
-class BDK_OT_TerrainInfoExport(Operator):
+class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
 
     bl_label = 'Export Terrain Info'
     bl_idname = 'bdk.export_terrain_info'
 
+    directory: StringProperty(name='Directory')
+    filename_ext: StringProperty(default='.')
+    filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
+
+    def invoke(self, context: 'Context', event: 'Event'):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
     def execute(self, context: Context):
-        export_terrain_heightmap(context.active_object)
-        export_terrain_layers(context.active_object)
+        export_terrain_heightmap(context.active_object, directory=self.directory)
+        export_terrain_layers(context.active_object, directory=self.directory)
         return {'FINISHED'}
 
 
