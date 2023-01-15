@@ -43,19 +43,23 @@ class BDK_OP_CopyObject(Operator):
     bl_label = 'Copy as Unreal T3D'
 
     def execute(self, context: Context) -> Set[str]:
-        copy_objects: list[Object] = []
+        copy_actors: list[UActor] = []
+
+        def can_copy(object: Object) -> bool:
+            return object.type == 'MESH' and object.data is not None
 
         for obj in context.selected_objects:
             if obj.instance_collection:
-                copy_objects += [*obj.instance_collection.all_objects]
-            else:
-                copy_objects.append(obj)
+                copy_actors += [UStaticMeshActor(o, obj) \
+                                for o in obj.instance_collection.all_objects \
+                                if can_copy(o)]
+            elif can_copy(obj):
+                copy_actors.append(UStaticMeshActor(obj))
 
         map = UMap()
 
-        for obj in copy_objects:
-            if obj.type == 'MESH' and obj.data is not None:
-                map.add_actor(UStaticMeshActor(obj))
+        for actor in copy_actors:
+            map.add_actor(actor)
 
         bpy.context.window_manager.clipboard = map.to_text()
         print(map.to_text())
