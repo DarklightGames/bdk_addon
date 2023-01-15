@@ -1,5 +1,7 @@
+import bpy
+import bmesh
 from bpy.types import Object
-from mathutils import Vector, Euler
+from mathutils import Vector, Euler, Quaternion
 from typing import Sequence
 
 
@@ -48,21 +50,23 @@ class UActor(T3DInterface):
         Location is corrected by 32 units because it gets offset when actor is pasted into the Unreal Editor.
         Y-Axis is inverted.
         """
-
-        loc: Vector = Vector(self.object.location) - Vector((32.0, -32.0, 32.0))
+        v: Vector = Vector(self.object.matrix_world.decompose()[0])
+        loc: Vector = v - Vector((32.0, -32.0, 32.0))
         loc.y = -loc.y
 
         return UVector(loc)
 
     def rotation(self) -> URotator:
         """Returns the actor's rotator."""
+        q: Quaternion = Quaternion(self.object.matrix_world.decompose()[1])
 
-        return URotator(Euler(self.object.rotation_euler))
+        return URotator(q.to_euler('XYZ'))
 
     def scale(self) -> UVector:
         """Returns the scale vector of the actor."""
+        v: Vector = Vector(self.object.matrix_world.decompose()[2])
 
-        return UVector(self.object.scale)
+        return UVector(v)
 
     def get_property_dict(self) -> dict[str, str]:
         """Returns properties of the actor as a dictionary."""
