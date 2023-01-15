@@ -91,7 +91,7 @@ class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
     bl_idname = 'bdk.export_terrain_info'
 
     directory: StringProperty(name='Directory')
-    filename_ext: StringProperty(default='.')
+    filename_ext: StringProperty(default='.', options={'HIDDEN'})
     filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
 
     def invoke(self, context: 'Context', event: 'Event'):
