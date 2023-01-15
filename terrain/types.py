@@ -37,6 +37,8 @@ class BDK_PG_TerrainInfoPropertyGroup(PropertyGroup):
     terrain_scale: FloatProperty(name='TerrainScale')
     terrain_layers: CollectionProperty(name='TerrainLayers', type=BDK_PG_TerrainLayerPropertyGroup)
     terrain_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_layer_index_update)
+    x_size: IntProperty(options={'HIDDEN'})
+    y_size: IntProperty(options={'HIDDEN'})
 
 
 classes = (

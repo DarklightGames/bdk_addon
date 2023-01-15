@@ -292,7 +292,6 @@ class BDK_OT_TerrainInfoAdd(Operator):
 
         mesh_object = bpy.data.objects.new('TerrainInfo', mesh_data)
         mesh_object.location = self.location
-        mesh_object['bdk.resolution'] = self.resolution
         mesh_object['bdk.quad_size'] = self.quad_size
 
         if self.lock_transforms:
@@ -307,6 +306,8 @@ class BDK_OT_TerrainInfoAdd(Operator):
         terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(mesh_object, 'terrain_info')
         terrain_info.is_terrain_info = True
         terrain_info.terrain_info_object = mesh_object
+        terrain_info.x_size = self.resolution
+        terrain_info.y_size = self.resolution
         terrain_info.terrain_scale = self.size / self.resolution
 
         # Add a base layer to start with.
