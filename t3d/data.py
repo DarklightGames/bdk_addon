@@ -35,9 +35,16 @@ class URotator:
 
 # TODO: Get 'defaultproperties' from object's custom properties
 class UActor(T3DInterface):
-    def __init__(self, object: Object) -> None:
+    def __init__(self, object: Object, parent: Object | None = None) -> None:
         self.object: Object = object
-        self.classname: str = 'StaticMeshActor'
+        self.parent: Object | None = parent
+        self.classname: str = 'Actor'
+
+        # TODO: calculate transform
+        if self.parent:
+            self.matrix_world = self.parent.matrix_world @ self.object.matrix_local
+        else:
+            self.matrix_world = self.object.matrix_world
 
     def __repr__(self) -> str:
         return self.to_text()
@@ -48,7 +55,7 @@ class UActor(T3DInterface):
         Location is corrected by 32 units because it gets offset when actor is pasted into the Unreal Editor.
         Y-Axis is inverted.
         """
-        v: Vector = Vector(self.object.matrix_world.decompose()[0])
+        v = Vector(self.matrix_world.decompose()[0])
         loc: Vector = v - Vector((32.0, -32.0, 32.0))
         loc.y = -loc.y
 
@@ -56,13 +63,15 @@ class UActor(T3DInterface):
 
     def rotation(self) -> URotator:
         """Returns the actor's rotator."""
-        q: Quaternion = Quaternion(self.object.matrix_world.decompose()[1])
+
+        q = Quaternion(self.matrix_world.decompose()[1])
 
         return URotator(q.to_euler('XYZ'))
 
     def scale(self) -> UVector:
         """Returns the scale vector of the actor."""
-        v: Vector = Vector(self.object.matrix_world.decompose()[2])
+
+        v: Vector = Vector(self.matrix_world.decompose()[2])
 
         return UVector(v)
 
@@ -88,8 +97,8 @@ class UActor(T3DInterface):
 
 
 class UStaticMeshActor(UActor):
-    def __init__(self, object: Object) -> None:
-        super().__init__(object)
+    def __init__(self, object: Object, parent: Object | None = None) -> None:
+        super().__init__(object, parent)
         self.classname = 'StaticMeshActor'
 
     def get_property_dict(self) -> dict[str, str]:
