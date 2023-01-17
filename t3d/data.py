@@ -1,6 +1,5 @@
 from bpy.types import Object
 from mathutils import Vector, Euler, Matrix, Quaternion
-from typing import Sequence
 
 
 def rad_to_unreal(value: float) -> int:
@@ -35,53 +34,52 @@ class URotator:
 
 # TODO: Get 'defaultproperties' from object's custom properties
 class UActor(T3DInterface):
-    def __init__(self, object: Object, parent: Object | None = None) -> None:
-        self.object: Object = object
-        self.parent: Object | None = parent
-        self.classname: str = 'Actor'
+    """
+    Unreal Actor
 
-        # TODO: calculate transform
-        if self.parent:
-            self.matrix_world = self.parent.matrix_world @ self.object.matrix_local
+    :param object: Blender object
+    :param asset_instance: Collection instance containing the object (optional)
+    """
+
+    def __init__(self, object: Object, asset_instance: Object | None = None) -> None:
+        self.object: Object = object
+        self.asset_instance: Object | None = asset_instance
+        self.classname: str = 'Actor'
+        self.matrix_world: Matrix
+
+        if self.asset_instance:
+            self.matrix_world: Matrix = self.asset_instance.matrix_world @ self.instance_offset @ object.matrix_local
         else:
             self.matrix_world = self.object.matrix_world
+
+        # Location is corrected by 32 units as it gets offset when actor 
+        # is pasted into the Unreal Editor.
+        loc: Vector = self.matrix_world.to_translation() - Vector((32.0, -32.0, 32.0))
+        # Y-Axis is inverted in UE.
+        loc.y = -loc.y 
+
+        self.location: UVector = UVector(loc)
+        self.rotation: URotator = URotator(self.matrix_world.to_euler('XYZ')) 
+        self.scale: UVector = UVector(self.matrix_world.to_scale())
 
     def __repr__(self) -> str:
         return self.to_text()
 
-    def location(self) -> UVector:
-        """
-        Returns location vector of the actor.
-        Location is corrected by 32 units because it gets offset when actor is pasted into the Unreal Editor.
-        Y-Axis is inverted.
-        """
-        v = Vector(self.matrix_world.decompose()[0])
-        loc: Vector = v - Vector((32.0, -32.0, 32.0))
-        loc.y = -loc.y
-
-        return UVector(loc)
-
-    def rotation(self) -> URotator:
-        """Returns the actor's rotator."""
-
-        q = Quaternion(self.matrix_world.decompose()[1])
-
-        return URotator(q.to_euler('XYZ'))
-
-    def scale(self) -> UVector:
-        """Returns the scale vector of the actor."""
-
-        v: Vector = Vector(self.matrix_world.decompose()[2])
-
-        return UVector(v)
-
+    @property
+    def instance_offset(self) -> Matrix:
+        try:
+            local_offset: Vector = self.asset_instance.instance_collection.instance_offset
+            return Matrix().Translation(local_offset).inverted()
+        except AttributeError:
+            return Matrix()
+    
     def get_property_dict(self) -> dict[str, str]:
         """Returns properties of the actor as a dictionary."""
 
         props: dict[str, str] = {}
-        props['Location'] = str(self.location())
-        props['Rotation'] = str(self.rotation())
-        props['DrawScale3D'] = str(self.scale())
+        props['Location'] = str(self.location)
+        props['Rotation'] = str(self.rotation)
+        props['DrawScale3D'] = str(self.scale)
 
         return props
 
@@ -97,8 +95,8 @@ class UActor(T3DInterface):
 
 
 class UStaticMeshActor(UActor):
-    def __init__(self, object: Object, parent: Object | None = None) -> None:
-        super().__init__(object, parent)
+    def __init__(self, object: Object, asset_instance: Object | None = None) -> None:
+        super().__init__(object, asset_instance)
         self.classname = 'StaticMeshActor'
 
     def get_property_dict(self) -> dict[str, str]:
