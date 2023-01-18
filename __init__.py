@@ -30,6 +30,8 @@ if 'bpy' in locals():
 
     importlib.reload(t3d_data)
     importlib.reload(t3d_operators)
+
+    importlib.reload(asset_browser_operators)
 else:
     from .material import data as material_data
     from .material import reader as material_reader
@@ -46,6 +48,7 @@ else:
     from .t3d import data as t3d_data
     from .t3d import operators as t3d_operators
 
+    from .asset_browser import operators as asset_browser_operators
 
 import bpy
 
@@ -65,6 +68,7 @@ classes = material_importer.classes + \
           terrain_exporter.classes + \
           bdk_panel.classes + \
           t3d_operators.classes + \
+          asset_browser_operators.classes + \
           (BdkAddonPreferences,)
 
 
@@ -87,6 +91,11 @@ def bdk_t3d_copy_asset_func(self, _context: bpy.types.Context):
     self.layout.operator(t3d_operators.BDK_OP_CopyAsset.bl_idname, icon='COPYDOWN')
 
 
+def bdk_asset_browser_import_data_func(self, _context: bpy.types.Context):
+    self.layout.separator()
+    self.layout.operator(asset_browser_operators.BDK_OP_ImportDataLinked.bl_idname, icon='LINKED')
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -102,8 +111,9 @@ def register():
     bpy.types.VIEW3D_MT_object_context_menu.append(bdk_t3d_copy_func)
     bpy.types.OUTLINER_MT_collection.append(bdk_t3d_copy_func)
 
-    # T3D Copy (assets)
-    bpy.types.ASSETBROWSER_MT_context_menu.append(bdk_t3d_copy_asset_func)
+    # Asset browser
+    # bpy.types.ASSETBROWSER_MT_context_menu.append(bdk_t3d_copy_asset_func)
+    bpy.types.ASSETBROWSER_MT_context_menu.append(bdk_asset_browser_import_data_func)
 
 
 def unregister():
@@ -119,8 +129,9 @@ def unregister():
     bpy.types.VIEW3D_MT_object_context_menu.remove(bdk_t3d_copy_func)
     bpy.types.OUTLINER_MT_collection.remove(bdk_t3d_copy_func)
 
-    # T3D Copy (assets)
-    bpy.types.ASSETBROWSER_MT_context_menu.remove(bdk_t3d_copy_asset_func)
+    # Asset browser
+    # bpy.types.ASSETBROWSER_MT_context_menu.remove(bdk_t3d_copy_asset_func)
+    bpy.types.ASSETBROWSER_MT_context_menu.remove(bdk_asset_browser_import_data_func)
 
 
 if __name__ == '__main__':
