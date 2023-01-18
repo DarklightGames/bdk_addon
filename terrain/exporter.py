@@ -3,8 +3,10 @@ import os
 from collections import OrderedDict
 from types import NoneType
 
+import bmesh
 import bpy
 import numpy as np
+from bmesh.types import BMFace
 from bpy.props import StringProperty
 from bpy.types import Object, Mesh, Context, Operator
 from typing import cast, Any, List
@@ -104,9 +106,28 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
             'TextureRotation': terrain_layer.texture_rotation,
         })
 
+    mesh = cast(Mesh, terrain_info_object.data)
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+
+    # Calculate the edge turn bitmap.
+    bitmap_size = max(1, (terrain_info.x_size * terrain_info.y_size) >> 5)
+    edge_turn_bitmap = [0] * bitmap_size
+
+    vertex_index = 0
+    faces_iter = iter(bm.faces)
+    for y in range(terrain_info.y_size - 1):
+        for x in range(terrain_info.x_size - 1):
+            face: BMFace = next(faces_iter)
+            loop_vertex_index = face.loops[0].vert.index
+            if loop_vertex_index != vertex_index and loop_vertex_index != vertex_index + terrain_info.x_size + 1:
+                edge_turn_bitmap[vertex_index // 32] = edge_turn_bitmap[vertex_index // 32] | (1 << (vertex_index & 0x1F))
+            vertex_index += 1
+        vertex_index += 1
+
     actor['TerrainMap'] = f'Texture\'myLevel.Terrain.{terrain_info_object.name}\''
     actor['Layers'] = layers
-    actor['EdgeTurnBitmap'] = []  # TODO: fill this in
+    actor['EdgeTurnBitmap'] = edge_turn_bitmap
     actor['bNoDelete'] = True
     actor['bMoveable'] = False
     actor['bLockLocation'] = True
