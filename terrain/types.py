@@ -1,4 +1,4 @@
-from bpy.types import PropertyGroup, Object, Image, Context, Mesh
+from bpy.types import PropertyGroup, Object, Context, Mesh, Material
 from bpy.props import PointerProperty, BoolProperty, FloatProperty, CollectionProperty, IntProperty, StringProperty
 from .builder import TerrainMaterialBuilder
 
@@ -12,7 +12,7 @@ class BDK_PG_TerrainLayerPropertyGroup(PropertyGroup):
     u_scale: FloatProperty(name='UScale', default=2.0)
     v_scale: FloatProperty(name='VScale', default=2.0)
     texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE')
-    image: PointerProperty(name='Image', type=Image, update=on_material_update)
+    material: PointerProperty(name='Material', type=Material, update=on_material_update)
     color_attribute_name: StringProperty(options={'HIDDEN'})
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)

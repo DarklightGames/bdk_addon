@@ -77,6 +77,7 @@ class MaterialSocketOutputs:
 
 
 class MaterialSocketInputs:
+    uv_source_socket: bpy.types.NodeSocket = None
     uv_socket: bpy.types.NodeSocket = None
 
 
@@ -273,13 +274,12 @@ class MaterialBuilder:
         return outputs
 
     def _import_detail_material(self, detail_material: UMaterial, detail_scale: float,
-                                color_socket: bpy.types.NodeSocket) -> bpy.types.NodeSocket:
+                                color_socket: bpy.types.NodeSocket, uv_source_socket: bpy.types.NodeSocket) -> bpy.types.NodeSocket:
         # Create UV scaling sockets.
-        tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
         scale_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         scale_node.operation = 'SCALE'
         scale_node.inputs['Scale'].default_value = detail_scale
-        self._node_tree.links.new(scale_node.inputs[0], tex_coord_node.outputs['UV'])
+        self._node_tree.links.new(scale_node.inputs[0], uv_source_socket)
         detail_socket_inputs = MaterialSocketInputs()
         detail_socket_inputs.uv_socket = scale_node.outputs['Vector']
 
@@ -332,7 +332,8 @@ class MaterialBuilder:
             diffuse_material_outputs = self._import_material(diffuse_material, copy.copy(socket_inputs))
             detail_material = self._material_cache.load_material(shader.Detail) if shader.Detail is not None else None
             if detail_material is not None:
-                self._import_detail_material(detail_material, shader.DetailScale, diffuse_material_outputs.color_socket)
+                self._import_detail_material(detail_material, shader.DetailScale, diffuse_material_outputs.color_socket,
+                                             uv_source_socket=socket_inputs.uv_source_socket)
             outputs.color_socket = diffuse_material_outputs.color_socket
             outputs.use_backface_culling = diffuse_material_outputs.use_backface_culling
 
@@ -413,8 +414,8 @@ class MaterialBuilder:
             uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
             uv_map_node.uv_map = 'EXTRAUV6'
         elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_WorldCoords:
-            tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
-            inputs.uv_socket = tex_coord_node.outputs['Object']
+            geometry_node = self._node_tree.nodes.new('ShaderNodeNewGeometry')
+            inputs.uv_socket = geometry_node.outputs['Position']
         elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_CameraCoords:
             tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
             inputs.uv_socket = tex_coord_node.outputs['Camera']
@@ -435,7 +436,6 @@ class MaterialBuilder:
 
     def _import_tex_oscillator(self, tex_oscillator: UTexOscillator,
                                socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-        tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
         vector_subtract_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         vector_subtract_node.operation = 'SUBTRACT'
         vector_add_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
@@ -444,7 +444,7 @@ class MaterialBuilder:
 
         offset_node = self._node_tree.nodes.new('ShaderNodeCombineXYZ')
 
-        self._node_tree.links.new(vector_subtract_node.inputs[0], tex_coord_node.outputs['UV'])
+        self._node_tree.links.new(vector_subtract_node.inputs[0], socket_inputs.uv_source_socket)
         self._node_tree.links.new(vector_add_node.inputs[0], vector_transform_node.outputs[0])
         self._node_tree.links.new(vector_transform_node.inputs[0], vector_subtract_node.outputs[0])
         self._node_tree.links.new(vector_subtract_node.inputs[1], offset_node.outputs['Vector'])
@@ -502,9 +502,6 @@ class MaterialBuilder:
         return material_outputs
 
     def _import_tex_panner(self, tex_panner: UTexPanner, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-
-        tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
-
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
         vector_rotate_node.inputs['Rotation'].default_value = tex_panner.PanDirection.get_radians()
@@ -517,7 +514,7 @@ class MaterialBuilder:
 
         # TODO: there are strange interactions with stacking multiple UV modifiers, handle this later
         self._node_tree.links.new(vector_add_node.inputs[0], vector_rotate_node.outputs['Vector'])
-        self._node_tree.links.new(vector_rotate_node.inputs[0], tex_coord_node.outputs['UV'])
+        self._node_tree.links.new(vector_rotate_node.inputs[0], socket_inputs.uv_source_socket)
 
         socket_inputs.uv_socket = vector_add_node.outputs['Vector']
 
@@ -528,7 +525,6 @@ class MaterialBuilder:
 
     def _import_tex_rotator(self, tex_rotator: UTexRotator,
                             socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-        tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
 
@@ -562,12 +558,11 @@ class MaterialBuilder:
                 if radians != 0:
                     add_driver_to_vector_rotate_rotation_input(f'(frame / bpy.context.scene.render.fps) * {radians}', i)
 
-        self._node_tree.links.new(vector_rotate_node.inputs['Vector'], tex_coord_node.outputs['UV'])
+        self._node_tree.links.new(vector_rotate_node.inputs['Vector'], socket_inputs.uv_source_socket)
 
         return material_outputs
 
     def _import_tex_scaler(self, tex_scaler: UTexScaler, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-        tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
         vector_subtract_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         vector_subtract_node.operation = 'SUBTRACT'
         vector_add_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
@@ -578,7 +573,7 @@ class MaterialBuilder:
 
         offset_node = self._node_tree.nodes.new('ShaderNodeCombineXYZ')
 
-        self._node_tree.links.new(vector_subtract_node.inputs[0], tex_coord_node.outputs['UV'])
+        self._node_tree.links.new(vector_subtract_node.inputs[0], socket_inputs.uv_source_socket)
         self._node_tree.links.new(vector_add_node.inputs[0], vector_transform_node.outputs[0])
         self._node_tree.links.new(vector_transform_node.inputs[0], vector_subtract_node.outputs[0])
         self._node_tree.links.new(vector_subtract_node.inputs[1], offset_node.outputs['Vector'])
@@ -606,6 +601,8 @@ class MaterialBuilder:
         if socket_inputs.uv_socket is not None:
             # Hook up UV socket input to image texture.
             self._node_tree.links.new(image_node.inputs['Vector'], socket_inputs.uv_socket)
+        elif socket_inputs.uv_source_socket is not None:
+            self._node_tree.links.new(image_node.inputs['Vector'], socket_inputs.uv_source_socket)
 
         if texture.UClampMode == ETexClampMode.TC_Clamp:
             image_node.extension = 'EXTEND'
@@ -616,7 +613,8 @@ class MaterialBuilder:
         detail_material = None if texture.Detail is None else self._material_cache.load_material(texture.Detail)
         if detail_material is not None:
             outputs.color_socket = self._import_detail_material(detail_material, texture.DetailScale,
-                                                                image_node.outputs['Color'])
+                                                                image_node.outputs['Color'],
+                                                                uv_source_socket=socket_inputs.uv_source_socket)
         else:
             outputs.color_socket = image_node.outputs['Color']
 
@@ -625,8 +623,10 @@ class MaterialBuilder:
         if texture.bAlphaTexture or texture.bMasked:
             outputs.alpha_socket = image_node.outputs['Alpha']
 
-        if texture.bMasked or texture.bAlphaTexture:
-            outputs.blend_method = 'CLIP'  # TODO: using 'BLEND' looks like ass, maybe figure this out later.
+        if texture.bMasked:
+            outputs.blend_method = 'CLIP'
+        elif texture.bAlphaTexture:
+            outputs.blend_method = 'BLEND'
         else:
             outputs.blend_method = 'OPAQUE'
 
@@ -655,7 +655,9 @@ class MaterialBuilder:
         self._node_tree.links.new(combine_xyz_node.inputs['X'], multiply_node.outputs['Value'])
         self._node_tree.links.new(vector_rotate_node.inputs['Vector'], combine_xyz_node.outputs['Vector'])
 
-        if socket_inputs.uv_socket is not None:
+        uv_socket = socket_inputs.uv_socket if socket_inputs.uv_socket else socket_inputs.uv_source_socket
+
+        if uv_socket is not None:
             # TODO: a generic way to handle this would be better, since it's possible to chain these UV modifiers
             #  together ad infinitum.
             #  Maybe just add UV socket outputs to a list and add them together whenever they're being used?
@@ -664,7 +666,7 @@ class MaterialBuilder:
             add_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
             add_node.operation = 'ADD'
 
-            self._node_tree.links.new(add_node.inputs[0], socket_inputs.uv_socket)
+            self._node_tree.links.new(add_node.inputs[0], uv_socket)
             self._node_tree.links.new(add_node.inputs[1], vector_rotate_node.outputs['Vector'])
 
             socket_inputs.uv_socket = add_node.outputs['Vector']
@@ -695,8 +697,10 @@ class MaterialBuilder:
             raise NotImplementedError(f'No importer registered for type "{type(material)}"')
         return material_import_function(material, inputs)
 
-    def build(self, material: UMaterial) -> Optional[MaterialSocketOutputs]:
-        return self._import_material(material, inputs=MaterialSocketInputs())
+    def build(self, material: UMaterial, uv_source_socket: Optional[bpy.types.NodeSocket]) -> Optional[MaterialSocketOutputs]:
+        inputs = MaterialSocketInputs()
+        inputs.uv_source_socket = uv_source_socket
+        return self._import_material(material, inputs=inputs)
 
 
 class BDK_OT_material_import(Operator, ImportHelper):
@@ -729,16 +733,20 @@ class BDK_OT_material_import(Operator, ImportHelper):
         # Create the material and prepare it.
         material_data = bpy.data.materials.new(reference.object_name)
         material_data.use_nodes = True
-        node_tree = material_data.node_tree
-        node_tree.nodes.clear()
 
         # Add custom property with Unreal reference.
-        material_data['bdk_reference'] = str(reference)
+        material_data['bdk.reference'] = str(reference)
+
+        node_tree = material_data.node_tree
+        node_tree.nodes.clear()
 
         material_cache = MaterialCache(bdk_build_path)
         reference = UReference.from_path(Path(self.filepath))
         unreal_material = material_cache.load_material(reference)
-        outputs = MaterialBuilder(material_cache, node_tree).build(unreal_material)
+
+        tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
+        outputs = MaterialBuilder(material_cache, node_tree).build(unreal_material,
+                                                                   uv_source_socket=tex_coord_node.outputs['UV'])
 
         output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
         diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')

@@ -22,7 +22,7 @@ class BDK_UL_TerrainLayersUIList(UIList):
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
         row = layout.row()
 
-        icon = row.icon(item.image) if item.image else None
+        icon = row.icon(item.material) if item.material else None
         if icon:
             row.prop(item, 'name', text='', emboss=False, icon_value=icon)
         else:
@@ -73,7 +73,7 @@ class BDK_PT_TerrainLayersPanel(Panel):
 
             terrain_layer = terrain_layers[terrain_layers_index]
 
-            row.prop(terrain_layer, 'image')
+            row.prop(terrain_layer, 'material')
 
             row = self.layout.row(align=True)
 

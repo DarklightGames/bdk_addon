@@ -3,6 +3,9 @@ from bpy.types import Mesh
 from typing import cast, Union
 import uuid
 
+from ..material.data import UReference
+from ..material.importer import MaterialBuilder, MaterialCache
+
 
 class TerrainMaterialBuilder:
     def __init__(self):
@@ -97,6 +100,10 @@ class TerrainMaterialBuilder:
 
         last_shader_socket = None
 
+        bdk_build_path = getattr(bpy.context.preferences.addons['bdk_addon'].preferences, 'build_path')
+        material_cache = MaterialCache(bdk_build_path)
+        material_builder = MaterialBuilder(material_cache, node_tree)
+
         for terrain_layer_index, terrain_layer in enumerate(terrain_layers):
             terrain_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
             terrain_layer_uv_node.node_tree = self._build_or_get_terrain_layer_uv_group_node()
@@ -118,8 +125,12 @@ class TerrainMaterialBuilder:
 
             terrain_layer_uv_node.inputs['TerrainScale'].default_value = terrain_info.terrain_scale
 
-            image_node = node_tree.nodes.new('ShaderNodeTexImage')
-            image_node.image = terrain_layer.image
+            material = terrain_layer.material
+            material_outputs = None
+            if material and 'bdk.reference' in material:
+                reference = UReference.from_string(material['bdk.reference'])
+                unreal_material = material_cache.load_material(reference)
+                material_outputs = material_builder.build(unreal_material, terrain_layer_uv_node.outputs['UV'])
 
             color_attribute_node = node_tree.nodes.new('ShaderNodeVertexColor')
             color_attribute_node.layer_name = terrain_layer.color_attribute_name
@@ -133,9 +144,9 @@ class TerrainMaterialBuilder:
             diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')
             mix_shader_node = node_tree.nodes.new('ShaderNodeMixShader')
 
-            node_tree.links.new(image_node.inputs['Vector'], terrain_layer_uv_node.outputs['UV'])
+            if material_outputs and material_outputs.color_socket:
+                node_tree.links.new(diffuse_node.inputs['Color'], material_outputs.color_socket)
 
-            node_tree.links.new(diffuse_node.inputs['Color'], image_node.outputs['Color'])
             node_tree.links.new(mix_shader_node.inputs['Fac'], hide_node.outputs['Value'])
 
             if last_shader_socket is not None:
