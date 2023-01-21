@@ -733,6 +733,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
         # Create the material and prepare it.
         material_data = bpy.data.materials.new(reference.object_name)
         material_data.use_nodes = True
+        material_data.preview_render_type = 'FLAT'
 
         # Add custom property with Unreal reference.
         material_data['bdk.reference'] = str(reference)
