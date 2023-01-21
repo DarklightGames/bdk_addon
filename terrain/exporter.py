@@ -93,13 +93,15 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
 
     actor = Actor(class_='TerrainInfo', name='TerrainInfo0')
 
-    quad_visibility_bitmap = [-1] * int(terrain_info.x_size * terrain_info.y_size / 32)
     layers = []
 
     for terrain_layer in terrain_info.terrain_layers:
         name = get_terrain_layer_human_readable_name(terrain_layer)
+
+        texture = terrain_layer.material.get('bdk.reference', None) if terrain_layer.material else None
+
         layers.append({
-            'Texture': None,
+            'Texture': texture,
             'AlphaMap': f'Texture\'myLevel.Terrain.{name}\'',  # TODO: make "reference" class, handle strings differently in writer
             'UScale': terrain_layer.u_scale,
             'VScale': terrain_layer.v_scale,
@@ -110,30 +112,55 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     bm = bmesh.new()
     bm.from_mesh(mesh)
 
-    # Calculate the edge turn bitmap.
-    bitmap_size = max(1, (terrain_info.x_size * terrain_info.y_size) >> 5)
-    edge_turn_bitmap = [0] * bitmap_size
+    bitmap_size = max(1, int(terrain_info.x_size * terrain_info.y_size / 32))
 
-    vertex_index = 0
-    faces_iter = iter(bm.faces)
-    for y in range(terrain_info.y_size - 1):
+    bm.faces.ensure_lookup_table()
+
+    # Edge Turn Bitmap
+    edge_turn_bitmap = np.zeros(bitmap_size, dtype=np.int32)
+    vertex_index = terrain_info.x_size * (terrain_info.y_size - 2)        # the vert index is wrong here
+    bitmap_index = 0
+    for y in reversed(range(terrain_info.y_size - 1)):
         for x in range(terrain_info.x_size - 1):
-            face: BMFace = next(faces_iter)
+            face_index = (y * terrain_info.x_size) - y + x
+            face = bm.faces[face_index]
             loop_vertex_index = face.loops[0].vert.index
-            if loop_vertex_index != vertex_index and loop_vertex_index != vertex_index + terrain_info.x_size + 1:
-                edge_turn_bitmap[vertex_index // 32] = edge_turn_bitmap[vertex_index // 32] | (1 << (vertex_index & 0x1F))
+            if loop_vertex_index == vertex_index or loop_vertex_index == vertex_index + terrain_info.x_size + 1:
+                array_index = bitmap_index >> 5
+                bit_mask = bitmap_index & 0x1F
+                edge_turn_bitmap[array_index] |= (np.int32(1) << bit_mask)
             vertex_index += 1
-        vertex_index += 1
+            bitmap_index += 1
+        vertex_index -= (terrain_info.x_size * 2) - 1
+        bitmap_index += 1
+
+    # Quad Visibility Bitmap
+    quad_visibility_bitmap = np.full(bitmap_size, fill_value=-1, dtype=np.int32)
+    bitmap_index = 0
+    for y in reversed(range(terrain_info.y_size - 1)):
+        for x in range(terrain_info.x_size - 1):
+            face_index = (y * terrain_info.x_size) - y + x
+            face = bm.faces[face_index]
+            if face.material_index == 1:
+                array_index = bitmap_index >> 5
+                bit_mask = bitmap_index & 0x1F
+                quad_visibility_bitmap[array_index] &= ~(np.int32(1) << bit_mask)
+            bitmap_index += 1
+        bitmap_index += 1
 
     actor['TerrainMap'] = f'Texture\'myLevel.Terrain.{terrain_info_object.name}\''
     actor['Layers'] = layers
-    actor['EdgeTurnBitmap'] = edge_turn_bitmap
+    actor['EdgeTurnBitmap'] = edge_turn_bitmap.tolist()
+    actor['QuadVisibilityBitmap'] = quad_visibility_bitmap.tolist()
     actor['bNoDelete'] = True
     actor['bMoveable'] = False
     actor['bLockLocation'] = True
-    actor['TerrainScale'] = Vector((terrain_info.terrain_scale, terrain_info.terrain_scale, terrain_scale_z / 256.0))
+    actor['TerrainSectorSize'] = min(16, terrain_info.y_size, terrain_info.x_size)
+    actor['TerrainScale'] = Vector((
+        terrain_info.terrain_scale,
+        terrain_info.terrain_scale,
+        max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
     actor['DecoLayerOffset'] = 0.0
-    actor['QuadVisibilityBitmap'] = quad_visibility_bitmap
 
     return actor
 
@@ -203,6 +230,9 @@ def export_terrain_heightmap(terrain_info_object: Object, directory: str):
     heightmap = np.array([v.co[2] for v in mesh_data.vertices], dtype=float)
     heightmap, terrain_scale_z = normalize_and_quantize_heights(heightmap)
     heightmap.reshape(shape)
+
+    print('hey')
+    print(terrain_scale_z)
 
     path = os.path.join(directory, f'{terrain_info_object.name}.bmp')
     write_bmp_g16(path, pixels=heightmap, shape=shape)

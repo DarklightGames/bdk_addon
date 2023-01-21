@@ -313,6 +313,18 @@ class BDK_OT_TerrainInfoAdd(Operator):
         # Add a base layer to start with.
         add_terrain_layer(mesh_object, name='Base', fill=(1.0, 1.0, 1.0, 1.0))
 
+        # Create the "hidden" material we will use for hiding quads.
+        hidden_material = bpy.data.materials.new(uuid.uuid4().hex)
+        hidden_material.use_nodes = True
+        hidden_material.node_tree.nodes.clear()
+        hidden_material.blend_method = 'CLIP'
+        node_tree = hidden_material.node_tree
+        output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
+        transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
+        node_tree.links.new(output_node.inputs['Surface'], transparent_node.outputs['BSDF'])
+
+        mesh_data.materials.append(hidden_material)
+
         context.scene.collection.objects.link(mesh_object)
 
         return {'FINISHED'}
