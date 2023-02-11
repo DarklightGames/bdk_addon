@@ -113,7 +113,6 @@ class TerrainMaterialBuilder:
                 fcurve.driver.type = 'AVERAGE'
                 variable = fcurve.driver.variables.new()
                 variable.type = 'SINGLE_PROP'
-                variable.name = 'u_scale'
                 target = variable.targets[0]
                 target.id_type = 'OBJECT'
                 target.id = terrain_info_object

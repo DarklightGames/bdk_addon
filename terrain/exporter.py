@@ -6,12 +6,9 @@ from types import NoneType
 import bmesh
 import bpy
 import numpy as np
-from bmesh.types import BMFace
-from bpy.props import StringProperty
-from bpy.types import Object, Mesh, Context, Operator
+from bpy.types import Object, Mesh
 from typing import cast, Any, List
 
-from bpy_extras.io_utils import ExportHelper
 from mathutils import Vector
 
 from .types import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainLayerPropertyGroup
@@ -160,7 +157,8 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
         terrain_info.terrain_scale,
         terrain_info.terrain_scale,
         max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
-    actor['DecoLayerOffset'] = 0.0
+    actor['DecoLayerOffset'] = 0.0  # ?
+    actor['Location'] = Vector(terrain_info_object.location) - Vector((32.0, 32.0, 32.0))
 
     return actor
 
@@ -231,9 +229,6 @@ def export_terrain_heightmap(terrain_info_object: Object, directory: str):
     heightmap, terrain_scale_z = normalize_and_quantize_heights(heightmap)
     heightmap.reshape(shape)
 
-    print('hey')
-    print(terrain_scale_z)
-
     path = os.path.join(directory, f'{terrain_info_object.name}.bmp')
     write_bmp_g16(path, pixels=heightmap, shape=shape)
 
@@ -259,26 +254,3 @@ def normalize_and_quantize_heights(heightmap: np.array) -> (np.array, float):
         heightmap = (heightmap - height_min) / terrain_scale_z
     heightmap = np.uint16(heightmap * 65535)
     return heightmap, terrain_scale_z
-
-
-class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
-    bl_label = 'Export Terrain Info'
-    bl_idname = 'bdk.export_terrain_info'
-
-    directory: StringProperty(name='Directory')
-    filename_ext: StringProperty(default='.', options={'HIDDEN'})
-    filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
-
-    def invoke(self, context: 'Context', event: 'Event'):
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-    def execute(self, context: Context):
-        export_terrain_heightmap(context.active_object, directory=self.directory)
-        export_terrain_layers(context.active_object, directory=self.directory)
-        return {'FINISHED'}
-
-
-classes = (
-    BDK_OT_TerrainInfoExport,
-)

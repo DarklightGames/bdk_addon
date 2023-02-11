@@ -16,11 +16,15 @@ bl_info = {
 if 'bpy' in locals():
     import importlib
 
+    importlib.reload(bdk_helpers)
+
     importlib.reload(material_data)
     importlib.reload(material_reader)
     importlib.reload(material_importer)
 
-    importlib.reload(g16)
+    importlib.reload(terrain_deco)
+    importlib.reload(terrain_g16)
+    importlib.reload(terrain_ui)
     importlib.reload(terrain_types)
     importlib.reload(terrain_builder)
     importlib.reload(terrain_operators)
@@ -29,10 +33,13 @@ if 'bpy' in locals():
     importlib.reload(bdk_panel)
 
     importlib.reload(t3d_data)
+    importlib.reload(t3d_types)
     importlib.reload(t3d_operators)
 
     importlib.reload(asset_browser_operators)
 else:
+    from . import helpers as bdk_helpers
+
     from .material import data as material_data
     from .material import reader as material_reader
     from .material import importer as material_importer
@@ -40,13 +47,16 @@ else:
     from .terrain import types as terrain_types
     from .terrain import builder as terrain_builder
     from .terrain import operators as terrain_operators
+    from .terrain import ui as terrain_ui
     from .terrain import exporter as terrain_exporter
-    from .terrain import g16
+    from .terrain import g16 as terrain_g16
+    from .terrain import deco as terrain_deco
 
     from .panel import panel as bdk_panel
 
     from .t3d import data as t3d_data
     from .t3d import operators as t3d_operators
+    from .t3d import types as t3d_types
 
     from .asset_browser import operators as asset_browser_operators
 
@@ -65,9 +75,10 @@ class BdkAddonPreferences(AddonPreferences):
 classes = material_importer.classes + \
           terrain_types.classes + \
           terrain_operators.classes + \
-          terrain_exporter.classes + \
+          terrain_ui.classes + \
           bdk_panel.classes + \
           t3d_operators.classes + \
+          t3d_types.classes + \
           asset_browser_operators.classes + \
           (BdkAddonPreferences,)
 

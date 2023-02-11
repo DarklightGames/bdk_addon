@@ -1,10 +1,9 @@
 import ctypes
-from ctypes import Structure, c_uint32, c_uint16, c_uint8, c_char, LittleEndianStructure
-
 import numpy
+from ctypes import c_uint32, c_uint16, c_char, LittleEndianStructure
 
 
-class BITMAPHEADER(LittleEndianStructure):
+class BitmapHeader(LittleEndianStructure):
     _pack_ = 1
     _fields_ = [
         ('magic', c_char * 2),
@@ -14,7 +13,7 @@ class BITMAPHEADER(LittleEndianStructure):
     ]
 
 
-class BITMAPCOREHEADER(LittleEndianStructure):
+class BitmapCoreHeader(LittleEndianStructure):
     _pack_ = 1
     _fields_ = [
         ('size', c_uint32),
@@ -32,14 +31,14 @@ class BITMAPCOREHEADER(LittleEndianStructure):
 
 def write_bmp_g16(path: str, pixels: numpy.array, shape: (int, int)):
     with open(path, 'wb') as fp:
-        header = BITMAPHEADER()
+        header = BitmapHeader()
         header.magic = b'BM'
-        header.size = ctypes.sizeof(BITMAPHEADER) + ctypes.sizeof(BITMAPCOREHEADER) + 2 * len(pixels)
+        header.size = ctypes.sizeof(BitmapHeader) + ctypes.sizeof(BitmapCoreHeader) + 2 * len(pixels)
         header.reserved = (0, 0)
-        header.data_offset = ctypes.sizeof(BITMAPHEADER) + ctypes.sizeof(BITMAPCOREHEADER)
+        header.data_offset = ctypes.sizeof(BitmapHeader) + ctypes.sizeof(BitmapCoreHeader)
 
-        core_header = BITMAPCOREHEADER()
-        core_header.size = ctypes.sizeof(BITMAPCOREHEADER)
+        core_header = BitmapCoreHeader()
+        core_header.size = ctypes.sizeof(BitmapCoreHeader)
         core_header.width = shape[0]
         core_header.height = shape[1]
         core_header.planes = 1
