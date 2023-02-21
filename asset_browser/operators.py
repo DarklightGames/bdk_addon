@@ -6,11 +6,15 @@ from pathlib import Path
 from typing import Set, Sequence
 
 
-class BDK_OP_ImportDataLinked(Operator):
+class BDK_OT_ImportDataLinked(Operator):
     bl_idname = 'bdk_asset_browser.import_data_linked'
     bl_description = 'Link asset from a library'
     bl_label = 'Import Data (Linked)'
     bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        return context.mode == 'OBJECT'
 
     def execute(self, context: Context) -> Set[str]:
         library: str | int = ''
@@ -39,5 +43,5 @@ class BDK_OP_ImportDataLinked(Operator):
 
 
 classes = ( 
-    BDK_OP_ImportDataLinked,
+    BDK_OT_ImportDataLinked,
 )

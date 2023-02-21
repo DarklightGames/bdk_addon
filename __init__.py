@@ -25,7 +25,7 @@ if 'bpy' in locals():
     importlib.reload(terrain_deco)
     importlib.reload(terrain_g16)
     importlib.reload(terrain_ui)
-    importlib.reload(terrain_types)
+    importlib.reload(terrain_properties)
     importlib.reload(terrain_builder)
     importlib.reload(terrain_operators)
     importlib.reload(terrain_exporter)
@@ -44,7 +44,7 @@ else:
     from .material import reader as material_reader
     from .material import importer as material_importer
 
-    from .terrain import types as terrain_types
+    from .terrain import properties as terrain_properties
     from .terrain import builder as terrain_builder
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
@@ -73,7 +73,7 @@ class BdkAddonPreferences(AddonPreferences):
 
 
 classes = material_importer.classes + \
-          terrain_types.classes + \
+          terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
           bdk_panel.classes + \
@@ -94,17 +94,21 @@ def bdk_add_menu_func(self, _context: bpy.types.Context):
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(t3d_operators.BDK_OP_CopyObject.bl_idname, icon='COPYDOWN')
+    self.layout.operator(t3d_operators.BDK_OT_CopyObject.bl_idname, icon='COPYDOWN')
 
 
 def bdk_t3d_copy_asset_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(t3d_operators.BDK_OP_CopyAsset.bl_idname, icon='COPYDOWN')
+    self.layout.operator(t3d_operators.BDK_OT_CopyAsset.bl_idname, icon='COPYDOWN')
 
 
 def bdk_asset_browser_import_data_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(asset_browser_operators.BDK_OP_ImportDataLinked.bl_idname, icon='LINKED')
+    self.layout.operator(asset_browser_operators.BDK_OT_ImportDataLinked.bl_idname, icon='LINKED')
+
+
+def bdk_terrain_export_func(self, _context: bpy.types.Context):
+    self.layout.operator(terrain_operators.BDK_OT_TerrainInfoExport.bl_idname)
 
 
 def register():
@@ -114,6 +118,7 @@ def register():
     bpy.types.Object.terrain_info = PointerProperty(type=terrain_operators.BDK_PG_TerrainInfoPropertyGroup)
 
     bpy.types.TOPBAR_MT_file_import.append(material_import_menu_func)
+    bpy.types.TOPBAR_MT_file_export.append(bdk_terrain_export_func)
 
     # For now, put the add-terrain operator in the add menu
     bpy.types.VIEW3D_MT_add.append(bdk_add_menu_func)
@@ -134,6 +139,7 @@ def unregister():
     del bpy.types.Object.terrain_info
 
     bpy.types.TOPBAR_MT_file_import.remove(material_import_menu_func)
+    bpy.types.TOPBAR_MT_file_export.remove(bdk_terrain_export_func)
     bpy.types.VIEW3D_MT_add.remove(bdk_add_menu_func)
 
     # T3D Copy (objects/collections)

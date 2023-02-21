@@ -1,5 +1,5 @@
 from bpy.types import Panel
-from ..t3d.operators import BDK_OP_CopyObject
+from ..t3d.operators import BDK_OT_CopyObject
 
 
 class BDK_PT_Panel(Panel):
@@ -11,7 +11,7 @@ class BDK_PT_Panel(Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.operator(BDK_OP_CopyObject.bl_idname, icon='COPYDOWN', text=f'Copy Object(s)')
+        row.operator(BDK_OT_CopyObject.bl_idname, icon='COPYDOWN', text=f'Copy Object(s)')
 
 
 classes = (

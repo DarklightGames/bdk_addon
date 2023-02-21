@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 # TODO: Copying assets from the asset browser
-class BDK_OP_CopyAsset(Operator):
+class BDK_OT_CopyAsset(Operator):
     bl_idname = 'bdk_t3d.copy_asset'
     bl_description = 'Copy assets to clipboard as Unreal T3D objects. Only local assets are supported'
     bl_label = 'Copy as Unreal T3D'
@@ -37,7 +37,7 @@ class BDK_OP_CopyAsset(Operator):
 
 
 # TODO: Copying from the outliner
-class BDK_OP_CopyObject(Operator):
+class BDK_OT_CopyObject(Operator):
     bl_idname = 'bdk_t3d.copy_object'
     bl_description = 'Copy to clipboard as Unreal T3D objects'
     bl_label = 'Copy as Unreal T3D'
@@ -68,5 +68,5 @@ class BDK_OP_CopyObject(Operator):
 
 
 classes = ( 
-    BDK_OP_CopyObject,
+    BDK_OT_CopyObject,
 )

@@ -6,12 +6,13 @@ from types import NoneType
 import bmesh
 import bpy
 import numpy as np
-from bpy.types import Object, Mesh
+from bpy.types import Object, Mesh, Image
 from typing import cast, Any, List
 
 from mathutils import Vector
 
-from .types import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainLayerPropertyGroup
+from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainLayerPropertyGroup, \
+    BDK_PG_TerrainDecoLayerPropertyGroup
 from .g16 import write_bmp_g16
 
 
@@ -28,7 +29,7 @@ class T3D:
 
 
 class T3DWriter:
-    def __init__(self, fp: io.StringIO):
+    def __init__(self, fp: io.TextIOBase):
         self._indent_count = 0
         self._indent_str = ' ' * 4
         self._fp = fp
@@ -91,9 +92,8 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     actor = Actor(class_='TerrainInfo', name='TerrainInfo0')
 
     layers = []
-
     for terrain_layer in terrain_info.terrain_layers:
-        name = get_terrain_layer_human_readable_name(terrain_layer)
+        name = terrain_layer.color_attribute_name
 
         texture = terrain_layer.material.get('bdk.reference', None) if terrain_layer.material else None
 
@@ -103,6 +103,41 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
             'UScale': terrain_layer.u_scale,
             'VScale': terrain_layer.v_scale,
             'TextureRotation': terrain_layer.texture_rotation,
+        })
+
+    deco_layers = []
+    for deco_layer in terrain_info.deco_layers:
+        deco_layers.append({
+            'ShowOnTerrain': int(deco_layer.show_on_terrain),
+            'DensityMap': f'Texture\'myLevel.Terrain.{deco_layer.id}\'',
+            'StaticMesh': deco_layer.static_mesh.data.name if deco_layer.static_mesh else None,
+            'ScaleMultiplier': {
+                'X': {
+                    'Min': deco_layer.scale_multiplier_min[0],
+                    'Max': deco_layer.scale_multiplier_max[0]
+                },
+                'Y': {
+                    'Min': deco_layer.scale_multiplier_min[1],
+                    'Max': deco_layer.scale_multiplier_max[1]
+                },
+                'Z': {
+                    'Min': deco_layer.scale_multiplier_min[2],
+                    'Max': deco_layer.scale_multiplier_max[2]
+                }
+            },
+            'DensityMultiplier': {
+                'Min': deco_layer.density_multiplier_min,
+                'Max': deco_layer.density_multiplier_max
+            },
+            'FadeoutRadius': {
+                'Min': deco_layer.fadeout_radius_min,
+                'Max': deco_layer.fadeout_radius_max
+            },
+            'MaxPerQuad': deco_layer.max_per_quad,
+            'Seed': deco_layer.seed,
+            'AlignToTerrain': int(deco_layer.align_to_terrain),
+            'RandomYaw': int(deco_layer.random_yaw),
+            'ForceDraw': int(deco_layer.force_draw)
         })
 
     mesh = cast(Mesh, terrain_info_object.data)
@@ -147,6 +182,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
 
     actor['TerrainMap'] = f'Texture\'myLevel.Terrain.{terrain_info_object.name}\''
     actor['Layers'] = layers
+    actor['DecoLayers'] = deco_layers
     actor['EdgeTurnBitmap'] = edge_turn_bitmap.tolist()
     actor['QuadVisibilityBitmap'] = quad_visibility_bitmap.tolist()
     actor['bNoDelete'] = True
@@ -157,7 +193,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
         terrain_info.terrain_scale,
         terrain_info.terrain_scale,
         max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
-    actor['DecoLayerOffset'] = 0.0  # ?
+    actor['DecoLayerOffset'] = 0.0  # ?f
     actor['Location'] = Vector(terrain_info_object.location) - Vector((32.0, 32.0, 32.0))
 
     return actor
@@ -168,8 +204,18 @@ def sanitize_name(name: str) -> str:
     return name.replace(' ', '_')
 
 
-def get_terrain_layer_human_readable_name(terrain_layer: BDK_PG_TerrainLayerPropertyGroup):
-    return f'{sanitize_name(terrain_layer.name)}-{terrain_layer.color_attribute_name[-6:]}'
+def export_deco_layers(terrain_info_object: Object, directory: str):
+    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+
+    if terrain_info is None or not terrain_info.is_terrain_info:
+        raise RuntimeError('Invalid object')
+
+    for deco_layer in terrain_info.deco_layers:
+        image = create_image_from_color_attribute(terrain_info_object, deco_layer.id)
+        # Write the image out to a file.
+        image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
+        # Now remove the image data block.
+        bpy.data.images.remove(image)
 
 
 def export_terrain_layers(terrain_info_object: Object, directory: str):
@@ -178,43 +224,51 @@ def export_terrain_layers(terrain_info_object: Object, directory: str):
     if terrain_info is None or not terrain_info.is_terrain_info:
         raise RuntimeError('Invalid object')
 
-    mesh_data = cast(Mesh, terrain_info_object.data)
-
     for terrain_layer in terrain_info.terrain_layers:
-        attribute = mesh_data.color_attributes[terrain_layer.color_attribute_name]
-        pixel_count = len(attribute.data)
-
-        image_name = get_terrain_layer_human_readable_name(terrain_layer)
-
-        image = bpy.data.images.new(name=image_name, width=terrain_info.x_size, height=terrain_info.y_size, alpha=True)
-        image.file_format = 'TARGA'
-
-        rgb_colors = np.ndarray(shape=(pixel_count, 3), dtype=float)
-        rgb_colors[:] = [datum.color[:3] for datum in attribute.data]
-
-        # Fill the data in with a middle-grey RGB layer and a 100% alpha.
-        data = np.ndarray(shape=(pixel_count, 4), dtype=float)
-        data[:] = (0.5, 0.5, 0.5, 1.0)
-
-        # Convert the RGB values to B/W values and assign those to the alpha channel of the data.
-        '''
-        Note that these coefficients are identical to the ones that Blender uses
-        when it converts an RGB color to a B/W value. Our terrain shader uses
-        the behavior, so we must replicate it here.
-        '''
-        luma_coefficients = (0.2126, 0.7152, 0.0722)
-        data[:, 3] = np.dot(rgb_colors, luma_coefficients)
-
-        # Assign the image pixels.
-        image.pixels[:] = data.flatten()
-        filepath = os.path.join(directory, f'{image_name}.tga')
-        image.save(filepath=filepath)
-
-        # Now remove the image, since we don't actually need to save this.
+        image = create_image_from_color_attribute(terrain_info_object, terrain_layer.color_attribute_name)
+        # Write the image out to a file.
+        image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
+        # Now remove the image data block.
         bpy.data.images.remove(image)
 
 
-def export_terrain_heightmap(terrain_info_object: Object, directory: str):
+def create_image_from_color_attribute(terrain_info_object: Object, color_attribute_name: str) -> Image:
+    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+
+    if terrain_info is None or not terrain_info.is_terrain_info:
+        raise RuntimeError('Invalid object')
+
+    mesh_data = cast(Mesh, terrain_info_object.data)
+
+    attribute = mesh_data.color_attributes[color_attribute_name]
+    pixel_count = len(attribute.data)
+
+    image = bpy.data.images.new(name=color_attribute_name, width=terrain_info.x_size, height=terrain_info.y_size, alpha=True)
+    image.file_format = 'TARGA'
+
+    rgb_colors = np.ndarray(shape=(pixel_count, 3), dtype=float)
+    rgb_colors[:] = [datum.color[:3] for datum in attribute.data]
+
+    # Fill the data in with a middle-grey RGB layer and a 100% alpha.
+    data = np.ndarray(shape=(pixel_count, 4), dtype=float)
+    data[:] = (0.5, 0.5, 0.5, 1.0)
+
+    # Convert the RGB values to B/W values and assign those to the alpha channel of the data.
+    '''
+    Note that these coefficients are identical to the ones that Blender uses
+    when it converts an RGB color to a B/W value. Our terrain shader uses
+    the behavior, so we must replicate it here.
+    '''
+    luma_coefficients = (0.2126, 0.7152, 0.0722)
+    data[:, 3] = np.dot(rgb_colors, luma_coefficients)
+
+    # Assign the image pixels.
+    image.pixels[:] = data.flatten()
+
+    return image
+
+
+def get_terrain_heightmap(terrain_info_object: Object) -> (np.ndarray, float):
     terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
 
     if terrain_info is None or not terrain_info.is_terrain_info:
@@ -224,29 +278,36 @@ def export_terrain_heightmap(terrain_info_object: Object, directory: str):
 
     # TODO: support "multiple terrains"
     shape = (terrain_info.x_size, terrain_info.y_size)
-
     heightmap = np.array([v.co[2] for v in mesh_data.vertices], dtype=float)
     heightmap, terrain_scale_z = normalize_and_quantize_heights(heightmap)
-    heightmap.reshape(shape)
+    return heightmap.reshape(shape), terrain_scale_z
 
+
+def export_terrain_heightmap(terrain_info_object: Object, directory: str):
+    heightmap, _ = get_terrain_heightmap(terrain_info_object)
     path = os.path.join(directory, f'{terrain_info_object.name}.bmp')
-    write_bmp_g16(path, pixels=heightmap, shape=shape)
+    write_bmp_g16(path, pixels=heightmap)
 
-    fp = io.StringIO()
 
+def write_terrain_t3d(terrain_info_object: Object, fp: io.TextIOBase):
+    heightmap, terrain_scale_z = get_terrain_heightmap(terrain_info_object)
+    print(heightmap, terrain_scale_z)
     t3d = T3D()
     t3d.actors.append(create_terrain_info_actor(terrain_info_object, terrain_scale_z))
     T3DWriter(fp).write(t3d)
 
-    bpy.context.window_manager.clipboard = fp.getvalue()
 
-
-def normalize_and_quantize_heights(heightmap: np.array) -> (np.array, float):
+def get_terrain_height_range(heightmap: np.ndarray) -> (float, float):
     height_max = np.max(heightmap)
     height_min = np.min(heightmap)
     max_extent = max(np.fabs(height_max), np.fabs(height_min))
     height_max = max_extent
     height_min = -max_extent
+    return height_min, height_max
+
+
+def normalize_and_quantize_heights(heightmap: np.array) -> (np.array, float):
+    height_min, height_max = get_terrain_height_range(heightmap)
     terrain_scale_z = height_max - height_min
     if terrain_scale_z == 0:
         heightmap.fill(0.5)

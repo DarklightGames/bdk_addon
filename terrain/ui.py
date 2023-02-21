@@ -1,8 +1,8 @@
 from bpy.types import Panel, Context, UIList, UILayout, Mesh, AnyType
 from typing import cast
-from .types import BDK_PG_TerrainInfoPropertyGroup
+from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainDecoLayerPropertyGroup
 from .operators import BDK_OT_TerrainLayerAdd, BDK_OT_TerrainLayerRemove, BDK_OT_TerrainLayerMove, \
-    BDK_OT_TerrainInfoExport, BDK_OT_TerrainDecoLayerAdd, BDK_OT_TerrainDecoLayerRemove
+    BDK_OT_TerrainDecoLayerAdd, BDK_OT_TerrainDecoLayerRemove
 
 
 class BDK_PT_TerrainLayersPanel(Panel):
@@ -63,8 +63,6 @@ class BDK_PT_TerrainLayersPanel(Panel):
             row.label(text='Rotation')
             row.prop(terrain_layer, 'texture_rotation', text='')
 
-        self.layout.operator(BDK_OT_TerrainInfoExport.bl_idname)
-
 
 class BDK_PT_TerrainDecoLayersPanel(Panel):
     bl_idname = 'BDK_PT_TerrainDecoLayersPanel'
@@ -98,7 +96,7 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
         has_deco_layer_selected = 0 <= deco_layers_index < len(deco_layers)
 
         if has_deco_layer_selected:
-            deco_layer: 'BDK_PG_TerrainDecoLayerPropertyGqroup' = deco_layers[deco_layers_index]
+            deco_layer: 'BDK_PG_TerrainDecoLayerPropertyGroup' = deco_layers[deco_layers_index]
 
             # icon =  if deco_layer.static_mesh and deco_layer.static_mesh.asset_data else None
             icon_id = 0
@@ -108,30 +106,39 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
             if deco_layer.static_mesh and deco_layer.static_mesh.preview:
                 icon_id = deco_layer.static_mesh.preview.icon_id
             box.template_icon(icon_value=icon_id, scale=4)
-            # box.prop(deco_layer, 'static_mesh', text='')
 
-            col = self.layout.column(align=True)
+            flow = self.layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
+            flow.use_property_split = True
 
-            col.prop(deco_layer, 'max_per_quad')
-            col.prop(deco_layer, 'seed')
-            col.prop(deco_layer, 'offset')
+            flow.column().prop(deco_layer, 'max_per_quad')
+            flow.column().prop(deco_layer, 'seed')
+            flow.column().prop(deco_layer, 'offset')
+            flow.separator()
 
-            row = self.layout.row(align=True)
-            row.label(text='Density Multiplier')
-            col = row.column(align=True)
-            col.prop(deco_layer, 'density_multiplier_min', text='Min')
+            col = flow.column(align=True)
+            col.prop(deco_layer, 'density_multiplier_min', text='Density Min')
             col.prop(deco_layer, 'density_multiplier_max', text='Max')
+            flow.separator()
 
-            col = self.layout.column(align=True)
-            row = col.row(align=True)
-            row.prop(deco_layer, 'scale_multiplier_min', text='Scale Min')
-            row = col.row(align=True)
-            row.prop(deco_layer, 'scale_multiplier_max', text='Scale Max')
+            col = flow.column(align=True)
+            col.prop(deco_layer, 'fadeout_radius_min', text='Fadeout Radius Min')
+            col.prop(deco_layer, 'fadeout_radius_max', text='Max')
+            flow.separator()
 
-            self.layout.prop(deco_layer, 'align_to_terrain')
-            self.layout.prop(deco_layer, 'show_on_invisible_terrain')
-            self.layout.prop(deco_layer, 'random_yaw')
-            self.layout.prop(deco_layer, 'inverted')
+            col = flow.column()
+            col.prop(deco_layer, 'scale_multiplier_min', text='Scale Min')
+            col.prop(deco_layer, 'scale_multiplier_max', text='Max')
+            col.separator()
+
+            flow.column().prop(deco_layer, 'align_to_terrain')
+            flow.column().prop(deco_layer, 'show_on_invisible_terrain')
+            flow.column().prop(deco_layer, 'random_yaw')
+            flow.column().prop(deco_layer, 'inverted')
+            flow.separator()
+
+            flow.column().prop(deco_layer, 'force_draw')
+            flow.column().prop(deco_layer, 'detail_mode')
+            flow.column().prop(deco_layer, 'draw_order')
 
 
 class BDK_UL_TerrainLayersUIList(UIList):
@@ -156,11 +163,7 @@ class BDK_UL_TerrainDecoLayersUIList(UIList):
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
         row = layout.row()
-        icon = row.icon(item.static_mesh) if item.static_mesh else None
-        if icon:
-            row.prop(item, 'name', text='', emboss=False, icon_value=icon)
-        else:
-            row.prop(item, 'name', text='', emboss=False, icon='ALIGN_TOP')
+        row.prop(item, 'name', text='', emboss=False)
 
         mesh = cast(Mesh, context.active_object.data)
         color_attribute_index = mesh.color_attributes.find(item.id)

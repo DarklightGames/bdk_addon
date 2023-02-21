@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import uuid
 import bpy.types
@@ -5,20 +7,15 @@ import bmesh
 from typing import Tuple, cast
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
 from bpy.types import Operator, Context, Mesh, Object, Collection
-from bpy_extras.io_utils import ExportHelper
+from bpy_extras.io_utils import ExportHelper, ImportHelper
 
-from .deco import TerrainDecoLayerBuilder
-from .exporter import export_terrain_heightmap, export_terrain_layers
+from .deco import create_deco_layer_object, build_deco_layers
+from .exporter import export_terrain_heightmap, export_terrain_layers, export_deco_layers, write_terrain_t3d
 
-from ..helpers import auto_increment_name
-from .builder import TerrainMaterialBuilder
-from .types import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainLayerPropertyGroup, \
+from ..helpers import auto_increment_name, get_terrain_info, is_active_object_terrain_info
+from .builder import build_terrain_material
+from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainLayerPropertyGroup, \
     BDK_PG_TerrainDecoLayerPropertyGroup
-
-
-# TODO: remove this
-def build_terrain_material(active_object: Object):
-    TerrainMaterialBuilder().build(active_object)
 
 
 class BDK_OT_TerrainLayerRemove(Operator):
@@ -38,7 +35,7 @@ class BDK_OT_TerrainLayerRemove(Operator):
         if active_object is None:
             return {'CANCELLED'}
 
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
+        terrain_info = get_terrain_info(active_object)
         terrain_layers = terrain_info.terrain_layers
         terrain_layers_index = terrain_info.terrain_layers_index
 
@@ -94,10 +91,7 @@ class BDK_OT_TerrainLayerMove(Operator):
 
 def add_terrain_layer(terrain_info_object: Object, name: str,
                       fill: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)):
-    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
-
-    if terrain_info is None or not terrain_info.is_terrain_info:
-        raise RuntimeError('Invalid object for operation')
+    terrain_info = get_terrain_info(terrain_info_object)
 
     # Auto-increment the names if there is a conflict.
     name = auto_increment_name(name, map(lambda x: x.name, terrain_info.terrain_layers))
@@ -133,21 +127,26 @@ class BDK_OT_TerrainDecoLayerAdd(Operator):
     bl_label = 'Add Deco Layer'
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+
     def execute(self, context: bpy.types.Context):
         active_object = context.active_object
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
+        terrain_info = get_terrain_info(active_object)
 
+        # Create the deco layer object.
         deco_layer = cast(BDK_PG_TerrainDecoLayerPropertyGroup, terrain_info.deco_layers.add())
         deco_layer.name = auto_increment_name(deco_layer.name, map(lambda x: x.name, terrain_info.deco_layers))
         deco_layer.id = uuid.uuid4().hex
+        deco_layer.object = create_deco_layer_object(context, active_object, deco_layer)
 
-        deco_layer.object = TerrainDecoLayerBuilder().build(context, active_object, deco_layer)
-
+        # Link and parent the deco layer object to the terrain object.
         collection: Collection = active_object.users_collection[0]
         collection.objects.link(deco_layer.object)
         deco_layer.object.parent = active_object
 
-        # TODO: add the object to the scene and parent it to the active object
+        build_deco_layers(active_object)
 
         return {'FINISHED'}
 
@@ -158,43 +157,49 @@ class BDK_OT_TerrainDecoLayerRemove(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
-    def poll(cls, context: 'Context'):
-        active_object = context.active_object
-
-        if active_object is None:
+    def poll(cls, context: Context):
+        if not is_active_object_terrain_info(context):
             return False
 
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
-        deco_layers = terrain_info.deco_layers
-        deco_layers_index = terrain_info.deco_layers_index
+        terrain_info = get_terrain_info(context.active_object)
 
-        if len(deco_layers) == 0 or deco_layers_index == -1:
+        if len(terrain_info.deco_layers) == 0 or terrain_info.deco_layers_index == -1:
             return False
 
         return True
 
     def execute(self, context: bpy.types.Context):
-        terrain_info_object = context.active_object
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+        terrain_info = get_terrain_info(context.active_object)
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index
 
-        if deco_layers_index >= 0:
-            deco_layer = deco_layers[deco_layers_index]
-            deco_layer_object = cast(Object, deco_layers[deco_layers_index].object)
+        deco_layer = deco_layers[deco_layers_index]
+        deco_layer_object = cast(Object, deco_layers[deco_layers_index].object)
 
-            if deco_layer_object is not None:
-                for collection in deco_layer_object.users_collection:
-                    collection.objects.unlink(deco_layer_object)
-                mesh_data = cast(Mesh, terrain_info_object.data)
-                if mesh_data is not None:
-                    attribute = mesh_data.color_attributes.get(deco_layer.id, None)
-                    if attribute is not None:
-                        mesh_data.attributes.remove(attribute)
-                bpy.data.objects.remove(deco_layer_object)
+        if deco_layer_object is not None:
+            # Unlink the deco layer object from any collections it belongs to.
+            for collection in deco_layer_object.users_collection:
+                collection.objects.unlink(deco_layer_object)
 
-            deco_layers.remove(deco_layers_index)
-            terrain_info.deco_layers_index = min(len(terrain_info.deco_layers) - 1, deco_layers_index)
+            # Remove the density map color attribute.
+            mesh_data = cast(Mesh, context.active_object.data)
+            if mesh_data is not None:
+                attribute = mesh_data.color_attributes.get(deco_layer.id, None)
+                if attribute is not None:
+                    mesh_data.attributes.remove(attribute)
+
+            # Remove the deco layer object data block.
+            bpy.data.objects.remove(deco_layer_object)
+
+        # Remove the deco layer entry.
+        deco_layers.remove(deco_layers_index)
+
+        # Set the new deco layer index to occupy the same index.
+        terrain_info.deco_layers_index = min(len(terrain_info.deco_layers) - 1, deco_layers_index)
+
+        # Build all deco layers. This is necessary because the drivers in the geometry node modifiers
+        # reference the deco_layers array by index, and removing an entry can mess up other node setups.
+        build_deco_layers(context.active_object)
 
         return {'FINISHED'}
 
@@ -204,7 +209,6 @@ class BDK_OT_TerrainLayerAdd(Operator):
     bl_label = 'Add Terrain Layer'
     bl_options = {'REGISTER', 'UNDO'}
 
-    name: StringProperty(name='Name')
     alpha_fill: FloatVectorProperty(name='Alpha Fill', subtype='COLOR', min=0.0, max=1.0, size=4,
                                     default=(0.0, 0.0, 0.0, 1.0))
     u_scale: FloatProperty(name='UScale', default=1.0)
@@ -212,12 +216,9 @@ class BDK_OT_TerrainLayerAdd(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        active_object = context.active_object
-        if not active_object:
+        if not is_active_object_terrain_info(context):
             return False
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
-        if not terrain_info.is_terrain_info:
-            return False
+        terrain_info = get_terrain_info(context.active_object)
         return len(terrain_info.terrain_layers) < 32
 
     def execute(self, context: bpy.types.Context):
@@ -328,21 +329,49 @@ class BDK_OT_TerrainInfoAdd(Operator):
 
 
 class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
-    bl_label = 'Export Terrain Info'
+    bl_label = 'Export BDK Terrain Info'
     bl_idname = 'bdk.export_terrain_info'
 
     directory: StringProperty(name='Directory')
     filename_ext: StringProperty(default='.', options={'HIDDEN'})
     filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
 
+    @classmethod
+    def poll(cls, context: 'Context'):
+        if not context.active_object or not context.active_object.terrain_info.is_terrain_info:
+            cls.poll_message_set('The active object must be a TerrainInfo object')
+            return False
+        return True
+
     def invoke(self, context: 'Context', event: 'Event'):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context: Context):
+        with open(os.path.join(self.directory, f'{context.active_object.name}.t3d'), 'w') as fp:
+            write_terrain_t3d(context.active_object, fp)
+
         export_terrain_heightmap(context.active_object, directory=self.directory)
         export_terrain_layers(context.active_object, directory=self.directory)
+        export_deco_layers(context.active_object, directory=self.directory)
+
+        self.report({'INFO'}, 'Exported TerrainInfo')
+
         return {'FINISHED'}
+
+
+class BDK_OT_TerrainInfoImport(Operator, ImportHelper):
+    bl_label = 'Import BDK Terrain Info'
+    bl_idname = 'bdk.import_terrain_info'
+
+    filename_ext = '.t3d'
+    filepath: StringProperty()
+    filter_glob: StringProperty(default='*.t3d', options={'HIDDEN'})
+    filepath: StringProperty(
+        name='File Path',
+        description='File path used for importing the PSA file',
+        maxlen=1024,
+        default='')
 
 
 classes = (

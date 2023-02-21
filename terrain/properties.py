@@ -1,17 +1,20 @@
 from typing import cast
 
-from bpy.types import PropertyGroup, Object, Context, Mesh, Material
+import bpy.ops
+from bpy.types import PropertyGroup, Object, Context, Mesh, Material, AssetHandle
 from bpy.props import PointerProperty, BoolProperty, FloatProperty, CollectionProperty, IntProperty, StringProperty, \
-    FloatVectorProperty
-from .builder import TerrainMaterialBuilder
+    FloatVectorProperty, EnumProperty
+
+from ..helpers import is_bdk_material, is_bdk_static_mesh_actor
+from .builder import build_terrain_material
 
 
 def on_material_update(self, _: Context):
-    TerrainMaterialBuilder().build(self.terrain_info_object)
+    build_terrain_material(self.terrain_info_object)
 
 
 def material_poll(_: Context, material: Material) -> bool:
-    return 'bdk.reference' in material.keys()
+    return is_bdk_material(material)
 
 
 class BDK_PG_TerrainLayerPropertyGroup(PropertyGroup):
@@ -35,7 +38,12 @@ def on_deco_layer_index_update(self: 'BDK_PG_TerrainInfoPropertyGroup', _: Conte
         if color_attribute.name == deco_layer.id:
             color_attribute_index = i
             break
-    mesh_data.color_attributes.active_color_index = color_attribute_index
+    if mesh_data.color_attributes.active_color_index != color_attribute_index:
+        mesh_data.color_attributes.active_color_index = color_attribute_index
+        # Push an undo state.
+        # This is needed so that if the user selects a new layer, does some operation, and then does an undo,
+        # it won't wipe out the active painting layer.
+        bpy.ops.ed.undo_push(message=f"Select '{deco_layer.name}' DecoLayer")
 
 
 def on_static_mesh_update(self: 'BDK_PG_TerrainDecoLayerPropertyGroup', context: Context):
@@ -49,28 +57,44 @@ def on_static_mesh_update(self: 'BDK_PG_TerrainDecoLayerPropertyGroup', context:
 
 
 def static_mesh_poll(_: Context, obj: Object) -> bool:
-    return obj.type == 'MESH' and 'Class' in obj.keys() and obj['Class'] == 'StaticMeshActor'
+    return is_bdk_static_mesh_actor(obj)
+
+
+empty_set = set()
 
 
 class BDK_PG_TerrainDecoLayerPropertyGroup(PropertyGroup):
+    align_to_terrain: BoolProperty(name='Align To Terrain', default=False, options=empty_set)
+    density_multiplier_max: FloatProperty('Density Multiplier Max', min=0.0, max=1.0, default=0.1, options=empty_set)
+    density_multiplier_min: FloatProperty('Density Multiplier Min', min=0.0, max=1.0, default=0.1, options=empty_set)
+    detail_mode: EnumProperty(name='Detail Mode', items=[
+        ('LOW', 'Low', '',),
+        ('HIGH', 'High', ''),
+        ('SUPER_HIGH', 'Super High', ''),
+    ], options=empty_set)
+    fadeout_radius_max: FloatProperty(name='Fadeout Radius Max', options=empty_set, subtype='DISTANCE')
+    fadeout_radius_min: FloatProperty(name='Fadeout Radius Min', options=empty_set, subtype='DISTANCE')
+    force_draw: BoolProperty(name='Force Draw', default=False, options=empty_set)
     id: StringProperty(options={'HIDDEN'})
-    name: StringProperty(name='Name', default='DecoLayer')
-    object: PointerProperty(type=Object, options={'HIDDEN'})
-    terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
-    density_multiplier_min: FloatProperty('Density Multiplier Min', min=0.0, max=1.0, default=1.0)
-    density_multiplier_max: FloatProperty('Density Multiplier Max', min=0.0, max=1.0, default=1.0)
-    scale_multiplier_min: FloatVectorProperty('Scale Multiplier Min', min=0.0, max=1.0, default=[1, 1, 1])
-    scale_multiplier_max: FloatVectorProperty('Scale Multiplier Max', min=0.0, max=1.0, default=[1, 1, 1])
-    show_on_terrain: BoolProperty(name='Show On Terrain', default=True)
-    static_mesh: PointerProperty(name='Static Mesh', type=Object, update=on_static_mesh_update, poll=static_mesh_poll)
-    max_per_quad: IntProperty(name='Max Per Quad', default=1, min=1, max=4)
-    seed: IntProperty(name='Seed')
-    align_to_terrain: BoolProperty(name='Align To Terrain', default=True)
-    show_on_invisible_terrain: BoolProperty(name='Show On Invisible Terrain', default=False)
-    random_yaw: BoolProperty(name='Random Yaw', default=True)
-    inverted: BoolProperty(name='Inverted')
-    offset: FloatProperty(name='Offset')
+    inverted: BoolProperty(name='Inverted', options=empty_set)
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
+    max_per_quad: IntProperty(name='Max Per Quad', default=1, min=1, max=4, options=empty_set)
+    name: StringProperty(name='Name', default='DecoLayer', options=empty_set)
+    object: PointerProperty(type=Object, options={'HIDDEN'})
+    offset: FloatProperty(name='Offset', options=empty_set, subtype='DISTANCE')
+    random_yaw: BoolProperty(name='Random Yaw', default=True, options=empty_set)
+    scale_multiplier_max: FloatVectorProperty('Scale Multiplier Max', min=0.0, max=1.0, default=[1, 1, 1], options=empty_set, subtype='XYZ')
+    scale_multiplier_min: FloatVectorProperty('Scale Multiplier Min', min=0.0, max=1.0, default=[1, 1, 1], options=empty_set, subtype='XYZ')
+    seed: IntProperty(name='Seed', options=empty_set)
+    show_on_invisible_terrain: BoolProperty(name='Show On Invisible Terrain', default=False, options=empty_set)
+    show_on_terrain: BoolProperty(name='Show On Terrain', default=True, options=empty_set)
+    draw_order: EnumProperty(name='Sort Order', options=empty_set, items=[
+        ('SORT_NoSort', 'No Sort', ''),
+        ('SORT_BackToFront', 'Back To Front', ''),
+        ('SORT_FrontToBack', 'Front To Back', ''),
+    ])
+    static_mesh: PointerProperty(name='Static Mesh', type=Object, update=on_static_mesh_update, poll=static_mesh_poll, options=empty_set)
+    terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
 
 
 def on_terrain_layer_index_update(self: 'BDK_PG_TerrainInfoPropertyGroup', _: Context):
@@ -83,7 +107,12 @@ def on_terrain_layer_index_update(self: 'BDK_PG_TerrainInfoPropertyGroup', _: Co
         if color_attribute.name == terrain_layer.color_attribute_name:
             color_attribute_index = i
             break
-    mesh_data.color_attributes.active_color_index = color_attribute_index
+    if mesh_data.color_attributes.active_color_index != color_attribute_index:
+        mesh_data.color_attributes.active_color_index = color_attribute_index
+        # Push an undo state.
+        # This is needed so that if the user selects a new layer, does some operation, and then does an undo,
+        # it won't wipe out the active painting layer.
+        bpy.ops.ed.undo_push(message=f"Select '{terrain_layer.name}' Layer")
 
 
 class BDK_PG_TerrainInfoPropertyGroup(PropertyGroup):
