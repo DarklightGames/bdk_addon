@@ -133,7 +133,7 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
             flow.column().prop(deco_layer, 'align_to_terrain')
             flow.column().prop(deco_layer, 'show_on_invisible_terrain')
             flow.column().prop(deco_layer, 'random_yaw')
-            flow.column().prop(deco_layer, 'inverted')
+            # flow.column().prop(deco_layer, 'inverted')    # TODO: move this to the top level object
             flow.separator()
 
             flow.column().prop(deco_layer, 'force_draw')

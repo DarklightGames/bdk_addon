@@ -1,9 +1,11 @@
+import bmesh
 import bpy
-from bpy.types import Mesh
-from typing import cast, Union
+from bpy.types import Mesh, Object
+from typing import cast, Union, Optional
 import uuid
+import numpy as np
 
-from ..material.data import UReference
+from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 
 
@@ -84,12 +86,8 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
     mesh_data = cast(Mesh, terrain_info_object.data)
 
-    if len(mesh_data.materials) == 0:
-        material = bpy.data.materials.new(uuid.uuid4().hex)
-        material.use_nodes = True
-        mesh_data.materials.append(material)
-    else:
-        material = mesh_data.materials[0]
+    # TODO: assuming it's slot 0 is perilous.
+    material = mesh_data.materials[0]
 
     node_tree = material.node_tree
     node_tree.nodes.clear()
@@ -155,3 +153,93 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
     if last_shader_socket is not None:
         node_tree.links.new(output_node.inputs['Surface'], last_shader_socket)
+
+
+def get_terrain_quad_size(size: float, resolution: int) -> float:
+    return size / (resolution - 1)
+
+
+def create_terrain_info_object(resolution: int, size: float, edge_turn_bitmap: Optional[np.array] = None) -> Object:
+    # NOTE: There is a bug in Unreal where the terrain is off-center, so we deliberately
+    # have to miscalculate things in order to replicate the behavior seen in the engine.
+    quad_length = float(size) / resolution
+    size_half = 0.5 * size
+
+    bm = bmesh.new()
+
+    # Vertices
+    for y in range(resolution):
+        for x in range(resolution):
+            co = (quad_length * x - size_half, quad_length * y - size_half + quad_length, 0.0)
+            bm.verts.new(co)
+
+    bm.verts.ensure_lookup_table()
+
+    # Build the edge turn face indices set.
+    # TODO: Would be nice to make a common function that can do this for both the edge turn bitmap and the quad vis.
+    # TODO: Inefficient to be doing look-ups here I think. Would probably make more sense to build an actual bitmap
+    # and then flip it over Y so that the indexing of the edge turn bitmap and the quads actually lines up.
+    edge_turn_face_indices = set()
+    if edge_turn_bitmap is not None:
+        edge_turn_bitmap_index = 0
+        for y in reversed(range(resolution - 1)):
+            for x in range(resolution - 1):
+                face_index = (y * resolution) - y + x
+                array_index = edge_turn_bitmap_index >> 5
+                bit_mask = edge_turn_bitmap_index & 0x1F
+                if (edge_turn_bitmap[array_index] & (1 << bit_mask)) == 0:
+                    edge_turn_face_indices.add(face_index)
+                edge_turn_bitmap_index += 1
+            edge_turn_bitmap_index += 1
+
+    # Faces
+    vertex_index = 0
+    indices = [0, 1, resolution + 1, resolution]
+    turned_indices = [resolution, 0, 1, resolution + 1]
+    for y in range(resolution - 1):
+        for x in range(resolution - 1):
+            face_index = (y * resolution) - y + x
+            if face_index in edge_turn_face_indices:
+                face = bm.faces.new(tuple([bm.verts[vertex_index + i] for i in turned_indices]))
+            else:
+                face = bm.faces.new(tuple([bm.verts[vertex_index + i] for i in indices]))
+            face.smooth = True
+            vertex_index += 1
+            face_index += 1
+        vertex_index += 1
+
+    mesh_data = bpy.data.meshes.new('TerrainInfo')
+    bm.to_mesh(mesh_data)
+    del bm
+
+    mesh_object = bpy.data.objects.new('TerrainInfo', mesh_data)
+    mesh_object['bdk.quad_size'] = get_terrain_quad_size(size, resolution)
+
+    # Custom properties
+    terrain_info: 'BDK_PG_TerrainInfoPropertyGroup' = getattr(mesh_object, 'terrain_info')
+    terrain_info.is_terrain_info = True
+    terrain_info.terrain_info_object = mesh_object
+    terrain_info.x_size = resolution
+    terrain_info.y_size = resolution
+    terrain_info.terrain_scale = size / resolution
+
+    # Create an empty material that will be used as the terrain material downstream.
+    terrain_material = bpy.data.materials.new(uuid.uuid4().hex)
+    terrain_material.use_nodes = True
+    terrain_material.node_tree.nodes.clear()
+
+    # Create the "hidden" material we will use for hiding quads.
+    hidden_material = bpy.data.materials.new(uuid.uuid4().hex)
+    hidden_material.use_nodes = True
+    hidden_material.node_tree.nodes.clear()
+    hidden_material.blend_method = 'CLIP'
+    node_tree = hidden_material.node_tree
+    output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
+
+    transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
+    node_tree.links.new(output_node.inputs['Surface'], transparent_node.outputs['BSDF'])
+
+    mesh_data.materials.append(terrain_material)
+    mesh_data.materials.append(hidden_material)
+
+    return mesh_object

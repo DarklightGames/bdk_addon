@@ -1,3 +1,4 @@
+import math
 import copy
 import json
 import os
@@ -8,6 +9,7 @@ from bpy.props import StringProperty
 from bpy.types import ShaderNodeTexImage
 from bpy_extras.io_utils import ImportHelper
 from bpy_types import Operator
+from pathlib import Path
 
 from .data import *
 from .reader import read_material
@@ -32,10 +34,12 @@ class MaterialCache:
         except UnicodeDecodeError as e:
             print(e)
 
+        # TODO: check if the files are still there! deleting things leaves dead references around.
+
         # Build list of texture packages.
         file_paths = manifest['files'].keys()
 
-        package_paths = filter(lambda x: os.path.splitext(x)[1] in ['.utx', '.usx'], file_paths)
+        package_paths = filter(lambda x: os.path.splitext(x)[1] in ['.utx', '.usx', '.rom'], file_paths)
 
         # Register package name with package directory
         for package_path in package_paths:
@@ -50,6 +54,9 @@ class MaterialCache:
             package_path = self._package_paths[reference.package_name]
             return Path(os.path.join(self._root_directory, os.path.splitext(package_path)[0], reference.type_name,
                                      f'{reference.object_name}.props.txt')).resolve()
+        except KeyError as e:
+            print(f"Couldn't find package for reference: {reference}")
+            raise e
         except RuntimeError:
             pass
         return None
@@ -573,7 +580,9 @@ class MaterialBuilder:
 
         offset_node = self._node_tree.nodes.new('ShaderNodeCombineXYZ')
 
-        self._node_tree.links.new(vector_subtract_node.inputs[0], socket_inputs.uv_source_socket)
+        if socket_inputs.uv_source_socket is not None:
+            self._node_tree.links.new(vector_subtract_node.inputs[0], socket_inputs.uv_source_socket)
+
         self._node_tree.links.new(vector_add_node.inputs[0], vector_transform_node.outputs[0])
         self._node_tree.links.new(vector_transform_node.inputs[0], vector_subtract_node.outputs[0])
         self._node_tree.links.new(vector_subtract_node.inputs[1], offset_node.outputs['Vector'])

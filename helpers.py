@@ -1,6 +1,9 @@
 import re
-from typing import Iterable
-from bpy.types import Material, Object, Context
+import bpy
+from typing import Iterable, Optional
+from bpy.types import Material, Object, Context, Mesh
+from pathlib import Path
+from .data import UReference
 
 
 def auto_increment_name(name, names: Iterable[str]):
@@ -38,3 +41,77 @@ def is_active_object_terrain_info(context: Context):
     if context.active_object is None:
         return False
     return get_terrain_info(context.active_object) is not None
+
+
+def get_bdk_asset_library_path() -> Optional[Path]:
+    asset_libraries = bpy.context.preferences.filepaths.asset_libraries
+    asset_library_name = 'BDK Library'
+
+    try:
+        asset_library = next(filter(lambda x: x.name == asset_library_name, asset_libraries))
+    except StopIteration:
+        print(f'BDK asset library could not be found (expected to find library with name "{asset_library_name}")')
+        return None
+
+    return Path(asset_library.path)
+
+
+def get_blend_file_for_package(package_name: str) -> Optional[str]:
+    asset_library_path = get_bdk_asset_library_path()
+
+    if asset_library_path is None:
+        return None
+
+    blend_files = [fp for fp in asset_library_path.glob(f'**/{package_name}.blend') if fp.is_file()]
+
+    if len(blend_files) == 0:
+        return None
+
+    return str(blend_files[0])
+
+
+def load_bdk_material(reference: str):
+    reference = UReference.from_string(reference)
+    if reference is None:
+        return None
+
+    blend_file = get_blend_file_for_package(reference.package_name)
+
+    if blend_file is None:
+        return None
+
+    with bpy.data.libraries.load(blend_file, link=True, relative=False, assets_only=True) as (data_in, data_out):
+        if reference.object_name in data_in.materials:
+            data_out.materials = [reference.object_name]
+        else:
+            return None
+
+    material = bpy.data.materials[reference.object_name]
+
+    return material
+
+
+def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
+
+    reference = UReference.from_string(reference)
+
+    if reference is None:
+        return None
+
+    # Strip the group name since we don't use it in the BDK library files.
+    reference.group_name = None
+
+    blend_file = get_blend_file_for_package(reference.package_name)
+
+    if blend_file is None:
+        return None
+
+    with bpy.data.libraries.load(blend_file, link=True, relative=False, assets_only=False) as (data_in, data_out):
+        if str(reference) in data_in.meshes:
+            data_out.meshes = [str(reference)]
+        else:
+            return None
+
+    mesh = bpy.data.meshes[str(reference)]
+
+    return mesh

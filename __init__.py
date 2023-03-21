@@ -1,5 +1,4 @@
-from bpy.props import PointerProperty, StringProperty
-from bpy_types import AddonPreferences
+from bpy.props import PointerProperty
 
 bl_info = {
     "name": "Blender Development Kit (BDK)",
@@ -8,20 +7,25 @@ bl_info = {
     "blender": (3, 5, 0),
     "description": "Blender Development Kit (BDK), a toolset for authoring levels for Unreal 1 & 2",
     "warning": "",
-    "doc_url": "https://github.com/DarklightGames/bdk-addon",
-    "tracker_url": "https://github.com/DarklightGames/bdk-addon",
+    "doc_url": "https://github.com/DarklightGames/bdk_addon",
+    "tracker_url": "https://github.com/DarklightGames/bdk_addon/issues",
     "category": "Development"
 }
 
 if 'bpy' in locals():
     import importlib
 
+    importlib.reload(bdk_data)
     importlib.reload(bdk_helpers)
+    importlib.reload(bdk_preferences)
+    importlib.reload(bdk_properties)
 
     importlib.reload(material_data)
     importlib.reload(material_reader)
     importlib.reload(material_importer)
+    importlib.reload(material_operators)
 
+    importlib.reload(terrain_layers)
     importlib.reload(terrain_deco)
     importlib.reload(terrain_g16)
     importlib.reload(terrain_ui)
@@ -35,15 +39,23 @@ if 'bpy' in locals():
     importlib.reload(t3d_data)
     importlib.reload(t3d_types)
     importlib.reload(t3d_operators)
+    importlib.reload(t3d_importer)
 
     importlib.reload(asset_browser_operators)
 else:
+    from . import data as bdk_data
     from . import helpers as bdk_helpers
+    from . import preferences as bdk_preferences
+    from . import properties as bdk_properties
 
+    # Material
     from .material import data as material_data
     from .material import reader as material_reader
     from .material import importer as material_importer
+    from .material import operators as material_operators
 
+    # Terrain
+    from .terrain import layers as terrain_layers
     from .terrain import properties as terrain_properties
     from .terrain import builder as terrain_builder
     from .terrain import operators as terrain_operators
@@ -54,33 +66,28 @@ else:
 
     from .panel import panel as bdk_panel
 
+    # T3D
     from .t3d import data as t3d_data
     from .t3d import operators as t3d_operators
     from .t3d import types as t3d_types
+    from .t3d import importer as t3d_importer
 
     from .asset_browser import operators as asset_browser_operators
 
 import bpy
 
 
-class BdkAddonPreferences(AddonPreferences):
-    bl_idname = __name__
-
-    build_path: StringProperty(subtype='DIR_PATH', name='Build Path')
-
-    def draw(self, _: bpy.types.Context):
-        self.layout.prop(self, 'build_path')
-
-
 classes = material_importer.classes + \
+          material_operators.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
           bdk_panel.classes + \
+          bdk_properties.classes + \
           t3d_operators.classes + \
           t3d_types.classes + \
           asset_browser_operators.classes + \
-          (BdkAddonPreferences,)
+          bdk_preferences.classes
 
 
 def material_import_menu_func(self, _context: bpy.types.Context):
@@ -89,7 +96,7 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(terrain_operators.BDK_OT_TerrainInfoAdd.bl_idname, text='Terrain Info', icon='GRID')
+    self.layout.operator(terrain_operators.BDK_OT_TerrainInfoAdd.bl_idname, text='BDK Terrain Info', icon='GRID')
 
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
@@ -111,13 +118,20 @@ def bdk_terrain_export_func(self, _context: bpy.types.Context):
     self.layout.operator(terrain_operators.BDK_OT_TerrainInfoExport.bl_idname)
 
 
+def bdk_t3d_import_func(self, _context: bpy.types.Context):
+    self.layout.operator(t3d_operators.BDK_OT_T3DImportFromFile.bl_idname)
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.Object.terrain_info = PointerProperty(type=terrain_operators.BDK_PG_TerrainInfoPropertyGroup)
+    bpy.types.Object.terrain_info = PointerProperty(type=terrain_properties.BDK_PG_TerrainInfoPropertyGroup)
+    bpy.types.Scene.bdk_info = PointerProperty(type=bdk_properties.BDK_PG_SceneInfoPropertyGroup)
 
     bpy.types.TOPBAR_MT_file_import.append(material_import_menu_func)
+    bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)
+
     bpy.types.TOPBAR_MT_file_export.append(bdk_terrain_export_func)
 
     # For now, put the add-terrain operator in the add menu
@@ -139,7 +153,10 @@ def unregister():
     del bpy.types.Object.terrain_info
 
     bpy.types.TOPBAR_MT_file_import.remove(material_import_menu_func)
+    bpy.types.TOPBAR_MT_file_import.remove(bdk_t3d_import_func)
+
     bpy.types.TOPBAR_MT_file_export.remove(bdk_terrain_export_func)
+
     bpy.types.VIEW3D_MT_add.remove(bdk_add_menu_func)
 
     # T3D Copy (objects/collections)

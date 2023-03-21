@@ -1,8 +1,83 @@
 import bpy
 from bpy.types import Operator, FileSelectEntry, Space, Context, Object
+from bpy.props import StringProperty
+from bpy_extras.io_utils import ImportHelper
 from typing import Sequence, Set
 from .data import UStaticMeshActor, UActor, UMap
 from pathlib import Path
+from .importer import import_t3d
+
+
+def bdk_are_dependencies_installed() -> bool:
+    try:
+        import t3dpy
+    except ModuleNotFoundError:
+        return False
+    return True
+
+
+class BDK_OT_T3DImportFromClipboard(Operator):
+    bl_idname = 'bdk.t3d_import_from_clipboard'
+    bl_description = 'Import T3D from OS Clipboard'
+    bl_label = 'Import T3D from Clipboard'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        if not bdk_are_dependencies_installed():
+            cls.poll_message_set(message='Dependencies are not installed')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        try:
+            import_t3d(context.window_manager.clipboard, context)
+        except RuntimeError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        except SyntaxError as e:
+            print(e)
+            self.report({'ERROR'}, 'Clipboard data is not valid T3D syntax. Additional debugging information has been '
+                                   'written to the console')
+            return {'CANCELLED'}
+        self.report({'INFO'}, f'T3D Imported successfully')
+        return {'FINISHED'}
+
+
+class BDK_OT_T3DImportFromFile(Operator, ImportHelper):
+    bl_idname = 'bdk.t3d_import_from_file'
+    bl_description = 'Import T3D'
+    bl_label = 'Import T3D (*.t3d)'
+    bl_options = {'REGISTER', 'UNDO'}
+    filename_ext: StringProperty(default='.t3d', options={'HIDDEN'})
+    filepath: StringProperty()
+    filter_glob: StringProperty(default='*.t3d', options={'HIDDEN'})
+    filepath: StringProperty(
+        name='File Path',
+        description='File path used for importing the T3D file',
+        maxlen=1024,
+        default='')
+
+    @classmethod
+    def poll(cls, context: Context):
+        if not bdk_are_dependencies_installed():
+            cls.poll_message_set(message='Dependencies are not installed')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        contents = Path(self.filepath).read_text()
+        try:
+            import_t3d(contents, context)
+        except RuntimeError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        except SyntaxError as e:
+            print(e)
+            self.report({'ERROR', 'File contents are not valid T3D syntax. Additional debugging information has been '
+                                  'written to the console'})
+        self.report({'INFO'}, f'T3D Imported successfully')
+        return {'FINISHED'}
 
 
 # TODO: Copying assets from the asset browser
@@ -20,7 +95,7 @@ class BDK_OT_CopyAsset(Operator):
         for asset in assets:
             asset_path: Path = Path(asset.relative_path)
             print(asset_path.parent)
-        
+
         # if isinstance(active, SpaceFileBrowser) and isinstance(active.params, FileAssetSelectParams):
         #     library = active.params.asset_library_ref
 
@@ -31,7 +106,6 @@ class BDK_OT_CopyAsset(Operator):
         #     library_path = Path(asset_libraries.get(str(library)).path) # type: ignore
         # except AttributeError:
         #     library_path = Path(bpy.data.filepath) # will be '.' if file has never been saved
-
 
         return {'FINISHED'}
 
@@ -67,6 +141,8 @@ class BDK_OT_CopyObject(Operator):
         return {'FINISHED'}
 
 
-classes = ( 
+classes = (
     BDK_OT_CopyObject,
+    BDK_OT_T3DImportFromFile,
+    BDK_OT_T3DImportFromClipboard,
 )

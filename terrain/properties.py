@@ -1,7 +1,7 @@
 from typing import cast
 
 import bpy.ops
-from bpy.types import PropertyGroup, Object, Context, Mesh, Material, AssetHandle
+from bpy.types import PropertyGroup, Object, Context, Mesh, Material
 from bpy.props import PointerProperty, BoolProperty, FloatProperty, CollectionProperty, IntProperty, StringProperty, \
     FloatVectorProperty, EnumProperty
 
@@ -43,6 +43,7 @@ def on_deco_layer_index_update(self: 'BDK_PG_TerrainInfoPropertyGroup', _: Conte
         # Push an undo state.
         # This is needed so that if the user selects a new layer, does some operation, and then does an undo,
         # it won't wipe out the active painting layer.
+        # TODO: replace this with an actual operator with an UNDO_GROUPED option flag so that we consolidate repeated changes into one undo step instead of polluting the undo stack.
         bpy.ops.ed.undo_push(message=f"Select '{deco_layer.name}' DecoLayer")
 
 
@@ -68,15 +69,14 @@ class BDK_PG_TerrainDecoLayerPropertyGroup(PropertyGroup):
     density_multiplier_max: FloatProperty('Density Multiplier Max', min=0.0, max=1.0, default=0.1, options=empty_set)
     density_multiplier_min: FloatProperty('Density Multiplier Min', min=0.0, max=1.0, default=0.1, options=empty_set)
     detail_mode: EnumProperty(name='Detail Mode', items=[
-        ('LOW', 'Low', '',),
-        ('HIGH', 'High', ''),
-        ('SUPER_HIGH', 'Super High', ''),
+        ('DM_Low', 'Low', '',),
+        ('DM_High', 'High', ''),
+        ('DM_SuperHigh', 'Super High', ''),
     ], options=empty_set)
     fadeout_radius_max: FloatProperty(name='Fadeout Radius Max', options=empty_set, subtype='DISTANCE')
     fadeout_radius_min: FloatProperty(name='Fadeout Radius Min', options=empty_set, subtype='DISTANCE')
     force_draw: BoolProperty(name='Force Draw', default=False, options=empty_set)
     id: StringProperty(options={'HIDDEN'})
-    inverted: BoolProperty(name='Inverted', options=empty_set)
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
     max_per_quad: IntProperty(name='Max Per Quad', default=1, min=1, max=4, options=empty_set)
     name: StringProperty(name='Name', default='DecoLayer', options=empty_set)

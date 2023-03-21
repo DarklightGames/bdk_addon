@@ -91,6 +91,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
 
     actor = Actor(class_='TerrainInfo', name='TerrainInfo0')
 
+    # Layers.
     layers = []
     for terrain_layer in terrain_info.terrain_layers:
         name = terrain_layer.color_attribute_name
@@ -105,6 +106,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
             'TextureRotation': terrain_layer.texture_rotation,
         })
 
+    # DecoLayers.
     deco_layers = []
     for deco_layer in terrain_info.deco_layers:
         deco_layers.append({
@@ -156,6 +158,8 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
         for x in range(terrain_info.x_size - 1):
             face_index = (y * terrain_info.x_size) - y + x
             face = bm.faces[face_index]
+            # Check if the first vertex in the loop for this face coincides with the natural first vertex or the vertex
+            # diagonal to it.
             loop_vertex_index = face.loops[0].vert.index
             if loop_vertex_index == vertex_index or loop_vertex_index == vertex_index + terrain_info.x_size + 1:
                 array_index = bitmap_index >> 5
@@ -193,7 +197,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
         terrain_info.terrain_scale,
         terrain_info.terrain_scale,
         max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
-    actor['DecoLayerOffset'] = 0.0  # ?f
+    actor['DecoLayerOffset'] = 0.0
     actor['Location'] = Vector(terrain_info_object.location) - Vector((32.0, 32.0, 32.0))
 
     return actor
@@ -291,7 +295,6 @@ def export_terrain_heightmap(terrain_info_object: Object, directory: str):
 
 def write_terrain_t3d(terrain_info_object: Object, fp: io.TextIOBase):
     heightmap, terrain_scale_z = get_terrain_heightmap(terrain_info_object)
-    print(heightmap, terrain_scale_z)
     t3d = T3D()
     t3d.actors.append(create_terrain_info_actor(terrain_info_object, terrain_scale_z))
     T3DWriter(fp).write(t3d)

@@ -28,10 +28,12 @@ class BDK_OT_ImportDataLinked(Operator):
         asset_libraries: bpy_prop_collection[UserAssetLibrary] = context.preferences.filepaths.asset_libraries
 
         try:
-            library_path = Path(asset_libraries.get(str(library)).path) # type: ignore
+            library_path = Path(asset_libraries.get(str(library)).path)  # type: ignore
         except AttributeError:
             # TODO: We don't need to link local assets.
-            library_path = Path(bpy.data.filepath) # will be '.' if file has never been saved
+            library_path = Path(bpy.data.filepath)  # will be '.' if file has never been saved
+
+        print(library_path)
 
         assets: Sequence[FileSelectEntry] = context.selected_asset_files
 

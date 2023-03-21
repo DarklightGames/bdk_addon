@@ -1,14 +1,11 @@
 from bpy.types import Object
 from mathutils import Vector, Euler, Matrix, Quaternion
-
-
-def rad_to_unreal(value: float) -> int:
-    return int(value * 10430.378350470452724949566316381)
+from ..units import radians_to_unreal
 
 
 class T3DInterface:
     """
-    Inteface for Unreal Text File format (T3D).
+    Interface for Unreal Text File format (T3D).
     https://wiki.beyondunreal.com/Legacy:T3D_File
     """
 
@@ -24,9 +21,9 @@ class UVector(Vector):
 
 class URotator:
     def __init__(self, euler: Euler):
-        self.pitch: int = -rad_to_unreal(euler.y)
-        self.roll: int = rad_to_unreal(euler.x)
-        self.yaw: int = -rad_to_unreal(euler.z)
+        self.pitch: int = -radians_to_unreal(euler.y)
+        self.roll: int = radians_to_unreal(euler.x)
+        self.yaw: int = -radians_to_unreal(euler.z)
 
     def __str__(self) -> str:
         return f'(Pitch={self.pitch},Roll={self.roll},Yaw={self.yaw})'
@@ -75,13 +72,11 @@ class UActor(T3DInterface):
     
     def get_property_dict(self) -> dict[str, str]:
         """Returns properties of the actor as a dictionary."""
-
-        props: dict[str, str] = {}
-        props['Location'] = str(self.location)
-        props['Rotation'] = str(self.rotation)
-        props['DrawScale3D'] = str(self.scale)
-
-        return props
+        return {
+            'Location': str(self.location),
+            'Rotation': str(self.rotation),
+            'DrawScale3D': str(self.scale)
+        }
 
     def to_text(self, name: str = '') -> str:
         actor_name: str = name if name else self.classname

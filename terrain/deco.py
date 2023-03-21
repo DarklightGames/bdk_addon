@@ -1,10 +1,36 @@
 import bpy
-from bpy.types import Context, Object, Mesh, NodeTree
 import numpy as np
+import uuid
+
+from bpy.types import Context, Object, Mesh, NodeTree, Collection
 from typing import cast, Optional
 
-from ..helpers import get_terrain_info
+from ..helpers import get_terrain_info, auto_increment_name
 from .properties import BDK_PG_TerrainDecoLayerPropertyGroup
+
+
+def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: str = 'DecoLayer') -> BDK_PG_TerrainDecoLayerPropertyGroup:
+    """
+    Adds a deco layer to the terrain.
+    This adds a new entry to the deco layers array in the terrain info and creates the associated deco layer object and
+    mesh attributes.
+    """
+    terrain_info = getattr(terrain_info_object, 'terrain_info')
+
+    # Create the deco layer object.
+    deco_layer = cast(BDK_PG_TerrainDecoLayerPropertyGroup, terrain_info.deco_layers.add())
+    deco_layer.name = auto_increment_name(name, map(lambda x: x.name, terrain_info.deco_layers))
+    deco_layer.id = uuid.uuid4().hex
+    deco_layer.object = create_deco_layer_object(context, terrain_info_object, deco_layer)
+
+    # Link and parent the deco layer object to the terrain object.
+    collection: Collection = terrain_info_object.users_collection[0]
+    collection.objects.link(deco_layer.object)
+    deco_layer.object.parent = terrain_info_object
+
+    build_deco_layers(terrain_info_object)
+
+    return deco_layer
 
 
 def build_deco_layer_node_group(terrain_info_object: Object, deco_layer: BDK_PG_TerrainDecoLayerPropertyGroup) -> NodeTree:
@@ -53,7 +79,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer: BDK_PG_
     add_deco_layer_driver('Show On Invisible Terrain', 'show_on_invisible_terrain')
     add_deco_layer_driver('Align To Terrain', 'align_to_terrain')
     add_deco_layer_driver('Random Yaw', 'random_yaw')
-    add_deco_layer_driver('Inverted', 'inverted')
+    # add_deco_layer_driver('Inverted', 'inverted')  # TODO: point to the top level object
     add_deco_layer_driver('Density Multiplier Min', 'density_multiplier_min')
     add_deco_layer_driver('Density Multiplier Max', 'density_multiplier_max')
     add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 0)

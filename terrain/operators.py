@@ -4,18 +4,18 @@ import numpy as np
 import uuid
 import bpy.types
 import bmesh
-from typing import Tuple, cast
+from typing import cast
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
 from bpy.types import Operator, Context, Mesh, Object, Collection
-from bpy_extras.io_utils import ExportHelper, ImportHelper
+from bpy_extras.io_utils import ExportHelper
 
 from .deco import create_deco_layer_object, build_deco_layers
 from .exporter import export_terrain_heightmap, export_terrain_layers, export_deco_layers, write_terrain_t3d
+from .layers import add_terrain_layer
 
 from ..helpers import auto_increment_name, get_terrain_info, is_active_object_terrain_info
-from .builder import build_terrain_material
-from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainLayerPropertyGroup, \
-    BDK_PG_TerrainDecoLayerPropertyGroup
+from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size
+from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainDecoLayerPropertyGroup
 
 
 class BDK_OT_TerrainLayerRemove(Operator):
@@ -89,39 +89,6 @@ class BDK_OT_TerrainLayerMove(Operator):
         return {'FINISHED'}
 
 
-def add_terrain_layer(terrain_info_object: Object, name: str,
-                      fill: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)):
-    terrain_info = get_terrain_info(terrain_info_object)
-
-    # Auto-increment the names if there is a conflict.
-    name = auto_increment_name(name, map(lambda x: x.name, terrain_info.terrain_layers))
-
-    mesh_data = cast(Mesh, terrain_info_object.data)
-
-    # Create the associated color attribute.
-    # TODO: in future, we will be able to paint non-color attributes, so use those once that's possible.
-    color_attribute = mesh_data.color_attributes.new(uuid.uuid4().hex, type='FLOAT_COLOR', domain='POINT')
-    vertex_count = len(color_attribute.data)
-    color_data = np.ndarray(shape=(vertex_count, 4), dtype=float)
-    color_data[:] = tuple(fill)
-    color_attribute.data.foreach_set('color', color_data.flatten())
-
-    # Add the terrain layer.
-    terrain_layer: BDK_PG_TerrainLayerPropertyGroup = terrain_info.terrain_layers.add()
-    terrain_layer.terrain_info_object = terrain_info_object
-    terrain_layer.name = name
-    terrain_layer.color_attribute_name = color_attribute.name
-
-    # Regenerate the terrain material.
-    build_terrain_material(terrain_info_object)
-
-    # Tag window regions for redraw so that the new layer is displayed in terrain layer lists immediately.
-    for region in filter(lambda r: r.type == 'WINDOW', bpy.context.area.regions):
-        region.tag_redraw()
-
-    return terrain_layer
-
-
 class BDK_OT_TerrainDecoLayerAdd(Operator):
     bl_idname = 'bdk.terrain_deco_layer_add'
     bl_label = 'Add Deco Layer'
@@ -132,19 +99,7 @@ class BDK_OT_TerrainDecoLayerAdd(Operator):
         return is_active_object_terrain_info(context)
 
     def execute(self, context: bpy.types.Context):
-        active_object = context.active_object
-        terrain_info = get_terrain_info(active_object)
-
-        # Create the deco layer object.
-        deco_layer = cast(BDK_PG_TerrainDecoLayerPropertyGroup, terrain_info.deco_layers.add())
-        deco_layer.name = auto_increment_name(deco_layer.name, map(lambda x: x.name, terrain_info.deco_layers))
-        deco_layer.id = uuid.uuid4().hex
-        deco_layer.object = create_deco_layer_object(context, active_object, deco_layer)
-
-        # Link and parent the deco layer object to the terrain object.
-        collection: Collection = active_object.users_collection[0]
-        collection.objects.link(deco_layer.object)
-        deco_layer.object.parent = active_object
+        add_terrain_deco_layer(context, context.active_object)
 
         build_deco_layers(active_object)
 
@@ -234,11 +189,11 @@ class BDK_OT_TerrainLayerAdd(Operator):
 
 
 def quad_size_get(self):
-    return self.size / (self.resolution - 1)
+    return get_terrain_quad_size(self.size, self.resolution)
 
 
 class BDK_OT_TerrainInfoAdd(Operator):
-    bl_idname = 'bdk.create_terrain_info'
+    bl_idname = 'bdk.terrain_info_add'
     bl_label = 'Add Terrain Info'
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -257,39 +212,8 @@ class BDK_OT_TerrainInfoAdd(Operator):
         return self.execute(context)
 
     def execute(self, context: bpy.types.Context):
-
-        # NOTE: There is a bug in Unreal where the terrain is off-center, so we deliberately
-        # have to miscalculate things in order to replicate the behavior seen in the engine.
-        quad_length = float(self.size) / self.resolution
-        size_half = 0.5 * self.size
-
-        bm = bmesh.new()
-
-        # Vertices
-        for y in range(self.resolution):
-            for x in range(self.resolution):
-                co = (quad_length * x - size_half, quad_length * y - size_half + quad_length, 0.0)
-                bm.verts.new(co)
-
-        bm.verts.ensure_lookup_table()
-
-        # Faces
-        z = 0
-        indices = [0, 1, self.resolution + 1, self.resolution]
-        for y in range(self.resolution - 1):
-            for x in range(self.resolution - 1):
-                face = bm.faces.new(tuple([bm.verts[z + x] for x in indices]))
-                face.smooth = True
-                z += 1
-            z += 1
-
-        mesh_data = bpy.data.meshes.new('TerrainInfo')
-        bm.to_mesh(mesh_data)
-        del bm
-
-        mesh_object = bpy.data.objects.new('TerrainInfo', mesh_data)
+        mesh_object = create_terrain_info_object(resolution=self.resolution, size=self.size)
         mesh_object.location = self.location
-        mesh_object['bdk.quad_size'] = self.quad_size
 
         if self.lock_transforms:
             # Lock transforms so that levelers don't accidentally move the terrain.
@@ -299,29 +223,8 @@ class BDK_OT_TerrainInfoAdd(Operator):
             mesh_object.lock_rotation_w = True
             mesh_object.lock_rotations_4d = True
 
-        # Custom properties
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(mesh_object, 'terrain_info')
-        terrain_info.is_terrain_info = True
-        terrain_info.terrain_info_object = mesh_object
-        terrain_info.x_size = self.resolution
-        terrain_info.y_size = self.resolution
-        terrain_info.terrain_scale = self.size / self.resolution
-
         # Add a base layer to start with.
         add_terrain_layer(mesh_object, name='Base', fill=(1.0, 1.0, 1.0, 1.0))
-
-        # Create the "hidden" material we will use for hiding quads.
-        hidden_material = bpy.data.materials.new(uuid.uuid4().hex)
-        hidden_material.use_nodes = True
-        hidden_material.node_tree.nodes.clear()
-        hidden_material.blend_method = 'CLIP'
-        node_tree = hidden_material.node_tree
-        output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
-
-        transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
-        node_tree.links.new(output_node.inputs['Surface'], transparent_node.outputs['BSDF'])
-
-        mesh_data.materials.append(hidden_material)
 
         context.scene.collection.objects.link(mesh_object)
 
@@ -330,7 +233,7 @@ class BDK_OT_TerrainInfoAdd(Operator):
 
 class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
     bl_label = 'Export BDK Terrain Info'
-    bl_idname = 'bdk.export_terrain_info'
+    bl_idname = 'bdk.terrain_info_export'
 
     directory: StringProperty(name='Directory')
     filename_ext: StringProperty(default='.', options={'HIDDEN'})
@@ -358,20 +261,6 @@ class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
         self.report({'INFO'}, 'Exported TerrainInfo')
 
         return {'FINISHED'}
-
-
-class BDK_OT_TerrainInfoImport(Operator, ImportHelper):
-    bl_label = 'Import BDK Terrain Info'
-    bl_idname = 'bdk.import_terrain_info'
-
-    filename_ext = '.t3d'
-    filepath: StringProperty()
-    filter_glob: StringProperty(default='*.t3d', options={'HIDDEN'})
-    filepath: StringProperty(
-        name='File Path',
-        description='File path used for importing the PSA file',
-        maxlen=1024,
-        default='')
 
 
 classes = (
