@@ -119,7 +119,7 @@ class MaterialBuilder:
     def _load_image(self, reference: UReference):
         image_path = self._material_cache.resolve_path_for_reference(reference)
         image_path = str(image_path)
-        extensions = ['.tga', '.hdr']  # A little dicey :think:
+        extensions = ['.tga']  # A little dicey :think:
         for extension in extensions:
             file_path = image_path.replace('.props.txt', extension)
             if os.path.isfile(file_path):
@@ -219,7 +219,8 @@ class MaterialBuilder:
             elif material1_outputs is not None and material1_outputs.alpha_socket is not None:
                 self._node_tree.links.new(mix_node.inputs['Fac'], material1_outputs.alpha_socket)
         elif combiner.CombineOperation == EColorOperation.CO_Use_Color_From_Mask:  # dropped in UE3, apparently
-            outputs.color_socket = mask_outputs.color_socket
+            if mask_outputs and mask_outputs.color_socket:
+                outputs.color_socket = mask_outputs.color_socket
 
         # Alpha Operation
         if combiner.AlphaOperation == EAlphaOperation.AO_Use_Mask:
@@ -521,7 +522,9 @@ class MaterialBuilder:
 
         # TODO: there are strange interactions with stacking multiple UV modifiers, handle this later
         self._node_tree.links.new(vector_add_node.inputs[0], vector_rotate_node.outputs['Vector'])
-        self._node_tree.links.new(vector_rotate_node.inputs[0], socket_inputs.uv_source_socket)
+
+        if socket_inputs.uv_source_socket:
+            self._node_tree.links.new(vector_rotate_node.inputs[0], socket_inputs.uv_source_socket)
 
         socket_inputs.uv_socket = vector_add_node.outputs['Vector']
 

@@ -96,6 +96,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer: BDK_PG_
     density_named_attribute_node.data_type = 'FLOAT'
     density_named_attribute_node.inputs['Name'].default_value = deco_layer.id
 
+    # Instance on Points
     instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
     node_tree.links.new(instance_on_points_node.inputs['Instance'], static_mesh_object_info_node.outputs['Geometry'])
     node_tree.links.new(instance_on_points_node.inputs['Points'], deco_layer_node.outputs['Points'])
@@ -104,8 +105,12 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer: BDK_PG_
 
     node_tree.links.new(deco_layer_node.inputs['Density Map'], density_named_attribute_node.outputs[1])
 
+    # Realize Instances
+    realize_instances_node = node_tree.nodes.new('GeometryNodeRealizeInstances')
+    node_tree.links.new(instance_on_points_node.outputs['Instances'], realize_instances_node.inputs['Geometry'])
+
     output_node = node_tree.nodes.new('NodeGroupOutput')
-    node_tree.links.new(output_node.inputs['Geometry'], instance_on_points_node.outputs['Instances'])
+    node_tree.links.new(output_node.inputs['Geometry'], realize_instances_node.outputs['Geometry'])
 
     return node_tree
 

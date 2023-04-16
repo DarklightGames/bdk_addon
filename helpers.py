@@ -75,6 +75,9 @@ def load_bdk_material(reference: str):
     if reference is None:
         return None
 
+    if reference.package_name == 'myLevel':
+        return bpy.data.materials[reference.object_name]
+
     blend_file = get_blend_file_for_package(reference.package_name)
 
     if blend_file is None:
@@ -86,16 +89,29 @@ def load_bdk_material(reference: str):
         else:
             return None
 
+    # TODO: there is (i think) a bug here if we try to load the same material multiple times;
+    #  it's making loads of local materials for skin overrides for some reason.
     material = bpy.data.materials[reference.object_name]
 
     return material
 
 
+# TODO: should actually do the object, not the mesh data
 def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
 
     reference = UReference.from_string(reference)
 
     if reference is None:
+        return None
+
+    if reference.package_name == 'myLevel':
+        if reference.object_name in bpy.data.objects:
+            return bpy.data.objects[reference.object_name].data
+        # Name look-up failed, sometimes the names can differ only by case, so manually check the names of each object
+        for object in bpy.data.objects:
+            if object.name.upper() == reference.object_name.upper():
+                return bpy.data.objects[reference.object_name].data
+        # Failed to find object in myLevel package. (handle reporting this errors downstream)
         return None
 
     # Strip the group name since we don't use it in the BDK library files.

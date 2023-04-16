@@ -159,7 +159,7 @@ def get_terrain_quad_size(size: float, resolution: int) -> float:
     return size / (resolution - 1)
 
 
-def create_terrain_info_object(resolution: int, size: float, edge_turn_bitmap: Optional[np.array] = None) -> Object:
+def create_terrain_info_object(resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
     # NOTE: There is a bug in Unreal where the terrain is off-center, so we deliberately
     # have to miscalculate things in order to replicate the behavior seen in the engine.
     quad_length = float(size) / resolution
@@ -167,11 +167,18 @@ def create_terrain_info_object(resolution: int, size: float, edge_turn_bitmap: O
 
     bm = bmesh.new()
 
+    if heightmap is None:
+        heightmap = np.full(resolution * resolution, fill_value=0.5, dtype=float)
+
+    # TODO: there is a bug in here where the quad size is not large enough
+
     # Vertices
+    vertex_index = 0
     for y in range(resolution):
         for x in range(resolution):
-            co = (quad_length * x - size_half, quad_length * y - size_half + quad_length, 0.0)
+            co = (quad_length * x - size_half, quad_length * y - size_half + quad_length, heightmap[vertex_index])
             bm.verts.new(co)
+            vertex_index += 1
 
     bm.verts.ensure_lookup_table()
 

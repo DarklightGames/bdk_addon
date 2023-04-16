@@ -9,7 +9,7 @@ from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolPrope
 from bpy.types import Operator, Context, Mesh, Object, Collection
 from bpy_extras.io_utils import ExportHelper
 
-from .deco import create_deco_layer_object, build_deco_layers
+from .deco import add_terrain_deco_layer, build_deco_layers
 from .exporter import export_terrain_heightmap, export_terrain_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_layer
 
@@ -101,7 +101,7 @@ class BDK_OT_TerrainDecoLayerAdd(Operator):
     def execute(self, context: bpy.types.Context):
         add_terrain_deco_layer(context, context.active_object)
 
-        build_deco_layers(active_object)
+        build_deco_layers(context.active_object)
 
         return {'FINISHED'}
 
