@@ -6,10 +6,9 @@ from bpy.types import Context, Object, Mesh, NodeTree, Collection
 from typing import cast, Optional
 
 from ..helpers import get_terrain_info, auto_increment_name
-from .properties import BDK_PG_TerrainDecoLayerPropertyGroup
 
 
-def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: str = 'DecoLayer') -> BDK_PG_TerrainDecoLayerPropertyGroup:
+def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: str = 'DecoLayer'):
     """
     Adds a deco layer to the terrain.
     This adds a new entry to the deco layers array in the terrain info and creates the associated deco layer object and
@@ -18,7 +17,7 @@ def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: 
     terrain_info = getattr(terrain_info_object, 'terrain_info')
 
     # Create the deco layer object.
-    deco_layer = cast(BDK_PG_TerrainDecoLayerPropertyGroup, terrain_info.deco_layers.add())
+    deco_layer = terrain_info.deco_layers.add()
     deco_layer.name = auto_increment_name(name, map(lambda x: x.name, terrain_info.deco_layers))
     deco_layer.id = uuid.uuid4().hex
     deco_layer.object = create_deco_layer_object(context, terrain_info_object, deco_layer)
@@ -33,7 +32,7 @@ def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: 
     return deco_layer
 
 
-def build_deco_layer_node_group(terrain_info_object: Object, deco_layer: BDK_PG_TerrainDecoLayerPropertyGroup) -> NodeTree:
+def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> NodeTree:
     terrain_info = get_terrain_info(terrain_info_object)
 
     deco_layer_index = list(terrain_info.deco_layers).index(deco_layer)
@@ -94,7 +93,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer: BDK_PG_
 
     density_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
     density_named_attribute_node.data_type = 'FLOAT'
-    density_named_attribute_node.inputs['Name'].default_value = deco_layer.id
+    density_named_attribute_node.inputs['Name'].default_value = deco_layer.get_density_color_attribute_id()
 
     # Instance on Points
     instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
@@ -128,12 +127,13 @@ def build_deco_layers(terrain_info_object: Object):
             modifier.node_group = node_group
 
 
-def create_deco_layer_object(context: Context, terrain_info_object: Object, deco_layer: BDK_PG_TerrainDecoLayerPropertyGroup) -> Object:
+def create_deco_layer_object(context: Context, terrain_info_object: Object, deco_layer) -> Object:
     # Create a new mesh object with empty data.
     mesh_data = bpy.data.meshes.new(deco_layer.id)
     deco_layer_object = bpy.data.objects.new(deco_layer.id, mesh_data)
     deco_layer_object.hide_select = True
 
+    # TODO: when we can paint non-color data, rewrite this!
     # Add the density map attribute to the TerrainInfo mesh.
     terrain_info_mesh_data = cast(Mesh, terrain_info_object.data)
     density_map_attribute = terrain_info_mesh_data.color_attributes.new(deco_layer.id, type='BYTE_COLOR', domain='POINT')

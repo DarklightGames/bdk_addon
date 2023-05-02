@@ -1,8 +1,9 @@
-from bpy.types import Panel, Context, UIList, UILayout, Mesh, AnyType
+from bpy.types import Panel, Context, UIList, UILayout, Mesh, AnyType, Menu
 from typing import cast
 from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainDecoLayerPropertyGroup
 from .operators import BDK_OT_TerrainLayerAdd, BDK_OT_TerrainLayerRemove, BDK_OT_TerrainLayerMove, \
-    BDK_OT_TerrainDecoLayerAdd, BDK_OT_TerrainDecoLayerRemove
+    BDK_OT_TerrainDecoLayerAdd, BDK_OT_TerrainDecoLayerRemove, BDK_OT_terrain_deco_layers_hide, \
+    BDK_OT_terrain_deco_layers_show
 
 
 class BDK_PT_TerrainLayersPanel(Panel):
@@ -64,6 +65,24 @@ class BDK_PT_TerrainLayersPanel(Panel):
             row.prop(terrain_layer, 'texture_rotation', text='')
 
 
+class BDK_MT_terrain_deco_layers_context_menu(Menu):
+    bl_idname = 'BDK_MT_terrain_deco_layers_context_menu'
+    bl_label = "Deco Layers Specials"
+
+    def draw(self, context: Context):
+        layout: UILayout = self.layout
+
+        operator = layout.operator(BDK_OT_terrain_deco_layers_show.bl_idname, text='Show All', icon='HIDE_OFF')
+        operator.mode = 'ALL'
+
+        layout.separator()
+
+        operator = layout.operator(BDK_OT_terrain_deco_layers_hide.bl_idname, text='Hide All', icon='HIDE_ON')
+        operator.mode = 'ALL'
+        operator = layout.operator(BDK_OT_terrain_deco_layers_hide.bl_idname, text='Hide Unselected')
+        operator.mode = 'UNSELECTED'
+
+
 class BDK_PT_TerrainDecoLayersPanel(Panel):
     bl_idname = 'BDK_PT_TerrainDecoLayersPanel'
     bl_label = 'Deco Layers'
@@ -78,7 +97,7 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
 
     def draw(self, context: Context):
         active_object = context.active_object
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
+        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info', None)
 
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index
@@ -93,22 +112,34 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
 
         col.separator()
 
+        col.menu(BDK_MT_terrain_deco_layers_context_menu.bl_idname, icon='DOWNARROW_HLT', text='')
+
         has_deco_layer_selected = 0 <= deco_layers_index < len(deco_layers)
 
         if has_deco_layer_selected:
             deco_layer: 'BDK_PG_TerrainDecoLayerPropertyGroup' = deco_layers[deco_layers_index]
 
-            # icon =  if deco_layer.static_mesh and deco_layer.static_mesh.asset_data else None
-            icon_id = 0
-
             box = self.layout.box()
-            self.layout.prop(deco_layer, 'static_mesh', text='')
+
+            icon_id = 0
             if deco_layer.static_mesh and deco_layer.static_mesh.preview:
                 icon_id = deco_layer.static_mesh.preview.icon_id
             box.template_icon(icon_value=icon_id, scale=4)
 
+            self.layout.separator()
+
             flow = self.layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
             flow.use_property_split = True
+
+            flow.column().prop(deco_layer, 'static_mesh', text='Static Mesh')
+
+            flow.separator()
+
+            flow.column().prop(deco_layer, 'is_linked_to_layer')
+            if deco_layer.is_linked_to_layer:
+                flow.column().prop(deco_layer, 'linked_layer_name', text='Linked Layer')
+
+            flow.separator()
 
             flow.column().prop(deco_layer, 'max_per_quad')
             flow.column().prop(deco_layer, 'seed')
@@ -156,7 +187,7 @@ class BDK_UL_TerrainLayersUIList(UIList):
         if color_attribute_index == mesh.color_attributes.active_color_index:
             row.label(text='', icon='VPAINT_HLT')
 
-        row.prop(item, 'is_visible', icon='HIDE_OFF' if item.is_visible else 'HIDE_ON', text='', emboss=False)
+        row.prop(item, 'is_visible', icon=('HIDE_OFF' if item.is_visible else 'HIDE_ON'), text='', emboss=False)
 
 
 class BDK_UL_TerrainDecoLayersUIList(UIList):
@@ -170,7 +201,7 @@ class BDK_UL_TerrainDecoLayersUIList(UIList):
         if color_attribute_index == mesh.color_attributes.active_color_index:
             row.label(text='', icon='VPAINT_HLT')
 
-        row.prop(item.object, 'hide_viewport', icon='HIDE_OFF' if item.is_visible else 'HIDE_ON', text='', emboss=False)
+        row.prop(item.object, 'hide_viewport', icon='HIDE_OFF' if not item.object.hide_viewport else 'HIDE_ON', text='', emboss=False)
 
 
 classes = (
@@ -178,4 +209,5 @@ classes = (
     BDK_PT_TerrainDecoLayersPanel,
     BDK_UL_TerrainLayersUIList,
     BDK_UL_TerrainDecoLayersUIList,
+    BDK_MT_terrain_deco_layers_context_menu,
 )

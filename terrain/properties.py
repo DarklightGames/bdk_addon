@@ -1,11 +1,12 @@
-from typing import cast
+from typing import cast, List
 
 import bpy.ops
 from bpy.types import PropertyGroup, Object, Context, Mesh, Material
 from bpy.props import PointerProperty, BoolProperty, FloatProperty, CollectionProperty, IntProperty, StringProperty, \
     FloatVectorProperty, EnumProperty
 
-from ..helpers import is_bdk_material, is_bdk_static_mesh_actor
+from .deco import build_deco_layers
+from ..helpers import is_bdk_material, is_bdk_static_mesh_actor, get_terrain_info
 from .builder import build_terrain_material
 
 
@@ -61,6 +62,39 @@ def static_mesh_poll(_: Context, obj: Object) -> bool:
     return is_bdk_static_mesh_actor(obj)
 
 
+def deco_layer_linked_layer_name_search(self: 'BDK_PG_TerrainDecoLayerPropertyGroup', context: Context, edit_text: str) -> List[str]:
+    # Get a list of terrain layer names for the selected terrain info object.
+    terrain_info = get_terrain_info(context.active_object)
+    if terrain_info is None:
+        return []
+    return [layer.name for layer in terrain_info.terrain_layers]
+
+
+def deco_layer_is_linked_to_layer_update(self: 'BDK_PG_TerrainDecoLayerPropertyGroup', context: Context):
+    build_deco_layers(context.active_object)
+
+    # Push an undo state.
+    bpy.ops.ed.undo_push(message='Update Linked Layer')
+
+
+def deco_layer_linked_layer_name_update(self: 'BDK_PG_TerrainDecoLayerPropertyGroup', context: Context):
+    # Try to find a terrain layer with the same name as the selected linked layer name.
+    terrain_info = get_terrain_info(context.active_object)
+    if terrain_info is None:
+        return
+    self.linked_layer_id = ''
+    for i, layer in enumerate(terrain_info.terrain_layers):
+        if layer.name == self.linked_layer_name:
+            self.linked_layer_id = layer.color_attribute_name   # TODO: Fix the naming of this to be more consistent.
+            break
+    # Trigger an update of the deco layers.
+    # TODO: Have the density map attribute ID in the geometry node be driven by a property.
+    build_deco_layers(context.active_object)
+
+    # Push an undo state.
+    bpy.ops.ed.undo_push(message='Update Linked Layer')
+
+
 empty_set = set()
 
 
@@ -77,7 +111,6 @@ class BDK_PG_TerrainDecoLayerPropertyGroup(PropertyGroup):
     fadeout_radius_min: FloatProperty(name='Fadeout Radius Min', options=empty_set, subtype='DISTANCE')
     force_draw: BoolProperty(name='Force Draw', default=False, options=empty_set)
     id: StringProperty(options={'HIDDEN'})
-    is_visible: BoolProperty(options={'HIDDEN'}, default=True)
     max_per_quad: IntProperty(name='Max Per Quad', default=1, min=1, max=4, options=empty_set)
     name: StringProperty(name='Name', default='DecoLayer', options=empty_set)
     object: PointerProperty(type=Object, options={'HIDDEN'})
@@ -95,6 +128,15 @@ class BDK_PG_TerrainDecoLayerPropertyGroup(PropertyGroup):
     ])
     static_mesh: PointerProperty(name='Static Mesh', type=Object, update=on_static_mesh_update, poll=static_mesh_poll, options=empty_set)
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
+    is_linked_to_layer: BoolProperty(options={'HIDDEN'}, default=False, update=deco_layer_is_linked_to_layer_update, name='Linked To Layer', description='Use the alpha map of the selected terrain layer as the density map')
+    linked_layer_name: StringProperty(options={'HIDDEN'}, update=deco_layer_linked_layer_name_update, search=deco_layer_linked_layer_name_search, name='Linked Layer')
+    linked_layer_id: StringProperty(options={'HIDDEN'})
+    color_attribute_id: StringProperty(options={'HIDDEN'}, description='The effective color attribute ID for this layer.')
+
+    def get_density_color_attribute_id(self) -> str:
+        if self.is_linked_to_layer:
+            return self.linked_layer_id
+        return self.id
 
 
 def on_terrain_layer_index_update(self: 'BDK_PG_TerrainInfoPropertyGroup', _: Context):

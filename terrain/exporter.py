@@ -11,8 +11,7 @@ from typing import cast, Any, List
 
 from mathutils import Vector
 
-from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainLayerPropertyGroup, \
-    BDK_PG_TerrainDecoLayerPropertyGroup
+from .properties import BDK_PG_TerrainInfoPropertyGroup
 from .g16 import write_bmp_g16
 
 

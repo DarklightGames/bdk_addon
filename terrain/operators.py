@@ -1,21 +1,18 @@
 import os
 
-import numpy as np
-import uuid
 import bpy.types
-import bmesh
 from typing import cast
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
-from bpy.types import Operator, Context, Mesh, Object, Collection
+from bpy.types import Operator, Context, Mesh, Object
 from bpy_extras.io_utils import ExportHelper
 
 from .deco import add_terrain_deco_layer, build_deco_layers
 from .exporter import export_terrain_heightmap, export_terrain_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_layer
 
-from ..helpers import auto_increment_name, get_terrain_info, is_active_object_terrain_info
+from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size
-from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainDecoLayerPropertyGroup
+from .properties import BDK_PG_TerrainInfoPropertyGroup
 
 
 class BDK_OT_TerrainLayerRemove(Operator):
@@ -263,6 +260,58 @@ class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_deco_layers_hide(Operator):
+    bl_idname = 'bdk.terrain_deco_layers_hide'
+    bl_label = 'Hide Deco Layers'
+
+    mode: EnumProperty(name='Operation', items=(
+        ('ALL', 'All', 'Hide all deco layers'),
+        ('UNSELECTED', 'Unselected', 'Hide all deco layers except the selected one')
+    ), default='ALL')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return True
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        deco_layers = terrain_info.deco_layers
+        deco_layers_index = terrain_info.deco_layers_index
+
+        for (deco_layer_index, deco_layer) in enumerate(deco_layers):
+            if self.mode == 'UNSELECTED' and deco_layer_index == deco_layers_index:
+                continue
+            deco_layer.object.hide_viewport = True
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_deco_layers_show(Operator):
+    bl_idname = 'bdk.terrain_deco_layers_show'
+    bl_label = 'Show Deco Layers'
+
+    mode: EnumProperty(name='Operation', items=(
+        ('ALL', 'All', 'Hide all deco layers'),
+        ('UNSELECTED', 'Unselected', 'Hide all deco layers except the selected one')
+    ), default='ALL')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return True
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        deco_layers = terrain_info.deco_layers
+        deco_layers_index = terrain_info.deco_layers_index
+
+        for (deco_layer_index, deco_layer) in enumerate(deco_layers):
+            if self.mode == 'UNSELECTED' and deco_layer_index == deco_layers_index:
+                continue
+            deco_layer.object.hide_viewport = False
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_TerrainInfoAdd,
     BDK_OT_TerrainLayerAdd,
@@ -270,5 +319,7 @@ classes = (
     BDK_OT_TerrainLayerMove,
     BDK_OT_TerrainDecoLayerAdd,
     BDK_OT_TerrainDecoLayerRemove,
-    BDK_OT_TerrainInfoExport
+    BDK_OT_TerrainInfoExport,
+    BDK_OT_terrain_deco_layers_hide,
+    BDK_OT_terrain_deco_layers_show
 )
