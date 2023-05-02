@@ -67,7 +67,6 @@ class BdkAddonPreferences(AddonPreferences):
             operator.uninstall = True
 
 
-
 classes = (
     BdkAddonPreferences,
     BDK_OT_InstallDependencies

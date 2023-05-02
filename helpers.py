@@ -131,3 +131,11 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
     mesh = bpy.data.meshes[str(reference)]
 
     return mesh
+
+
+def are_bdk_dependencies_installed() -> bool:
+    try:
+        import t3dpy
+    except ModuleNotFoundError:
+        return False
+    return True

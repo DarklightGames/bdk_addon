@@ -6,14 +6,7 @@ from typing import Sequence, Set
 from .data import UStaticMeshActor, UActor, UMap
 from pathlib import Path
 from .importer import import_t3d
-
-
-def bdk_are_dependencies_installed() -> bool:
-    try:
-        import t3dpy
-    except ModuleNotFoundError:
-        return False
-    return True
+from ..helpers import are_bdk_dependencies_installed
 
 
 class BDK_OT_T3DImportFromClipboard(Operator):
@@ -24,7 +17,7 @@ class BDK_OT_T3DImportFromClipboard(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        if not bdk_are_dependencies_installed():
+        if not are_bdk_dependencies_installed():
             cls.poll_message_set(message='Dependencies are not installed')
             return False
         return True
@@ -60,7 +53,7 @@ class BDK_OT_T3DImportFromFile(Operator, ImportHelper):
 
     @classmethod
     def poll(cls, context: Context):
-        if not bdk_are_dependencies_installed():
+        if not are_bdk_dependencies_installed():
             cls.poll_message_set(message='Dependencies are not installed')
             return False
         return True
