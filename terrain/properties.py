@@ -131,7 +131,6 @@ class BDK_PG_TerrainDecoLayerPropertyGroup(PropertyGroup):
     is_linked_to_layer: BoolProperty(options={'HIDDEN'}, default=False, update=deco_layer_is_linked_to_layer_update, name='Linked To Layer', description='Use the alpha map of the selected terrain layer as the density map')
     linked_layer_name: StringProperty(options={'HIDDEN'}, update=deco_layer_linked_layer_name_update, search=deco_layer_linked_layer_name_search, name='Linked Layer')
     linked_layer_id: StringProperty(options={'HIDDEN'})
-    color_attribute_id: StringProperty(options={'HIDDEN'}, description='The effective color attribute ID for this layer.')
 
     def get_density_color_attribute_id(self) -> str:
         if self.is_linked_to_layer:
