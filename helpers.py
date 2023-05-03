@@ -33,7 +33,7 @@ def is_bdk_static_mesh_actor(obj: Object) -> bool:
 def get_terrain_info(terrain_info_object: Object):
     terrain_info = getattr(terrain_info_object, 'terrain_info')
     if terrain_info is None or not terrain_info.is_terrain_info:
-        raise RuntimeError('Invalid object for operation')
+        return None
     return terrain_info
 
 

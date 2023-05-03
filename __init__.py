@@ -34,6 +34,10 @@ if 'bpy' in locals():
     importlib.reload(terrain_operators)
     importlib.reload(terrain_exporter)
 
+    importlib.reload(terrain_object_builder)
+    importlib.reload(terrain_object_operators)
+    importlib.reload(terrain_object_ui)
+
     if bdk_helpers.are_bdk_dependencies_installed():
         importlib.reload(bdk_panel) # TODO: remove this or rename it to a T3D panel
         importlib.reload(t3d_data)
@@ -64,6 +68,10 @@ else:
     from .terrain import g16 as terrain_g16
     from .terrain import deco as terrain_deco
 
+    from .terrain.objects import builder as terrain_object_builder
+    from .terrain.objects import operators as terrain_object_operators
+    from .terrain.objects import ui as terrain_object_ui
+
     # T3D
     if bdk_helpers.are_bdk_dependencies_installed():
         from .panel import panel as bdk_panel
@@ -74,6 +82,7 @@ else:
 
     from .asset_browser import operators as asset_browser_operators
 
+
 import bpy
 
 
@@ -82,6 +91,8 @@ classes = material_importer.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
+          terrain_object_operators.classes + \
+          terrain_object_ui.classes + \
           bdk_properties.classes + \
           asset_browser_operators.classes + \
           bdk_preferences.classes
@@ -91,6 +102,7 @@ if bdk_helpers.are_bdk_dependencies_installed():
         t3d_operators.classes + \
         t3d_types.classes
 
+
 def material_import_menu_func(self, _context: bpy.types.Context):
     self.layout.operator(material_importer.BDK_OT_material_import.bl_idname, text='Unreal Material (.props.txt)')
 
@@ -98,6 +110,7 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
     self.layout.operator(terrain_operators.BDK_OT_TerrainInfoAdd.bl_idname, text='BDK Terrain Info', icon='GRID')
+    self.layout.operator(terrain_object_operators.BDK_OT_terrain_object_add.bl_idname, text='BDK Terrain Object', icon='GRID')
 
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
