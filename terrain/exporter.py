@@ -11,7 +11,7 @@ from typing import cast, Any, List
 
 from mathutils import Vector
 
-from .properties import BDK_PG_TerrainInfoPropertyGroup
+from ..helpers import get_terrain_info
 from .g16 import write_bmp_g16
 
 
@@ -86,7 +86,7 @@ class T3DWriter:
 
 
 def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: float) -> Actor:
-    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+    terrain_info = get_terrain_info(terrain_info_object)
 
     actor = Actor(class_='TerrainInfo', name='TerrainInfo0')
 
@@ -208,9 +208,9 @@ def sanitize_name(name: str) -> str:
 
 
 def export_deco_layers(terrain_info_object: Object, directory: str):
-    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+    terrain_info = get_terrain_info(terrain_info_object)
 
-    if terrain_info is None or not terrain_info.is_terrain_info:
+    if terrain_info is None:
         raise RuntimeError('Invalid object')
 
     for deco_layer in terrain_info.deco_layers:
@@ -222,9 +222,9 @@ def export_deco_layers(terrain_info_object: Object, directory: str):
 
 
 def export_terrain_layers(terrain_info_object: Object, directory: str):
-    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+    terrain_info = get_terrain_info(terrain_info_object)
 
-    if terrain_info is None or not terrain_info.is_terrain_info:
+    if terrain_info is None:
         raise RuntimeError('Invalid object')
 
     for terrain_layer in terrain_info.terrain_layers:
@@ -236,9 +236,9 @@ def export_terrain_layers(terrain_info_object: Object, directory: str):
 
 
 def create_image_from_color_attribute(terrain_info_object: Object, color_attribute_name: str) -> Image:
-    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
+    terrain_info = get_terrain_info(terrain_info_object)
 
-    if terrain_info is None or not terrain_info.is_terrain_info:
+    if terrain_info is None:
         raise RuntimeError('Invalid object')
 
     mesh_data = cast(Mesh, terrain_info_object.data)
@@ -272,9 +272,8 @@ def create_image_from_color_attribute(terrain_info_object: Object, color_attribu
 
 
 def get_terrain_heightmap(terrain_info_object: Object) -> (np.ndarray, float):
-    terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(terrain_info_object, 'terrain_info')
-
-    if terrain_info is None or not terrain_info.is_terrain_info:
+    terrain_info = get_terrain_info(terrain_info_object)
+    if terrain_info is None:
         raise RuntimeError('Invalid object')
 
     mesh_data = cast(Mesh, terrain_info_object.data)

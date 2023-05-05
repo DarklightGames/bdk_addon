@@ -4,8 +4,8 @@ import bpy
 from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, Node
 
-from .components import TerrainObjectSculptComponent, CustomPropertyAttribute, TerrainObjectPaintComponent
-from .definitions import TerrainObjectDefinition
+from .properties import BDK_PG_terrain_object, BDK_PG_terrain_object_sculpt_component, \
+    BDK_PG_terrain_object_paint_component
 from ...units import meters_to_unreal
 
 
@@ -29,7 +29,27 @@ def add_driver_to_node_socket(node_socket: NodeSocket, target_object: Object, da
     var.targets[0].data_path = f"[\"{data_path}\"]"
 
 
-def create_distance_to_curve_node_group(terrain_object: Object) -> NodeTree:
+def add_sculpt_component_driver_to_node_socket(node_socket: NodeSocket, sculpt_component: BDK_PG_terrain_object_sculpt_component, data_path: str):
+    driver = node_socket.driver_add('default_value').driver
+    driver.type = 'AVERAGE'
+    var = driver.variables.new()
+    var.name = data_path
+    var.type = 'SINGLE_PROP'
+    var.targets[0].id = sculpt_component.terrain_object
+    var.targets[0].data_path = f"bdk.terrain_object.sculpt_components[{sculpt_component.index}].{data_path}"
+
+
+def add_terrain_object_driver_to_node(node: Node, node_path: str, terrain_object: BDK_PG_terrain_object, data_path: str):
+    driver = node.driver_add(node_path).driver
+    driver.type = 'AVERAGE'
+    var = driver.variables.new()
+    var.name = data_path
+    var.type = 'SINGLE_PROP'
+    var.targets[0].id = terrain_object.object
+    var.targets[0].data_path = f"bdk.terrain_object.{data_path}"
+
+
+def create_distance_to_curve_node_group(terrain_object: BDK_PG_terrain_object) -> NodeTree:
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
     node_tree.inputs.new('NodeSocketGeometry', 'Curve')
     node_tree.outputs.new('NodeSocketFloat', 'Distance')
@@ -51,33 +71,6 @@ def create_distance_to_curve_node_group(terrain_object: Object) -> NodeTree:
     # Link the mesh output of the curve to mesh node to the geometry input of the proximity node.
     node_tree.links.new(curve_to_mesh_node.outputs['Mesh'], geometry_proximity_node.inputs['Target'])
 
-    # Create a value node and add a driver mapping the "radius" custom property of the terrain object.
-    radius_value_node = node_tree.nodes.new(type='ShaderNodeValue')
-    radius_value_node.label = 'radius'
-    add_driver_to_node_socket(radius_value_node.outputs[0], terrain_object, 'radius')
-
-    # Add a divide math node.
-    divide_node = node_tree.nodes.new(type='ShaderNodeMath')
-    divide_node.operation = 'DIVIDE'
-    divide_node.use_clamp = True
-
-    # Link the distance output of the geometry proximity node to the first input of the divide node.
-    node_tree.links.new(geometry_proximity_node.outputs['Distance'], divide_node.inputs[0])
-
-    # Link the radius value node to the second input of the divide node.
-    node_tree.links.new(radius_value_node.outputs['Value'], divide_node.inputs[1])
-
-    # Add a subtract node.
-    subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
-    subtract_node.operation = 'SUBTRACT'
-    subtract_node.inputs[0].default_value = 1.0
-
-    # Link the divide node to the second input of the subtract node.
-    node_tree.links.new(divide_node.outputs['Value'], subtract_node.inputs[1])
-
-    # Link subtract node value output to the distance output of the node group.
-    node_tree.links.new(subtract_node.outputs['Value'], output_node.inputs['Distance'])
-
     # Add a new Position and Separate XYZ node.
     position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
     separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
@@ -90,7 +83,7 @@ def create_distance_to_curve_node_group(terrain_object: Object) -> NodeTree:
 
     # Add a new boolean node.
     boolean_node = node_tree.nodes.new(type='FunctionNodeInputBool')
-    add_driver_to_node(boolean_node, 'boolean', terrain_object, 'is_3d')
+    add_terrain_object_driver_to_node(boolean_node, 'boolean', terrain_object, 'is_3d')
 
     # Link the output of the boolean node to the switch input of the switch node.
     node_tree.links.new(boolean_node.outputs['Boolean'], switch_node.inputs['Switch'])
@@ -108,10 +101,91 @@ def create_distance_to_curve_node_group(terrain_object: Object) -> NodeTree:
     # Link the output of the combine XYZ node to the source position input of the geometry proximity node.
     node_tree.links.new(combine_xyz_node_2.outputs['Vector'], geometry_proximity_node.inputs['Source Position'])
 
+    # Link the output of the geometry proximity node to the distance output of the node group.
+    node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+
     return node_tree
 
 
-def create_sculpt_node_group(terrain_object: Object) -> NodeTree:
+def create_noise_node_group():
+    # Create a new geometry node group.
+    node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
+
+    node_tree.inputs.new('NodeSocketFloat', 'Distance')
+    node_tree.inputs.new('NodeSocketFloat', 'Radius')
+    node_tree.inputs.new('NodeSocketFloat', 'Noise Strength')
+    node_tree.inputs.new('NodeSocketFloat', 'Noise Roughness')
+    node_tree.inputs.new('NodeSocketFloat', 'Noise Distortion')
+
+    node_tree.outputs.new('NodeSocketFloat', 'Offset')
+
+    # Create an input and output node.
+    input_node = node_tree.nodes.new(type='NodeGroupInput')
+    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+
+    # Add a multiply node.
+    multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+    multiply_node.operation = 'MULTIPLY'
+
+    # Add another multiply node.
+    multiply_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
+    multiply_node_2.operation = 'MULTIPLY'
+
+    node_tree.links.new(multiply_node_2.outputs['Value'], multiply_node.inputs[0])
+    node_tree.links.new(input_node.outputs['Noise Strength'], multiply_node.inputs[1])
+
+    # Add a position input node.
+    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+    # Add a noise texture node.
+    noise_texture_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
+    noise_texture_node.noise_dimensions = '2D'
+    noise_texture_node.inputs['Scale'].default_value = 1.0
+
+    # Link the roughness input of the input node to the roughness input of the noise texture node.
+    node_tree.links.new(input_node.outputs['Noise Roughness'], noise_texture_node.inputs['Roughness'])
+    node_tree.links.new(input_node.outputs['Noise Distortion'], noise_texture_node.inputs['Distortion'])
+
+    # Link the position output of the position node to the vector input of the noise texture node.
+    node_tree.links.new(position_node.outputs['Position'], noise_texture_node.inputs['Vector'])
+
+    # Add a Map Range node.
+    map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
+    map_range_node.data_type = 'FLOAT'
+    map_range_node.inputs['To Min'].default_value = -0.5
+    map_range_node.inputs['To Max'].default_value = 0.5
+
+    # Link the factor output of the noise texture to the value input of the map range node.
+    node_tree.links.new(noise_texture_node.outputs['Fac'], map_range_node.inputs['Value'])
+
+    # Add a Subtract node.
+    subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+    subtract_node.operation = 'SUBTRACT'
+    subtract_node.inputs[0].default_value = 1.0
+
+    # Add a Divide node.
+    divide_node = node_tree.nodes.new(type='ShaderNodeMath')
+    divide_node.operation = 'DIVIDE'
+    divide_node.use_clamp = True
+
+    node_tree.links.new(input_node.outputs['Distance'], divide_node.inputs[0])
+    node_tree.links.new(input_node.outputs['Radius'], divide_node.inputs[1])
+
+    # Link the output of the divide node to the second input of the subtract node.
+    node_tree.links.new(divide_node.outputs['Value'], subtract_node.inputs[1])
+
+    # Link the output of the subtract node to the first input of the second multiply node.
+    node_tree.links.new(subtract_node.outputs['Value'], multiply_node_2.inputs[0])
+
+    # Link the map range result to the second input of the second multiply node.
+    node_tree.links.new(map_range_node.outputs['Result'], multiply_node_2.inputs[1])
+
+    node_tree.links.new(multiply_node.outputs['Value'], output_node.inputs['Offset'])
+
+    return node_tree
+
+
+def create_sculpt_node_group(terrain_object: BDK_PG_terrain_object, sculpt_component: BDK_PG_terrain_object_sculpt_component) -> NodeTree:
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
     node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
     node_tree.inputs.new('NodeSocketFloat', 'Distance')
@@ -123,13 +197,52 @@ def create_sculpt_node_group(terrain_object: Object) -> NodeTree:
     # Create the output nodes.
     output_node = node_tree.nodes.new(type='NodeGroupOutput')
 
+    # Add a value node and add a driver that maps to the component's radius.
+    radius_value_node = node_tree.nodes.new(type='ShaderNodeValue')
+    radius_value_node.label = 'Radius'
+    add_sculpt_component_driver_to_node_socket(radius_value_node.outputs[0], sculpt_component, 'radius')
+
+    # Add a subtract node.
+    subtract_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
+    subtract_node_2.operation = 'SUBTRACT'
+
+    # Link the distance from the input node to the first input of the subtract node.
+    node_tree.links.new(input_node.outputs['Distance'], subtract_node_2.inputs[0])
+    node_tree.links.new(radius_value_node.outputs['Value'], subtract_node_2.inputs[1])
+
+    # Add a value node and add a driver that maps to the component's falloff radius.
+    falloff_radius_value_node = node_tree.nodes.new(type='ShaderNodeValue')
+    falloff_radius_value_node.label = 'Falloff Radius'
+    add_sculpt_component_driver_to_node_socket(falloff_radius_value_node.outputs[0], sculpt_component, 'falloff_radius')
+
+    # Add a divide math node.
+    divide_node = node_tree.nodes.new(type='ShaderNodeMath')
+    divide_node.operation = 'DIVIDE'
+    divide_node.use_clamp = True
+
+    # Link the distance output of the geometry proximity node to the first input of the divide node.
+    node_tree.links.new(subtract_node_2.outputs['Value'], divide_node.inputs[0])
+
+    # Link the radius value node to the second input of the divide node.
+    node_tree.links.new(falloff_radius_value_node.outputs['Value'], divide_node.inputs[1])
+
+    # Add a subtract node.
+    subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+    subtract_node.operation = 'SUBTRACT'
+    subtract_node.inputs[0].default_value = 1.0
+
+    # Link the divide node to the second input of the subtract node.
+    node_tree.links.new(divide_node.outputs['Value'], subtract_node.inputs[1])
+
+    # --------------------
+
     # Create a Float Curve node.
     float_curve_node = node_tree.nodes.new(type='ShaderNodeFloatCurve')
     float_curve_node.mapping.curves[0].points[0].location = (0.0, 0.5)
     float_curve_node.mapping.curves[0].points[1].location = (1.0, 0.0)
 
     # Link subtract node to the value input of the float curve node.
-    node_tree.links.new(input_node.outputs['Distance'], float_curve_node.inputs['Value'])
+    node_tree.links.new(subtract_node.outputs['Value'], float_curve_node.inputs['Value'])
 
     # Add another subtract node.
     subtract_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
@@ -141,8 +254,8 @@ def create_sculpt_node_group(terrain_object: Object) -> NodeTree:
 
     # Create a new value node and add a driver mapping to the depth custom property of the terrain object.
     depth_node = node_tree.nodes.new(type='ShaderNodeValue')
-    depth_node.label = 'depth'
-    add_driver_to_node_socket(depth_node.outputs[0], terrain_object, 'depth')
+    depth_node.label = 'Depth'
+    add_sculpt_component_driver_to_node_socket(depth_node.outputs[0], sculpt_component, 'depth')
 
     # Add a new multiply node.
     multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
@@ -161,9 +274,6 @@ def create_sculpt_node_group(terrain_object: Object) -> NodeTree:
     # Add a combine XYZ node.
     combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
 
-    # Link the output of the second multiply node to the Z input of the combine XYZ node.
-    node_tree.links.new(multiply_node_2.outputs['Value'], combine_xyz_node.inputs['Z'])
-
     # Add a Set Position node.
     set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
@@ -174,10 +284,56 @@ def create_sculpt_node_group(terrain_object: Object) -> NodeTree:
     node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
     node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
+    # Create the noise node.
+    noise_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    noise_node.node_tree = create_noise_node_group()
+
+    add_sculpt_component_driver_to_node_socket(noise_node.inputs['Noise Strength'], sculpt_component, 'noise_strength')
+    add_sculpt_component_driver_to_node_socket(noise_node.inputs['Noise Roughness'], sculpt_component, 'noise_roughness')
+    add_sculpt_component_driver_to_node_socket(noise_node.inputs['Noise Distortion'], sculpt_component, 'noise_distortion')
+
+    # Add a switch node of with input type float.
+    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_node.input_type = 'FLOAT'
+    switch_node.label = 'Use Noise'
+
+    add_sculpt_component_driver_to_node_socket(switch_node.inputs['Switch'], sculpt_component, 'use_noise')
+
+    # Link the offset output of the noise node to the True input of the switch node.
+    node_tree.links.new(noise_node.outputs['Offset'], switch_node.inputs['True'])
+
+    # Add a new add node.
+    add_node = node_tree.nodes.new(type='ShaderNodeMath')
+    add_node.operation = 'ADD'
+
+    node_tree.links.new(multiply_node_2.outputs['Value'], add_node.inputs[0])
+    node_tree.links.new(switch_node.outputs['Output'], add_node.inputs[1])
+    node_tree.links.new(add_node.outputs['Value'], combine_xyz_node.inputs['Z'])
+
+    # Link the distance output of the input node to the distance input of the noise node.
+    node_tree.links.new(input_node.outputs['Distance'], noise_node.inputs['Distance'])
+
+    # Add a new add node that adds the output values of the radius and the falloff radius nodes.
+    add_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
+    add_node_2.operation = 'ADD'
+    node_tree.links.new(radius_value_node.outputs['Value'], add_node_2.inputs[0])
+    node_tree.links.new(falloff_radius_value_node.outputs['Value'], add_node_2.inputs[1])
+
+    # Add a new multiply node that multiplies the output of the add node by a second value driven by the noise radius factor.
+    noise_radius_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+    noise_radius_multiply_node.operation = 'MULTIPLY'
+
+    node_tree.links.new(add_node_2.outputs['Value'], noise_radius_multiply_node.inputs[0])
+    add_sculpt_component_driver_to_node_socket(noise_radius_multiply_node.inputs[1], sculpt_component, 'noise_radius_factor')
+
+    # Link the value output of the add node to the radius input of the noise node.
+    node_tree.links.new(noise_radius_multiply_node.outputs['Value'], noise_node.inputs['Radius'])
+
+
     return node_tree
 
 
-def create_paint_node_group(terrain_object: Object) -> NodeTree:
+def create_paint_node_group(terrain_object: Object, paint_component: BDK_PG_terrain_object_paint_component) -> NodeTree:
     # Create a new node group.
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
     node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
@@ -195,8 +351,7 @@ def create_paint_node_group(terrain_object: Object) -> NodeTree:
     return node_tree
 
 
-def create_terrain_object_geometry_node_group(terrain_object: Object,
-                                              terrain_object_definition: TerrainObjectDefinition) -> NodeTree:
+def create_terrain_object_geometry_node_group(terrain_object: BDK_PG_terrain_object) -> NodeTree:
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
     node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
     node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
@@ -209,7 +364,7 @@ def create_terrain_object_geometry_node_group(terrain_object: Object,
 
     # Add an object info node and set the object to the terrain object.
     object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-    object_info_node.inputs[0].default_value = terrain_object
+    object_info_node.inputs[0].default_value = terrain_object.object
     object_info_node.transform_space = 'RELATIVE'
 
     # Create a new distance to curve node group.
@@ -223,30 +378,30 @@ def create_terrain_object_geometry_node_group(terrain_object: Object,
     geometry_node_socket = input_node.outputs['Geometry']
 
     # Now chain the node components together.
-    for component in terrain_object_definition.components:
-        if type(component) == TerrainObjectSculptComponent:
-            sculpt_node_group = create_sculpt_node_group(terrain_object)
-            sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
-            sculpt_node.node_tree = sculpt_node_group
-            sculpt_node.label = 'Sculpt'
+    for sculpt_component in terrain_object.sculpt_components:
+        sculpt_node_group = create_sculpt_node_group(terrain_object, sculpt_component)
+        sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        sculpt_node.node_tree = sculpt_node_group
+        sculpt_node.label = 'Sculpt'
 
-            # Link the geometry socket of the object info node to the geometry socket of the sculpt node.
-            node_tree.links.new(geometry_node_socket, sculpt_node.inputs['Geometry'])
-            node_tree.links.new(distance_to_curve_node.outputs['Distance'], sculpt_node.inputs['Distance'])
-            node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
+        # Link the geometry socket of the object info node to the geometry socket of the sculpt node.
+        node_tree.links.new(geometry_node_socket, sculpt_node.inputs['Geometry'])
+        node_tree.links.new(distance_to_curve_node.outputs['Distance'], sculpt_node.inputs['Distance'])
+        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
 
-            geometry_node_socket = sculpt_node.outputs['Geometry']
-        elif type(component) == TerrainObjectPaintComponent:
-            paint_node_group = create_paint_node_group(terrain_object)
-            paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
-            paint_node.node_tree = paint_node_group
-            paint_node.label = 'Paint'
+        geometry_node_socket = sculpt_node.outputs['Geometry']
 
-            node_tree.links.new(geometry_node_socket, paint_node.inputs['Geometry'])
-            node_tree.links.new(distance_to_curve_node.outputs['Distance'], paint_node.inputs['Distance'])
-            node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
+    for paint_component in terrain_object.paint_components:
+        paint_node_group = create_paint_node_group(terrain_object, paint_component)
+        paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        paint_node.node_tree = paint_node_group
+        paint_node.label = 'Paint'
 
-            geometry_node_socket = paint_node.outputs['Geometry']
+        node_tree.links.new(geometry_node_socket, paint_node.inputs['Geometry'])
+        node_tree.links.new(distance_to_curve_node.outputs['Distance'], paint_node.inputs['Distance'])
+        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
+
+        geometry_node_socket = paint_node.outputs['Geometry']
 
     # Link the last geometry node socket to the output node's geometry socket.
     node_tree.links.new(geometry_node_socket, output_node.inputs['Geometry'])
@@ -255,13 +410,11 @@ def create_terrain_object_geometry_node_group(terrain_object: Object,
 
 
 def create_terrain_object(context: Context,
-                          terrain_object_definition: TerrainObjectDefinition,
                           terrain_info_object: Object) -> Object:
     """
     Creates a terrain object from the given definition and connects it to the given terrain info object. Note that this
     function does not add the terrain object to the scene. That is the responsibility of the caller.
     :param context:
-    :param terrain_object_definition:
     :param terrain_info_object:
     :return:
     """
@@ -272,9 +425,11 @@ def create_terrain_object(context: Context,
     # Add some points to the spline.
     spline.bezier_points.add(count=1)
 
-    # Add a set of meandering points.
+    # Add a set of aligned meandering points.
     for i, point in enumerate(spline.bezier_points):
         point.co = (i, 0, 0)
+        point.handle_left_type = 'AUTO'
+        point.handle_right_type = 'AUTO'
         point.handle_left = (i - 0.25, -0.25, 0)
         point.handle_right = (i + 0.25, 0.25, 0)
 
@@ -285,22 +440,26 @@ def create_terrain_object(context: Context,
         point.handle_right *= meters_to_unreal(5.0)
 
     curve_object = bpy.data.objects.new(name=name, object_data=curve_data)
+    curve_object.bdk.type = 'TERRAIN_OBJECT'
+    curve_object.bdk.terrain_object.terrain_info_object = terrain_info_object
+    curve_object.bdk.terrain_object.object = curve_object
     curve_object.show_in_front = True
 
-    # Add custom properties from the terrain object definition.
-    for key, value in terrain_object_definition.properties.items():
-        if type(value) is CustomPropertyAttribute:
-            value = cast(CustomPropertyAttribute, value)
-            curve_object[key] = str(value.name)
-        else:
-            curve_object[key] = value
+    terrain_object = cast(BDK_PG_terrain_object, curve_object.bdk.terrain_object)
+
+    # Add sculpt and paint components.
+    # In the future, we will allow the user to select a preset for the terrain object.
+    sculpt_component = terrain_object.sculpt_components.add()
+    sculpt_component.terrain_object = terrain_object.object
+    paint_component = terrain_object.paint_components.add()
+    paint_component.terrain_object = terrain_object.object
 
     # Set the location of the curve object to the 3D cursor.
     curve_object.location = context.scene.cursor.location
 
     # Add a geometry node modifier to the terrain info object.
     modifier = terrain_info_object.modifiers.new(name=name, type='NODES')
-    modifier.node_group = create_terrain_object_geometry_node_group(curve_object, terrain_object_definition)
+    modifier.node_group = create_terrain_object_geometry_node_group(curve_object.bdk.terrain_object)
     modifier.show_on_cage = True
 
     return curve_object

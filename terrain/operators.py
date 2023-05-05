@@ -22,9 +22,9 @@ class BDK_OT_TerrainLayerRemove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        active_object = context.active_object
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
-        return terrain_info.terrain_layers_index >= 0
+        if not is_active_object_terrain_info(context):
+            return False
+        return get_terrain_info(context.active_object).terrain_layers_index >= 0
 
     def execute(self, context: Context):
         active_object = context.active_object
@@ -68,9 +68,13 @@ class BDK_OT_TerrainLayerMove(Operator):
         ),
     )
 
+    @classmethod
+    def poll(cls, context: 'Context'):
+        return is_active_object_terrain_info(context)
+
     def execute(self, context: Context):
         active_object = context.active_object
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
+        terrain_info = get_terrain_info(context.active_object)
         terrain_layers = terrain_info.terrain_layers
         terrain_layers_index = terrain_info.terrain_layers_index
 
@@ -225,6 +229,10 @@ class BDK_OT_TerrainInfoAdd(Operator):
 
         context.scene.collection.objects.link(mesh_object)
 
+        # Select the new object.
+        context.view_layer.objects.active = mesh_object
+        mesh_object.select_set(True)
+
         return {'FINISHED'}
 
 
@@ -238,7 +246,7 @@ class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
 
     @classmethod
     def poll(cls, context: 'Context'):
-        if not context.active_object or not context.active_object.terrain_info.is_terrain_info:
+        if not is_active_object_terrain_info(context):
             cls.poll_message_set('The active object must be a TerrainInfo object')
             return False
         return True

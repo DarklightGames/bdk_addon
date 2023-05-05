@@ -158,7 +158,6 @@ def on_terrain_layer_index_update(self: 'BDK_PG_TerrainInfoPropertyGroup', _: Co
 
 class BDK_PG_TerrainInfoPropertyGroup(PropertyGroup):
     terrain_info_object: PointerProperty(type=Object)
-    is_terrain_info: BoolProperty(default=False, options={'HIDDEN'})
     terrain_scale: FloatProperty(name='TerrainScale')
     terrain_layers: CollectionProperty(name='TerrainLayers', type=BDK_PG_TerrainLayerPropertyGroup)
     terrain_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_layer_index_update)

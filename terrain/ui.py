@@ -4,6 +4,7 @@ from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainDecoLayer
 from .operators import BDK_OT_TerrainLayerAdd, BDK_OT_TerrainLayerRemove, BDK_OT_TerrainLayerMove, \
     BDK_OT_TerrainDecoLayerAdd, BDK_OT_TerrainDecoLayerRemove, BDK_OT_terrain_deco_layers_hide, \
     BDK_OT_terrain_deco_layers_show
+from ..helpers import is_active_object_terrain_info, get_terrain_info
 
 
 class BDK_PT_TerrainLayersPanel(Panel):
@@ -15,15 +16,10 @@ class BDK_PT_TerrainLayersPanel(Panel):
 
     @classmethod
     def poll(cls, context: Context):
-        active_object = context.active_object
-        if active_object is None:
-            return False
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info', None)
-        return terrain_info and terrain_info.is_terrain_info
+        return is_active_object_terrain_info(context)
 
     def draw(self, context: Context):
-        active_object = context.active_object
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info')
+        terrain_info = get_terrain_info(context.active_object)
         terrain_layers = terrain_info.terrain_layers
         terrain_layers_index = terrain_info.terrain_layers_index
 
@@ -92,12 +88,10 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
 
     @classmethod
     def poll(cls, context: Context):
-        active_object = context.active_object
-        return active_object and active_object.terrain_info.is_terrain_info
+        return is_active_object_terrain_info(context)
 
     def draw(self, context: Context):
-        active_object = context.active_object
-        terrain_info: BDK_PG_TerrainInfoPropertyGroup = getattr(active_object, 'terrain_info', None)
+        terrain_info = get_terrain_info(context.active_object)
 
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index

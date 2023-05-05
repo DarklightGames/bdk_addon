@@ -5,6 +5,7 @@ from typing import cast, Union, Optional
 import uuid
 import numpy as np
 
+from ..helpers import get_terrain_info
 from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 
@@ -81,7 +82,9 @@ def _build_or_get_terrain_layer_uv_group_node() -> bpy.types.NodeTree:
 
 
 def build_terrain_material(terrain_info_object: bpy.types.Object):
-    terrain_info = getattr(terrain_info_object, 'terrain_info')
+    terrain_info = get_terrain_info(terrain_info_object)
+    if terrain_info is None:
+        raise RuntimeError('Invalid object')
     terrain_layers = terrain_info.terrain_layers
 
     mesh_data = cast(Mesh, terrain_info_object.data)
@@ -110,7 +113,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
             target = variable.targets[0]
             target.id_type = 'OBJECT'
             target.id = terrain_info_object
-            target.data_path = f'terrain_info.terrain_layers[{terrain_layer_index}].{terrain_layer_prop}'
+            target.data_path = f'bdk.terrain_info.terrain_layers[{terrain_layer_index}].{terrain_layer_prop}'
 
         add_terrain_layer_input_driver(terrain_layer_uv_node, 'UScale', 'u_scale')
         add_terrain_layer_input_driver(terrain_layer_uv_node, 'VScale', 'v_scale')
@@ -220,11 +223,12 @@ def create_terrain_info_object(resolution: int, size: float, heightmap: Optional
     del bm
 
     mesh_object = bpy.data.objects.new('TerrainInfo', mesh_data)
-    mesh_object['bdk.quad_size'] = get_terrain_quad_size(size, resolution)
+
+    # Set the BDK object type.
+    mesh_object.bdk.type = 'TERRAIN_INFO'
 
     # Custom properties
-    terrain_info: 'BDK_PG_TerrainInfoPropertyGroup' = getattr(mesh_object, 'terrain_info')
-    terrain_info.is_terrain_info = True
+    terrain_info: 'BDK_PG_TerrainInfoPropertyGroup' = getattr(mesh_object.bdk, 'terrain_info')
     terrain_info.terrain_info_object = mesh_object
     terrain_info.x_size = resolution
     terrain_info.y_size = resolution

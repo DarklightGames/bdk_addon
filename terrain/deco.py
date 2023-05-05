@@ -14,7 +14,7 @@ def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: 
     This adds a new entry to the deco layers array in the terrain info and creates the associated deco layer object and
     mesh attributes.
     """
-    terrain_info = getattr(terrain_info_object, 'terrain_info')
+    terrain_info = get_terrain_info(terrain_info_object)
 
     # Create the deco layer object.
     deco_layer = terrain_info.deco_layers.add()

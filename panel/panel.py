@@ -23,8 +23,7 @@ class BDK_PT_SceneInfoPanel(Panel):
     bl_context = "scene"
 
     def draw(self, context: 'Context'):
-        layout = self.layout
-        layout.prop(getattr(context.scene, 'bdk_info'), 'my_level_package_name')
+        pass
 
 
 classes = (

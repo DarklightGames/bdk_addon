@@ -1,3 +1,4 @@
+from bpy.app.handlers import persistent
 from bpy.props import PointerProperty
 
 bl_info = {
@@ -18,7 +19,6 @@ if 'bpy' in locals():
     importlib.reload(bdk_data)
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
-    importlib.reload(bdk_properties)
 
     importlib.reload(material_data)
     importlib.reload(material_reader)
@@ -35,6 +35,7 @@ if 'bpy' in locals():
     importlib.reload(terrain_exporter)
 
     importlib.reload(terrain_object_builder)
+    importlib.reload(terrain_object_properties)
     importlib.reload(terrain_object_operators)
     importlib.reload(terrain_object_ui)
 
@@ -46,6 +47,7 @@ if 'bpy' in locals():
         importlib.reload(t3d_importer)
 
     importlib.reload(asset_browser_operators)
+    importlib.reload(bdk_properties)
 else:
     from . import data as bdk_data
     from . import helpers as bdk_helpers
@@ -70,6 +72,7 @@ else:
 
     from .terrain.objects import builder as terrain_object_builder
     from .terrain.objects import operators as terrain_object_operators
+    from .terrain.objects import properties as terrain_object_properties
     from .terrain.objects import ui as terrain_object_ui
 
     # T3D
@@ -92,8 +95,8 @@ classes = material_importer.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
           terrain_object_operators.classes + \
+          terrain_object_properties.classes + \
           terrain_object_ui.classes + \
-          bdk_properties.classes + \
           asset_browser_operators.classes + \
           bdk_preferences.classes
 
@@ -101,6 +104,8 @@ if bdk_helpers.are_bdk_dependencies_installed():
     classes += bdk_panel.classes + \
         t3d_operators.classes + \
         t3d_types.classes
+
+classes += bdk_properties.classes
 
 
 def material_import_menu_func(self, _context: bpy.types.Context):
@@ -138,10 +143,10 @@ def bdk_t3d_import_func(self, _context: bpy.types.Context):
 
 def register():
     for cls in classes:
+        print(cls)
         bpy.utils.register_class(cls)
 
-    bpy.types.Object.terrain_info = PointerProperty(type=terrain_properties.BDK_PG_TerrainInfoPropertyGroup)
-    bpy.types.Scene.bdk_info = PointerProperty(type=bdk_properties.BDK_PG_SceneInfoPropertyGroup)
+    bpy.types.Object.bdk = PointerProperty(type=bdk_properties.BDK_PG_object)
 
     bpy.types.TOPBAR_MT_file_import.append(material_import_menu_func)
 
@@ -164,7 +169,7 @@ def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
-    del bpy.types.Object.terrain_info
+    del bpy.types.Object.bdk
 
     bpy.types.TOPBAR_MT_file_import.remove(material_import_menu_func)
 

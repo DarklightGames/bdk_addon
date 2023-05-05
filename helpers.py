@@ -31,10 +31,9 @@ def is_bdk_static_mesh_actor(obj: Object) -> bool:
 
 
 def get_terrain_info(terrain_info_object: Object):
-    terrain_info = getattr(terrain_info_object, 'terrain_info')
-    if terrain_info is None or not terrain_info.is_terrain_info:
-        return None
-    return terrain_info
+    if terrain_info_object.bdk.type == 'TERRAIN_INFO':
+        return terrain_info_object.bdk.terrain_info
+    return None
 
 
 def is_active_object_terrain_info(context: Context):
