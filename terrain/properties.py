@@ -18,8 +18,25 @@ def material_poll(_: Context, material: Material) -> bool:
     return is_bdk_material(material)
 
 
+def terrain_layer_name_update_cb(self, context: Context):
+
+    # Find all terrain objects in the file.
+    terrain_object_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_OBJECT', bpy.data.objects))
+
+    # Update terrain object paint component names if the terrain layer's color attribute name matches.
+    for terrain_object_object in terrain_object_objects:
+        for paint_component in terrain_object_object.bdk.terrain_object.paint_components:
+            if paint_component.terrain_layer_id == self.color_attribute_name:
+                paint_component.terrain_layer_name = self.name
+
+    # Update deco layer names if the linked terrain layer matches.
+    for deco_layer in self.terrain_info_object.bdk.terrain_info.deco_layers:
+        if deco_layer.linked_layer_id == self.color_attribute_name:
+            deco_layer.linked_layer_name = self.name
+
+
 class BDK_PG_TerrainLayerPropertyGroup(PropertyGroup):
-    name: StringProperty(name='Name', default='TerrainLayer')
+    name: StringProperty(name='Name', default='TerrainLayer', update=terrain_layer_name_update_cb)
     u_scale: FloatProperty(name='UScale', default=2.0)
     v_scale: FloatProperty(name='VScale', default=2.0)
     texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE')
@@ -35,11 +52,16 @@ def on_deco_layer_index_update(self: 'BDK_PG_TerrainInfoPropertyGroup', _: Conte
     mesh_data: Mesh = self.terrain_info_object.data
     deco_layer: BDK_PG_TerrainDecoLayerPropertyGroup = self.deco_layers[self.deco_layers_index]
     color_attribute_index = -1
+
     for i, color_attribute in enumerate(mesh_data.color_attributes):
         if color_attribute.name == deco_layer.id:
             color_attribute_index = i
             break
-    if mesh_data.color_attributes.active_color_index != color_attribute_index:
+
+    if color_attribute_index == -1:
+        print(f"Could not find color attribute for deco layer '{deco_layer.name}'")
+        return
+    elif mesh_data.color_attributes.active_color_index != color_attribute_index:
         mesh_data.color_attributes.active_color_index = color_attribute_index
         # Push an undo state.
         # This is needed so that if the user selects a new layer, does some operation, and then does an undo,

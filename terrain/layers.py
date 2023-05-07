@@ -30,6 +30,7 @@ def add_terrain_layer(terrain_info_object: Object, name: str,
     terrain_layer: BDK_PG_TerrainLayerPropertyGroup = terrain_info.terrain_layers.add()
     terrain_layer.terrain_info_object = terrain_info_object
     terrain_layer.name = name
+    terrain_layer.id = uuid.uuid4().hex
     terrain_layer.color_attribute_name = color_attribute.name
 
     # Regenerate the terrain material.

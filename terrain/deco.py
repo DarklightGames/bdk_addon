@@ -68,9 +68,9 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         target.id_type = 'OBJECT'
         target.id = terrain_info_object
         if index is not None:
-            target.data_path = f'terrain_info.deco_layers[{deco_layer_index}].{property_name}[{index}]'
+            target.data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}[{index}]'
         else:
-            target.data_path = f'terrain_info.deco_layers[{deco_layer_index}].{property_name}'
+            target.data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}'
 
     add_deco_layer_driver('Max Per Quad', 'max_per_quad')
     add_deco_layer_driver('Seed', 'seed')
