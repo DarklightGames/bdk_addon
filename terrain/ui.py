@@ -1,6 +1,6 @@
 from bpy.types import Panel, Context, UIList, UILayout, Mesh, AnyType, Menu
 from typing import cast
-from .properties import BDK_PG_TerrainInfoPropertyGroup, BDK_PG_TerrainDecoLayerPropertyGroup
+from .properties import BDK_PG_TerrainDecoLayerPropertyGroup
 from .operators import BDK_OT_TerrainLayerAdd, BDK_OT_TerrainLayerRemove, BDK_OT_TerrainLayerMove, \
     BDK_OT_TerrainDecoLayerAdd, BDK_OT_TerrainDecoLayerRemove, BDK_OT_terrain_deco_layers_hide, \
     BDK_OT_terrain_deco_layers_show

@@ -347,6 +347,10 @@ def create_paint_node_group(terrain_object: Object, paint_component: 'BDK_PG_ter
     node_tree.inputs.new('NodeSocketFloat', 'Radius')
     node_tree.inputs.new('NodeSocketFloat', 'Falloff Radius')
     node_tree.inputs.new('NodeSocketFloat', 'Strength')
+    node_tree.inputs.new('NodeSocketFloat', 'Distance Noise Factor')
+    node_tree.inputs.new('NodeSocketFloat', 'Distance Noise Distortion')
+    node_tree.inputs.new('NodeSocketFloat', 'Distance Noise Offset')
+    node_tree.inputs.new('NodeSocketBool', 'Use Distance Noise')
 
     # Create the input and output nodes.
     input_node = node_tree.nodes.new(type='NodeGroupInput')
@@ -373,7 +377,6 @@ def create_paint_node_group(terrain_object: Object, paint_component: 'BDK_PG_ter
     subtract_node.operation = 'SUBTRACT'
 
     # Link the distance output of the input node to the first input of the subtract node.
-    node_tree.links.new(input_node.outputs['Distance'], subtract_node.inputs[0])
     node_tree.links.new(input_node.outputs['Radius'], subtract_node.inputs[1])
 
     # Add a divide node.
@@ -423,6 +426,53 @@ def create_paint_node_group(terrain_object: Object, paint_component: 'BDK_PG_ter
 
     # Link the output of the add node to the value input of the store named attribute node.
     node_tree.links.new(operation_node.outputs['Value'], store_named_attribute_node.inputs[5])
+
+    # Add a position input node.
+    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+    # Add noise nodes.
+    noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
+    noise_node.label = 'Distance Noise'
+    noise_node.noise_dimensions = '2D'
+    noise_node.inputs['Scale'].default_value = 0.5
+    noise_node.inputs['Detail'].default_value = 16
+    noise_node.inputs['Distortion'].default_value = 0.5
+
+    node_tree.links.new(input_node.outputs['Distance Noise Distortion'], noise_node.inputs['Distortion'])
+    node_tree.links.new(position_node.outputs['Position'], noise_node.inputs['Vector'])
+
+    # Add an add noise node.
+    add_distance_noise_node = node_tree.nodes.new(type='ShaderNodeMath')
+    add_distance_noise_node.operation = 'ADD'
+    add_distance_noise_node.label = 'Add Distance Noise'
+
+    node_tree.links.new(input_node.outputs['Distance'], add_distance_noise_node.inputs[0])
+
+    use_noise_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    use_noise_switch_node.input_type = 'FLOAT'
+    use_noise_switch_node.label = 'Use Distance Noise'
+
+    node_tree.links.new(input_node.outputs['Use Distance Noise'], use_noise_switch_node.inputs[0])
+
+    node_tree.links.new(input_node.outputs['Distance'], use_noise_switch_node.inputs[2])
+    node_tree.links.new(add_distance_noise_node.outputs['Value'], use_noise_switch_node.inputs[3])
+
+    node_tree.links.new(use_noise_switch_node.outputs[0], subtract_node.inputs[0])
+
+    distance_noise_factor_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+    distance_noise_factor_multiply_node.operation = 'MULTIPLY'
+    distance_noise_factor_multiply_node.label = 'Distance Noise Factor'
+
+    node_tree.links.new(input_node.outputs['Distance Noise Factor'], distance_noise_factor_multiply_node.inputs[1])
+    node_tree.links.new(distance_noise_factor_multiply_node.outputs['Value'], add_distance_noise_node.inputs[1])
+
+    distance_noise_offset_subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+    distance_noise_offset_subtract_node.operation = 'SUBTRACT'
+    distance_noise_offset_subtract_node.label = 'Distance Noise Offset'
+
+    node_tree.links.new(noise_node.outputs['Fac'], distance_noise_offset_subtract_node.inputs[0])
+    node_tree.links.new(input_node.outputs['Distance Noise Offset'], distance_noise_offset_subtract_node.inputs[1])
+    node_tree.links.new(distance_noise_offset_subtract_node.outputs['Value'], distance_noise_factor_multiply_node.inputs[0])
 
     return node_tree
 
@@ -485,6 +535,10 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         add_paint_component_driver_to_node_socket(paint_node.inputs['Radius'], paint_component, 'radius')
         add_paint_component_driver_to_node_socket(paint_node.inputs['Falloff Radius'], paint_component, 'falloff_radius')
         add_paint_component_driver_to_node_socket(paint_node.inputs['Strength'], paint_component, 'strength')
+        add_paint_component_driver_to_node_socket(paint_node.inputs['Use Distance Noise'], paint_component, 'use_distance_noise')
+        add_paint_component_driver_to_node_socket(paint_node.inputs['Distance Noise Distortion'], paint_component, 'distance_noise_distortion')
+        add_paint_component_driver_to_node_socket(paint_node.inputs['Distance Noise Factor'], paint_component, 'distance_noise_factor')
+        add_paint_component_driver_to_node_socket(paint_node.inputs['Distance Noise Offset'], paint_component, 'distance_noise_offset')
 
         node_tree.links.new(geometry_node_socket, paint_node.inputs['Geometry'])
         node_tree.links.new(distance_to_curve_node.outputs['Distance'], paint_node.inputs['Distance'])

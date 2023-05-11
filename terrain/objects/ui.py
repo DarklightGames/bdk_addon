@@ -65,6 +65,14 @@ class BDK_PT_terrain_object_paint_layers(Panel):
             col.prop(paint_component, 'falloff_radius')
             col.prop(paint_component, 'strength')
 
+            flow.prop(paint_component, 'use_distance_noise')
+
+            if paint_component.use_distance_noise:
+                col = flow.column(align=True)
+                col.prop(paint_component, 'distance_noise_factor')
+                col.prop(paint_component, 'distance_noise_distortion')
+                col.prop(paint_component, 'distance_noise_offset')
+
 
 class BDK_PT_terrain_object_sculpt_players(Panel):
     bl_idname = 'BDK_PT_terrain_object_sculpt_players'
