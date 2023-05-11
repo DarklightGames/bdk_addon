@@ -5,7 +5,7 @@ from pkg_resources import DistributionNotFound, get_distribution
 import sys
 
 
-class BDK_OT_InstallDependencies(Operator):
+class BDK_OT_install_dependencies(Operator):
     bl_idname = 'bdk.install_dependencies'
     bl_label = 'Install Dependencies'
 
@@ -60,14 +60,14 @@ class BdkAddonPreferences(AddonPreferences):
                 has_uninstalled_dependencies = True
 
         if has_uninstalled_dependencies:
-            box.operator(BDK_OT_InstallDependencies.bl_idname)
+            box.operator(BDK_OT_install_dependencies.bl_idname)
         else:
             box.label(text='All dependencies are installed')
-            operator = box.operator(BDK_OT_InstallDependencies.bl_idname, text='Reinstall')
+            operator = box.operator(BDK_OT_install_dependencies.bl_idname, text='Reinstall')
             operator.uninstall = True
 
 
 classes = (
     BdkAddonPreferences,
-    BDK_OT_InstallDependencies
+    BDK_OT_install_dependencies
 )

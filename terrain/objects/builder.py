@@ -17,50 +17,50 @@ def add_driver_to_node_socket(node_socket: NodeSocket, target_object: Object, da
     var.targets[0].data_path = f"[\"{data_path}\"]"
 
 
-def add_sculpt_component_driver_to_node(node: Node,
+def add_sculpt_layer_driver_to_node(node: Node,
                                         node_path: str,
-                                        sculpt_component: 'BDK_PG_terrain_object_sculpt_component',
+                                        sculpt_layer: 'BDK_PG_terrain_object_sculpt_layer',
                                         data_path: str):
     driver = node.driver_add(node_path).driver
     driver.type = 'AVERAGE'
     var = driver.variables.new()
     var.name = data_path
     var.type = 'SINGLE_PROP'
-    var.targets[0].id = sculpt_component.terrain_object
-    var.targets[0].data_path = f"bdk.terrain_object.sculpt_components[{sculpt_component.index}].{data_path}"
+    var.targets[0].id = sculpt_layer.terrain_object
+    var.targets[0].data_path = f"bdk.terrain_object.sculpt_layers[{sculpt_layer.index}].{data_path}"
 
 
-def add_paint_component_driver_to_node(node: Node,
+def add_paint_layer_driver_to_node(node: Node,
                                        node_path: str,
-                                       paint_component: 'BDK_PG_terrain_object_paint_component',
+                                       paint_layer: 'BDK_PG_terrain_object_paint_layer',
                                        data_path: str):
     driver = node.driver_add(node_path).driver
     driver.type = 'AVERAGE'
     var = driver.variables.new()
     var.name = data_path
     var.type = 'SINGLE_PROP'
-    var.targets[0].id = paint_component.terrain_object
-    var.targets[0].data_path = f"bdk.terrain_object.paint_components[{paint_component.index}].{data_path}"
+    var.targets[0].id = paint_layer.terrain_object
+    var.targets[0].data_path = f"bdk.terrain_object.paint_layers[{paint_layer.index}].{data_path}"
 
 
-def add_sculpt_component_driver_to_node_socket(node_socket: NodeSocket, sculpt_component: 'BDK_PG_terrain_object_sculpt_component', data_path: str):
+def add_sculpt_layer_driver_to_node_socket(node_socket: NodeSocket, sculpt_layer: 'BDK_PG_terrain_object_sculpt_layer', data_path: str):
     driver = node_socket.driver_add('default_value').driver
     driver.type = 'AVERAGE'
     var = driver.variables.new()
     var.name = data_path
     var.type = 'SINGLE_PROP'
-    var.targets[0].id = sculpt_component.terrain_object
-    var.targets[0].data_path = f"bdk.terrain_object.sculpt_components[{sculpt_component.index}].{data_path}"
+    var.targets[0].id = sculpt_layer.terrain_object
+    var.targets[0].data_path = f"bdk.terrain_object.sculpt_layers[{sculpt_layer.index}].{data_path}"
 
 
-def add_paint_component_driver_to_node_socket(node_socket: NodeSocket, paint_component: 'BDK_PG_terrain_object_paint_component', data_path: str):
+def add_paint_layer_driver_to_node_socket(node_socket: NodeSocket, paint_layer: 'BDK_PG_terrain_object_paint_layer', data_path: str):
     driver = node_socket.driver_add('default_value').driver
     driver.type = 'AVERAGE'
     var = driver.variables.new()
     var.name = data_path
     var.type = 'SINGLE_PROP'
-    var.targets[0].id = paint_component.terrain_object
-    var.targets[0].data_path = f"bdk.terrain_object.paint_components[{paint_component.index}].{data_path}"
+    var.targets[0].id = paint_layer.terrain_object
+    var.targets[0].data_path = f"bdk.terrain_object.paint_layers[{paint_layer.index}].{data_path}"
 
 
 def add_terrain_object_driver_to_node(node: Node, node_path: str, terrain_object: 'BDK_PG_terrain_object', data_path: str):
@@ -209,7 +209,7 @@ def create_noise_node_group():
     return node_tree
 
 
-def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_component: 'BDK_PG_terrain_object_sculpt_component') -> NodeTree:
+def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_layer: 'BDK_PG_terrain_object_sculpt_layer') -> NodeTree:
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
     node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
     node_tree.inputs.new('NodeSocketFloat', 'Distance')
@@ -224,7 +224,7 @@ def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_com
     # Add a value node and add a driver that maps to the component's radius.
     radius_value_node = node_tree.nodes.new(type='ShaderNodeValue')
     radius_value_node.label = 'Radius'
-    add_sculpt_component_driver_to_node_socket(radius_value_node.outputs[0], sculpt_component, 'radius')
+    add_sculpt_layer_driver_to_node_socket(radius_value_node.outputs[0], sculpt_layer, 'radius')
 
     # Add a subtract node.
     subtract_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
@@ -237,7 +237,7 @@ def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_com
     # Add a value node and add a driver that maps to the component's falloff radius.
     falloff_radius_value_node = node_tree.nodes.new(type='ShaderNodeValue')
     falloff_radius_value_node.label = 'Falloff Radius'
-    add_sculpt_component_driver_to_node_socket(falloff_radius_value_node.outputs[0], sculpt_component, 'falloff_radius')
+    add_sculpt_layer_driver_to_node_socket(falloff_radius_value_node.outputs[0], sculpt_layer, 'falloff_radius')
 
     # Add a divide math node.
     divide_node = node_tree.nodes.new(type='ShaderNodeMath')
@@ -254,7 +254,7 @@ def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_com
 
     map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
     map_range_node.data_type = 'FLOAT'
-    map_range_node.interpolation_type = sculpt_component.interpolation_type
+    map_range_node.interpolation_type = sculpt_layer.interpolation_type
     map_range_node.inputs['To Min'].default_value = 1.0
     map_range_node.inputs['To Max'].default_value = 0.0
 
@@ -264,7 +264,7 @@ def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_com
     # Create a new value node and add a driver mapping to the depth custom property of the terrain object.
     depth_node = node_tree.nodes.new(type='ShaderNodeValue')
     depth_node.label = 'Depth'
-    add_sculpt_component_driver_to_node_socket(depth_node.outputs[0], sculpt_component, 'depth')
+    add_sculpt_layer_driver_to_node_socket(depth_node.outputs[0], sculpt_layer, 'depth')
 
     # Add a new multiply node.
     multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
@@ -293,16 +293,16 @@ def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_com
     noise_node = node_tree.nodes.new(type='GeometryNodeGroup')
     noise_node.node_tree = create_noise_node_group()
 
-    add_sculpt_component_driver_to_node_socket(noise_node.inputs['Noise Strength'], sculpt_component, 'noise_strength')
-    add_sculpt_component_driver_to_node_socket(noise_node.inputs['Noise Roughness'], sculpt_component, 'noise_roughness')
-    add_sculpt_component_driver_to_node_socket(noise_node.inputs['Noise Distortion'], sculpt_component, 'noise_distortion')
+    add_sculpt_layer_driver_to_node_socket(noise_node.inputs['Noise Strength'], sculpt_layer, 'noise_strength')
+    add_sculpt_layer_driver_to_node_socket(noise_node.inputs['Noise Roughness'], sculpt_layer, 'noise_roughness')
+    add_sculpt_layer_driver_to_node_socket(noise_node.inputs['Noise Distortion'], sculpt_layer, 'noise_distortion')
 
     # Add a switch node of with input type float.
     switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
     switch_node.input_type = 'FLOAT'
     switch_node.label = 'Use Noise'
 
-    add_sculpt_component_driver_to_node_socket(switch_node.inputs['Switch'], sculpt_component, 'use_noise')
+    add_sculpt_layer_driver_to_node_socket(switch_node.inputs['Switch'], sculpt_layer, 'use_noise')
 
     # Link the offset output of the noise node to the True input of the switch node.
     node_tree.links.new(noise_node.outputs['Offset'], switch_node.inputs['True'])
@@ -329,7 +329,7 @@ def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_com
     noise_radius_multiply_node.operation = 'MULTIPLY'
 
     node_tree.links.new(add_node_2.outputs['Value'], noise_radius_multiply_node.inputs[0])
-    add_sculpt_component_driver_to_node_socket(noise_radius_multiply_node.inputs[1], sculpt_component, 'noise_radius_factor')
+    add_sculpt_layer_driver_to_node_socket(noise_radius_multiply_node.inputs[1], sculpt_layer, 'noise_radius_factor')
 
     # Link the value output of the add node to the radius input of the noise node.
     node_tree.links.new(noise_radius_multiply_node.outputs['Value'], noise_node.inputs['Radius'])
@@ -337,7 +337,7 @@ def create_sculpt_node_group(terrain_object: 'BDK_PG_terrain_object', sculpt_com
     return node_tree
 
 
-def create_paint_node_group(terrain_object: Object, paint_component: 'BDK_PG_terrain_object_paint_component') -> NodeTree:
+def create_paint_node_group(terrain_object: Object, paint_layer: 'BDK_PG_terrain_object_paint_layer') -> NodeTree:
     # Create a new node group.
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
     node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
@@ -390,7 +390,7 @@ def create_paint_node_group(terrain_object: Object, paint_component: 'BDK_PG_ter
     # Add a map range node.
     map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
     map_range_node.data_type = 'FLOAT'
-    map_range_node.interpolation_type = paint_component.interpolation_type
+    map_range_node.interpolation_type = paint_layer.interpolation_type
     map_range_node.inputs['To Min'].default_value = 1.0
     map_range_node.inputs['To Max'].default_value = 0.0
 
@@ -399,7 +399,7 @@ def create_paint_node_group(terrain_object: Object, paint_component: 'BDK_PG_ter
 
     # Add an operation node.
     operation_node = node_tree.nodes.new(type='ShaderNodeMath')
-    operation_node.operation = paint_component.operation
+    operation_node.operation = paint_layer.operation
     operation_node.use_clamp = True
     operation_node.label = 'Operation'
 
@@ -509,13 +509,13 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
     geometry_node_socket = input_node.outputs['Geometry']
 
     # Now chain the node components together.
-    for sculpt_component in terrain_object.sculpt_components:
-        sculpt_node_group = create_sculpt_node_group(terrain_object, sculpt_component)
+    for sculpt_layer in terrain_object.sculpt_layers:
+        sculpt_node_group = create_sculpt_node_group(terrain_object, sculpt_layer)
         sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
         sculpt_node.node_tree = sculpt_node_group
         sculpt_node.label = 'Sculpt'
 
-        add_sculpt_component_driver_to_node(sculpt_node, 'mute', sculpt_component, 'mute')
+        add_sculpt_layer_driver_to_node(sculpt_node, 'mute', sculpt_layer, 'mute')
 
         # Link the geometry socket of the object info node to the geometry socket of the sculpt node.
         node_tree.links.new(geometry_node_socket, sculpt_node.inputs['Geometry'])
@@ -524,21 +524,21 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
 
         geometry_node_socket = sculpt_node.outputs['Geometry']
 
-    for paint_component in terrain_object.paint_components:
-        paint_node_group = create_paint_node_group(terrain_object, paint_component)
+    for paint_layer in terrain_object.paint_layers:
+        paint_node_group = create_paint_node_group(terrain_object, paint_layer)
         paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
         paint_node.node_tree = paint_node_group
         paint_node.label = 'Paint'
-        paint_node.inputs['Attribute'].default_value = paint_component.terrain_layer_id
+        paint_node.inputs['Attribute'].default_value = paint_layer.terrain_layer_id
 
-        add_paint_component_driver_to_node(paint_node, 'mute', paint_component, 'mute')
-        add_paint_component_driver_to_node_socket(paint_node.inputs['Radius'], paint_component, 'radius')
-        add_paint_component_driver_to_node_socket(paint_node.inputs['Falloff Radius'], paint_component, 'falloff_radius')
-        add_paint_component_driver_to_node_socket(paint_node.inputs['Strength'], paint_component, 'strength')
-        add_paint_component_driver_to_node_socket(paint_node.inputs['Use Distance Noise'], paint_component, 'use_distance_noise')
-        add_paint_component_driver_to_node_socket(paint_node.inputs['Distance Noise Distortion'], paint_component, 'distance_noise_distortion')
-        add_paint_component_driver_to_node_socket(paint_node.inputs['Distance Noise Factor'], paint_component, 'distance_noise_factor')
-        add_paint_component_driver_to_node_socket(paint_node.inputs['Distance Noise Offset'], paint_component, 'distance_noise_offset')
+        add_paint_layer_driver_to_node(paint_node, 'mute', paint_layer, 'mute')
+        add_paint_layer_driver_to_node_socket(paint_node.inputs['Radius'], paint_layer, 'radius')
+        add_paint_layer_driver_to_node_socket(paint_node.inputs['Falloff Radius'], paint_layer, 'falloff_radius')
+        add_paint_layer_driver_to_node_socket(paint_node.inputs['Strength'], paint_layer, 'strength')
+        add_paint_layer_driver_to_node_socket(paint_node.inputs['Use Distance Noise'], paint_layer, 'use_distance_noise')
+        add_paint_layer_driver_to_node_socket(paint_node.inputs['Distance Noise Distortion'], paint_layer, 'distance_noise_distortion')
+        add_paint_layer_driver_to_node_socket(paint_node.inputs['Distance Noise Factor'], paint_layer, 'distance_noise_factor')
+        add_paint_layer_driver_to_node_socket(paint_node.inputs['Distance Noise Offset'], paint_layer, 'distance_noise_offset')
 
         node_tree.links.new(geometry_node_socket, paint_node.inputs['Geometry'])
         node_tree.links.new(distance_to_curve_node.outputs['Distance'], paint_node.inputs['Distance'])
@@ -594,11 +594,11 @@ def create_terrain_object(context: Context,
 
     # Add sculpt and paint components.
     # In the future, we will allow the user to select a preset for the terrain object.
-    sculpt_component = terrain_object.sculpt_components.add()
-    sculpt_component.terrain_object = terrain_object.object
+    sculpt_layer = terrain_object.sculpt_layers.add()
+    sculpt_layer.terrain_object = terrain_object.object
 
-    paint_component = terrain_object.paint_components.add()
-    paint_component.terrain_object = terrain_object.object
+    paint_layer = terrain_object.paint_layers.add()
+    paint_layer.terrain_object = terrain_object.object
 
     # Set the location of the curve object to the 3D cursor.
     curve_object.location = context.scene.cursor.location

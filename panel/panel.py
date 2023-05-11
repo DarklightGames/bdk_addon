@@ -1,32 +1,20 @@
 from bpy.types import Panel
-from ..t3d.operators import BDK_OT_CopyObject, BDK_OT_T3DImportFromClipboard
+from ..t3d.operators import BDK_OT_t3d_copy_to_clipboard, BDK_OT_t3d_import_from_clipboard
 
 
-class BDK_PT_Panel(Panel):
+class BDK_PT_clipboard(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'BDK'
-    bl_label = 'BDK'
+    bl_label = 'Clipboard'
 
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.operator(BDK_OT_CopyObject.bl_idname, icon='COPYDOWN', text=f'Copy Object(s)')
-        layout.operator(BDK_OT_T3DImportFromClipboard.bl_idname, icon='PASTEDOWN')
-
-
-class BDK_PT_SceneInfoPanel(Panel):
-    bl_label = "BDK Properties"
-    bl_idname = "SCENE_PT_layout"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "scene"
-
-    def draw(self, context: 'Context'):
-        pass
+        row.operator(BDK_OT_t3d_copy_to_clipboard.bl_idname, icon='COPYDOWN', text=f'Copy Object(s)')
+        layout.operator(BDK_OT_t3d_import_from_clipboard.bl_idname, icon='PASTEDOWN')
 
 
 classes = (
-    BDK_PT_Panel,
-    BDK_PT_SceneInfoPanel,
+    BDK_PT_clipboard,
 )

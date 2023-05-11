@@ -5,7 +5,7 @@ def create_fluid_surface(context: Context):
     pass
 
 
-class BDK_OT_FluidSurfaceAdd(Operator):
+class BDK_OT_fluid_surface_add(Operator):
     bl_label = 'Add FluidSurface'
     bl_idname = 'bdk.fluid_surface_add'
     bl_options = {'REGISTER', 'UNDO'}
@@ -16,5 +16,5 @@ class BDK_OT_FluidSurfaceAdd(Operator):
 
 
 classes = (
-    BDK_OT_FluidSurfaceAdd,
+    BDK_OT_fluid_surface_add,
 )

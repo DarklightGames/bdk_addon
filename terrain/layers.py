@@ -6,7 +6,7 @@ from bpy.types import Mesh, Object
 
 from ..helpers import get_terrain_info, auto_increment_name
 from .builder import build_terrain_material
-from .properties import BDK_PG_TerrainLayerPropertyGroup
+from .properties import BDK_PG_terrain_layer
 
 
 def add_terrain_layer(terrain_info_object: Object, name: str,
@@ -27,7 +27,7 @@ def add_terrain_layer(terrain_info_object: Object, name: str,
     color_attribute.data.foreach_set('color', color_data.flatten())
 
     # Add the terrain layer.
-    terrain_layer: BDK_PG_TerrainLayerPropertyGroup = terrain_info.terrain_layers.add()
+    terrain_layer: BDK_PG_terrain_layer = terrain_info.terrain_layers.add()
     terrain_layer.terrain_info_object = terrain_info_object
     terrain_layer.name = name
     terrain_layer.id = uuid.uuid4().hex

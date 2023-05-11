@@ -114,36 +114,30 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(terrain_operators.BDK_OT_TerrainInfoAdd.bl_idname, text='BDK Terrain Info', icon='GRID')
+    self.layout.operator(terrain_operators.BDK_OT_terrain_info_add.bl_idname, text='BDK Terrain Info', icon='GRID')
     self.layout.operator(terrain_object_operators.BDK_OT_terrain_object_add.bl_idname, text='BDK Terrain Object', icon='GRID')
 
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(t3d_operators.BDK_OT_CopyObject.bl_idname, icon='COPYDOWN')
-
-
-def bdk_t3d_copy_asset_func(self, _context: bpy.types.Context):
-    self.layout.separator()
-    self.layout.operator(t3d_operators.BDK_OT_CopyAsset.bl_idname, icon='COPYDOWN')
+    self.layout.operator(t3d_operators.BDK_OT_t3d_copy_to_clipboard.bl_idname, icon='COPYDOWN')
 
 
 def bdk_asset_browser_import_data_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(asset_browser_operators.BDK_OT_ImportDataLinked.bl_idname, icon='LINKED')
+    self.layout.operator(asset_browser_operators.BDK_OT_asset_import_data_linked.bl_idname, icon='LINKED')
 
 
 def bdk_terrain_export_func(self, _context: bpy.types.Context):
-    self.layout.operator(terrain_operators.BDK_OT_TerrainInfoExport.bl_idname)
+    self.layout.operator(terrain_operators.BDK_OT_terrain_info_export.bl_idname)
 
 
 def bdk_t3d_import_func(self, _context: bpy.types.Context):
-    self.layout.operator(t3d_operators.BDK_OT_T3DImportFromFile.bl_idname)
+    self.layout.operator(t3d_operators.BDK_OT_t3d_import_from_file.bl_idname)
 
 
 def register():
     for cls in classes:
-        print(cls)
         bpy.utils.register_class(cls)
 
     bpy.types.Object.bdk = PointerProperty(type=bdk_properties.BDK_PG_object)

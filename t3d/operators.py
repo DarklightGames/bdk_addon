@@ -1,15 +1,16 @@
 import bpy
-from bpy.types import Operator, FileSelectEntry, Space, Context, Object
+from bpy.types import Operator, Context, Object
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
-from typing import Sequence, Set
-from .data import UStaticMeshActor, UActor, UMap
+from typing import  Set
+from .data import UStaticMeshActor, UActor
 from pathlib import Path
 from .importer import import_t3d
 from ..helpers import are_bdk_dependencies_installed
+from t3dpy import T3dObject
 
 
-class BDK_OT_T3DImportFromClipboard(Operator):
+class BDK_OT_t3d_import_from_clipboard(Operator):
     bl_idname = 'bdk.t3d_import_from_clipboard'
     bl_description = 'Import T3D from OS Clipboard'
     bl_label = 'Import T3D from Clipboard'
@@ -17,8 +18,9 @@ class BDK_OT_T3DImportFromClipboard(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        if not are_bdk_dependencies_installed():
-            cls.poll_message_set(message='Dependencies are not installed')
+        # Return false if the clipboard doesn't contain text
+        if not context.window_manager.clipboard:
+            cls.poll_message_set(message='Clipboard is empty')
             return False
         return True
 
@@ -37,7 +39,7 @@ class BDK_OT_T3DImportFromClipboard(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_T3DImportFromFile(Operator, ImportHelper):
+class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
     bl_idname = 'bdk.t3d_import_from_file'
     bl_description = 'Import T3D'
     bl_label = 'Import T3D (*.t3d)'
@@ -73,46 +75,25 @@ class BDK_OT_T3DImportFromFile(Operator, ImportHelper):
         return {'FINISHED'}
 
 
-# TODO: Copying assets from the asset browser
-class BDK_OT_CopyAsset(Operator):
-    bl_idname = 'bdk_t3d.copy_asset'
-    bl_description = 'Copy assets to clipboard as Unreal T3D objects. Only local assets are supported'
-    bl_label = 'Copy as Unreal T3D'
-    bl_options = {'INTERNAL'}
-
-    def execute(self, context: Context) -> Set[str]:
-        assets: Sequence[FileSelectEntry] = context.selected_asset_files
-        library: str | int = ''
-        active: Space = context.area.spaces.active
-
-        for asset in assets:
-            asset_path: Path = Path(asset.relative_path)
-            print(asset_path.parent)
-
-        # if isinstance(active, SpaceFileBrowser) and isinstance(active.params, FileAssetSelectParams):
-        #     library = active.params.asset_library_ref
-
-        # library_path: Path
-        # asset_libraries: bpy_prop_collection[UserAssetLibrary] = context.preferences.filepaths.asset_libraries
-
-        # try:
-        #     library_path = Path(asset_libraries.get(str(library)).path) # type: ignore
-        # except AttributeError:
-        #     library_path = Path(bpy.data.filepath) # will be '.' if file has never been saved
-
-        return {'FINISHED'}
-
-
 # TODO: Copying from the outliner
-class BDK_OT_CopyObject(Operator):
-    bl_idname = 'bdk_t3d.copy_object'
+class BDK_OT_t3d_copy_to_clipboard(Operator):
+    bl_idname = 'bdk.t3d_copy_objects_to_clipboard'
     bl_description = 'Copy to clipboard as Unreal T3D objects'
     bl_label = 'Copy as Unreal T3D'
+
+    @classmethod
+    def poll(cls, context: Context):
+        # Return false if no objects are selected.
+        if len(context.selected_objects) == 0:
+            cls.poll_message_set('No objects selected')
+            return False
+        return True
 
     def execute(self, context: Context) -> Set[str]:
         copy_actors: list[UActor] = []
 
         def can_copy(object: Object) -> bool:
+            # TODO: SpectatorCam, Projector, FluidSurface etc.
             return object.type == 'MESH' and object.data is not None
 
         for obj in context.selected_objects:
@@ -123,19 +104,18 @@ class BDK_OT_CopyObject(Operator):
             elif can_copy(obj):
                 copy_actors.append(UStaticMeshActor(obj))
 
-        map = UMap()
+        t3d = T3D()
 
         for actor in copy_actors:
             map.add_actor(actor)
 
         bpy.context.window_manager.clipboard = map.to_text()
-        print(map.to_text())
 
         return {'FINISHED'}
 
 
 classes = (
-    BDK_OT_CopyObject,
-    BDK_OT_T3DImportFromFile,
-    BDK_OT_T3DImportFromClipboard,
+    BDK_OT_t3d_copy_to_clipboard,
+    BDK_OT_t3d_import_from_file,
+    BDK_OT_t3d_import_from_clipboard,
 )

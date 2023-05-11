@@ -8,13 +8,13 @@ from .builder import update_terrain_object_geometry_node_group
 from ...units import meters_to_unreal
 
 
-def terrain_object_update_cb(self: 'BDK_PG_terrain_object_paint_component', context: Context):
+def terrain_object_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
     # We update the node group whe the operation is changed since we don't want to use drivers to control the
     # operation for performance reasons.
     update_terrain_object_geometry_node_group(self.terrain_object.bdk.terrain_object)
 
 
-class BDK_PG_terrain_object_sculpt_component(PropertyGroup):
+class BDK_PG_terrain_object_sculpt_layer(PropertyGroup):
     name: StringProperty(name='Name', default='Sculpt Layer')
     terrain_object: PointerProperty(type=Object, options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
@@ -36,14 +36,14 @@ class BDK_PG_terrain_object_sculpt_component(PropertyGroup):
     ), default='LINEAR', update=terrain_object_update_cb)
 
 
-def terrain_object_paint_component_terrain_layer_name_search_cb(self: 'BDK_PG_terrain_object_paint_component', context: Context, edit_text: str) -> List[str]:
+def terrain_object_paint_layer_terrain_layer_name_search_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context, edit_text: str) -> List[str]:
     # Get a list of terrain layer names for the selected terrain info object.
     # TODO: This is insanely verbose.
     terrain_layers = self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info.terrain_layers
     return [terrain_layer.name for terrain_layer in terrain_layers]
 
 
-def terrain_object_paint_component_terrain_layer_name_update_cb(self: 'BDK_PG_terrain_object_paint_component', context: Context):
+def terrain_object_paint_layer_terrain_layer_name_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
     # Update the terrain layer ID when the terrain layer name is changed.
     terrain_layers = self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info.terrain_layers
 
@@ -59,7 +59,7 @@ def terrain_object_paint_component_terrain_layer_name_update_cb(self: 'BDK_PG_te
     update_terrain_object_geometry_node_group(self.terrain_object.bdk.terrain_object)
 
 
-class BDK_PG_terrain_object_paint_component(PropertyGroup):
+class BDK_PG_terrain_object_paint_layer(PropertyGroup):
     name: StringProperty(name='Name', default='Paint Layer')
     operation: EnumProperty(name='Operation', items=(
         ('ADD', 'Add', 'Add paint to the terrain layer.'),
@@ -79,8 +79,8 @@ class BDK_PG_terrain_object_paint_component(PropertyGroup):
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     terrain_layer_name: StringProperty(
         name='Terrain Layer',
-        search=terrain_object_paint_component_terrain_layer_name_search_cb,
-        update=terrain_object_paint_component_terrain_layer_name_update_cb,
+        search=terrain_object_paint_layer_terrain_layer_name_search_cb,
+        update=terrain_object_paint_layer_terrain_layer_name_update_cb,
         search_options={'SORT'}
     )
     terrain_layer_id: StringProperty(name='Terrain Layer ID', default='')
@@ -98,14 +98,14 @@ class BDK_PG_terrain_object(PropertyGroup):
     node_tree: PointerProperty(type=NodeTree, options={'HIDDEN'})
     object: PointerProperty(type=Object)
     is_3d: BoolProperty(name='3D', default=False)
-    paint_components: CollectionProperty(name='Paint Components', type=BDK_PG_terrain_object_paint_component)
-    paint_components_index: IntProperty()
-    sculpt_components: CollectionProperty(name='Sculpt Components', type=BDK_PG_terrain_object_sculpt_component)
-    sculpt_components_index: IntProperty()
+    paint_layers: CollectionProperty(name='Paint Components', type=BDK_PG_terrain_object_paint_layer)
+    paint_layers_index: IntProperty()
+    sculpt_layers: CollectionProperty(name='Sculpt Components', type=BDK_PG_terrain_object_sculpt_layer)
+    sculpt_layers_index: IntProperty()
 
 
 classes = (
-    BDK_PG_terrain_object_paint_component,
-    BDK_PG_terrain_object_sculpt_component,
+    BDK_PG_terrain_object_paint_layer,
+    BDK_PG_terrain_object_sculpt_layer,
     BDK_PG_terrain_object,
 )

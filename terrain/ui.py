@@ -1,8 +1,8 @@
 from bpy.types import Panel, Context, UIList, UILayout, Mesh, AnyType, Menu
 from typing import cast
-from .properties import BDK_PG_TerrainDecoLayerPropertyGroup
-from .operators import BDK_OT_TerrainLayerAdd, BDK_OT_TerrainLayerRemove, BDK_OT_TerrainLayerMove, \
-    BDK_OT_TerrainDecoLayerAdd, BDK_OT_TerrainDecoLayerRemove, BDK_OT_terrain_deco_layers_hide, \
+from .properties import BDK_PG_terrain_deco_layer
+from .operators import BDK_OT_terrain_layer_add, BDK_OT_terrain_layer_remove, BDK_OT_terrain_layer_move, \
+    BDK_OT_terrain_deco_layer_add, BDK_OT_terrain_deco_layer_remove, BDK_OT_terrain_deco_layers_hide, \
     BDK_OT_terrain_deco_layers_show
 from ..helpers import is_active_object_terrain_info, get_terrain_info
 
@@ -28,12 +28,12 @@ class BDK_PT_TerrainLayersPanel(Panel):
                           'terrain_layers_index', sort_lock=True)
 
         col = row.column(align=True)
-        col.operator(BDK_OT_TerrainLayerAdd.bl_idname, icon='ADD', text='')
-        col.operator(BDK_OT_TerrainLayerRemove.bl_idname, icon='REMOVE', text='')
+        col.operator(BDK_OT_terrain_layer_add.bl_idname, icon='ADD', text='')
+        col.operator(BDK_OT_terrain_layer_remove.bl_idname, icon='REMOVE', text='')
         col.separator()
-        operator = col.operator(BDK_OT_TerrainLayerMove.bl_idname, icon='TRIA_UP', text='')
+        operator = col.operator(BDK_OT_terrain_layer_move.bl_idname, icon='TRIA_UP', text='')
         operator.direction = 'UP'
-        operator = col.operator(BDK_OT_TerrainLayerMove.bl_idname, icon='TRIA_DOWN', text='')
+        operator = col.operator(BDK_OT_terrain_layer_move.bl_idname, icon='TRIA_DOWN', text='')
         operator.direction = 'DOWN'
 
         col.separator()
@@ -101,8 +101,8 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
                           'deco_layers_index', sort_lock=True)
 
         col = row.column(align=True)
-        col.operator(BDK_OT_TerrainDecoLayerAdd.bl_idname, icon='ADD', text='')
-        col.operator(BDK_OT_TerrainDecoLayerRemove.bl_idname, icon='REMOVE', text='')
+        col.operator(BDK_OT_terrain_deco_layer_add.bl_idname, icon='ADD', text='')
+        col.operator(BDK_OT_terrain_deco_layer_remove.bl_idname, icon='REMOVE', text='')
 
         col.separator()
 
@@ -111,7 +111,7 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
         has_deco_layer_selected = 0 <= deco_layers_index < len(deco_layers)
 
         if has_deco_layer_selected:
-            deco_layer: 'BDK_PG_TerrainDecoLayerPropertyGroup' = deco_layers[deco_layers_index]
+            deco_layer: 'BDK_PG_terrain_deco_layer' = deco_layers[deco_layers_index]
 
             box = self.layout.box()
 

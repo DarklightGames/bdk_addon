@@ -40,18 +40,18 @@ def update_terrain_object_indices(terrain_object):
     print('Updating terrain object indices')
 
     # Sculpt Components
-    for i, sculpt_component in enumerate(terrain_object.sculpt_components):
-        sculpt_component.index = i
-        print(f'Sculpt component {sculpt_component.name} index: {sculpt_component.index}')
+    for i, sculpt_layer in enumerate(terrain_object.sculpt_layers):
+        sculpt_layer.index = i
+        print(f'Sculpt component {sculpt_layer.name} index: {sculpt_layer.index}')
     # Paint Components
-    for i, paint_component in enumerate(terrain_object.paint_components):
-        print(f'Paint component {paint_component.terrain_layer_name} index: {paint_component.index}')
-        paint_component.index = i
+    for i, paint_layer in enumerate(terrain_object.paint_layers):
+        print(f'Paint component {paint_layer.terrain_layer_name} index: {paint_layer.index}')
+        paint_layer.index = i
 
 
-class BDK_OT_terrain_object_sculpt_component_add(Operator):
+class BDK_OT_terrain_object_sculpt_layer_add(Operator):
     bl_label = 'Add Sculpt Component'
-    bl_idname = 'bdk.terrain_object_sculpt_component_add'
+    bl_idname = 'bdk.terrain_object_sculpt_layer_add'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -61,8 +61,8 @@ class BDK_OT_terrain_object_sculpt_component_add(Operator):
     def execute(self, context: Context):
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
-        sculpt_component = terrain_object.sculpt_components.add()
-        sculpt_component.terrain_object = terrain_object.object
+        sculpt_layer = terrain_object.sculpt_layers.add()
+        sculpt_layer.terrain_object = terrain_object.object
 
         # Update all the indices of the components.
         update_terrain_object_indices(terrain_object)
@@ -71,14 +71,14 @@ class BDK_OT_terrain_object_sculpt_component_add(Operator):
         update_terrain_object_geometry_node_group(terrain_object)
 
         # Set the sculpt component index to the new sculpt component.
-        terrain_object.sculpt_components_index = len(terrain_object.sculpt_components) - 1
+        terrain_object.sculpt_layers_index = len(terrain_object.sculpt_layers) - 1
 
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_object_sculpt_component_remove(Operator):
+class BDK_OT_terrain_object_sculpt_layer_remove(Operator):
     bl_label = 'Remove Sculpt Component'
-    bl_idname = 'bdk.terrain_object_sculpt_component_remove'
+    bl_idname = 'bdk.terrain_object_sculpt_layer_remove'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -88,12 +88,10 @@ class BDK_OT_terrain_object_sculpt_component_remove(Operator):
     def execute(self, context: Context):
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
-        sculpt_components_index = terrain_object.sculpt_components_index
+        sculpt_layers_index = terrain_object.sculpt_layers_index
 
-        print(sculpt_components_index, terrain_object.sculpt_components[sculpt_components_index].name)
-
-        terrain_object.sculpt_components.remove(sculpt_components_index)
-        terrain_object.sculpt_components_index = min(len(terrain_object.sculpt_components) - 1, sculpt_components_index)
+        terrain_object.sculpt_layers.remove(sculpt_layers_index)
+        terrain_object.sculpt_layers_index = min(len(terrain_object.sculpt_layers) - 1, sculpt_layers_index)
 
         # Update all the indices of the components.
         update_terrain_object_indices(terrain_object)
@@ -105,8 +103,8 @@ class BDK_OT_terrain_object_sculpt_component_remove(Operator):
 
 
 # Add an operator that moves the sculpt component up and down in the list.
-class BDK_OT_terrain_object_sculpt_component_move(Operator):
-    bl_idname = 'bdk.terrain_object_sculpt_component_move'
+class BDK_OT_terrain_object_sculpt_layer_move(Operator):
+    bl_idname = 'bdk.terrain_object_sculpt_layer_move'
     bl_label = 'Move Sculpt Component'
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -125,13 +123,13 @@ class BDK_OT_terrain_object_sculpt_component_move(Operator):
     def execute(self, context: Context):
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
-        sculpt_components_index = terrain_object.sculpt_components_index
+        sculpt_layers_index = terrain_object.sculpt_layers_index
         if self.direction == 'UP':
-            terrain_object.sculpt_components.move(sculpt_components_index, sculpt_components_index - 1)
-            terrain_object.sculpt_components_index -= 1
+            terrain_object.sculpt_layers.move(sculpt_layers_index, sculpt_layers_index - 1)
+            terrain_object.sculpt_layers_index -= 1
         elif self.direction == 'DOWN':
-            terrain_object.sculpt_components.move(sculpt_components_index, sculpt_components_index + 1)
-            terrain_object.sculpt_components_index += 1
+            terrain_object.sculpt_layers.move(sculpt_layers_index, sculpt_layers_index + 1)
+            terrain_object.sculpt_layers_index += 1
 
         update_terrain_object_indices(terrain_object)
         update_terrain_object_geometry_node_group(terrain_object)
@@ -177,9 +175,9 @@ class BDK_OT_terrain_object_bake(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_object_paint_component_add(Operator):
+class BDK_OT_terrain_object_paint_layer_add(Operator):
     bl_label = 'Add Paint Component'
-    bl_idname = 'bdk.terrain_object_paint_component_add'
+    bl_idname = 'bdk.terrain_object_paint_layer_add'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -189,8 +187,8 @@ class BDK_OT_terrain_object_paint_component_add(Operator):
     def execute(self, context: Context):
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
-        paint_component = terrain_object.paint_components.add()
-        paint_component.terrain_object = terrain_object.object
+        paint_layer = terrain_object.paint_layers.add()
+        paint_layer.terrain_object = terrain_object.object
 
         # Update all the indices of the components.
         update_terrain_object_indices(terrain_object)
@@ -199,14 +197,14 @@ class BDK_OT_terrain_object_paint_component_add(Operator):
         update_terrain_object_geometry_node_group(terrain_object)
 
         # Set the paint component index to the new paint component.
-        terrain_object.paint_components_index = len(terrain_object.paint_components) - 1
+        terrain_object.paint_layers_index = len(terrain_object.paint_layers) - 1
 
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_object_paint_component_remove(Operator):
+class BDK_OT_terrain_object_paint_layer_remove(Operator):
     bl_label = 'Remove Paint Component'
-    bl_idname = 'bdk.terrain_object_paint_component_remove'
+    bl_idname = 'bdk.terrain_object_paint_layer_remove'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -216,10 +214,10 @@ class BDK_OT_terrain_object_paint_component_remove(Operator):
     def execute(self, context: Context):
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
-        paint_components_index = terrain_object.paint_components_index
+        paint_layers_index = terrain_object.paint_layers_index
 
-        terrain_object.paint_components.remove(paint_components_index)
-        terrain_object.paint_components_index = min(len(terrain_object.paint_components) - 1, paint_components_index)
+        terrain_object.paint_layers.remove(paint_layers_index)
+        terrain_object.paint_layers_index = min(len(terrain_object.paint_layers) - 1, paint_layers_index)
 
         # Update all the indices of the components.
         update_terrain_object_indices(terrain_object)
@@ -233,9 +231,9 @@ class BDK_OT_terrain_object_paint_component_remove(Operator):
 classes = (
     BDK_OT_terrain_object_add,
     BDK_OT_terrain_object_bake,
-    BDK_OT_terrain_object_sculpt_component_add,
-    BDK_OT_terrain_object_sculpt_component_remove,
-    BDK_OT_terrain_object_sculpt_component_move,
-    BDK_OT_terrain_object_paint_component_add,
-    BDK_OT_terrain_object_paint_component_remove
+    BDK_OT_terrain_object_sculpt_layer_add,
+    BDK_OT_terrain_object_sculpt_layer_remove,
+    BDK_OT_terrain_object_sculpt_layer_move,
+    BDK_OT_terrain_object_paint_layer_add,
+    BDK_OT_terrain_object_paint_layer_remove
 )

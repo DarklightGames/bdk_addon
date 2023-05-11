@@ -1,12 +1,10 @@
 import bpy
-from bpy.types import (Operator, FileSelectEntry, Space, Context, 
-                       bpy_prop_collection, SpaceFileBrowser, 
-                       FileAssetSelectParams, UserAssetLibrary)
+from bpy.types import Operator, FileSelectEntry, Context, bpy_prop_collection, UserAssetLibrary
 from pathlib import Path
 from typing import Set, Sequence, Optional
 
 
-class BDK_OT_ImportDataLinked(Operator):
+class BDK_OT_asset_import_data_linked(Operator):
     bl_idname = 'bdk_asset_browser.import_data_linked'
     bl_description = 'Link asset from a library'
     bl_label = 'Import Data (Linked)'
@@ -65,6 +63,6 @@ class BDK_OT_ImportDataLinked(Operator):
         return {'FINISHED'}
 
 
-classes = ( 
-    BDK_OT_ImportDataLinked,
+classes = (
+    BDK_OT_asset_import_data_linked,
 )

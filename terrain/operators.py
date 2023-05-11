@@ -12,10 +12,10 @@ from .layers import add_terrain_layer
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size
-from .properties import BDK_PG_TerrainInfoPropertyGroup
+from .properties import BDK_PG_terrain_info
 
 
-class BDK_OT_TerrainLayerRemove(Operator):
+class BDK_OT_terrain_layer_remove(Operator):
     bl_idname = 'bdk.terrain_layer_remove'
     bl_label = 'Remove Terrain Layer'
     bl_options = {'REGISTER', 'UNDO'}
@@ -54,7 +54,7 @@ class BDK_OT_TerrainLayerRemove(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_TerrainLayerMove(Operator):
+class BDK_OT_terrain_layer_move(Operator):
     bl_idname = 'bdk.terrain_layer_move'
     bl_label = 'Move Terrain Layer'
     bl_options = {'REGISTER', 'UNDO'}
@@ -90,7 +90,7 @@ class BDK_OT_TerrainLayerMove(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_TerrainDecoLayerAdd(Operator):
+class BDK_OT_terrain_deco_layer_add(Operator):
     bl_idname = 'bdk.terrain_deco_layer_add'
     bl_label = 'Add Deco Layer'
     bl_options = {'REGISTER', 'UNDO'}
@@ -107,7 +107,7 @@ class BDK_OT_TerrainDecoLayerAdd(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_TerrainDecoLayerRemove(Operator):
+class BDK_OT_terrain_deco_layer_remove(Operator):
     bl_idname = 'bdk.terrain_deco_layer_remove'
     bl_label = 'Remove Deco Layer'
     bl_options = {'REGISTER', 'UNDO'}
@@ -160,7 +160,7 @@ class BDK_OT_TerrainDecoLayerRemove(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_TerrainLayerAdd(Operator):
+class BDK_OT_terrain_layer_add(Operator):
     bl_idname = 'bdk.terrain_layer_add'
     bl_label = 'Add Terrain Layer'
     bl_options = {'REGISTER', 'UNDO'}
@@ -193,7 +193,7 @@ def quad_size_get(self):
     return get_terrain_quad_size(self.size, self.resolution)
 
 
-class BDK_OT_TerrainInfoAdd(Operator):
+class BDK_OT_terrain_info_add(Operator):
     bl_idname = 'bdk.terrain_info_add'
     bl_label = 'Add Terrain Info'
     bl_options = {'REGISTER', 'UNDO'}
@@ -236,7 +236,7 @@ class BDK_OT_TerrainInfoAdd(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_TerrainInfoExport(Operator, ExportHelper):
+class BDK_OT_terrain_info_export(Operator, ExportHelper):
     bl_label = 'Export BDK Terrain Info'
     bl_idname = 'bdk.terrain_info_export'
 
@@ -321,13 +321,13 @@ class BDK_OT_terrain_deco_layers_show(Operator):
 
 
 classes = (
-    BDK_OT_TerrainInfoAdd,
-    BDK_OT_TerrainLayerAdd,
-    BDK_OT_TerrainLayerRemove,
-    BDK_OT_TerrainLayerMove,
-    BDK_OT_TerrainDecoLayerAdd,
-    BDK_OT_TerrainDecoLayerRemove,
-    BDK_OT_TerrainInfoExport,
+    BDK_OT_terrain_info_add,
+    BDK_OT_terrain_layer_add,
+    BDK_OT_terrain_layer_remove,
+    BDK_OT_terrain_layer_move,
+    BDK_OT_terrain_deco_layer_add,
+    BDK_OT_terrain_deco_layer_remove,
+    BDK_OT_terrain_info_export,
     BDK_OT_terrain_deco_layers_hide,
     BDK_OT_terrain_deco_layers_show
 )

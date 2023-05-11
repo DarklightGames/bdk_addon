@@ -43,7 +43,6 @@ class ActorImporter:
 
 
 class DefaultActorImporter(ActorImporter):
-
     """
     Default actor importer used when no other importer is found.
     """
@@ -113,44 +112,141 @@ class FluidSurfaceInfoImporter(ActorImporter):
     @classmethod
     def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
         # Create a new geometry node tree.
-        geometry_node_tree = bpy.data.node_groups.new(name="FluidSurfaceInfo", type="GeometryNodeTree")
+        geometry_node_tree = bpy.data.node_groups.new(name=bpy_object.name, type="GeometryNodeTree")
         geometry_node_tree.inputs.clear()
-        geometry_node_tree.inputs.new("NodeSocketInt", "FluidGridType")
-        geometry_node_tree.inputs.new("NodeSocketFloatDistance", "FluidGridSpacing")
-        geometry_node_tree.inputs.new("NodeSocketInt", "FluidXSize")
-        geometry_node_tree.inputs.new("NodeSocketInt", "FluidYSize")
-        geometry_node_tree.inputs.new("NodeSocketFloat", "UTiles")
-        geometry_node_tree.inputs.new("NodeSocketFloat", "UOffset")
-        geometry_node_tree.inputs.new("NodeSocketFloat", "VTiles")
-        geometry_node_tree.inputs.new("NodeSocketFloat", "VOffset")
+
         geometry_node_tree.outputs.new("NodeSocketGeometry", "Geometry")
 
-        input_node = geometry_node_tree.nodes.new(type="NodeGroupInput")
         fluid_surface_node = geometry_node_tree.nodes.new(type="GeometryNodeBDKFluidSurface")
+        set_material_node = geometry_node_tree.nodes.new(type="GeometryNodeSetMaterial")
         output_node = geometry_node_tree.nodes.new(type="NodeGroupOutput")
 
-        # Hook up the group inputs to the fluid surface node.
-        for input_name in map(lambda x: x.name, geometry_node_tree.inputs):
-            geometry_node_tree.links.new(input_node.outputs[input_name], fluid_surface_node.inputs[input_name])
-
-        # Hook up the fluid surface node to the output node.
-        geometry_node_tree.links.new(fluid_surface_node.outputs["Geometry"], output_node.inputs["Geometry"])
+        geometry_node_tree.links.new(fluid_surface_node.outputs["Geometry"], set_material_node.inputs["Geometry"])
+        geometry_node_tree.links.new(set_material_node.outputs["Geometry"], output_node.inputs["Geometry"])
 
         # Add geometry node modifier to fluid_surface_object.
         geometry_node_modifier = bpy_object.modifiers.new(name="FluidSurfaceInfo", type="NODES")
         geometry_node_modifier.node_group = geometry_node_tree
 
-        # Create drivers on the geometry node inputs that map to the corresponding custom properties of the object.
-        for input_name in map(lambda x: x.name, geometry_node_tree.inputs):
-            # Get the name of the property in the geometry node tree that corresponds to the input.
-            input_property_name = geometry_node_tree.inputs[input_name].identifier
-            driver = geometry_node_modifier[input_property_name].driver_add(input_name).driver
+        input_names = [
+            "FluidGridType",
+            "FluidGridSpacing",
+            "FluidXSize",
+            "FluidYSize",
+            "UTiles",
+            "UOffset",
+            "VTiles",
+            "VOffset"
+        ]
+
+        # Create drivers on fluid surface node inputs that map to the properties on the fluid surface object.
+        for input_name in input_names:
+            driver = fluid_surface_node.inputs[input_name].driver_add("default_value").driver
             driver.type = 'AVERAGE'
             var = driver.variables.new()
             var.name = input_name
             var.type = 'SINGLE_PROP'
             var.targets[0].id = bpy_object
-            var.targets[0].data_path = f"['{input_name}']"
+            var.targets[0].data_path = f"[\"{input_name}\"]"
+
+
+class ProjectorImporter(ActorImporter):
+    @classmethod
+    def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
+        name = t3d_actor.properties.get('Name')
+        mesh_data: Mesh = cast(Mesh, bpy.data.meshes.new(name))
+        return bpy.data.objects.new(name, mesh_data)
+
+    @classmethod
+    def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
+        # Create a new geometry node tree.
+        node_tree = bpy.data.node_groups.new(name=bpy_object.name, type="GeometryNodeTree")
+        node_tree.inputs.clear()
+
+        node_tree.inputs.new("NodeSocketObject", "Target")
+        node_tree.outputs.new("NodeSocketGeometry", "Geometry")
+
+        input_node = node_tree.nodes.new(type="NodeGroupInput")
+        object_info_node = node_tree.nodes.new(type="GeometryNodeObjectInfo")
+        projector_node = node_tree.nodes.new(type="GeometryNodeBDKProjector")
+        set_material_node = node_tree.nodes.new(type="GeometryNodeSetMaterial")
+        output_node = node_tree.nodes.new(type="NodeGroupOutput")
+        join_geometry_node = node_tree.nodes.new(type="GeometryNodeJoinGeometry")
+        transform_geometry_node = node_tree.nodes.new(type="GeometryNodeTransform")
+
+        store_named_attribute_node = node_tree.nodes.new(type="GeometryNodeStoreNamedAttribute")
+        store_named_attribute_node.data_type = 'FLOAT2'
+        store_named_attribute_node.domain = 'CORNER'
+        store_named_attribute_node.inputs["Name"].default_value = "UVMap"
+
+        value_node = node_tree.nodes.new(type="ShaderNodeValue")
+        # Add a driver to the default value of the value node corresponding to the projector object's "FOV" property.
+        driver = value_node.outputs[0].driver_add("default_value").driver
+        driver.type = 'AVERAGE'
+        var = driver.variables.new()
+        var.name = "FOV"
+        var.type = 'SINGLE_PROP'
+        var.targets[0].id = bpy_object
+        var.targets[0].data_path = "[\"FOV\"]"
+
+        # Add a "To Radians" node to convert the FOV value from degrees to radians.
+        to_radians_node = node_tree.nodes.new(type="ShaderNodeMath")
+        to_radians_node.operation = "RADIANS"
+        node_tree.links.new(value_node.outputs["Value"], to_radians_node.inputs[0])
+
+        # Connect theo "To Radians" node to the projector node's "FOV" input.
+        node_tree.links.new(to_radians_node.outputs["Value"], projector_node.inputs["FOV"])
+
+        # Note that the self node is only here so that the geometry is recalculated when the projector object is moved.
+        node_tree.nodes.new(type="GeometryNodeSelfObject")
+
+        node_tree.links.new(input_node.outputs["Target"], object_info_node.inputs[0])
+
+        node_tree.links.new(object_info_node.outputs["Location"], transform_geometry_node.inputs["Translation"])
+        node_tree.links.new(object_info_node.outputs["Rotation"], transform_geometry_node.inputs["Rotation"])
+        node_tree.links.new(object_info_node.outputs["Scale"], transform_geometry_node.inputs["Scale"])
+        node_tree.links.new(object_info_node.outputs["Geometry"], transform_geometry_node.inputs["Geometry"])
+
+        node_tree.links.new(transform_geometry_node.outputs["Geometry"], projector_node.inputs["Target"])
+
+        node_tree.links.new(projector_node.outputs["Geometry"], store_named_attribute_node.inputs["Geometry"])
+        node_tree.links.new(projector_node.outputs["UV Map"], store_named_attribute_node.inputs["Value"])
+        node_tree.links.new(store_named_attribute_node.outputs["Geometry"], set_material_node.inputs["Geometry"])
+
+        node_tree.links.new(set_material_node.outputs["Geometry"], join_geometry_node.inputs["Geometry"])
+        node_tree.links.new(projector_node.outputs["Frustum"], join_geometry_node.inputs["Geometry"])
+        node_tree.links.new(join_geometry_node.outputs["Geometry"], output_node.inputs["Geometry"])
+
+        # Add geometry node modifier to projector_object.
+        geometry_node_modifier = bpy_object.modifiers.new(name="Projector", type="NODES")
+        geometry_node_modifier.node_group = node_tree
+
+        input_names = [
+            "MaxTraceDistance",
+            "DrawScale"
+        ]
+
+        # Load the projector material.
+        projector_material = t3d_actor.properties.get('ProjTexture', 'None')
+        material = load_bdk_material(str(projector_material))
+        if material is not None:
+            # Set the material input for the set material node.
+            set_material_node.inputs["Material"].default_value = material
+
+        # Create drivers on projector node inputs that map to the properties on projector object.
+        for input_name in input_names:
+            # Check that the properties exist on the projector object, and if not, create them.
+            # TODO: In the future, we need to do type lookups for these properties and set the correct default value
+            #  based on the type.
+            if input_name not in bpy_object:
+                bpy_object[input_name] = 0.0
+            driver = projector_node.inputs[input_name].driver_add("default_value").driver
+            driver.type = 'AVERAGE'
+            var = driver.variables.new()
+            var.name = input_name
+            var.type = 'SINGLE_PROP'
+            var.targets[0].id = bpy_object
+            var.targets[0].data_path = f"[\"{input_name}\"]"
 
 
 class TerrainInfoImporter(ActorImporter):
@@ -160,7 +256,7 @@ class TerrainInfoImporter(ActorImporter):
         terrain_scale: Dict[str, float] = t3d_actor.properties.get('TerrainScale', {'X': 0.0, 'Y': 0.0, 'Z': 0.0})
         layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('Layers', [])
         deco_layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('DecoLayers', [])
-        deco_layer_offset: float = t3d_actor.properties.get('DecoLayerOffset', 0.0)     # TODO: handle this
+        deco_layer_offset: float = t3d_actor.properties.get('DecoLayerOffset', 0.0)  # TODO: handle this
         quad_visibility_bitmap_entries: List[(int, int)] = t3d_actor.properties.get('QuadVisibilityBitmap', [])
         edge_turn_bitmap_entries: List[(int, int)] = t3d_actor.properties.get('EdgeTurnBitmap', [])
 
@@ -183,7 +279,8 @@ class TerrainInfoImporter(ActorImporter):
             edge_turn_bitmap[index] = value
 
         # TODO: make create_terrain_info_object take quad_size instead of full resolution
-        mesh_object = create_terrain_info_object(resolution=resolution, size=resolution * size, heightmap=heightmap, edge_turn_bitmap=edge_turn_bitmap)
+        mesh_object = create_terrain_info_object(resolution=resolution, size=resolution * size, heightmap=heightmap,
+                                                 edge_turn_bitmap=edge_turn_bitmap)
         mesh_data: Mesh = cast(Mesh, mesh_object.data)
 
         # Link the new object to the scene.
@@ -307,7 +404,7 @@ class TerrainInfoImporter(ActorImporter):
         return mesh_object
 
     @classmethod
-    def on_object_linked(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
+    def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
         # The scale and rotation properties are not used by the terrain geometry, so we can reset them.
         bpy_object.scale = (1.0, 1.0, 1.0)
         bpy_object.rotation_euler = (0.0, 0.0, 0.0)
@@ -336,6 +433,7 @@ __actor_type_importers__ = {
     'FluidSurfaceInfo': FluidSurfaceInfoImporter,
     'TerrainInfo': TerrainInfoImporter,
     'SpectatorCam': SpectatorCamImporter,
+    'Projector': ProjectorImporter,
 }
 
 
@@ -396,7 +494,7 @@ def import_t3d(contents: str, context: Context):
             bpy_object[key] = value
         bpy_object.scale = scale
 
-    def import_t3d_object(t3d_object, context: Context):
+    def import_t3d_object(t3d_object: t3dpy.T3dObject, context: Context):
         if t3d_object.type_ == 'Map':
             import_t3d_map(t3d_object, context)
         elif t3d_object.type_ == 'Actor':

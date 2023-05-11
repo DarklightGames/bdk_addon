@@ -1,7 +1,7 @@
 from bpy.types import Context, Operator
 
 
-class BDK_OT_TerrainInfoImport(Operator):
+class BDK_OT_terrain_info_import(Operator):
 
     @classmethod
     def poll(cls, context: Context):

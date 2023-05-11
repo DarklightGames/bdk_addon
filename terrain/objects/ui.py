@@ -2,20 +2,20 @@ from typing import cast
 
 from bpy.types import Panel, Context, UIList
 
-from .operators import BDK_OT_terrain_object_bake, BDK_OT_terrain_object_sculpt_component_add, \
-    BDK_OT_terrain_object_sculpt_component_remove, BDK_OT_terrain_object_sculpt_component_move, \
-    BDK_OT_terrain_object_paint_component_add, BDK_OT_terrain_object_paint_component_remove
+from .operators import BDK_OT_terrain_object_bake, BDK_OT_terrain_object_sculpt_layer_add, \
+    BDK_OT_terrain_object_sculpt_layer_remove, BDK_OT_terrain_object_sculpt_layer_move, \
+    BDK_OT_terrain_object_paint_layer_add, BDK_OT_terrain_object_paint_layer_remove
 from .properties import BDK_PG_terrain_object
 
 
-class BDK_UL_terrain_object_sculpt_components(UIList):
+class BDK_UL_terrain_object_sculpt_layers(UIList):
 
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
         layout.prop(item, 'name', icon='SCULPTMODE_HLT', emboss=False, text='')
         layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
 
-class BDK_UL_terrain_object_paint_components(UIList):
+class BDK_UL_terrain_object_paint_layers(UIList):
 
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
         layout.label(text=item.terrain_layer_name if item.terrain_layer_name else '<no layer selected>', icon='VPAINT_HLT')
@@ -41,37 +41,37 @@ class BDK_PT_terrain_object_paint_layers(Panel):
         # Paint Components
         row = layout.row()
 
-        row.template_list('BDK_UL_terrain_object_paint_components', '', terrain_object, 'paint_components',
-                          terrain_object, 'paint_components_index', sort_lock=True, rows=3)
+        row.template_list('BDK_UL_terrain_object_paint_layers', '', terrain_object, 'paint_layers',
+                          terrain_object, 'paint_layers_index', sort_lock=True, rows=3)
 
         col = row.column(align=True)
-        col.operator(BDK_OT_terrain_object_paint_component_add.bl_idname, icon='ADD', text='')
-        col.operator(BDK_OT_terrain_object_paint_component_remove.bl_idname, icon='REMOVE', text='')
+        col.operator(BDK_OT_terrain_object_paint_layer_add.bl_idname, icon='ADD', text='')
+        col.operator(BDK_OT_terrain_object_paint_layer_remove.bl_idname, icon='REMOVE', text='')
 
         layout.separator()
 
-        paint_component = terrain_object.paint_components[terrain_object.paint_components_index]
+        paint_layer = terrain_object.paint_layers[terrain_object.paint_layers_index]
 
-        if paint_component:
+        if paint_layer:
             flow = layout.grid_flow()
 
-            flow.prop(paint_component, 'terrain_layer_name')
+            flow.prop(paint_layer, 'terrain_layer_name')
 
-            flow.prop(paint_component, 'operation')
-            flow.prop(paint_component, 'interpolation_type')
+            flow.prop(paint_layer, 'operation')
+            flow.prop(paint_layer, 'interpolation_type')
 
             col = flow.column(align=True)
-            col.prop(paint_component, 'radius')
-            col.prop(paint_component, 'falloff_radius')
-            col.prop(paint_component, 'strength')
+            col.prop(paint_layer, 'radius')
+            col.prop(paint_layer, 'falloff_radius')
+            col.prop(paint_layer, 'strength')
 
-            flow.prop(paint_component, 'use_distance_noise')
+            flow.prop(paint_layer, 'use_distance_noise')
 
-            if paint_component.use_distance_noise:
+            if paint_layer.use_distance_noise:
                 col = flow.column(align=True)
-                col.prop(paint_component, 'distance_noise_factor')
-                col.prop(paint_component, 'distance_noise_distortion')
-                col.prop(paint_component, 'distance_noise_offset')
+                col.prop(paint_layer, 'distance_noise_factor')
+                col.prop(paint_layer, 'distance_noise_distortion')
+                col.prop(paint_layer, 'distance_noise_offset')
 
 
 class BDK_PT_terrain_object_sculpt_players(Panel):
@@ -92,41 +92,41 @@ class BDK_PT_terrain_object_sculpt_players(Panel):
 
         row = layout.row()
 
-        row.template_list('BDK_UL_terrain_object_sculpt_components', '', terrain_object, 'sculpt_components',
-                          terrain_object, 'sculpt_components_index', sort_lock=True, rows=3)
+        row.template_list('BDK_UL_terrain_object_sculpt_layers', '', terrain_object, 'sculpt_layers',
+                          terrain_object, 'sculpt_layers_index', sort_lock=True, rows=3)
 
         col = row.column(align=True)
-        col.operator(BDK_OT_terrain_object_sculpt_component_add.bl_idname, icon='ADD', text='')
-        col.operator(BDK_OT_terrain_object_sculpt_component_remove.bl_idname, icon='REMOVE', text='')
+        col.operator(BDK_OT_terrain_object_sculpt_layer_add.bl_idname, icon='ADD', text='')
+        col.operator(BDK_OT_terrain_object_sculpt_layer_remove.bl_idname, icon='REMOVE', text='')
         col.separator()
-        operator = col.operator(BDK_OT_terrain_object_sculpt_component_move.bl_idname, icon='TRIA_UP', text='')
+        operator = col.operator(BDK_OT_terrain_object_sculpt_layer_move.bl_idname, icon='TRIA_UP', text='')
         operator.direction = 'UP'
-        operator = col.operator(BDK_OT_terrain_object_sculpt_component_move.bl_idname, icon='TRIA_DOWN', text='')
+        operator = col.operator(BDK_OT_terrain_object_sculpt_layer_move.bl_idname, icon='TRIA_DOWN', text='')
         operator.direction = 'DOWN'
 
-        sculpt_component = terrain_object.sculpt_components[terrain_object.sculpt_components_index]
+        sculpt_layer = terrain_object.sculpt_layers[terrain_object.sculpt_layers_index]
 
-        if sculpt_component:
+        if sculpt_layer:
             flow = layout.grid_flow()
 
             col = flow.column(align=True)
-            col.prop(sculpt_component, 'radius')
-            col.prop(sculpt_component, 'falloff_radius')
-            col.prop(sculpt_component, 'interpolation_type')
+            col.prop(sculpt_layer, 'radius')
+            col.prop(sculpt_layer, 'falloff_radius')
+            col.prop(sculpt_layer, 'interpolation_type')
 
-            col.prop(sculpt_component, 'depth')
+            col.prop(sculpt_layer, 'depth')
 
             flow.separator()
 
-            flow.prop(sculpt_component, 'use_noise')
+            flow.prop(sculpt_layer, 'use_noise')
 
             col = flow.column(align=True)
 
-            if sculpt_component.use_noise:
-                col.prop(sculpt_component, 'noise_radius_factor')
-                col.prop(sculpt_component, 'noise_distortion')
-                col.prop(sculpt_component, 'noise_strength')
-                col.prop(sculpt_component, 'noise_roughness')
+            if sculpt_layer.use_noise:
+                col.prop(sculpt_layer, 'noise_radius_factor')
+                col.prop(sculpt_layer, 'noise_distortion')
+                col.prop(sculpt_layer, 'noise_strength')
+                col.prop(sculpt_layer, 'noise_roughness')
 
 
 class BDK_PT_terrain_object(Panel):
@@ -149,8 +149,8 @@ class BDK_PT_terrain_object(Panel):
 
 classes = (
     BDK_PT_terrain_object,
-    BDK_UL_terrain_object_sculpt_components,
-    BDK_UL_terrain_object_paint_components,
+    BDK_UL_terrain_object_sculpt_layers,
+    BDK_UL_terrain_object_paint_layers,
     BDK_PT_terrain_object_sculpt_players,
     BDK_PT_terrain_object_paint_layers,
 )
