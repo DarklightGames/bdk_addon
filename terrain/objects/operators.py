@@ -1,13 +1,24 @@
 import bpy
 from bpy.types import Operator, Context, Collection
+from bpy.props import EnumProperty
 
-from ...helpers import is_active_object_terrain_info
+from ...helpers import is_active_object_terrain_info, copy_simple_property_group
 from .builder import create_terrain_object, update_terrain_object_geometry_node_group
 
 
 class BDK_OT_terrain_object_add(Operator):
     bl_label = 'Add Terrain Object'
     bl_idname = 'bdk.terrain_object_add'
+    bl_description = 'Add a terrain object to the scene'
+
+    object_type: EnumProperty(
+        name='Type',
+        items=(
+            ('CURVE', 'Curve', 'A terrain object that uses a curve to define the shape', 'CURVE_DATA', 0),
+            ('MESH', 'Mesh', 'A terrain object that uses a mesh to define the shape', 'MESH_DATA', 1),
+            ('EMPTY', 'Empty', 'A terrain object that uses an empty to define the shape', 'EMPTY_DATA', 2),
+        )
+    )
 
     @classmethod
     def poll(cls, context: Context):
@@ -19,7 +30,7 @@ class BDK_OT_terrain_object_add(Operator):
     def execute(self, context: Context):
         # TODO: have a way to select the terrain object definition.
         terrain_info_object = context.active_object
-        terrain_object = create_terrain_object(context, terrain_info_object)
+        terrain_object = create_terrain_object(context, terrain_info_object, self.object_type)
 
         # Link and parent the terrain object to the terrain info.
         collection: Collection = terrain_info_object.users_collection[0]
@@ -228,12 +239,77 @@ class BDK_OT_terrain_object_paint_layer_remove(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_object_paint_layer_duplicate(Operator):
+    bl_label = 'Duplicate Paint Component'
+    bl_idname = 'bdk.terrain_object_paint_layer_duplicate'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.active_object.bdk.type == 'TERRAIN_OBJECT'
+
+    def execute(self, context: Context):
+        terrain_info_object = context.active_object
+        terrain_object = terrain_info_object.bdk.terrain_object
+        paint_layer_copy = terrain_object.paint_layers.add()
+
+        copy_simple_property_group(terrain_object.paint_layers[terrain_object.paint_layers_index], paint_layer_copy)
+
+        # Update all the indices of the components.
+        update_terrain_object_indices(terrain_object)
+
+        # Update the geometry node tree.
+        update_terrain_object_geometry_node_group(terrain_object)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_object_sculpt_layer_duplicate(Operator):
+    bl_label = 'Duplicate Sculpt Component'
+    bl_idname = 'bdk.terrain_object_sculpt_layer_duplicate'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.active_object.bdk.type == 'TERRAIN_OBJECT'
+
+    def execute(self, context: Context):
+        terrain_info_object = context.active_object
+        terrain_object = terrain_info_object.bdk.terrain_object
+        sculpt_layer_copy = terrain_object.sculpt_layers.add()
+
+        copy_simple_property_group(terrain_object.sculpt_layers[terrain_object.sculpt_layers_index], sculpt_layer_copy)
+
+        # Update all the indices of the components.
+        update_terrain_object_indices(terrain_object)
+
+        # Update the geometry node tree.
+        update_terrain_object_geometry_node_group(terrain_object)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_object_duplicate(Operator):
+    bl_label = 'Duplicate Terrain Object'
+    bl_idname = 'bdk.terrain_object_duplicate'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.active_object.bdk.type == 'TERRAIN_OBJECT'
+
+    def execute(self, context: Context):
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_object_add,
     BDK_OT_terrain_object_bake,
     BDK_OT_terrain_object_sculpt_layer_add,
     BDK_OT_terrain_object_sculpt_layer_remove,
     BDK_OT_terrain_object_sculpt_layer_move,
+    BDK_OT_terrain_object_sculpt_layer_duplicate,
     BDK_OT_terrain_object_paint_layer_add,
-    BDK_OT_terrain_object_paint_layer_remove
+    BDK_OT_terrain_object_paint_layer_remove,
+    BDK_OT_terrain_object_paint_layer_duplicate
 )

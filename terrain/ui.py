@@ -7,12 +7,28 @@ from .operators import BDK_OT_terrain_layer_add, BDK_OT_terrain_layer_remove, BD
 from ..helpers import is_active_object_terrain_info, get_terrain_info
 
 
-class BDK_PT_TerrainLayersPanel(Panel):
-    bl_idname = 'BDK_PT_TerrainLayersPanel'
+class BDK_PT_terrain_info(Panel):
+    bl_idname = 'BDK_PT_terrain_info'
+    bl_label = 'Terrain Info'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'BDK'
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.active_object and context.active_object.bdk.type == 'TERRAIN_INFO'
+
+    def draw(self, context: Context):
+        pass
+
+
+class BDK_PT_terrain_layers(Panel):
+    bl_idname = 'BDK_PT_terrain_layers'
     bl_label = 'Layers'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'Terrain'
+    bl_parent_id = 'BDK_PT_terrain_info'
 
     @classmethod
     def poll(cls, context: Context):
@@ -24,7 +40,7 @@ class BDK_PT_TerrainLayersPanel(Panel):
         terrain_layers_index = terrain_info.terrain_layers_index
 
         row = self.layout.row()
-        row.template_list('BDK_UL_TerrainLayersUIList', '', terrain_info, 'terrain_layers', terrain_info,
+        row.template_list('BDK_UL_terrain_layers', '', terrain_info, 'terrain_layers', terrain_info,
                           'terrain_layers_index', sort_lock=True)
 
         col = row.column(align=True)
@@ -79,12 +95,66 @@ class BDK_MT_terrain_deco_layers_context_menu(Menu):
         operator.mode = 'UNSELECTED'
 
 
-class BDK_PT_TerrainDecoLayersPanel(Panel):
-    bl_idname = 'BDK_PT_TerrainDecoLayersPanel'
+class BDK_PT_terrain_deco_layers_settings(Panel):
+    bl_parent_id = 'BDK_PT_terrain_deco_layers'
+    bl_label = 'Settings'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        terrain_info = get_terrain_info(context.active_object)
+        deco_layers = terrain_info.deco_layers
+        deco_layers_index = terrain_info.deco_layers_index
+        has_deco_layer_selected = 0 <= deco_layers_index < len(deco_layers)
+        return has_deco_layer_selected
+
+    def draw(self, context: 'Context'):
+        terrain_info = get_terrain_info(context.active_object)
+        deco_layers = terrain_info.deco_layers
+        deco_layers_index = terrain_info.deco_layers_index
+        deco_layer = deco_layers[deco_layers_index]
+
+        flow = self.layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
+        flow.use_property_split = True
+
+        flow.column().prop(deco_layer, 'max_per_quad')
+        flow.column().prop(deco_layer, 'seed')
+        flow.column().prop(deco_layer, 'offset')
+        flow.separator()
+
+        col = flow.column(align=True)
+        col.prop(deco_layer, 'density_multiplier_min', text='Density Min')
+        col.prop(deco_layer, 'density_multiplier_max', text='Max')
+        flow.separator()
+
+        col = flow.column(align=True)
+        col.prop(deco_layer, 'fadeout_radius_min', text='Fadeout Radius Min')
+        col.prop(deco_layer, 'fadeout_radius_max', text='Max')
+        flow.separator()
+
+        col = flow.column()
+        col.prop(deco_layer, 'scale_multiplier_min', text='Scale Min')
+        col.prop(deco_layer, 'scale_multiplier_max', text='Max')
+        col.separator()
+
+        flow.column().prop(deco_layer, 'align_to_terrain')
+        flow.column().prop(deco_layer, 'show_on_invisible_terrain')
+        flow.column().prop(deco_layer, 'random_yaw')
+        # flow.column().prop(deco_layer, 'inverted')    # TODO: move this to the top level object
+        flow.separator()
+
+        flow.column().prop(deco_layer, 'force_draw')
+        flow.column().prop(deco_layer, 'detail_mode')
+        flow.column().prop(deco_layer, 'draw_order')
+
+
+class BDK_PT_terrain_deco_layers(Panel):
+    bl_idname = 'BDK_PT_terrain_deco_layers'
     bl_label = 'Deco Layers'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Terrain'
+    bl_parent_id = 'BDK_PT_terrain_info'
 
     @classmethod
     def poll(cls, context: Context):
@@ -92,12 +162,12 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
 
     def draw(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index
+        has_deco_layer_selected = 0 <= deco_layers_index < len(deco_layers)
 
         row = self.layout.row()
-        row.template_list('BDK_UL_TerrainDecoLayersUIList', '', terrain_info, 'deco_layers', terrain_info,
+        row.template_list('BDK_UL_terrain_deco_layers', '', terrain_info, 'deco_layers', terrain_info,
                           'deco_layers_index', sort_lock=True)
 
         col = row.column(align=True)
@@ -107,8 +177,6 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
         col.separator()
 
         col.menu(BDK_MT_terrain_deco_layers_context_menu.bl_idname, icon='DOWNARROW_HLT', text='')
-
-        has_deco_layer_selected = 0 <= deco_layers_index < len(deco_layers)
 
         if has_deco_layer_selected:
             deco_layer: 'BDK_PG_terrain_deco_layer' = deco_layers[deco_layers_index]
@@ -130,43 +198,12 @@ class BDK_PT_TerrainDecoLayersPanel(Panel):
             flow.separator()
 
             flow.column().prop(deco_layer, 'is_linked_to_layer')
+
             if deco_layer.is_linked_to_layer:
                 flow.column().prop(deco_layer, 'linked_layer_name', text='Linked Layer')
 
-            flow.separator()
 
-            flow.column().prop(deco_layer, 'max_per_quad')
-            flow.column().prop(deco_layer, 'seed')
-            flow.column().prop(deco_layer, 'offset')
-            flow.separator()
-
-            col = flow.column(align=True)
-            col.prop(deco_layer, 'density_multiplier_min', text='Density Min')
-            col.prop(deco_layer, 'density_multiplier_max', text='Max')
-            flow.separator()
-
-            col = flow.column(align=True)
-            col.prop(deco_layer, 'fadeout_radius_min', text='Fadeout Radius Min')
-            col.prop(deco_layer, 'fadeout_radius_max', text='Max')
-            flow.separator()
-
-            col = flow.column()
-            col.prop(deco_layer, 'scale_multiplier_min', text='Scale Min')
-            col.prop(deco_layer, 'scale_multiplier_max', text='Max')
-            col.separator()
-
-            flow.column().prop(deco_layer, 'align_to_terrain')
-            flow.column().prop(deco_layer, 'show_on_invisible_terrain')
-            flow.column().prop(deco_layer, 'random_yaw')
-            # flow.column().prop(deco_layer, 'inverted')    # TODO: move this to the top level object
-            flow.separator()
-
-            flow.column().prop(deco_layer, 'force_draw')
-            flow.column().prop(deco_layer, 'detail_mode')
-            flow.column().prop(deco_layer, 'draw_order')
-
-
-class BDK_UL_TerrainLayersUIList(UIList):
+class BDK_UL_terrain_layers(UIList):
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
         row = layout.row()
@@ -184,7 +221,7 @@ class BDK_UL_TerrainLayersUIList(UIList):
         row.prop(item, 'is_visible', icon=('HIDE_OFF' if item.is_visible else 'HIDE_ON'), text='', emboss=False)
 
 
-class BDK_UL_TerrainDecoLayersUIList(UIList):
+class BDK_UL_terrain_deco_layers(UIList):
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
         row = layout.row()
@@ -199,9 +236,11 @@ class BDK_UL_TerrainDecoLayersUIList(UIList):
 
 
 classes = (
-    BDK_PT_TerrainLayersPanel,
-    BDK_PT_TerrainDecoLayersPanel,
-    BDK_UL_TerrainLayersUIList,
-    BDK_UL_TerrainDecoLayersUIList,
+    BDK_PT_terrain_info,
+    BDK_PT_terrain_layers,
+    BDK_PT_terrain_deco_layers,
+    BDK_UL_terrain_layers,
+    BDK_UL_terrain_deco_layers,
+    BDK_PT_terrain_deco_layers_settings,
     BDK_MT_terrain_deco_layers_context_menu,
 )

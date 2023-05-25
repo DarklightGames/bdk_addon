@@ -4,7 +4,8 @@ from bpy.types import Panel, Context, UIList
 
 from .operators import BDK_OT_terrain_object_bake, BDK_OT_terrain_object_sculpt_layer_add, \
     BDK_OT_terrain_object_sculpt_layer_remove, BDK_OT_terrain_object_sculpt_layer_move, \
-    BDK_OT_terrain_object_paint_layer_add, BDK_OT_terrain_object_paint_layer_remove
+    BDK_OT_terrain_object_paint_layer_add, BDK_OT_terrain_object_paint_layer_remove, \
+    BDK_OT_terrain_object_paint_layer_duplicate, BDK_OT_terrain_object_sculpt_layer_duplicate
 from .properties import BDK_PG_terrain_object
 
 
@@ -29,9 +30,11 @@ class BDK_PT_terrain_object_paint_layers(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_object'
+    bl_order = 1
 
     @classmethod
     def poll(cls, context: Context):
+        # TODO: make sure there is at least one paint layer
         return context.active_object and context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def draw(self, context: Context):
@@ -41,12 +44,17 @@ class BDK_PT_terrain_object_paint_layers(Panel):
         # Paint Components
         row = layout.row()
 
-        row.template_list('BDK_UL_terrain_object_paint_layers', '', terrain_object, 'paint_layers',
-                          terrain_object, 'paint_layers_index', sort_lock=True, rows=3)
+        row.template_list(
+            'BDK_UL_terrain_object_paint_layers', '',
+            terrain_object, 'paint_layers',
+            terrain_object, 'paint_layers_index',
+            sort_lock=True, rows=3)
 
         col = row.column(align=True)
         col.operator(BDK_OT_terrain_object_paint_layer_add.bl_idname, icon='ADD', text='')
         col.operator(BDK_OT_terrain_object_paint_layer_remove.bl_idname, icon='REMOVE', text='')
+        col.separator()
+        col.operator(BDK_OT_terrain_object_paint_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
         layout.separator()
 
@@ -77,10 +85,11 @@ class BDK_PT_terrain_object_paint_layers(Panel):
 class BDK_PT_terrain_object_sculpt_players(Panel):
     bl_idname = 'BDK_PT_terrain_object_sculpt_players'
     bl_label = 'Sculpt Layers'
-    bl_category = 'Terrain'
+    bl_category = 'BDK'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_object'
+    bl_order = 0
 
     @classmethod
     def poll(cls, context: Context):
@@ -103,6 +112,8 @@ class BDK_PT_terrain_object_sculpt_players(Panel):
         operator.direction = 'UP'
         operator = col.operator(BDK_OT_terrain_object_sculpt_layer_move.bl_idname, icon='TRIA_DOWN', text='')
         operator.direction = 'DOWN'
+        col.separator()
+        col.operator(BDK_OT_terrain_object_sculpt_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
         sculpt_layer = terrain_object.sculpt_layers[terrain_object.sculpt_layers_index]
 
@@ -132,7 +143,7 @@ class BDK_PT_terrain_object_sculpt_players(Panel):
 class BDK_PT_terrain_object(Panel):
     bl_label = 'Terrain Object'
     bl_idname = 'BDK_PT_terrain_object'
-    bl_category = 'Terrain'
+    bl_category = 'BDK'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
 

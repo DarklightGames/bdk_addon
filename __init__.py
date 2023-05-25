@@ -25,6 +25,9 @@ if 'bpy' in locals():
     importlib.reload(material_importer)
     importlib.reload(material_operators)
 
+    importlib.reload(projector_builder)
+    importlib.reload(projector_operators)
+
     importlib.reload(terrain_layers)
     importlib.reload(terrain_deco)
     importlib.reload(terrain_g16)
@@ -40,9 +43,8 @@ if 'bpy' in locals():
     importlib.reload(terrain_object_ui)
 
     if bdk_helpers.are_bdk_dependencies_installed():
-        importlib.reload(bdk_panel) # TODO: remove this or rename it to a T3D panel
+        importlib.reload(bdk_panel) # TODO: remove this or rename it to a T3DMap panel
         importlib.reload(t3d_data)
-        importlib.reload(t3d_types)
         importlib.reload(t3d_operators)
         importlib.reload(t3d_importer)
 
@@ -60,6 +62,10 @@ else:
     from .material import importer as material_importer
     from .material import operators as material_operators
 
+    # Projector
+    from .projector import operators as projector_operators
+    from .projector import builder as projector_builder
+
     # Terrain
     from .terrain import layers as terrain_layers
     from .terrain import properties as terrain_properties
@@ -75,12 +81,11 @@ else:
     from .terrain.objects import properties as terrain_object_properties
     from .terrain.objects import ui as terrain_object_ui
 
-    # T3D
+    # T3DMap
     if bdk_helpers.are_bdk_dependencies_installed():
         from .panel import panel as bdk_panel
         from .t3d import data as t3d_data
         from .t3d import operators as t3d_operators
-        from .t3d import types as t3d_types
         from .t3d import importer as t3d_importer
 
     from .asset_browser import operators as asset_browser_operators
@@ -91,6 +96,7 @@ import bpy
 
 classes = material_importer.classes + \
           material_operators.classes + \
+          projector_operators.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
@@ -102,8 +108,7 @@ classes = material_importer.classes + \
 
 if bdk_helpers.are_bdk_dependencies_installed():
     classes += bdk_panel.classes + \
-        t3d_operators.classes + \
-        t3d_types.classes
+        t3d_operators.classes
 
 classes += bdk_properties.classes
 
@@ -115,7 +120,8 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
     self.layout.operator(terrain_operators.BDK_OT_terrain_info_add.bl_idname, text='BDK Terrain Info', icon='GRID')
-    self.layout.operator(terrain_object_operators.BDK_OT_terrain_object_add.bl_idname, text='BDK Terrain Object', icon='GRID')
+    self.layout.operator_menu_enum(terrain_object_operators.BDK_OT_terrain_object_add.bl_idname, 'object_type', text='BDK Terrain Object', icon='CURVE_DATA')
+    self.layout.operator(projector_operators.BDK_OT_projector_add.bl_idname, text='BDK Projector', icon='CAMERA_DATA')
 
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
@@ -149,7 +155,7 @@ def register():
     # For now, put the add-terrain operator in the add menu
     bpy.types.VIEW3D_MT_add.append(bdk_add_menu_func)
 
-    # T3D Copy (objects/collections)
+    # T3DMap Copy (objects/collections)
     if bdk_helpers.are_bdk_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)
         bpy.types.VIEW3D_MT_object_context_menu.append(bdk_t3d_copy_func)
@@ -171,7 +177,7 @@ def unregister():
 
     bpy.types.VIEW3D_MT_add.remove(bdk_add_menu_func)
 
-    # T3D Copy (objects/collections)
+    # T3DMap Copy (objects/collections)
     if bdk_helpers.are_bdk_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.remove(bdk_t3d_import_func)
         bpy.types.VIEW3D_MT_object_context_menu.remove(bdk_t3d_copy_func)

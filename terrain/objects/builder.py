@@ -477,6 +477,61 @@ def create_paint_node_group(terrain_object: Object, paint_layer: 'BDK_PG_terrain
     return node_tree
 
 
+def create_distance_to_empty_node_group(terrain_object):
+    node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
+    node_tree.inputs.new('NodeSocketVector', 'Location')
+    node_tree.outputs.new('NodeSocketFloat', 'Distance')
+
+    # Create input and output nodes.
+    input_node = node_tree.nodes.new(type='NodeGroupInput')
+    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+
+    # Add a new Position and Separate XYZ node.
+    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_node.input_type = 'FLOAT'
+
+    # Add a new boolean node.
+    boolean_node = node_tree.nodes.new(type='FunctionNodeInputBool')
+    add_terrain_object_driver_to_node(boolean_node, 'boolean', terrain_object, 'is_3d')
+
+    # Link the output of the boolean node to the switch input of the switch node.
+    node_tree.links.new(boolean_node.outputs['Boolean'], switch_node.inputs['Switch'])
+
+    # Link the Z output of the separate XYZ node to the True input of the switch node.
+    node_tree.links.new(separate_xyz_node.outputs['Z'], switch_node.inputs['True'])
+
+    combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+    # Link the X and Y outputs of the separate XYZ node to the X and Y inputs of the combine XYZ node.
+    node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node_2.inputs['X'])
+    node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node_2.inputs['Y'])
+    node_tree.links.new(switch_node.outputs['Output'], combine_xyz_node_2.inputs['Z'])
+
+    vector_subtract_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+    vector_subtract_node.operation = 'SUBTRACT'
+
+    node_tree.links.new(input_node.outputs['Location'], vector_subtract_node.inputs[0])
+    node_tree.links.new(position_node.outputs['Position'], vector_subtract_node.inputs[1])
+
+    # Link the position node to the input of the separate XYZ node.
+    node_tree.links.new(vector_subtract_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
+
+    # Add a new vector length node.
+    vector_length_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+    vector_length_node.operation = 'LENGTH'
+
+    # Link the output of the combine XYZ node to the input of the vector length node.
+    node_tree.links.new(combine_xyz_node_2.outputs['Vector'], vector_length_node.inputs['Vector'])
+
+    # Link the output of the vector length node to the input of the output node.
+    node_tree.links.new(vector_length_node.outputs['Value'], output_node.inputs['Distance'])
+
+    return node_tree
+
+
 def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_object'):
     node_tree = terrain_object.node_tree
 
@@ -498,13 +553,33 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
     object_info_node.inputs[0].default_value = terrain_object.object
     object_info_node.transform_space = 'RELATIVE'
 
-    # Create a new distance to curve node group.
-    distance_to_curve_node_group = create_distance_to_curve_node_group(terrain_object)
+    distance_socket = None
 
-    # Add a new node group node.
-    distance_to_curve_node = node_tree.nodes.new(type='GeometryNodeGroup')
-    distance_to_curve_node.node_tree = distance_to_curve_node_group
-    distance_to_curve_node.label = 'Distance to Curve'
+    if terrain_object.object_type == 'CURVE':
+        # Create a new distance to curve node group.
+        distance_to_curve_node_group = create_distance_to_curve_node_group(terrain_object)
+
+        # Add a new node group node.
+        distance_to_curve_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        distance_to_curve_node.node_tree = distance_to_curve_node_group
+        distance_to_curve_node.label = 'Distance to Curve'
+
+        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
+
+        distance_socket = distance_to_curve_node.outputs['Distance']
+
+    elif terrain_object.object_type == 'MESH':
+        pass
+    elif terrain_object.object_type == 'EMPTY':
+        distance_to_empty_node_group = create_distance_to_empty_node_group(terrain_object)
+
+        distance_to_empty_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        distance_to_empty_node.node_tree = distance_to_empty_node_group
+        distance_to_empty_node.label = 'Distance to Empty'
+
+        node_tree.links.new(object_info_node.outputs['Location'], distance_to_empty_node.inputs['Location'])
+
+        distance_socket = distance_to_empty_node.outputs['Distance']
 
     geometry_node_socket = input_node.outputs['Geometry']
 
@@ -519,8 +594,7 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
 
         # Link the geometry socket of the object info node to the geometry socket of the sculpt node.
         node_tree.links.new(geometry_node_socket, sculpt_node.inputs['Geometry'])
-        node_tree.links.new(distance_to_curve_node.outputs['Distance'], sculpt_node.inputs['Distance'])
-        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
+        node_tree.links.new(distance_socket, sculpt_node.inputs['Distance'])
 
         geometry_node_socket = sculpt_node.outputs['Geometry']
 
@@ -541,8 +615,7 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         add_paint_layer_driver_to_node_socket(paint_node.inputs['Distance Noise Offset'], paint_layer, 'distance_noise_offset')
 
         node_tree.links.new(geometry_node_socket, paint_node.inputs['Geometry'])
-        node_tree.links.new(distance_to_curve_node.outputs['Distance'], paint_node.inputs['Distance'])
-        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
+        node_tree.links.new(distance_socket, paint_node.inputs['Distance'])
 
         geometry_node_socket = paint_node.outputs['Geometry']
 
@@ -551,46 +624,64 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
 
 
 def create_terrain_object(context: Context,
-                          terrain_info_object: Object) -> Object:
+                          terrain_info_object: Object,
+                          object_type: str = 'CURVE'
+                          ) -> Object:
     """
-    Creates a terrain object from the given definition and connects it to the given terrain info object. Note that this
-    function does not add the terrain object to the scene. That is the responsibility of the caller.
+    Creates a terrain object of the specified type.
+    Note that this function does not add the terrain object to the scene. That is the responsibility of the caller.
     :param context:
     :param terrain_info_object:
+    :param object_type: The type of object to create. Valid values are 'CURVE', 'MESH' and 'EMPTY'
     :return:
     """
     terrain_object_name = uuid4().hex
-    curve_data = bpy.data.curves.new(name=terrain_object_name, type='CURVE')
-    spline = curve_data.splines.new(type='BEZIER')
 
-    # Add some points to the spline.
-    spline.bezier_points.add(count=1)
+    if object_type == 'CURVE':
+        object_data = bpy.data.curves.new(name=terrain_object_name, type='CURVE')
+        spline = object_data.splines.new(type='BEZIER')
 
-    # Add a set of aligned meandering points.
-    for i, point in enumerate(spline.bezier_points):
-        point.co = (i, 0, 0)
-        point.handle_left_type = 'AUTO'
-        point.handle_right_type = 'AUTO'
-        point.handle_left = (i - 0.25, -0.25, 0)
-        point.handle_right = (i + 0.25, 0.25, 0)
+        # Add some points to the spline.
+        spline.bezier_points.add(count=1)
 
-    # Scale the points.
-    scale = meters_to_unreal(10.0)
-    for point in spline.bezier_points:
-        point.co *= scale
-        point.handle_left *= scale
-        point.handle_right *= scale
+        # Add a set of aligned meandering points.
+        for i, point in enumerate(spline.bezier_points):
+            point.co = (i, 0, 0)
+            point.handle_left_type = 'AUTO'
+            point.handle_right_type = 'AUTO'
+            point.handle_left = (i - 0.25, -0.25, 0)
+            point.handle_right = (i + 0.25, 0.25, 0)
 
-    curve_object = bpy.data.objects.new(name=terrain_object_name, object_data=curve_data)
-    curve_object.bdk.type = 'TERRAIN_OBJECT'
-    curve_object.bdk.terrain_object.id = terrain_object_name
-    curve_object.bdk.terrain_object.terrain_info_object = terrain_info_object
-    curve_object.bdk.terrain_object.object = curve_object
-    curve_object.bdk.terrain_object.node_tree = bpy.data.node_groups.new(name=terrain_object_name, type='GeometryNodeTree')
-    curve_object.show_in_front = True
-    curve_object.lock_location = (False, False, True)
+        # Scale the points.
+        scale = meters_to_unreal(10.0)
+        for point in spline.bezier_points:
+            point.co *= scale
+            point.handle_left *= scale
+            point.handle_right *= scale
+    elif object_type == 'EMPTY':
+        object_data = None
+    elif object_type == 'MESH':
+        object_data = bpy.data.meshes.new(name=terrain_object_name)
+        # TODO: Add a default mesh (just a square plane for now).
 
-    terrain_object = curve_object.bdk.terrain_object
+    bpy_object = bpy.data.objects.new(name=terrain_object_name, object_data=object_data)
+
+    if object_type == 'EMPTY':
+        bpy_object.empty_display_type = 'CIRCLE'
+        bpy_object.empty_display_size = meters_to_unreal(10.0)
+        # Set the delta transform to the terrain info object's rotation.
+        bpy_object.delta_rotation_euler = (0, 0, 0)
+
+    bpy_object.bdk.type = 'TERRAIN_OBJECT'
+    bpy_object.bdk.terrain_object.id = terrain_object_name
+    bpy_object.bdk.terrain_object.object_type = object_type
+    bpy_object.bdk.terrain_object.terrain_info_object = terrain_info_object
+    bpy_object.bdk.terrain_object.object = bpy_object
+    bpy_object.bdk.terrain_object.node_tree = bpy.data.node_groups.new(name=terrain_object_name, type='GeometryNodeTree')
+    bpy_object.show_in_front = True
+    bpy_object.lock_location = (False, False, True)
+
+    terrain_object = bpy_object.bdk.terrain_object
 
     # Add sculpt and paint components.
     # In the future, we will allow the user to select a preset for the terrain object.
@@ -601,13 +692,13 @@ def create_terrain_object(context: Context,
     paint_layer.terrain_object = terrain_object.object
 
     # Set the location of the curve object to the 3D cursor.
-    curve_object.location = context.scene.cursor.location
+    bpy_object.location = context.scene.cursor.location
 
     # Add a geometry node modifier to the terrain info object.
     modifier = terrain_info_object.modifiers.new(name=terrain_object_name, type='NODES')
-    modifier.node_group = curve_object.bdk.terrain_object.node_tree
+    modifier.node_group = bpy_object.bdk.terrain_object.node_tree
     modifier.show_on_cage = True
 
-    update_terrain_object_geometry_node_group(curve_object.bdk.terrain_object)
+    update_terrain_object_geometry_node_group(bpy_object.bdk.terrain_object)
 
-    return curve_object
+    return bpy_object
