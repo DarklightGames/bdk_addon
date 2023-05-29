@@ -87,6 +87,10 @@ class BDK_PG_terrain_object_paint_layer(PropertyGroup):
     mute: BoolProperty(name='Mute', default=False)
 
     use_distance_noise: BoolProperty(name='Distance Noise', default=False)
+    noise_type: EnumProperty(name='Noise Type', items=(
+        ('PERLIN', 'Perlin', 'Perlin noise.'),
+        ('WHITE', 'White', 'White noise.'),
+    ), default='WHITE', update=terrain_object_update_cb)
     distance_noise_factor: FloatProperty(name='Distance Noise Factor', default=meters_to_unreal(0.5), subtype='DISTANCE', min=0.0)
     distance_noise_distortion: FloatProperty(name='Distance Noise Distortion', default=1.0, min=0.0)
     distance_noise_offset: FloatProperty(name='Distance Noise Offset', default=0.5, min=0.0, max=1.0, subtype='FACTOR')

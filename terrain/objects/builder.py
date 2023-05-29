@@ -431,15 +431,27 @@ def create_paint_node_group(terrain_object: Object, paint_layer: 'BDK_PG_terrain
     position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
     # Add noise nodes.
-    noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
-    noise_node.label = 'Distance Noise'
-    noise_node.noise_dimensions = '2D'
-    noise_node.inputs['Scale'].default_value = 0.5
-    noise_node.inputs['Detail'].default_value = 16
-    noise_node.inputs['Distortion'].default_value = 0.5
+    if paint_layer.noise_type == 'PERLIN':
+        noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
+        noise_node.noise_dimensions = '2D'
+        noise_node.inputs['Scale'].default_value = 0.5
+        noise_node.inputs['Detail'].default_value = 16
+        noise_node.inputs['Distortion'].default_value = 0.5
 
-    node_tree.links.new(input_node.outputs['Distance Noise Distortion'], noise_node.inputs['Distortion'])
-    node_tree.links.new(position_node.outputs['Position'], noise_node.inputs['Vector'])
+        node_tree.links.new(input_node.outputs['Distance Noise Distortion'], noise_node.inputs['Distortion'])
+        node_tree.links.new(position_node.outputs['Position'], noise_node.inputs['Vector'])
+
+        noise_value_socket = noise_node.outputs['Fac']
+    elif paint_layer.noise_type == 'WHITE':
+        noise_node = node_tree.nodes.new(type='ShaderNodeTexWhiteNoise')
+        noise_node.label = 'Distance Noise'
+        noise_node.noise_dimensions = '2D'
+
+        node_tree.links.new(position_node.outputs['Position'], noise_node.inputs['Vector'])
+
+        noise_value_socket = noise_node.outputs['Value']
+    else:
+        raise ValueError('Invalid noise type: %s' % paint_layer.noise_type)
 
     # Add an add noise node.
     add_distance_noise_node = node_tree.nodes.new(type='ShaderNodeMath')
@@ -470,9 +482,35 @@ def create_paint_node_group(terrain_object: Object, paint_layer: 'BDK_PG_terrain
     distance_noise_offset_subtract_node.operation = 'SUBTRACT'
     distance_noise_offset_subtract_node.label = 'Distance Noise Offset'
 
-    node_tree.links.new(noise_node.outputs['Fac'], distance_noise_offset_subtract_node.inputs[0])
+    node_tree.links.new(noise_value_socket, distance_noise_offset_subtract_node.inputs[0])
     node_tree.links.new(input_node.outputs['Distance Noise Offset'], distance_noise_offset_subtract_node.inputs[1])
     node_tree.links.new(distance_noise_offset_subtract_node.outputs['Value'], distance_noise_factor_multiply_node.inputs[0])
+
+    return node_tree
+
+
+def creat_distance_to_mesh_node_group(terrain_object):
+    node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
+    node_tree.inputs.new('NodeSocketVector', 'Location')
+    node_tree.outputs.new('NodeSocketFloat', 'Distance')
+
+    # Create input and output nodes.
+    input_node = node_tree.nodes.new(type='NodeGroupInput')
+    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+
+    # Add a new Position and Separate XYZ node.
+    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_node.input_type = 'FLOAT'
+
+    # Add a new boolean node.
+    boolean_node = node_tree.nodes.new(type='FunctionNode')
+    add_terrain_object_driver_to_node(boolean_node, 'boolean', terrain_object, 'is_3d')
+
+    # Link the output of the boolean node to the switch input of the switch node.
+    node_tree.links.new(boolean_node.outputs['Boolean'], switch_node.inputs['Switch'])
 
     return node_tree
 
@@ -581,7 +619,26 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
 
         distance_socket = distance_to_empty_node.outputs['Distance']
 
-    geometry_node_socket = input_node.outputs['Geometry']
+    # Store the calculated distance to a named attribute.
+    # This is faster than recalculating the distance when evaluating each layer. (~20% faster)
+    store_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+    store_distance_attribute_node.inputs['Name'].default_value = 'distance'
+    store_distance_attribute_node.data_type = 'FLOAT'
+    store_distance_attribute_node.domain = 'POINT'
+
+    # Link the geometry from the input node to the input of the store distance attribute node.
+    node_tree.links.new(input_node.outputs['Geometry'], store_distance_attribute_node.inputs['Geometry'])
+
+    # Link the distance socket to the input of the store distance attribute node.
+    node_tree.links.new(distance_socket, store_distance_attribute_node.inputs[4])
+
+    # Create a named attribute node for the distance.
+    distance_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    distance_attribute_node.inputs['Name'].default_value = 'distance'
+    distance_attribute_node.data_type = 'FLOAT'
+
+    distance_socket = distance_attribute_node.outputs[1]
+    geometry_node_socket = store_distance_attribute_node.outputs['Geometry']
 
     # Now chain the node components together.
     for sculpt_layer in terrain_object.sculpt_layers:
@@ -619,8 +676,13 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
 
         geometry_node_socket = paint_node.outputs['Geometry']
 
+    # Add a remove attribute node to remove the distance attribute.
+    remove_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeRemoveAttribute')
+    remove_distance_attribute_node.inputs['Name'].default_value = 'distance'
+
     # Link the last geometry node socket to the output node's geometry socket.
-    node_tree.links.new(geometry_node_socket, output_node.inputs['Geometry'])
+    node_tree.links.new(geometry_node_socket, remove_distance_attribute_node.inputs['Geometry'])
+    node_tree.links.new(remove_distance_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
 
 def create_terrain_object(context: Context,

@@ -256,12 +256,15 @@ class BDK_OT_terrain_info_export(Operator, ExportHelper):
         return {'RUNNING_MODAL'}
 
     def execute(self, context: Context):
-        with open(os.path.join(self.directory, f'{context.active_object.name}.t3d'), 'w') as fp:
-            write_terrain_t3d(context.active_object, fp)
+        # Get the depsgraph.
+        depsgraph = context.evaluated_depsgraph_get()
 
-        export_terrain_heightmap(context.active_object, directory=self.directory)
-        export_terrain_layers(context.active_object, directory=self.directory)
-        export_deco_layers(context.active_object, directory=self.directory)
+        with open(os.path.join(self.directory, f'{context.active_object.name}.t3d'), 'w') as fp:
+            write_terrain_t3d(context.active_object, depsgraph, fp)
+
+        export_terrain_heightmap(context.active_object, depsgraph, directory=self.directory)
+        export_terrain_layers(context.active_object, depsgraph, directory=self.directory)
+        export_deco_layers(context.active_object, depsgraph, directory=self.directory)
 
         self.report({'INFO'}, 'Exported TerrainInfo')
 
