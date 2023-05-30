@@ -149,3 +149,7 @@ def copy_simple_property_group(source, target):
             setattr(target, prop_name, getattr(source, prop_name))
         except (AttributeError, TypeError):
             pass
+
+
+def should_show_bdk_developer_extras(context: Context):
+    return getattr(context.preferences.addons['bdk_addon'].preferences, 'developer_extras', False)

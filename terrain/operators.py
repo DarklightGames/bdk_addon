@@ -323,6 +323,62 @@ class BDK_OT_terrain_deco_layers_show(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_layers_show(Operator):
+    bl_idname = 'bdk.terrain_layers_show'
+    bl_label = 'Show Layers'
+
+    mode: EnumProperty(name='Operation', items=(
+        ('ALL', 'All', 'Show all layers'),
+        ('UNSELECTED', 'Unselected', 'Show all layers except the selected one')
+    ), default='ALL')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return True
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        layers = terrain_info.terrain_layers
+        layers_index = terrain_info.terrain_layers_index
+
+        for (layer_index, layer) in enumerate(layers):
+            if self.mode == 'UNSELECTED' and layer_index == layers_index:
+                continue
+            layer.is_visible = True
+
+        # TODO: The shader isn't reevaluated when the layer visibility is changed via Python.
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_layers_hide(Operator):
+    bl_idname = 'bdk.terrain_layers_hide'
+    bl_label = 'Hide Layers'
+
+    mode: EnumProperty(name='Operation', items=(
+        ('ALL', 'All', 'Hide all layers'),
+        ('UNSELECTED', 'Unselected', 'Hide all layers except the selected one')
+    ), default='ALL')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return True
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        layers = terrain_info.terrain_layers
+        layers_index = terrain_info.terrain_layers_index
+
+        for (layer_index, layer) in enumerate(layers):
+            if self.mode == 'UNSELECTED' and layer_index == layers_index:
+                continue
+            layer.is_visible = False
+
+        # TODO: The shader isn't reevaluated when the layer visibility is changed via Python.
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_layer_add,

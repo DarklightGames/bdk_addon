@@ -40,8 +40,11 @@ class BdkAddonPreferences(AddonPreferences):
     bl_idname = 'bdk_addon'
 
     build_path: StringProperty(subtype='DIR_PATH', name='Build Path')
+    developer_extras: BoolProperty(name='Developer Extras', default=False,
+                                   description='Enable developer extras such as debug panels and operators.')
 
     def draw(self, _: Context):
+        self.layout.prop(self, 'developer_extras')
         self.layout.prop(self, 'build_path')
 
         # TODO: parse the requirements.txt

@@ -1,11 +1,14 @@
 from typing import cast
 
+from bpy.props import BoolProperty
 from bpy.types import Panel, Context, UIList
 
-from .operators import BDK_OT_terrain_object_bake, BDK_OT_terrain_object_sculpt_layer_add, \
+from ...helpers import should_show_bdk_developer_extras
+from .operators import BDK_OT_terrain_object_sculpt_layer_add, \
     BDK_OT_terrain_object_sculpt_layer_remove, BDK_OT_terrain_object_sculpt_layer_move, \
     BDK_OT_terrain_object_paint_layer_add, BDK_OT_terrain_object_paint_layer_remove, \
-    BDK_OT_terrain_object_paint_layer_duplicate, BDK_OT_terrain_object_sculpt_layer_duplicate
+    BDK_OT_terrain_object_paint_layer_duplicate, BDK_OT_terrain_object_sculpt_layer_duplicate, \
+    BDK_OT_terrain_object_bake
 from .properties import BDK_PG_terrain_object
 
 
@@ -84,6 +87,42 @@ class BDK_PT_terrain_object_paint_layers(Panel):
                     col.prop(paint_layer, 'distance_noise_distortion')
 
 
+class BDK_PT_terrain_object_bake(Panel):
+    bl_idname = 'BDK_PT_terrain_object_bake'
+    bl_label = 'Bake'
+    bl_description = 'Bake the object to the mesh'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_object'
+    bl_order = 2
+
+    def draw(self, context: 'Context'):
+        self.layout.operator(BDK_OT_terrain_object_bake.bl_idname)
+
+
+class BDK_PT_terrain_object_debug(Panel):
+    bl_idname = 'BDK_PT_terrain_object_debug'
+    bl_label = 'Debug'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_object'
+    bl_order = 3
+
+    @classmethod
+    def poll(cls, context: Context):
+        return should_show_bdk_developer_extras(context)
+
+    def draw(self, context: 'Context'):
+        terrain_object: 'BDK_PG_terrain_object' = context.active_object.bdk.terrain_object
+        self.layout.prop(terrain_object, 'id')
+        self.layout.prop(terrain_object, 'object_type')
+        self.layout.prop(terrain_object, 'object')
+        self.layout.prop(terrain_object, 'node_tree')
+        self.layout.prop(terrain_object, 'terrain_info_object')
+
+
 class BDK_PT_terrain_object_sculpt_players(Panel):
     bl_idname = 'BDK_PT_terrain_object_sculpt_players'
     bl_label = 'Sculpt Layers'
@@ -153,11 +192,8 @@ class BDK_PT_terrain_object(Panel):
     def poll(cls, context: Context):
         return context.active_object and context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
-    def draw(self, context: Context):
-        layout = self.layout
-        terrain_object = cast(BDK_PG_terrain_object, context.active_object.bdk.terrain_object)
-        # layout.prop(terrain_object, 'is_3d')
-        layout.operator(BDK_OT_terrain_object_bake.bl_idname)
+    def draw(self, context: 'Context'):
+        pass
 
 
 classes = (
@@ -166,4 +202,6 @@ classes = (
     BDK_UL_terrain_object_paint_layers,
     BDK_PT_terrain_object_sculpt_players,
     BDK_PT_terrain_object_paint_layers,
+    BDK_PT_terrain_object_bake,
+    BDK_PT_terrain_object_debug,
 )

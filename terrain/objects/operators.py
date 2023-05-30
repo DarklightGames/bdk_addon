@@ -32,8 +32,14 @@ class BDK_OT_terrain_object_add(Operator):
         terrain_info_object = context.active_object
         terrain_object = create_terrain_object(context, terrain_info_object, self.object_type)
 
+        """
+        BUG: If the terrain object has been added as rigid body, the collection will be the
+        RigidBodyWorld collection, which isn't actually a collection that shows up in the outliner or the view layer.
+        """
+
         # Link and parent the terrain object to the terrain info.
         collection: Collection = terrain_info_object.users_collection[0]
+
         collection.objects.link(terrain_object)
         terrain_object.parent = terrain_info_object
 
@@ -153,32 +159,42 @@ class BDK_OT_terrain_object_bake(Operator):
     bl_idname = 'bdk.terrain_object_bake'
     bl_options = {'REGISTER', 'UNDO'}
 
+    def invoke(self, context: 'Context', event: 'Event'):
+        return context.window_manager.invoke_props_dialog(self)
+
     @classmethod
     def poll(cls, context: Context):
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
-        # TODO: Apply the associated modifier in the terrain info object, then delete the terrain object.
-        terrain_object_object = context.active_object
-        terrain_info_object = terrain_object_object.parent  # TODO: technically this can be manually changed, so we should probably store a reference to the terrain info object in the terrain object.
-
-        terrain_object = terrain_object_object.bdk.terrain_object
+        active_object = context.active_object
+        terrain_object = active_object.bdk.terrain_object
+        terrain_info_object = terrain_object.terrain_info_object
 
         # Select the terrain info object and make it the active object.
         context.view_layer.objects.active = terrain_info_object
         terrain_info_object.select_set(True)
 
-        # Apply the associated modifier in the terrain info object. (we are just deleting it for now)
+        # Find the modifier associated with the terrain object.
+        did_find_modifier = False
         for modifier in terrain_info_object.modifiers:
             if modifier.name == terrain_object.id:
-                bpy.ops.object.modifier_apply(modifier=modifier.name)
-                break
+                did_find_modifier = True
+
+        if not did_find_modifier:
+            self.report({'ERROR'}, 'Could not find the associated modifier in the terrain info object.')
+            return {'CANCELLED'}
+
+        # Move the modifier to the top of the stack.
+        bpy.ops.object.modifier_move_to_index(modifier=terrain_object.id, index=0)
+        # Apply the modifier.
+        bpy.ops.object.modifier_apply(modifier=terrain_object.id)
 
         # Delete the terrain object node group.
         bpy.data.node_groups.remove(terrain_object.node_tree)
 
         # Delete the terrain object.
-        bpy.data.objects.remove(terrain_object_object)
+        bpy.data.objects.remove(active_object)
 
         # Deselect the terrain info object.
         terrain_info_object.select_set(False)

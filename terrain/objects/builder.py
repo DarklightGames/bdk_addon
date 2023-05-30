@@ -18,9 +18,9 @@ def add_driver_to_node_socket(node_socket: NodeSocket, target_object: Object, da
 
 
 def add_sculpt_layer_driver_to_node(node: Node,
-                                        node_path: str,
-                                        sculpt_layer: 'BDK_PG_terrain_object_sculpt_layer',
-                                        data_path: str):
+                                    node_path: str,
+                                    sculpt_layer: 'BDK_PG_terrain_object_sculpt_layer',
+                                    data_path: str):
     driver = node.driver_add(node_path).driver
     driver.type = 'AVERAGE'
     var = driver.variables.new()
@@ -31,9 +31,9 @@ def add_sculpt_layer_driver_to_node(node: Node,
 
 
 def add_paint_layer_driver_to_node(node: Node,
-                                       node_path: str,
-                                       paint_layer: 'BDK_PG_terrain_object_paint_layer',
-                                       data_path: str):
+                                   node_path: str,
+                                   paint_layer: 'BDK_PG_terrain_object_paint_layer',
+                                   data_path: str):
     driver = node.driver_add(node_path).driver
     driver.type = 'AVERAGE'
     var = driver.variables.new()
@@ -729,8 +729,8 @@ def create_terrain_object(context: Context,
     bpy_object = bpy.data.objects.new(name=terrain_object_name, object_data=object_data)
 
     if object_type == 'EMPTY':
-        bpy_object.empty_display_type = 'CIRCLE'
-        bpy_object.empty_display_size = meters_to_unreal(10.0)
+        bpy_object.empty_display_type = 'SPHERE'
+        bpy_object.empty_display_size = meters_to_unreal(1.0)
         # Set the delta transform to the terrain info object's rotation.
         bpy_object.delta_rotation_euler = (0, 0, 0)
 

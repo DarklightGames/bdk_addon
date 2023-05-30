@@ -29,7 +29,7 @@ class BDK_PG_terrain_object_sculpt_layer(PropertyGroup):
     noise_roughness: FloatProperty(name='Noise Roughness', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
     mute: BoolProperty(name='Mute', default=False)
     interpolation_type: EnumProperty(name='Interpolation Type', items=(
-        ('LINEAR', 'Linear', 'Linear interpolation between From Min and From Max values.', 'IPO_LINEAR', 0),
+        ('LINEAR', 'Linear', 'Linear interpolation between From Min and From Max values.', 'LINCURVE', 0),
         ('STEPPED', 'Stepped', 'Stepped linear interpolation between From Min and From Max values.', 'IPO_CONSTANT', 1),
         ('SMOOTHSTEP', 'Smooth Step', 'Smooth Hermite edge interpolation between From Min and From Max values.', 'IPO_EASE_IN', 2),
         ('SMOOTHERSTEP', 'Smoother Step', 'Smoother Hermite edge interpolation between From Min and From Max values.', 'IPO_EASE_IN_OUT', 3),
@@ -97,15 +97,15 @@ class BDK_PG_terrain_object_paint_layer(PropertyGroup):
 
 
 class BDK_PG_terrain_object(PropertyGroup):
-    id: StringProperty(options={'HIDDEN'})
+    id: StringProperty(options={'HIDDEN'}, name='ID')
     object_type: EnumProperty(name='Object Type', items=(
-        ('CURVE', 'Curve', ''),
-        ('MESH', 'Mesh', ''),
-        ('EMPTY', 'Empty', ''),
+        ('CURVE', 'Curve', '', 'CURVE_DATA', 0),
+        ('MESH', 'Mesh', '', 'MESH_DATA', 1),
+        ('EMPTY', 'Empty', '', 'EMPTY_DATA', 2),
     ), default='CURVE')
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     node_tree: PointerProperty(type=NodeTree, options={'HIDDEN'})
-    object: PointerProperty(type=Object)
+    object: PointerProperty(type=Object, name='Object')
     is_3d: BoolProperty(name='3D', default=False)
     paint_layers: CollectionProperty(name='Paint Components', type=BDK_PG_terrain_object_paint_layer)
     paint_layers_index: IntProperty()

@@ -23,12 +23,12 @@ def build_projector_node_tree() -> NodeTree:
 
     input_node = node_tree.nodes.new(type="NodeGroupInput")
 
-    object_info_node = node_tree.nodes.new(type="GeometryNodeObjectInfo")
+    # object_info_node = node_tree.nodes.new(type="GeometryNodeObjectInfo")
     projector_node = node_tree.nodes.new(type="GeometryNodeBDKProjector")
     set_material_node = node_tree.nodes.new(type="GeometryNodeSetMaterial")
     output_node = node_tree.nodes.new(type="NodeGroupOutput")
     join_geometry_node = node_tree.nodes.new(type="GeometryNodeJoinGeometry")
-    transform_geometry_node = node_tree.nodes.new(type="GeometryNodeTransform")
+    # transform_geometry_node = node_tree.nodes.new(type="GeometryNodeTransform")
 
     store_named_attribute_node = node_tree.nodes.new(type="GeometryNodeStoreNamedAttribute")
     store_named_attribute_node.data_type = 'FLOAT2'
@@ -47,14 +47,14 @@ def build_projector_node_tree() -> NodeTree:
     # Note that the self node is only here so that the geometry is recalculated when the projector object is moved.
     node_tree.nodes.new(type="GeometryNodeSelfObject")
 
-    node_tree.links.new(input_node.outputs["Target"], object_info_node.inputs[0])
+    node_tree.links.new(input_node.outputs["Target"], projector_node.inputs['Target'])
 
-    node_tree.links.new(object_info_node.outputs["Location"], transform_geometry_node.inputs["Translation"])
-    node_tree.links.new(object_info_node.outputs["Rotation"], transform_geometry_node.inputs["Rotation"])
-    node_tree.links.new(object_info_node.outputs["Scale"], transform_geometry_node.inputs["Scale"])
-    node_tree.links.new(object_info_node.outputs["Geometry"], transform_geometry_node.inputs["Geometry"])
+    # node_tree.links.new(object_info_node.outputs["Location"], transform_geometry_node.inputs["Translation"])
+    # node_tree.links.new(object_info_node.outputs["Rotation"], transform_geometry_node.inputs["Rotation"])
+    # node_tree.links.new(object_info_node.outputs["Scale"], transform_geometry_node.inputs["Scale"])
+    # node_tree.links.new(object_info_node.outputs["Geometry"], transform_geometry_node.inputs["Geometry"])
 
-    node_tree.links.new(transform_geometry_node.outputs["Geometry"], projector_node.inputs["Target"])
+    # node_tree.links.new(transform_geometry_node.outputs["Geometry"], projector_node.inputs["Target"])
 
     node_tree.links.new(projector_node.outputs["Geometry"], store_named_attribute_node.inputs["Geometry"])
     node_tree.links.new(projector_node.outputs["UV Map"], store_named_attribute_node.inputs["Value"])

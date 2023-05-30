@@ -3,7 +3,7 @@ from typing import cast
 from .properties import BDK_PG_terrain_deco_layer
 from .operators import BDK_OT_terrain_layer_add, BDK_OT_terrain_layer_remove, BDK_OT_terrain_layer_move, \
     BDK_OT_terrain_deco_layer_add, BDK_OT_terrain_deco_layer_remove, BDK_OT_terrain_deco_layers_hide, \
-    BDK_OT_terrain_deco_layers_show
+    BDK_OT_terrain_deco_layers_show, BDK_OT_terrain_layers_show, BDK_OT_terrain_layers_hide
 from ..helpers import is_active_object_terrain_info, get_terrain_info
 
 
@@ -54,6 +54,8 @@ class BDK_PT_terrain_layers(Panel):
 
         col.separator()
 
+        col.menu(BDK_MT_terrain_layers_context_menu.bl_idname, icon='DOWNARROW_HLT', text='')
+
         has_terrain_layer_selected = 0 <= terrain_layers_index < len(terrain_layers)
 
         if has_terrain_layer_selected:
@@ -75,6 +77,24 @@ class BDK_PT_terrain_layers(Panel):
             row = self.layout.row(align=True)
             row.label(text='Rotation')
             row.prop(terrain_layer, 'texture_rotation', text='')
+
+
+class BDK_MT_terrain_layers_context_menu(Menu):
+    bl_idname = 'BDK_MT_terrain_layers_context_menu'
+    bl_label = "Layers Specials"
+
+    def draw(self, context: Context):
+        layout: UILayout = self.layout
+
+        operator = layout.operator(BDK_OT_terrain_layers_show.bl_idname, text='Show All', icon='HIDE_OFF')
+        operator.mode = 'ALL'
+
+        layout.separator()
+
+        operator = layout.operator(BDK_OT_terrain_layers_hide.bl_idname, text='Hide All', icon='HIDE_ON')
+        operator.mode = 'ALL'
+        operator = layout.operator(BDK_OT_terrain_layers_hide.bl_idname, text='Hide Unselected')
+        operator.mode = 'UNSELECTED'
 
 
 class BDK_MT_terrain_deco_layers_context_menu(Menu):
@@ -243,4 +263,5 @@ classes = (
     BDK_UL_terrain_deco_layers,
     BDK_PT_terrain_deco_layers_settings,
     BDK_MT_terrain_deco_layers_context_menu,
+    BDK_MT_terrain_layers_context_menu,
 )
