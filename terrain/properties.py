@@ -29,6 +29,7 @@ def terrain_layer_name_update_cb(self, context: Context):
                 paint_layer.terrain_layer_name = self.name
 
     # Update deco layer names if the linked terrain layer matches.
+    # TODO: this will need to change when we add the terrain node system.
     for deco_layer in self.terrain_info_object.bdk.terrain_info.deco_layers:
         if deco_layer.linked_layer_id == self.color_attribute_name:
             deco_layer.linked_layer_name = self.name
@@ -58,12 +59,12 @@ BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name=
 
 
 class BDK_PG_terrain_layer(PropertyGroup):
+    color_attribute_name: StringProperty(options={'HIDDEN'})    # TOD: this will be the responsibility of the nodes now (rename this to ID to convey uniqueness)
     name: StringProperty(name='Name', default='TerrainLayer', update=terrain_layer_name_update_cb)
     u_scale: FloatProperty(name='UScale', default=2.0)
     v_scale: FloatProperty(name='VScale', default=2.0)
     texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE')
     material: PointerProperty(name='Material', type=Material, update=on_material_update, poll=material_poll)
-    color_attribute_name: StringProperty(options={'HIDDEN'})    # TOD: this will be the responsibility of the nodes now
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
     nodes: CollectionProperty(name='Nodes', type=BDK_PG_terrain_layer_node, options={'HIDDEN'})
@@ -144,7 +145,24 @@ def deco_layer_linked_layer_name_update(self: 'BDK_PG_terrain_deco_layer', conte
 empty_set = set()
 
 
+def deco_layer_name_update_cb(self, context):
+    print('deco_layer_name_update_cb')
+
+    # Find all terrain objects in the file.
+    terrain_object_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_OBJECT', bpy.data.objects))
+
+    # Update terrain object paint component names if the terrain layer's color attribute name matches.
+    for terrain_object_object in terrain_object_objects:
+        for paint_layer in terrain_object_object.bdk.terrain_object.paint_layers:
+            if paint_layer.deco_layer_id == self.id:
+                paint_layer.deco_layer_name = self.name
+
+    # TODO: add additional handling for nodes system, once implemented
+
+
 class BDK_PG_terrain_deco_layer(PropertyGroup):
+    id: StringProperty(options={'HIDDEN'})
+    name: StringProperty(name='Name', default='DecoLayer', options=empty_set, update=deco_layer_name_update_cb)
     align_to_terrain: BoolProperty(name='Align To Terrain', default=False, options=empty_set)
     density_multiplier_max: FloatProperty('Density Multiplier Max', min=0.0, max=1.0, default=0.1, options=empty_set)
     density_multiplier_min: FloatProperty('Density Multiplier Min', min=0.0, max=1.0, default=0.1, options=empty_set)
@@ -156,9 +174,7 @@ class BDK_PG_terrain_deco_layer(PropertyGroup):
     fadeout_radius_max: FloatProperty(name='Fadeout Radius Max', options=empty_set, subtype='DISTANCE')
     fadeout_radius_min: FloatProperty(name='Fadeout Radius Min', options=empty_set, subtype='DISTANCE')
     force_draw: BoolProperty(name='Force Draw', default=False, options=empty_set)
-    id: StringProperty(options={'HIDDEN'})
     max_per_quad: IntProperty(name='Max Per Quad', default=1, min=1, max=4, options=empty_set)
-    name: StringProperty(name='Name', default='DecoLayer', options=empty_set)
     object: PointerProperty(type=Object, options={'HIDDEN'})
     offset: FloatProperty(name='Offset', options=empty_set, subtype='DISTANCE')
     random_yaw: BoolProperty(name='Random Yaw', default=True, options=empty_set)
