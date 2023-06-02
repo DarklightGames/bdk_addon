@@ -146,18 +146,15 @@ empty_set = set()
 
 
 def deco_layer_name_update_cb(self, context):
-    print('deco_layer_name_update_cb')
-
     # Find all terrain objects in the file.
     terrain_object_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_OBJECT', bpy.data.objects))
 
+    # TODO: add handling for nodes system, once implemented
     # Update terrain object paint component names if the terrain layer's color attribute name matches.
     for terrain_object_object in terrain_object_objects:
         for paint_layer in terrain_object_object.bdk.terrain_object.paint_layers:
             if paint_layer.deco_layer_id == self.id:
                 paint_layer.deco_layer_name = self.name
-
-    # TODO: add additional handling for nodes system, once implemented
 
 
 class BDK_PG_terrain_deco_layer(PropertyGroup):

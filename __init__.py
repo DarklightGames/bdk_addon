@@ -1,5 +1,6 @@
 from bpy.app.handlers import persistent
 from bpy.props import PointerProperty
+from bpy.types import Menu
 
 bl_info = {
     "name": "Blender Development Kit (BDK)",
@@ -55,12 +56,14 @@ if 'bpy' in locals():
 
     importlib.reload(asset_browser_operators)
     importlib.reload(bdk_properties)
+    importlib.reload(bdk_ui)
 else:
     from . import data as bdk_data
     from . import helpers as bdk_helpers
     from . import preferences as bdk_preferences
     from . import properties as bdk_properties
     from . import operators as bdk_operators
+    from . import ui as bdk_ui
 
     # Material
     from .material import data as material_data
@@ -117,7 +120,8 @@ classes = material_importer.classes + \
           terrain_object_ui.classes + \
           asset_browser_operators.classes + \
           bdk_preferences.classes + \
-          bdk_operators.classes
+          bdk_operators.classes + \
+          bdk_ui.classes
 
 if bdk_helpers.are_bdk_dependencies_installed():
     classes += bdk_panel.classes + \
@@ -132,10 +136,7 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(terrain_operators.BDK_OT_terrain_info_add.bl_idname, text='BDK Terrain Info', icon='GRID')
-    self.layout.operator_menu_enum(terrain_object_operators.BDK_OT_terrain_object_add.bl_idname, 'object_type', text='BDK Terrain Object', icon='CURVE_DATA')
-    self.layout.operator(projector_operators.BDK_OT_projector_add.bl_idname, text='BDK Projector', icon='CAMERA_DATA')
-    self.layout.operator(fluid_surface_operators.BDK_OT_fluid_surface_add.bl_idname, text='BDK Fluid Surface', icon='MOD_FLUIDSIM')
+    self.layout.menu(bdk_ui.BDK_MT_object_add_menu.bl_idname, text='BDK', icon='BDK_UNREAL')
 
 
 def bdk_select_menu_func(self, _context: bpy.types.Context):
