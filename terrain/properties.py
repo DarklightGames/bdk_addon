@@ -19,7 +19,6 @@ def material_poll(_: Context, material: Material) -> bool:
 
 
 def terrain_layer_name_update_cb(self, context: Context):
-
     # Find all terrain objects in the file.
     terrain_object_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_OBJECT', bpy.data.objects))
 
@@ -35,15 +34,39 @@ def terrain_layer_name_update_cb(self, context: Context):
             deco_layer.linked_layer_name = self.name
 
 
+# what is another name for layer? component?
+class BDK_PG_terrain_layer_node(PropertyGroup):
+    name: StringProperty(name='Name', default='Paint')
+    type: EnumProperty(name='Type', items=[
+        ('PAINT', 'Paint', 'Paint'),
+        ('NOISE', 'Noise', 'Noise'),
+        ('FILL', 'Fill', 'Fill'),
+    ], default='PAINT')
+    operation: EnumProperty(name='Operation', items=[
+        ('ADD', 'Add', 'Add'),
+        ('SUBTRACT', 'Subtract', 'Subtract'),
+        ('MULTIPLY', 'Multiply', 'Multiply'),
+        ('DIVIDE', 'Divide', 'Divide'),
+    ], default='ADD')
+    attribute_name: StringProperty(name='Attribute Name', options={'HIDDEN'})
+
+
+# Add the children property to the node property group (this must be done after the class is defined).
+BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name='Children',
+                                                                           type=BDK_PG_terrain_layer_node,
+                                                                           options={'HIDDEN'})
+
+
 class BDK_PG_terrain_layer(PropertyGroup):
     name: StringProperty(name='Name', default='TerrainLayer', update=terrain_layer_name_update_cb)
     u_scale: FloatProperty(name='UScale', default=2.0)
     v_scale: FloatProperty(name='VScale', default=2.0)
     texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE')
     material: PointerProperty(name='Material', type=Material, update=on_material_update, poll=material_poll)
-    color_attribute_name: StringProperty(options={'HIDDEN'})
+    color_attribute_name: StringProperty(options={'HIDDEN'})    # TOD: this will be the responsibility of the nodes now
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
+    nodes: CollectionProperty(name='Nodes', type=BDK_PG_terrain_layer_node, options={'HIDDEN'})
 
 
 def on_deco_layer_index_update(self: 'BDK_PG_terrain_info', _: Context):
@@ -84,7 +107,8 @@ def static_mesh_poll(_: Context, obj: Object) -> bool:
     return is_bdk_static_mesh_actor(obj)
 
 
-def deco_layer_linked_layer_name_search(self: 'BDK_PG_terrain_deco_layer', context: Context, edit_text: str) -> List[str]:
+def deco_layer_linked_layer_name_search(self: 'BDK_PG_terrain_deco_layer', context: Context, edit_text: str) -> List[
+    str]:
     # Get a list of terrain layer names for the selected terrain info object.
     terrain_info = get_terrain_info(context.active_object)
     if terrain_info is None:
@@ -107,7 +131,7 @@ def deco_layer_linked_layer_name_update(self: 'BDK_PG_terrain_deco_layer', conte
     self.linked_layer_id = ''
     for i, layer in enumerate(terrain_info.terrain_layers):
         if layer.name == self.linked_layer_name:
-            self.linked_layer_id = layer.color_attribute_name   # TODO: Fix the naming of this to be more consistent.
+            self.linked_layer_id = layer.color_attribute_name  # TODO: Fix the naming of this to be more consistent.
             break
     # Trigger an update of the deco layers.
     # TODO: Have the density map attribute ID in the geometry node be driven by a property.
@@ -138,8 +162,10 @@ class BDK_PG_terrain_deco_layer(PropertyGroup):
     object: PointerProperty(type=Object, options={'HIDDEN'})
     offset: FloatProperty(name='Offset', options=empty_set, subtype='DISTANCE')
     random_yaw: BoolProperty(name='Random Yaw', default=True, options=empty_set)
-    scale_multiplier_max: FloatVectorProperty('Scale Multiplier Max', min=0.0, max=1.0, default=[1, 1, 1], options=empty_set, subtype='XYZ')
-    scale_multiplier_min: FloatVectorProperty('Scale Multiplier Min', min=0.0, max=1.0, default=[1, 1, 1], options=empty_set, subtype='XYZ')
+    scale_multiplier_max: FloatVectorProperty('Scale Multiplier Max', min=0.0, max=1.0, default=[1, 1, 1],
+                                              options=empty_set, subtype='XYZ')
+    scale_multiplier_min: FloatVectorProperty('Scale Multiplier Min', min=0.0, max=1.0, default=[1, 1, 1],
+                                              options=empty_set, subtype='XYZ')
     seed: IntProperty(name='Seed', options=empty_set)
     show_on_invisible_terrain: BoolProperty(name='Show On Invisible Terrain', default=False, options=empty_set)
     show_on_terrain: BoolProperty(name='Show On Terrain', default=True, options=empty_set)
@@ -148,10 +174,14 @@ class BDK_PG_terrain_deco_layer(PropertyGroup):
         ('SORT_BackToFront', 'Back To Front', ''),
         ('SORT_FrontToBack', 'Front To Back', ''),
     ])
-    static_mesh: PointerProperty(name='Static Mesh', type=Object, update=on_static_mesh_update, poll=static_mesh_poll, options=empty_set)
+    static_mesh: PointerProperty(name='Static Mesh', type=Object, update=on_static_mesh_update, poll=static_mesh_poll,
+                                 options=empty_set)
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
-    is_linked_to_layer: BoolProperty(options={'HIDDEN'}, default=False, update=deco_layer_is_linked_to_layer_update, name='Linked To Layer', description='Use the alpha map of the selected terrain layer as the density map')
-    linked_layer_name: StringProperty(options={'HIDDEN'}, update=deco_layer_linked_layer_name_update, search=deco_layer_linked_layer_name_search, name='Linked Layer')
+    is_linked_to_layer: BoolProperty(options={'HIDDEN'}, default=False, update=deco_layer_is_linked_to_layer_update,
+                                     name='Linked To Layer',
+                                     description='Use the alpha map of the selected terrain layer as the density map')
+    linked_layer_name: StringProperty(options={'HIDDEN'}, update=deco_layer_linked_layer_name_update,
+                                      search=deco_layer_linked_layer_name_search, name='Linked Layer')
     linked_layer_id: StringProperty(options={'HIDDEN'})
 
     def get_density_color_attribute_id(self) -> str:
@@ -190,6 +220,7 @@ class BDK_PG_terrain_info(PropertyGroup):
 
 
 classes = (
+    BDK_PG_terrain_layer_node,
     BDK_PG_terrain_deco_layer,
     BDK_PG_terrain_layer,
     BDK_PG_terrain_info,

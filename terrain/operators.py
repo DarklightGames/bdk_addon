@@ -346,7 +346,10 @@ class BDK_OT_terrain_layers_show(Operator):
                 continue
             layer.is_visible = True
 
-        # TODO: The shader isn't reevaluated when the layer visibility is changed via Python.
+        # Tag the object to be updated and redraw all regions.
+        context.active_object.update_tag()
+        for region in context.area.regions:
+            region.tag_redraw()
 
         return {'FINISHED'}
 
@@ -374,7 +377,10 @@ class BDK_OT_terrain_layers_hide(Operator):
                 continue
             layer.is_visible = False
 
-        # TODO: The shader isn't reevaluated when the layer visibility is changed via Python.
+        # Tag the object to be updated and redraw all regions.
+        context.active_object.update_tag()
+        for region in context.area.regions:
+            region.tag_redraw()
 
         return {'FINISHED'}
 
@@ -388,5 +394,7 @@ classes = (
     BDK_OT_terrain_deco_layer_remove,
     BDK_OT_terrain_info_export,
     BDK_OT_terrain_deco_layers_hide,
-    BDK_OT_terrain_deco_layers_show
+    BDK_OT_terrain_deco_layers_show,
+    BDK_OT_terrain_layers_show,
+    BDK_OT_terrain_layers_hide,
 )

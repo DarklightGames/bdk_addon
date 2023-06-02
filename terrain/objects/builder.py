@@ -1,5 +1,4 @@
-from typing import cast
-
+import bmesh
 import bpy
 from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, Node
@@ -489,33 +488,67 @@ def create_paint_node_group(terrain_object: Object, paint_layer: 'BDK_PG_terrain
     return node_tree
 
 
-def creat_distance_to_mesh_node_group(terrain_object):
+def create_distance_to_mesh_node_group(terrain_object) -> NodeTree:
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
-    node_tree.inputs.new('NodeSocketVector', 'Location')
+    node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
+    node_tree.inputs.new('NodeSocketBool', 'Is 3D')
     node_tree.outputs.new('NodeSocketFloat', 'Distance')
 
     # Create input and output nodes.
     input_node = node_tree.nodes.new(type='NodeGroupInput')
     output_node = node_tree.nodes.new(type='NodeGroupOutput')
 
-    # Add a new Position and Separate XYZ node.
     position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+    # Add a new Position and Separate XYZ node.
     separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
 
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'FLOAT'
+    # Add geometry proximity node.
+    geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
+    geometry_proximity_node.target_element = 'FACES'
 
-    # Add a new boolean node.
-    boolean_node = node_tree.nodes.new(type='FunctionNode')
-    add_terrain_object_driver_to_node(boolean_node, 'boolean', terrain_object, 'is_3d')
+    # Add transform geometry node.
+    transform_geometry_node = node_tree.nodes.new(type='GeometryNodeTransform')
+    transform_geometry_node.inputs['Scale'].default_value = (1.0, 1.0, 0.0)
+
+    # Link the geometry node from the input node to the geometry input of the transform geometry node.
+    node_tree.links.new(input_node.outputs['Geometry'], transform_geometry_node.inputs['Geometry'])
+
+    # Link the geometry node from the transform geometry node to the geometry input of the geometry proximity node.
+    node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
+
+    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_node.input_type = 'VECTOR'
 
     # Link the output of the boolean node to the switch input of the switch node.
-    node_tree.links.new(boolean_node.outputs['Boolean'], switch_node.inputs['Switch'])
+    node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
+
+    # Link the distance output of the geometry proximity node to the distance input of the output node.
+    node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+
+    # Link the position output of the position node to the vector input of the separate XYZ node.
+    node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+
+    # Link the position output of the position node to the true input of the switch node.
+
+    # Add a combine XYZ node.
+    combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+    # Link the X and Y output of the separate XYZ node to the X and Y input of the combine XYZ node.
+    node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
+    node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
+
+    # Link the output of the combine XYZ node to the false input of the switch node.
+    node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs[8])
+    node_tree.links.new(position_node.outputs['Position'], switch_node.inputs[9])
+
+    # Link the vector output of the switch node to the source position input of the geometry proximity node.
+    node_tree.links.new(switch_node.outputs[3], geometry_proximity_node.inputs['Source Position'])
 
     return node_tree
 
 
-def create_distance_to_empty_node_group(terrain_object):
+def create_distance_to_empty_node_group(terrain_object) -> NodeTree:
     node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
     node_tree.inputs.new('NodeSocketVector', 'Location')
     node_tree.outputs.new('NodeSocketFloat', 'Distance')
@@ -607,6 +640,16 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         distance_socket = distance_to_curve_node.outputs['Distance']
 
     elif terrain_object.object_type == 'MESH':
+        distance_to_mesh_node_group = create_distance_to_mesh_node_group(terrain_object)
+
+        # Add a new node group node.
+        distance_to_mesh_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        distance_to_mesh_node.node_tree = distance_to_mesh_node_group
+        distance_to_mesh_node.label = 'Distance to Mesh'
+
+        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_mesh_node.inputs['Geometry'])
+
+        distance_socket = distance_to_mesh_node.outputs['Distance']
         pass
     elif terrain_object.object_type == 'EMPTY':
         distance_to_empty_node_group = create_distance_to_empty_node_group(terrain_object)
@@ -660,7 +703,11 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
         paint_node.node_tree = paint_node_group
         paint_node.label = 'Paint'
-        paint_node.inputs['Attribute'].default_value = paint_layer.terrain_layer_id
+
+        if paint_layer.layer_type == 'TERRAIN':
+            paint_node.inputs['Attribute'].default_value = paint_layer.terrain_layer_id
+        elif paint_layer.layer_type == 'DECO':
+            paint_node.inputs['Attribute'].default_value = paint_layer.deco_layer_id
 
         add_paint_layer_driver_to_node(paint_node, 'mute', paint_layer, 'mute')
         add_paint_layer_driver_to_node_socket(paint_node.inputs['Radius'], paint_layer, 'radius')
@@ -724,7 +771,11 @@ def create_terrain_object(context: Context,
         object_data = None
     elif object_type == 'MESH':
         object_data = bpy.data.meshes.new(name=terrain_object_name)
-        # TODO: Add a default mesh (just a square plane for now).
+        # Create a plane using bmesh.
+        bm = bmesh.new()
+        bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=meters_to_unreal(1.0))
+        bm.to_mesh(object_data)
+        del bm
 
     bpy_object = bpy.data.objects.new(name=terrain_object_name, object_data=object_data)
 
@@ -733,6 +784,18 @@ def create_terrain_object(context: Context,
         bpy_object.empty_display_size = meters_to_unreal(1.0)
         # Set the delta transform to the terrain info object's rotation.
         bpy_object.delta_rotation_euler = (0, 0, 0)
+    elif object_type == 'MESH':
+        bpy_object.display_type = 'WIRE'
+
+    # Hide from rendering and Cycles passes.
+    bpy_object.hide_render = True
+    # Disable all ray visibility settings (this stops it from being visible in Cycles rendering in the viewport).
+    bpy_object.visible_camera = False
+    bpy_object.visible_diffuse = False
+    bpy_object.visible_glossy = False
+    bpy_object.visible_transmission = False
+    bpy_object.visible_volume_scatter = False
+    bpy_object.visible_shadow = False
 
     bpy_object.bdk.type = 'TERRAIN_OBJECT'
     bpy_object.bdk.terrain_object.id = terrain_object_name

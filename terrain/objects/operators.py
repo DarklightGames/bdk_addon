@@ -1,5 +1,7 @@
+import uuid
+
 import bpy
-from bpy.types import Operator, Context, Collection
+from bpy.types import Operator, Context, Collection, Event
 from bpy.props import EnumProperty
 
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group
@@ -34,7 +36,10 @@ class BDK_OT_terrain_object_add(Operator):
 
         """
         BUG: If the terrain object has been added as rigid body, the collection will be the
-        RigidBodyWorld collection, which isn't actually a collection that shows up in the outliner or the view layer.
+        RigidBodyWorld collection, which isn't actually a collection that shows up in the outliner or the view layer,
+        and makes the function fail.
+        
+        How can we get the *actual* collection that the terrain object is in (the one that shows up in the outliner)?
         """
 
         # Link and parent the terrain object to the terrain info.
@@ -54,15 +59,11 @@ class BDK_OT_terrain_object_add(Operator):
 
 
 def update_terrain_object_indices(terrain_object):
-    print('Updating terrain object indices')
-
     # Sculpt Components
     for i, sculpt_layer in enumerate(terrain_object.sculpt_layers):
         sculpt_layer.index = i
-        print(f'Sculpt component {sculpt_layer.name} index: {sculpt_layer.index}')
     # Paint Components
     for i, paint_layer in enumerate(terrain_object.paint_layers):
-        print(f'Paint component {paint_layer.terrain_layer_name} index: {paint_layer.index}')
         paint_layer.index = i
 
 
@@ -154,12 +155,64 @@ class BDK_OT_terrain_object_sculpt_layer_move(Operator):
         return {'FINISHED'}
 
 
+# TODO: Make this a macro operator that duplicates and then moves mode (same behavior as native duplicate).
+
+class BDK_OT_terrain_object_duplicate(Operator):
+    bl_idname = 'bdk.terrain_object_duplicate'
+    bl_label = 'Duplicate Terrain Object'
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Duplicate the terrain object'
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.active_object is not None and context.active_object.bdk.type == 'TERRAIN_OBJECT'
+
+    def execute(self, context: Context):
+        new_id = uuid.uuid4().hex
+        terrain_object_object = context.active_object
+        object_copy = terrain_object_object.copy()
+        object_copy.name = new_id
+        if terrain_object_object.data:
+            data_copy = terrain_object_object.data.copy()
+            data_copy.name = new_id
+            object_copy.data = data_copy
+        collection = terrain_object_object.users_collection[0]  # TODO: issue with RigidBody collection
+        collection.objects.link(object_copy)
+
+        copy_simple_property_group(terrain_object_object.bdk.terrain_object, object_copy.bdk.terrain_object)
+
+        # Make a new node group for the new object.
+        node_group = bpy.data.node_groups.new(name=new_id, type='GeometryNodeTree')
+
+        terrain_object = object_copy.bdk.terrain_object
+        terrain_object.id = new_id
+        terrain_object.object = object_copy
+        terrain_object.node_tree = node_group
+
+        # Build the geometry node tree.
+        update_terrain_object_geometry_node_group(terrain_object)
+
+        # Add a new modifier to the terrain info object.
+        terrain_info_object = terrain_object.terrain_info_object
+        modifier = terrain_info_object.modifiers.new(name=new_id, type='NODES')
+        modifier.node_group = node_group
+
+        # Deselect the active object.
+        terrain_object_object.select_set(False)
+
+        # Set the new object as the active object.
+        context.view_layer.objects.active = object_copy
+
+        return {'FINISHED'}
+
+
 class BDK_OT_terrain_object_bake(Operator):
     bl_label = 'Bake Terrain Object'
     bl_idname = 'bdk.terrain_object_bake'
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Bake the terrain object to the terrain'
 
-    def invoke(self, context: 'Context', event: 'Event'):
+    def invoke(self, context: Context, event: Event):
         return context.window_manager.invoke_props_dialog(self)
 
     @classmethod
@@ -305,22 +358,60 @@ class BDK_OT_terrain_object_sculpt_layer_duplicate(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_object_duplicate(Operator):
-    bl_label = 'Duplicate Terrain Object'
-    bl_idname = 'bdk.terrain_object_duplicate'
+class BDK_OT_terrain_object_delete(Operator):
+    bl_idname = 'bdk.terrain_object_delete'
+    bl_label = 'Delete Terrain Object'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_OBJECT'
+        return context.active_object and context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
+        terrain_object_object = context.active_object
+        terrain_object = terrain_object_object.bdk.terrain_object
+
+        # Delete the modifier from the terrain info object.
+        terrain_info_object = terrain_object.terrain_info_object
+        terrain_info_object.modifiers.remove(terrain_info_object.modifiers[terrain_object.id])
+
+        # Delete the node group.
+        bpy.data.node_groups.remove(terrain_object.node_tree)
+
+        # Delete the terrain object.
+        bpy.data.objects.remove(terrain_object_object)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_convert_to_terrain_object(Operator):
+    bl_idname = 'bdk.convert_to_terrain_object'
+    bl_label = 'Convert to Terrain Object'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        # Check if object is already a terrain object
+        if context.active_object.bdk.type == 'TERRAIN_OBJECT':
+            cls.poll_message_set('Object is already a terrain object')
+            return False
+        # Check if object is a mesh, curve or empty.
+        if context.active_object.type not in ('MESH', 'CURVE', 'EMPTY'):
+            cls.poll_message_set('Active object must be a mesh, curve or empty.')
+            return False
+        return context.active_object and context.active_object.type in ('MESH', 'CURVE', 'EMPTY')
+
+    def execute(self, context: Context):
+        # TODO: convert to terrain object (refactor from terrain object add)
         return {'FINISHED'}
 
 
 classes = (
+    BDK_OT_convert_to_terrain_object,
     BDK_OT_terrain_object_add,
     BDK_OT_terrain_object_bake,
+    BDK_OT_terrain_object_delete,
+    BDK_OT_terrain_object_duplicate,
     BDK_OT_terrain_object_sculpt_layer_add,
     BDK_OT_terrain_object_sculpt_layer_remove,
     BDK_OT_terrain_object_sculpt_layer_move,

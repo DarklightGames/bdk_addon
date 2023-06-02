@@ -1,102 +1,70 @@
 import io
 import os
-from collections import OrderedDict
-from types import NoneType
 
 import bmesh
 import bpy
 import numpy as np
-from bpy.types import Object, Mesh, Image
-from typing import cast, Any, List
+from bpy.types import Object, Mesh, Image, Depsgraph
+from typing import cast, Optional
 
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
+from ..t3d.data import T3DActor, T3DMap
+from ..t3d.writer import T3DWriter
 from ..helpers import get_terrain_info
 from .g16 import write_bmp_g16
 
 
-class Actor(OrderedDict):
-    def __init__(self, class_: str, name: str):
-        super().__init__()
-        self['Class'] = class_
-        self['Name'] = name
+def get_instance_offset(asset_instance: Object) -> Matrix:
+    try:
+        local_offset: Vector = asset_instance.instance_collection.instance_offset
+        return Matrix().Translation(local_offset).inverted()
+    except AttributeError:
+        return Matrix()
 
 
-class T3D:
-    def __init__(self):
-        self.actors = []
+# TODO: kind of ugly
+def add_movement_properties_to_actor(actor: T3DActor, bpy_object: Object, asset_instance: Optional[Object] = None) -> None:
+    if asset_instance:
+        matrix_world: Matrix = asset_instance.matrix_world @ get_instance_offset(asset_instance) @ bpy_object.matrix_local
+    else:
+        matrix_world = bpy_object.matrix_world
+
+    # Location is corrected by 32 units as it gets offset when actor
+    # is pasted into the Unreal Editor.
+    loc: Vector = matrix_world.to_translation() - Vector((32.0, -32.0, 32.0))
+    # Y-Axis is inverted in UE.
+    loc.y = -loc.y
+
+    actor['Location'] = loc
+    actor['Rotation'] = matrix_world.to_euler('XYZ')
+    actor['DrawScale3D'] = matrix_world.to_scale()
 
 
-class T3DWriter:
-    def __init__(self, fp: io.TextIOBase):
-        self._indent_count = 0
-        self._indent_str = ' ' * 4
-        self._fp = fp
+def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optional[Object] = None) -> T3DActor:
+    actor = T3DActor(class_='StaticMeshActor', name=static_mesh_object.name)
 
-    def _indent(self):
-        self._indent_count += 1
-        return self
+    actor['StaticMesh'] = static_mesh_object.data.name
+    add_movement_properties_to_actor(actor, static_mesh_object, asset_instance)
 
-    def _dedent(self):
-        self._indent_count = max(self._indent_count - 1, 0)
-        return self
+    # Skin Overrides
+    for material_index, material_slot in enumerate(static_mesh_object.material_slots):
+        if material_slot.link == 'OBJECT' and material_slot.material is not None and 'bdk.reference' in material_slot.material:
+            actor[f'Skins({material_index})'] = material_slot.material['bdk.reference']
 
-    def _write_line(self, line: str):
-        self._fp.write(f'{self._indent_str * self._indent_count}{line}\n')
-
-    def _write_key_value(self, key: str, value: Any):
-        self._write_line(f'{key}={self._value_to_string(value)}')
-
-    def _value_to_string(self, value) -> str:
-        if type(value) in {float}:
-            return f'{value:0.6f}'
-        if type(value) in {int, float, bool, str, NoneType}:
-            return str(value)
-        elif type(value) in {dict, OrderedDict}:
-            return '(' + ','.join(map(lambda item: f'{item[0]}={self._value_to_string(item[1])}', value.items())) + ')'
-        elif type(value) == Vector:
-            return f'(X={value[0]},Y={value[1]},Z={value[2]})'
-        elif type(value) == list:
-            raise ValueError('Lists cannot be written inline...probably?')
-        else:
-            raise ValueError(f'Unhandled data type: {type(value)}')
-
-    def _write_list(self, key: str, value_list: List):
-        for index, value in enumerate(value_list):
-            self._write_line(f'{key}({index})={self._value_to_string(value)}')
-
-    def write(self, t3d: T3D):
-        self._write_line('Begin Map')
-        for actor in t3d.actors:
-            self._write_actor(actor)
-        self._write_line('End Map')
-
-    def _write_actor(self, actor: Actor):
-        self._write_line(f'Begin Actor Class={actor["Class"]} Name={actor["Name"]}')
-        self._indent()
-
-        for key, value in filter(lambda item: item[0] not in {'Class', 'Name'}, actor.items()):
-            if type(value) == list:
-                self._write_list(key, value)
-            else:
-                self._write_key_value(key, value)
-
-        self._dedent()
-        self._write_line('End Actor')
+    return actor
 
 
-def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: float) -> Actor:
+def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: float) -> T3DActor:
     terrain_info = get_terrain_info(terrain_info_object)
 
-    actor = Actor(class_='TerrainInfo', name='TerrainInfo0')
+    actor = T3DActor(class_='TerrainInfo', name='TerrainInfo0')
 
     # Layers.
     layers = []
     for terrain_layer in terrain_info.terrain_layers:
         name = terrain_layer.color_attribute_name
-
         texture = terrain_layer.material.get('bdk.reference', None) if terrain_layer.material else None
-
         layers.append({
             'Texture': texture,
             'AlphaMap': f'Texture\'myLevel.Terrain.{name}\'',  # TODO: make "reference" class, handle strings differently in writer
@@ -207,40 +175,42 @@ def sanitize_name(name: str) -> str:
     return name.replace(' ', '_')
 
 
-def export_deco_layers(terrain_info_object: Object, directory: str):
+def export_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
         raise RuntimeError('Invalid object')
 
     for deco_layer in terrain_info.deco_layers:
-        image = create_image_from_color_attribute(terrain_info_object, deco_layer.id)
+        image = create_image_from_color_attribute(terrain_info_object, depsgraph, deco_layer.id)
         # Write the image out to a file.
         image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
         # Now remove the image data block.
         bpy.data.images.remove(image)
 
 
-def export_terrain_layers(terrain_info_object: Object, directory: str):
+def export_terrain_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
         raise RuntimeError('Invalid object')
 
     for terrain_layer in terrain_info.terrain_layers:
-        image = create_image_from_color_attribute(terrain_info_object, terrain_layer.color_attribute_name)
+        image = create_image_from_color_attribute(terrain_info_object, depsgraph, terrain_layer.color_attribute_name)
         # Write the image out to a file.
         image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
         # Now remove the image data block.
         bpy.data.images.remove(image)
 
 
-def create_image_from_color_attribute(terrain_info_object: Object, color_attribute_name: str) -> Image:
+def create_image_from_color_attribute(terrain_info_object: Object, depsgraph: Depsgraph, color_attribute_name: str) -> Image:
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
         raise RuntimeError('Invalid object')
 
+    # Get evaluated mesh data.
+    terrain_info_object = terrain_info_object.evaluated_get(depsgraph)
     mesh_data = cast(Mesh, terrain_info_object.data)
 
     attribute = mesh_data.color_attributes[color_attribute_name]
@@ -250,7 +220,17 @@ def create_image_from_color_attribute(terrain_info_object: Object, color_attribu
     image.file_format = 'TARGA'
 
     rgb_colors = np.ndarray(shape=(pixel_count, 3), dtype=float)
+
     rgb_colors[:] = [datum.color[:3] for datum in attribute.data]
+
+    # Reshape this to a 2D array based on the terrain size.
+    rgb_colors = rgb_colors.reshape((terrain_info.y_size, terrain_info.x_size, 3))
+
+    # Flip along the first axis and then the second axis.
+    rgb_colors = np.flip(rgb_colors, axis=0)
+
+    # Now set the shape back to a 1D array.
+    rgb_colors = rgb_colors.reshape((pixel_count, 3))
 
     # Fill the data in with a middle-grey RGB layer and a 100% alpha.
     data = np.ndarray(shape=(pixel_count, 4), dtype=float)
@@ -271,11 +251,12 @@ def create_image_from_color_attribute(terrain_info_object: Object, color_attribu
     return image
 
 
-def get_terrain_heightmap(terrain_info_object: Object) -> (np.ndarray, float):
+def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph) -> (np.ndarray, float):
     terrain_info = get_terrain_info(terrain_info_object)
     if terrain_info is None:
         raise RuntimeError('Invalid object')
 
+    terrain_info_object = terrain_info_object.evaluated_get(depsgraph)
     mesh_data = cast(Mesh, terrain_info_object.data)
 
     # TODO: support "multiple terrains"
@@ -285,15 +266,15 @@ def get_terrain_heightmap(terrain_info_object: Object) -> (np.ndarray, float):
     return heightmap.reshape(shape), terrain_scale_z
 
 
-def export_terrain_heightmap(terrain_info_object: Object, directory: str):
-    heightmap, _ = get_terrain_heightmap(terrain_info_object)
+def export_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
+    heightmap, _ = get_terrain_heightmap(terrain_info_object, depsgraph)
     path = os.path.join(directory, f'{terrain_info_object.name}.bmp')
     write_bmp_g16(path, pixels=heightmap)
 
 
-def write_terrain_t3d(terrain_info_object: Object, fp: io.TextIOBase):
-    heightmap, terrain_scale_z = get_terrain_heightmap(terrain_info_object)
-    t3d = T3D()
+def write_terrain_t3d(terrain_info_object: Object, depsgraph: Depsgraph, fp: io.TextIOBase):
+    heightmap, terrain_scale_z = get_terrain_heightmap(terrain_info_object, depsgraph)
+    t3d = T3DMap()
     t3d.actors.append(create_terrain_info_actor(terrain_info_object, terrain_scale_z))
     T3DWriter(fp).write(t3d)
 

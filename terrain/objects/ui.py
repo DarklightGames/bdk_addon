@@ -1,6 +1,5 @@
 from typing import cast
 
-from bpy.props import BoolProperty
 from bpy.types import Panel, Context, UIList
 
 from ...helpers import should_show_bdk_developer_extras
@@ -8,7 +7,7 @@ from .operators import BDK_OT_terrain_object_sculpt_layer_add, \
     BDK_OT_terrain_object_sculpt_layer_remove, BDK_OT_terrain_object_sculpt_layer_move, \
     BDK_OT_terrain_object_paint_layer_add, BDK_OT_terrain_object_paint_layer_remove, \
     BDK_OT_terrain_object_paint_layer_duplicate, BDK_OT_terrain_object_sculpt_layer_duplicate, \
-    BDK_OT_terrain_object_bake
+    BDK_OT_terrain_object_bake, BDK_OT_terrain_object_duplicate, BDK_OT_terrain_object_delete
 from .properties import BDK_PG_terrain_object
 
 
@@ -22,7 +21,10 @@ class BDK_UL_terrain_object_sculpt_layers(UIList):
 class BDK_UL_terrain_object_paint_layers(UIList):
 
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
-        layout.label(text=item.terrain_layer_name if item.terrain_layer_name else '<no layer selected>', icon='VPAINT_HLT')
+        if item.layer_type == 'TERRAIN':
+            layout.label(text=item.terrain_layer_name if item.terrain_layer_name else '<no layer selected>', icon='VPAINT_HLT')
+        elif item.layer_type == 'DECO':
+            layout.label(text=item.deco_layer_name if item.deco_layer_name else '<no layer selected>', icon='MONKEY')
         layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
 
@@ -66,7 +68,15 @@ class BDK_PT_terrain_object_paint_layers(Panel):
         if paint_layer:
             flow = layout.grid_flow()
 
-            flow.prop(paint_layer, 'terrain_layer_name')
+            row = flow.row()
+            row.prop(paint_layer, 'layer_type', expand=True)
+
+            if paint_layer.layer_type == 'TERRAIN':
+                flow.prop(paint_layer, 'terrain_layer_name')
+            elif paint_layer.layer_type == 'DECO':
+                flow.prop(paint_layer, 'deco_layer_name')
+
+            flow.separator()
 
             flow.prop(paint_layer, 'operation')
             flow.prop(paint_layer, 'interpolation_type')
@@ -95,10 +105,11 @@ class BDK_PT_terrain_object_bake(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_object'
-    bl_order = 2
+    bl_order = 4
 
     def draw(self, context: 'Context'):
         self.layout.operator(BDK_OT_terrain_object_bake.bl_idname)
+        self.layout.operator(BDK_OT_terrain_object_duplicate.bl_idname)
 
 
 class BDK_PT_terrain_object_debug(Panel):
@@ -108,7 +119,7 @@ class BDK_PT_terrain_object_debug(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_object'
-    bl_order = 3
+    bl_order = 100
 
     @classmethod
     def poll(cls, context: Context):
@@ -123,8 +134,23 @@ class BDK_PT_terrain_object_debug(Panel):
         self.layout.prop(terrain_object, 'terrain_info_object')
 
 
-class BDK_PT_terrain_object_sculpt_players(Panel):
-    bl_idname = 'BDK_PT_terrain_object_sculpt_players'
+class BDK_PT_terrain_object_advanced(Panel):
+    bl_idname = 'BDK_PT_terrain_object_advanced'
+    bl_label = 'Advanced'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_object'
+    bl_order = 3
+
+    def draw(self, context: 'Context'):
+        terrain_object: 'BDK_PG_terrain_object' = context.active_object.bdk.terrain_object
+        flow = self.layout.grid_flow(align=True)
+        flow.prop(terrain_object, 'sort_order')
+
+
+class BDK_PT_terrain_object_sculpt_layers(Panel):
+    bl_idname = 'BDK_PT_terrain_object_sculpt_layers'
     bl_label = 'Sculpt Layers'
     bl_category = 'BDK'
     bl_space_type = 'VIEW_3D'
@@ -149,11 +175,11 @@ class BDK_PT_terrain_object_sculpt_players(Panel):
         col.operator(BDK_OT_terrain_object_sculpt_layer_add.bl_idname, icon='ADD', text='')
         col.operator(BDK_OT_terrain_object_sculpt_layer_remove.bl_idname, icon='REMOVE', text='')
         col.separator()
-        operator = col.operator(BDK_OT_terrain_object_sculpt_layer_move.bl_idname, icon='TRIA_UP', text='')
-        operator.direction = 'UP'
-        operator = col.operator(BDK_OT_terrain_object_sculpt_layer_move.bl_idname, icon='TRIA_DOWN', text='')
-        operator.direction = 'DOWN'
-        col.separator()
+        # operator = col.operator(BDK_OT_terrain_object_sculpt_layer_move.bl_idname, icon='TRIA_UP', text='')
+        # operator.direction = 'UP'
+        # operator = col.operator(BDK_OT_terrain_object_sculpt_layer_move.bl_idname, icon='TRIA_DOWN', text='')
+        # operator.direction = 'DOWN'
+        # col.separator()
         col.operator(BDK_OT_terrain_object_sculpt_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
         sculpt_layer = terrain_object.sculpt_layers[terrain_object.sculpt_layers_index]
@@ -172,13 +198,17 @@ class BDK_PT_terrain_object_sculpt_players(Panel):
 
             flow.prop(sculpt_layer, 'use_noise')
 
-            col = flow.column(align=True)
-
             if sculpt_layer.use_noise:
-                col.prop(sculpt_layer, 'noise_radius_factor')
-                col.prop(sculpt_layer, 'noise_distortion')
-                col.prop(sculpt_layer, 'noise_strength')
-                col.prop(sculpt_layer, 'noise_roughness')
+                flow.prop(sculpt_layer, 'noise_type')
+
+                col = flow.column(align=True)
+
+                if sculpt_layer.use_noise:
+                    col.prop(sculpt_layer, 'noise_radius_factor')
+                    if sculpt_layer.noise_type == 'PERLIN':
+                        col.prop(sculpt_layer, 'noise_distortion')
+                        col.prop(sculpt_layer, 'noise_roughness')
+                        col.prop(sculpt_layer, 'noise_strength')
 
 
 class BDK_PT_terrain_object(Panel):
@@ -193,15 +223,16 @@ class BDK_PT_terrain_object(Panel):
         return context.active_object and context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def draw(self, context: 'Context'):
-        pass
+        self.layout.operator(BDK_OT_terrain_object_delete.bl_idname, icon='X')
 
 
 classes = (
     BDK_PT_terrain_object,
     BDK_UL_terrain_object_sculpt_layers,
     BDK_UL_terrain_object_paint_layers,
-    BDK_PT_terrain_object_sculpt_players,
+    BDK_PT_terrain_object_sculpt_layers,
     BDK_PT_terrain_object_paint_layers,
+    BDK_PT_terrain_object_advanced,
     BDK_PT_terrain_object_bake,
     BDK_PT_terrain_object_debug,
 )
