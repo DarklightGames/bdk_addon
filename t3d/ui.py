@@ -6,7 +6,7 @@ class BDK_PT_clipboard(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'BDK'
-    bl_label = 'Clipboard'
+    bl_label = 'T3D Clipboard'
 
     def draw(self, context):
         layout = self.layout

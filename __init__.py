@@ -45,11 +45,11 @@ if 'bpy' in locals():
     importlib.reload(terrain_object_ui)
 
     if bdk_helpers.are_bdk_dependencies_installed():
-        importlib.reload(bdk_panel) # TODO: remove this or rename it to a T3DMap panel
         importlib.reload(t3d_data)
         importlib.reload(t3d_operators)
         importlib.reload(t3d_importer)
         importlib.reload(t3d_writer)
+        importlib.reload(t3d_ui)
 
     importlib.reload(asset_browser_operators)
     importlib.reload(bdk_properties)
@@ -64,25 +64,38 @@ else:
     # Material
     from .material import importer as material_importer
     from .material import operators as material_operators
+    from .material import data as material_data
+    from .material import reader as material_reader
 
     # Projector
+    from .projector import builder as projector_builder
     from .projector import operators as projector_operators
 
     # Fluid Surface
+    from .fluid_surface import builder as fluid_surface_builder
     from .fluid_surface import operators as fluid_surface_operators
 
     # Terrain
+    from .terrain import builder as terrain_builder
+    from .terrain import exporter as terrain_exporter
+    from .terrain import layers as terrain_layers
+    from .terrain import deco as terrain_deco
+    from .terrain import g16 as terrain_g16
     from .terrain import properties as terrain_properties
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
 
+    from .terrain.objects import builder as terrain_object_builder
     from .terrain.objects import operators as terrain_object_operators
     from .terrain.objects import properties as terrain_object_properties
     from .terrain.objects import ui as terrain_object_ui
 
     # T3DMap
     if bdk_helpers.are_bdk_dependencies_installed():
-        from .panel import panel as bdk_panel
+        from .t3d import data as t3d_data
+        from .t3d import importer as t3d_importer
+        from .t3d import writer as t3d_writer
+        from .t3d import ui as t3d_ui
         from .t3d import operators as t3d_operators
 
     from .asset_browser import operators as asset_browser_operators
@@ -107,8 +120,7 @@ classes = material_importer.classes + \
           bdk_ui.classes
 
 if bdk_helpers.are_bdk_dependencies_installed():
-    classes += bdk_panel.classes + \
-        t3d_operators.classes
+    classes += t3d_ui.classes + t3d_operators.classes
 
 classes += bdk_properties.classes
 
