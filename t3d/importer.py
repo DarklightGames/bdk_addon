@@ -383,6 +383,7 @@ class SpectatorCamImporter(ActorImporter):
     @classmethod
     def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
         # Correct the rotation here since the blender cameras point down -Z with +X up by default.
+        # TODO: use transform matrix
         bpy_object.rotation_euler.z -= math.pi / 2
         bpy_object.rotation_euler.x += math.pi / 2
 

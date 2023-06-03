@@ -1,9 +1,9 @@
 from bpy.types import Menu
 
-from .terrain import operators as terrain_operators
-from .terrain.objects import operators as terrain_object_operators
-from .projector import operators as projector_operators
-from .fluid_surface import operators as fluid_surface_operators
+from ..terrain import operators as terrain_operators
+from ..terrain.objects import operators as terrain_object_operators
+from ..projector import operators as projector_operators
+from ..fluid_surface import operators as fluid_surface_operators
 
 
 class BDK_MT_object_add_menu(Menu):

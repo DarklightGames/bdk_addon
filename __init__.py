@@ -1,6 +1,4 @@
-from bpy.app.handlers import persistent
 from bpy.props import PointerProperty
-from bpy.types import Menu
 
 bl_info = {
     "name": "Blender Development Kit (BDK)",
@@ -17,7 +15,6 @@ bl_info = {
 if 'bpy' in locals():
     import importlib
 
-    importlib.reload(bdk_data)
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
@@ -58,38 +55,27 @@ if 'bpy' in locals():
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
 else:
-    from . import data as bdk_data
     from . import helpers as bdk_helpers
-    from . import preferences as bdk_preferences
-    from . import properties as bdk_properties
-    from . import operators as bdk_operators
-    from . import ui as bdk_ui
+    from .bdk import operators as bdk_operators
+    from .bdk import properties as bdk_properties
+    from .bdk import ui as bdk_ui
+    from .bdk import preferences as bdk_preferences
 
     # Material
-    from .material import data as material_data
-    from .material import reader as material_reader
     from .material import importer as material_importer
     from .material import operators as material_operators
 
     # Projector
     from .projector import operators as projector_operators
-    from .projector import builder as projector_builder
 
     # Fluid Surface
     from .fluid_surface import operators as fluid_surface_operators
-    from .fluid_surface import builder as fluid_surface_builder
 
     # Terrain
-    from .terrain import layers as terrain_layers
     from .terrain import properties as terrain_properties
-    from .terrain import builder as terrain_builder
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
-    from .terrain import exporter as terrain_exporter
-    from .terrain import g16 as terrain_g16
-    from .terrain import deco as terrain_deco
 
-    from .terrain.objects import builder as terrain_object_builder
     from .terrain.objects import operators as terrain_object_operators
     from .terrain.objects import properties as terrain_object_properties
     from .terrain.objects import ui as terrain_object_ui
@@ -97,10 +83,7 @@ else:
     # T3DMap
     if bdk_helpers.are_bdk_dependencies_installed():
         from .panel import panel as bdk_panel
-        from .t3d import data as t3d_data
         from .t3d import operators as t3d_operators
-        from .t3d import importer as t3d_importer
-        from .t3d import writer as t3d_writer
 
     from .asset_browser import operators as asset_browser_operators
 
