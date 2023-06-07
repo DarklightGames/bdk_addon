@@ -1,8 +1,23 @@
 # bdk_addon
-Blender addon for importing Unreal Engine 1 & 2 materials as Blender materials.
 
-This is accomplished by reading material property files from UEViewer and programmatically generating materials based on the settings.
+![bdk-logo-02](https://github.com/DarklightGames/bdk_addon/assets/5035660/c7d1d277-2c85-4e6f-8e9b-2afb0a658235)
 
-This addon is a part of the BDK (Blender Development Kit) project.
+The Blender addon for the BDK (Blender Development Kit) project.
+
+The BDK allows users to use a custom build of Blender as a game level authoring tool for games derived from the Unreal 2 engine.
+
+This project is currently in active development towards a first beta release. If you want to partake in the beta, contact `colin.basnett` on Discord.
+
+# Features
+* Powerful procedural terrain sculpting and painting functionality.
+* Unreal Materials recreated with Blender's material node system.
+* All game/mod assets exported to easy-to-use asset libraries, allowing for drag & drop placement of statics meshes.
+* Copy & paste Unreal objects (static meshes, terrain etc.) between the Blender (BDK) and the Unreal 2 SDK.
+* Even more to come!
+
+# Related Projects
+* [bdk-blender](https://projects.blender.org/cmbasnett/bdk-blender) - Custom fork of Blender that adds native functionality necessary for the functioning of the BDK.
+* [UEViewer](https://github.com/DarklightGames/UEViewer) - Custom fork of UEViewer that exports more data
+* [io_scene_psk_psa](https://github.com/DarklightGames/io_scene_psk_psa) - Blender addon used for importing PSKs into Blender
 
 More information will be forthcoming as development continues.
