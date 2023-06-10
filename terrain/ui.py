@@ -211,8 +211,9 @@ class BDK_PT_terrain_deco_layer_nodes(Panel):
         return has_deco_layer_selected(context)
 
     def draw(self, context: 'Context'):
+        layout = self.layout
         deco_layer = get_selected_deco_layer(context)
-        row = self.layout.row()
+        row = layout.row()
         row.column().template_list(
             'BDK_UL_terrain_deco_layer_nodes', '',
             deco_layer, 'nodes',
@@ -227,12 +228,21 @@ class BDK_PT_terrain_deco_layer_nodes(Panel):
 
         selected_deco_layer_node = get_selected_deco_layer_node(context)
         if selected_deco_layer_node:
-            self.layout.separator()
+            layout.separator()
             if selected_deco_layer_node.type == 'TERRAIN_LAYER':
-                self.layout.prop(selected_deco_layer_node, 'layer_name')
-                self.layout.prop(selected_deco_layer_node, 'blur')
-                if selected_deco_layer_node.blur:
-                    self.layout.prop(selected_deco_layer_node, 'blur_iterations')
+                layout.prop(selected_deco_layer_node, 'layer_name')
+            elif selected_deco_layer_node.type == 'NORMAL':
+                flow = layout.grid_flow(align=True, columns=2)
+                flow.use_property_split = True
+
+                col = flow.column(align=True)
+
+                col.prop(selected_deco_layer_node, 'normal_angle_min')
+                col.prop(selected_deco_layer_node, 'normal_angle_max', text='Max')
+                # The blur node is *extremely* expensive, so we don't want to show it for now.
+                # self.layout.prop(selected_deco_layer_node, 'blur')
+                # if selected_deco_layer_node.blur:
+                #     self.layout.prop(selected_deco_layer_node, 'blur_iterations')
 
 
 class BDK_PT_terrain_deco_layer_debug(Panel):
@@ -350,13 +360,11 @@ class BDK_PT_terrain_deco_layers(Panel):
 
     def draw(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        deco_layers = terrain_info.deco_layers
-        deco_layers_index = terrain_info.deco_layers_index
 
         row = self.layout.row()
         row.template_list('BDK_UL_terrain_deco_layers', '',
                           terrain_info, 'deco_layers',
-                          terrain_info, 'deco_layers_index', sort_lock=True)
+                          terrain_info, 'deco_layers_index', rows=3, sort_lock=True)
 
         col = row.column(align=True)
         col.operator(BDK_OT_terrain_deco_layer_add.bl_idname, icon='ADD', text='')
@@ -419,8 +427,15 @@ class BDK_UL_terrain_deco_layer_nodes(UIList):
             col.prop(item, 'name', text='', emboss=False, icon=terrain_layer_node_type_icons[item.type])
 
         row = row.row(align=True)
-        row.prop(item, 'operation', text='', emboss=False)
-        row.prop(item, 'factor', text='', emboss=False)
+
+        if item.type not in ('MAP_RANGE',):  # add a function to get the meta-type of the node
+            row.prop(item, 'operation', text='', emboss=False)
+            row.prop(item, 'factor', text='', emboss=False)
+
+        if item.type == 'MAP_RANGE':
+            row.prop(item, 'map_range_from_min', text='')
+            row.prop(item, 'map_range_from_max', text='')
+
         row.prop(item, 'mute', text='', emboss=False, icon='HIDE_OFF' if not item.mute else 'HIDE_ON')
 
 

@@ -1,3 +1,4 @@
+import math
 from typing import cast, List
 
 import bpy.ops
@@ -42,6 +43,7 @@ terrain_layer_node_type_icons = {
     'TERRAIN_LAYER': 'MATERIAL',
     'CONSTANT': 'IMAGE_ALPHA',
     'NORMAL': 'DRIVER_ROTATIONAL_DIFFERENCE',
+    'MAP_RANGE': 'FCURVE',
 }
 
 terrain_layer_node_type_items = (
@@ -50,7 +52,8 @@ terrain_layer_node_type_items = (
     ('NOISE', 'Noise', 'Noise', terrain_layer_node_type_icons['NOISE'], 2),
     ('TERRAIN_LAYER', 'Terrain Layer', 'Terrain Layer', terrain_layer_node_type_icons['TERRAIN_LAYER'], 3),
     ('CONSTANT', 'Constant', 'Constant', terrain_layer_node_type_icons['CONSTANT'], 4),
-    ('NORMAL', 'Normal', 'Value will be ', terrain_layer_node_type_icons['NORMAL'], 5),
+    ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector', terrain_layer_node_type_icons['NORMAL'], 5),
+    ('MAP_RANGE', 'Map Range', 'Values will be mapped to the specified range window', terrain_layer_node_type_icons['MAP_RANGE'], 6),
 )
 
 
@@ -60,7 +63,12 @@ def terrain_layer_node_terrain_layer_name_search_cb(self: 'BDK_PG_terrain_layer_
 
 
 def terrain_layer_node_terrain_layer_name_update_cb(self: 'BDK_PG_terrain_layer_node', context: Context):
-    self.layer_id = self.terrain_info_object.bdk.terrain_info.terrain_layers[self.layer_name].id
+    terrain_layers = self.terrain_info_object.bdk.terrain_info.terrain_layers
+    if self.layer_name in terrain_layers:
+        self.layer_id = terrain_layers[self.layer_name].id
+    else:
+        self.layer_id = ''
+
     # Rebuild the deco node setup.
     build_deco_layers(self.terrain_info_object)
 
@@ -74,12 +82,12 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
         ('ADD', 'Add', 'Add'),
         ('SUBTRACT', 'Subtract', 'Subtract'),
         ('MULTIPLY', 'Multiply', 'Multiply'),
-        ('DIVIDE', 'Divide', 'Divide'),
         ('MAXIMUM', 'Maximum', 'Maximum'),
         ('MINIMUM', 'Minimum', 'Minimum')
     ], default='ADD')
     factor: FloatProperty(name='Factor', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
     mute: BoolProperty(name='Mute', default=False)
+    # Blur (currently not exposed due to performance concerns)
     blur: BoolProperty(name='Blur', default=False)
     blur_iterations: IntProperty(name='Blur Iterations', default=1, min=1, max=10)
     # Layer
@@ -87,6 +95,12 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
                                search=terrain_layer_node_terrain_layer_name_search_cb,
                                update=terrain_layer_node_terrain_layer_name_update_cb)
     layer_id: StringProperty(name='Layer ID', options={'HIDDEN'})
+    # Map Range
+    map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR')
+    map_range_from_max: FloatProperty(name='From Max', default=1.0, min=0, max=1.0, subtype='FACTOR')
+    # Normal
+    normal_angle_min: FloatProperty(name='Angle Min', default=math.radians(5.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
+    normal_angle_max: FloatProperty(name='Angle Max', default=math.radians(10.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
 
 
 # Add the children property to the node property group (this must be done after the class is defined).
@@ -105,7 +119,6 @@ def terrain_layer_texel_density_get(self: 'BDK_PG_terrain_layer') -> float:
 
 
 class BDK_PG_terrain_layer(PropertyGroup):
-    color_attribute_name: StringProperty(options={'HIDDEN'})  # TODO: this will be the responsibility of the nodes now (rename this to ID to convey uniqueness)
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='TerrainLayer', update=terrain_layer_name_update_cb)
     u_scale: FloatProperty(name='UScale', default=2.0, options=set())

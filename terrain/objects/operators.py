@@ -389,6 +389,8 @@ class BDK_OT_terrain_object_delete(Operator):
         # Delete the terrain object.
         bpy.data.objects.remove(terrain_object_object)
 
+        # TODO: delete the node groups etc. for the sculpt and paint layers.
+
         return {'FINISHED'}
 
 

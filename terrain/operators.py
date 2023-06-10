@@ -393,6 +393,7 @@ class BDK_OT_terrain_layers_hide(Operator):
 class BDK_OT_terrain_deco_layer_nodes_add(Operator):
     bl_idname = 'bdk.terrain_deco_layer_nodes_add'
     bl_label = 'Add Layer Node'
+    bl_description = 'Add a node to the selected deco layer'
 
     type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
 
@@ -407,6 +408,7 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
         deco_layers_index = terrain_info.deco_layers_index
         deco_layer = deco_layers[deco_layers_index]
 
+        # Create the new node.
         node = deco_layer.nodes.add()
         node.id = uuid.uuid4().hex
         node.name = self.type
@@ -422,6 +424,9 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
             color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
             color_data[:] = (0.0, 0.0, 0.0, 0.0)
             attribute.data.foreach_set('color', color_data.flatten())
+
+        # Move the node to the top of the list.
+        deco_layer.nodes.move(len(deco_layer.nodes) - 1, 0)
 
         build_deco_layers(context.active_object)
 

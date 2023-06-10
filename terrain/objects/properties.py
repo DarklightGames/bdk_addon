@@ -85,7 +85,7 @@ def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_
 
 def terrain_object_sort_order_update_cb(self: 'BDK_PG_terrain_object', context: Context):
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
-    sort_terrain_info_modifiers(terrain_info)
+    sort_terrain_info_modifiers(context, terrain_info)
 
 
 def terrain_object_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):

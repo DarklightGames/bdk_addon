@@ -1,7 +1,7 @@
 import re
 import bpy
 from typing import Iterable, Optional
-from bpy.types import Material, Object, Context, Mesh
+from bpy.types import Material, Object, Context, Mesh, NodeTree, NodeSocket
 from pathlib import Path
 from .data import UReference
 
@@ -153,3 +153,133 @@ def copy_simple_property_group(source, target):
 
 def should_show_bdk_developer_extras(context: Context):
     return getattr(context.preferences.addons['bdk_addon'].preferences, 'developer_extras', False)
+
+
+def add_operation_switch_nodes(
+        node_tree: NodeTree,
+        operation_socket: NodeSocket,
+        value_1_socket: Optional[NodeSocket],
+        value_2_socket: Optional[NodeSocket],
+        operations: Iterable[str]
+) -> NodeSocket:
+
+    last_output_node_socket: Optional[NodeSocket] = None
+
+    for index, operation in enumerate(operations):
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.data_type = 'INT'
+        compare_node.operation = 'EQUAL'
+        compare_node.inputs[3].default_value = index
+        node_tree.links.new(operation_socket, compare_node.inputs[2])
+
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'FLOAT'
+
+        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
+
+        math_node = node_tree.nodes.new(type='ShaderNodeMath')
+        math_node.operation = operation
+        math_node.inputs[0].default_value = 0.0
+        math_node.inputs[1].default_value = 0.0
+
+        if value_1_socket:
+            node_tree.links.new(value_1_socket, math_node.inputs[0])
+
+        if value_2_socket:
+            node_tree.links.new(value_2_socket, math_node.inputs[1])
+
+        node_tree.links.new(math_node.outputs['Value'], switch_node.inputs['True'])
+
+        if last_output_node_socket:
+            node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
+
+        last_output_node_socket = switch_node.outputs[0]  # Output
+
+    return last_output_node_socket
+
+
+def add_interpolation_type_switch_nodes(
+        node_tree: NodeTree,
+        interpolation_type_socket: NodeSocket,
+        value_socket: NodeSocket,
+        interpolation_types: Iterable[str]
+) -> NodeSocket:
+
+    last_output_node_socket: Optional[NodeSocket] = None
+
+    for index, interpolation_type in enumerate(interpolation_types):
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.data_type = 'INT'
+        compare_node.operation = 'EQUAL'
+        compare_node.inputs[3].default_value = index
+        node_tree.links.new(interpolation_type_socket, compare_node.inputs[2])
+
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'FLOAT'
+
+        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
+
+        map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
+        map_range_node.data_type = 'FLOAT'
+        map_range_node.interpolation_type = interpolation_type
+        map_range_node.inputs[3].default_value = 1.0  # To Min
+        map_range_node.inputs[4].default_value = 0.0  # To Max
+
+        node_tree.links.new(value_socket, map_range_node.inputs[0])
+        node_tree.links.new(map_range_node.outputs[0], switch_node.inputs['True'])
+
+        if last_output_node_socket:
+            node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
+
+        last_output_node_socket = switch_node.outputs[0]  # Output
+
+    return last_output_node_socket
+
+
+def add_noise_type_switch_nodes(
+        node_tree: NodeTree,
+        vector_socket: NodeSocket,
+        noise_type_socket: NodeSocket,
+        noise_distortion_socket: NodeSocket,
+        noise_types: Iterable[str]
+) -> NodeSocket:
+
+    last_output_node_socket: Optional[NodeSocket] = None
+
+    for index, noise_type in enumerate(noise_types):
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.data_type = 'INT'
+        compare_node.operation = 'EQUAL'
+        compare_node.inputs[3].default_value = index
+        node_tree.links.new(noise_type_socket, compare_node.inputs[2])
+
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'FLOAT'
+
+        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
+
+        noise_value_socket = None
+
+        if noise_type == 'PERLIN':
+            noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
+            noise_node.noise_dimensions = '2D'
+            noise_node.inputs['Scale'].default_value = 0.5
+            noise_node.inputs['Detail'].default_value = 16
+            noise_node.inputs['Distortion'].default_value = 0.5
+
+            node_tree.links.new(noise_distortion_socket, noise_node.inputs['Distortion'])
+            node_tree.links.new(vector_socket, noise_node.inputs['Vector'])
+            noise_value_socket = noise_node.outputs['Fac']
+        elif noise_type == 'WHITE':
+            noise_node = node_tree.nodes.new(type='ShaderNodeTexWhiteNoise')
+            noise_node.noise_dimensions = '2D'
+            noise_value_socket = noise_node.outputs['Value']
+
+        node_tree.links.new(noise_value_socket, switch_node.inputs['True'])
+
+        if last_output_node_socket:
+            node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
+
+        last_output_node_socket = switch_node.outputs[0]  # Output
+
+    return last_output_node_socket
