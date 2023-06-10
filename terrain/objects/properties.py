@@ -5,23 +5,54 @@ from bpy.props import IntProperty, PointerProperty, CollectionProperty, FloatPro
     EnumProperty
 from bpy.types import PropertyGroup, Object, NodeTree, Context
 
+from ...helpers import get_terrain_info
 from .builder import update_terrain_object_geometry_node_group
 from ...units import meters_to_unreal
+from .data import terrain_object_noise_type_items, terrain_object_operation_items, map_range_interpolation_type_items, \
+    terrain_object_type_items
 
 
-def get_terrain_objects_for_terrain_info_object(context: Context, terrain_info_object: Object) -> List:
+def get_terrain_objects_for_terrain_info_object(context: Context, terrain_info_object: Object) -> List['BDK_PG_terrain_object']:
     return [obj.bdk.terrain_object for obj in context.scene.objects if obj.bdk.type == 'TERRAIN_OBJECT' and obj.bdk.terrain_object.terrain_info_object == terrain_info_object]
 
 
-def terrain_object_sort_order_update_cb(self: 'BDK_PG_terrain_object', context: Context):
+def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
+    terrain_info_object = terrain_info.terrain_info_object
+
+    # The modifier ID list will contain a list of modifier IDs in the order that they should be sorted.
+    modifier_ids = []
+
+    # TODO: add in the list of terrain layer modifiers
+
+    # Get a list of all the deco layers.
+    modifier_ids.extend(map(lambda deco_layer: deco_layer.id, terrain_info.deco_layers))
+
     # Get list of all terrain objects that are part of the same terrain info object.
-    terrain_objects = get_terrain_objects_for_terrain_info_object(context, self.terrain_info_object)
+    terrain_objects = get_terrain_objects_for_terrain_info_object(context, terrain_info_object)
 
     # Sort the terrain objects by sort order, then ID.
     terrain_objects.sort(key=lambda x: (x.sort_order, x.id))
-    terrain_info_object = self.terrain_info_object
 
-    # Make note of what the current mode is so we can restore it later.
+    for terrain_object in terrain_objects:
+        for sculpt_layer in terrain_object.sculpt_layers:
+            pass
+
+    for terrain_object in terrain_objects:
+        for paint_layer in terrain_object.paint_layers:
+            if paint_layer.type == 'LAYER':
+                pass
+
+    for terrain_object in terrain_objects:
+        for paint_layer in terrain_object.paint_layers:
+            if paint_layer.type == 'DECO':
+                pass
+
+    # TODO: we need to split the terrain objects into two passes of modifiers each terrain object then needs two
+    #  modifier IDs (maybe even 3 if we have one for the deco?)
+
+    # modifier_ids.extend(map(lambda x: x.id, terrain_objects))
+
+    # Make note of what the current mode is so that we can restore it later.
     current_mode = bpy.context.object.mode
     current_active_object = bpy.context.view_layer.objects.active
 
@@ -31,13 +62,30 @@ def terrain_object_sort_order_update_cb(self: 'BDK_PG_terrain_object', context: 
     # Make the active object the terrain info object.
     bpy.context.view_layer.objects.active = terrain_info_object
 
+    # It's theoretically possible that the modifiers don't exist (e.g., having been deleted by the user, debugging etc.)
+    # Get a list of missing modifiers.
+    missing_modifier_ids = set(modifier_ids).difference(set(terrain_info_object.modifiers.keys()))
+    if len(missing_modifier_ids) > 0:
+        print(f'Missing modifiers: {missing_modifier_ids}')
+
+    # Remove any modifier IDs that do not have a corresponding modifier in the terrain info object.
+    modifier_ids = [x for x in modifier_ids if x in terrain_info_object.modifiers]
+
+    # TODO: it would be nice if we could move the modifiers without needing to use the ops API, or at least suspend
+    #  evaluation of the node tree while we do it.
+
     # Update the modifiers on the terrain info object to reflect the new sort order.
-    for i, terrain_object in enumerate(terrain_objects):
-        bpy.ops.object.modifier_move_to_index(modifier=terrain_object.id, index=i)
+    for i, modifier_id in enumerate(modifier_ids):
+        bpy.ops.object.modifier_move_to_index(modifier=modifier_id, index=i)
 
     # Restore the mode and active object to what it was before.
     bpy.context.view_layer.objects.active = current_active_object
     bpy.ops.object.mode_set(mode=current_mode)
+
+
+def terrain_object_sort_order_update_cb(self: 'BDK_PG_terrain_object', context: Context):
+    terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
+    sort_terrain_info_modifiers(terrain_info)
 
 
 def terrain_object_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
@@ -47,6 +95,7 @@ def terrain_object_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context:
 
 
 class BDK_PG_terrain_object_sculpt_layer(PropertyGroup):
+    id: StringProperty(name='ID', default='')
     name: StringProperty(name='Name', default='Sculpt Layer')
     terrain_object: PointerProperty(type=Object, options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
@@ -55,21 +104,13 @@ class BDK_PG_terrain_object_sculpt_layer(PropertyGroup):
     depth: FloatProperty(name='Depth', default=meters_to_unreal(0.5), subtype='DISTANCE')
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     use_noise: BoolProperty(name='Use Noise', default=False)
-    noise_type: EnumProperty(name='Noise Type', items=(
-        ('WHITE', 'White', 'White noise'),
-        ('PERLIN', 'Perlin', 'Perlin noise'),
-    ), default='WHITE')
+    noise_type: EnumProperty(name='Noise Type', items=terrain_object_noise_type_items, default='WHITE')
     noise_radius_factor: FloatProperty(name='Noise Radius Factor', default=1.0, subtype='FACTOR', min=0.0, soft_max=8.0)
     noise_strength: FloatProperty(name='Noise Strength', default=meters_to_unreal(0.25), subtype='DISTANCE', min=0.0, soft_max=meters_to_unreal(2.0))
     noise_distortion: FloatProperty(name='Noise Distortion', default=1.0, min=0.0)
     noise_roughness: FloatProperty(name='Noise Roughness', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
     mute: BoolProperty(name='Mute', default=False)
-    interpolation_type: EnumProperty(name='Interpolation Type', items=(
-        ('LINEAR', 'Linear', 'Linear interpolation between From Min and From Max values.', 'LINCURVE', 0),
-        ('STEPPED', 'Stepped', 'Stepped linear interpolation between From Min and From Max values.', 'IPO_CONSTANT', 1),
-        ('SMOOTHSTEP', 'Smooth Step', 'Smooth Hermite edge interpolation between From Min and From Max values.', 'IPO_EASE_IN', 2),
-        ('SMOOTHERSTEP', 'Smoother Step', 'Smoother Hermite edge interpolation between From Min and From Max values.', 'IPO_EASE_IN_OUT', 3),
-    ), default='LINEAR', update=terrain_object_update_cb)
+    interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
 
 
 def terrain_object_paint_layer_terrain_layer_name_search_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context, edit_text: str) -> List[str]:
@@ -94,7 +135,7 @@ def terrain_object_paint_layer_terrain_layer_name_update_cb(self: 'BDK_PG_terrai
 
     try:
         terrain_layer_index = terrain_layer_names.index(self.terrain_layer_name)
-        self.terrain_layer_id = terrain_layers[terrain_layer_index].color_attribute_name
+        self.terrain_layer_id = terrain_layers[terrain_layer_index].id
     except ValueError:
         self.terrain_layer_id = ''
 
@@ -118,17 +159,10 @@ def terrain_object_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_o
 
 
 class BDK_PG_terrain_object_paint_layer(PropertyGroup):
+    id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer')
-    operation: EnumProperty(name='Operation', items=(
-        ('ADD', 'Add', 'Add paint to the terrain layer.'),
-        ('SUBTRACT', 'Subtract', 'Subtract paint from the terrain layer.'),
-    ), default='ADD', update=terrain_object_update_cb)
-    interpolation_type: EnumProperty(name='Interpolation Type', items=(
-        ('LINEAR', 'Linear', 'Linear interpolation between From Min and From Max values.', 'IPO_LINEAR', 0),
-        ('STEPPED', 'Stepped', 'Stepped linear interpolation between From Min and From Max values.', 'IPO_CONSTANT', 1),
-        ('SMOOTHSTEP', 'Smooth Step', 'Smooth Hermite edge interpolation between From Min and From Max values.', 'IPO_EASE_IN', 2),
-        ('SMOOTHERSTEP', 'Smoother Step', 'Smoother Hermite edge interpolation between From Min and From Max values.', 'IPO_EASE_IN_OUT', 3),
-    ), default='LINEAR', update=terrain_object_update_cb)
+    operation: EnumProperty(name='Operation', items=terrain_object_operation_items, default='ADD')
+    interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
     index: IntProperty(options={'HIDDEN'})
     terrain_object: PointerProperty(type=Object, options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
@@ -138,7 +172,7 @@ class BDK_PG_terrain_object_paint_layer(PropertyGroup):
     layer_type: EnumProperty(name='Layer Type', items=(
         ('TERRAIN', 'Terrain', 'Terrain layer.'),
         ('DECO', 'Deco', 'Deco layer.'),
-    ), default='TERRAIN', update=terrain_object_update_cb)
+    ), default='TERRAIN', update=terrain_object_update_cb)  # TODO: switch node this as well
     terrain_layer_name: StringProperty(
         name='Terrain Layer',
         search=terrain_object_paint_layer_terrain_layer_name_search_cb,
@@ -156,10 +190,7 @@ class BDK_PG_terrain_object_paint_layer(PropertyGroup):
     mute: BoolProperty(name='Mute', default=False)
 
     use_distance_noise: BoolProperty(name='Distance Noise', default=False)
-    noise_type: EnumProperty(name='Noise Type', items=(
-        ('PERLIN', 'Perlin', 'Perlin noise.'),
-        ('WHITE', 'White', 'White noise.'),
-    ), default='WHITE', update=terrain_object_update_cb)
+    noise_type: EnumProperty(name='Noise Type', items=terrain_object_noise_type_items, default='WHITE', update=terrain_object_update_cb)
     distance_noise_factor: FloatProperty(name='Distance Noise Factor', default=meters_to_unreal(0.5), subtype='DISTANCE', min=0.0)
     distance_noise_distortion: FloatProperty(name='Distance Noise Distortion', default=1.0, min=0.0)
     distance_noise_offset: FloatProperty(name='Distance Noise Offset', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
@@ -167,11 +198,7 @@ class BDK_PG_terrain_object_paint_layer(PropertyGroup):
 
 class BDK_PG_terrain_object(PropertyGroup):
     id: StringProperty(options={'HIDDEN'}, name='ID')
-    object_type: EnumProperty(name='Object Type', items=(
-        ('CURVE', 'Curve', '', 'CURVE_DATA', 0),
-        ('MESH', 'Mesh', '', 'MESH_DATA', 1),
-        ('EMPTY', 'Empty', '', 'EMPTY_DATA', 2),
-    ), default='CURVE')
+    object_type: EnumProperty(name='Object Type', items=terrain_object_type_items, default='CURVE')
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'}, name='Terrain Info Object')
     node_tree: PointerProperty(type=NodeTree, options={'HIDDEN'}, name='Node Tree')
     object: PointerProperty(type=Object, name='Object')
@@ -181,6 +208,8 @@ class BDK_PG_terrain_object(PropertyGroup):
     sculpt_layers: CollectionProperty(name='Sculpt Components', type=BDK_PG_terrain_object_sculpt_layer)
     sculpt_layers_index: IntProperty()
     # TODO: we probably need a "creation index" to use a stable tie-breaker for the sort order of the terrain objects.
+    #  we are currently using the ID of the terrain object, but this isn't ideal because the sort order is effectively
+    #  random for terrain objects that share the same sort order.
     sort_order: IntProperty(name='Sort Order', default=0, description='The order in which the terrain objects are '
                                                                       'evaluated (lower values are evaluated first)',
                             update=terrain_object_sort_order_update_cb)

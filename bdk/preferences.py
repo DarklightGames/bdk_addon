@@ -9,7 +9,7 @@ class BdkAddonPreferences(AddonPreferences):
 
     build_path: StringProperty(subtype='DIR_PATH', name='Build Path')
     developer_extras: BoolProperty(name='Developer Extras', default=False,
-                                   description='Enable developer extras such as debug panels and operators.')
+                                   description='Enable developer extras such as debug panels and operators')
 
     def draw(self, _: Context):
         self.layout.prop(self, 'developer_extras')

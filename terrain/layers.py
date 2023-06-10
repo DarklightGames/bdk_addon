@@ -18,24 +18,19 @@ def add_terrain_layer(terrain_info_object: Object, name: str,
 
     mesh_data = cast(Mesh, terrain_info_object.data)
 
-    # Create the associated color attribute.
-    # TODO: in future, we will be able to paint non-color attributes, so use those once that's possible.
-    color_attribute = mesh_data.color_attributes.new(uuid.uuid4().hex, type='FLOAT_COLOR', domain='POINT')
-    vertex_count = len(color_attribute.data)
-    color_data = np.ndarray(shape=(vertex_count, 4), dtype=float)
-    color_data[:] = tuple(fill)
-    color_attribute.data.foreach_set('color', color_data.flatten())
-
     # Add the terrain layer.
     terrain_layer: BDK_PG_terrain_layer = terrain_info.terrain_layers.add()
     terrain_layer.terrain_info_object = terrain_info_object
     terrain_layer.name = name
     terrain_layer.id = uuid.uuid4().hex
 
-    paint_node = terrain_layer.nodes.add()
-    paint_node.type = 'PAINT'
-
-    terrain_layer.color_attribute_name = color_attribute.name
+    # Create the associated color attribute.
+    # TODO: in future, we will be able to paint non-color attributes, so use those once that's possible.
+    color_attribute = mesh_data.color_attributes.new(terrain_layer.id, type='FLOAT_COLOR', domain='POINT')
+    vertex_count = len(color_attribute.data)
+    color_data = np.ndarray(shape=(vertex_count, 4), dtype=float)
+    color_data[:] = tuple(fill)
+    color_attribute.data.foreach_set('color', color_data.flatten())
 
     # Regenerate the terrain material.
     build_terrain_material(terrain_info_object)

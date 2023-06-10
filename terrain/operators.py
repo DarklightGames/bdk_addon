@@ -1,7 +1,10 @@
 import os
+import uuid
 
 import bpy.types
 from typing import cast
+
+import numpy
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
 from bpy.types import Operator, Context, Mesh, Object
 from bpy_extras.io_utils import ExportHelper
@@ -11,8 +14,9 @@ from .exporter import export_terrain_heightmap, export_terrain_layers, export_de
 from .layers import add_terrain_layer
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info
-from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size
-from .properties import BDK_PG_terrain_info
+from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
+    get_terrain_info_vertex_coordinates
+from .properties import terrain_layer_node_type_items
 
 
 class BDK_OT_terrain_layer_remove(Operator):
@@ -40,9 +44,9 @@ class BDK_OT_terrain_layer_remove(Operator):
             # Remove color attribute.
             terrain_object = context.active_object
             mesh_data = cast(Mesh, terrain_object.data)
-            color_attribute_name = terrain_layers[terrain_layers_index].color_attribute_name
-            if color_attribute_name in mesh_data.color_attributes:
-                color_attribute = mesh_data.color_attributes[color_attribute_name]
+            terrain_layer_id = terrain_layers[terrain_layers_index].id
+            if terrain_layer_id in mesh_data.color_attributes:
+                color_attribute = mesh_data.color_attributes[terrain_layer_id]
                 mesh_data.color_attributes.remove(color_attribute)
 
             terrain_layers.remove(terrain_layers_index)
@@ -101,9 +105,6 @@ class BDK_OT_terrain_deco_layer_add(Operator):
 
     def execute(self, context: bpy.types.Context):
         add_terrain_deco_layer(context, context.active_object)
-
-        build_deco_layers(context.active_object)
-
         return {'FINISHED'}
 
 
@@ -131,6 +132,10 @@ class BDK_OT_terrain_deco_layer_remove(Operator):
 
         deco_layer = deco_layers[deco_layers_index]
         deco_layer_object = cast(Object, deco_layers[deco_layers_index].object)
+
+        # Remove the deco layer modifier from the terrain object.
+        if deco_layer.id in context.active_object.modifiers:
+            context.active_object.modifiers.remove(context.active_object.modifiers[deco_layer.id])
 
         if deco_layer_object is not None:
             # Unlink the deco layer object from any collections it belongs to.
@@ -385,16 +390,162 @@ class BDK_OT_terrain_layers_hide(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_deco_layer_nodes_add(Operator):
+    bl_idname = 'bdk.terrain_deco_layer_nodes_add'
+    bl_label = 'Add Layer Node'
+
+    type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return True
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+
+        deco_layers = terrain_info.deco_layers
+        deco_layers_index = terrain_info.deco_layers_index
+        deco_layer = deco_layers[deco_layers_index]
+
+        node = deco_layer.nodes.add()
+        node.id = uuid.uuid4().hex
+        node.name = self.type
+        node.terrain_info_object = context.active_object
+        node.type = self.type
+
+        if self.type == 'PAINT':
+            mesh_data = context.active_object.data
+            # TODO: when we can paint non-color data, rewrite this!
+            # Add the density map attribute to the TerrainInfo mesh.
+            attribute = mesh_data.attributes.new(node.id, 'BYTE_COLOR', domain='POINT')
+            vertex_count = len(attribute.data)
+            color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
+            color_data[:] = (0.0, 0.0, 0.0, 0.0)
+            attribute.data.foreach_set('color', color_data.flatten())
+
+        build_deco_layers(context.active_object)
+
+        # TODO: for some reason, the factor driver is invalid when added
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
+    bl_idname = 'bdk.terrain_deco_layer_nodes_remove'
+    bl_label = 'Remove Layer Node'
+    bl_description = 'Remove the selected layer node'
+
+    @classmethod
+    def poll(cls, context: Context):
+        if not is_active_object_terrain_info(context):
+            cls.poll_message_set('The active object is not a terrain info object')
+            return False
+        # TODO: Make sure a node exists and is selected.
+        return True
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        deco_layers = terrain_info.deco_layers
+        deco_layers_index = terrain_info.deco_layers_index
+        deco_layer = deco_layers[deco_layers_index]
+        node = deco_layer.nodes[deco_layer.nodes_index]
+
+        if node.type == 'PAINT':
+            mesh_data = context.active_object.data
+            if node.id in mesh_data.attributes:
+                attribute = mesh_data.attributes[node.id]
+                mesh_data.attributes.remove(attribute)
+        deco_layer.nodes.remove(deco_layer.nodes_index)
+
+        build_deco_layers(context.active_object)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_deco_layer_nodes_move(Operator):
+    bl_idname = 'bdk.terrain_deco_layer_nodes_move'
+    bl_label = 'Move Layer Node'
+    bl_description = 'Move the selected layer node'
+
+    direction: EnumProperty(name='Direction', items=(
+        ('UP', 'Up', 'Move the node up'),
+        ('DOWN', 'Down', 'Move the node down')
+    ), default='UP')
+
+    @classmethod
+    def poll(cls, context: Context):
+        if not is_active_object_terrain_info(context):
+            cls.poll_message_set('The active object is not a terrain info object')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        deco_layers = terrain_info.deco_layers
+        deco_layers_index = terrain_info.deco_layers_index
+        deco_layer = deco_layers[deco_layers_index]
+
+        if self.direction == 'UP':
+            if deco_layer.nodes_index > 0:
+                deco_layer.nodes.move(deco_layer.nodes_index, deco_layer.nodes_index - 1)
+                deco_layer.nodes_index = deco_layer.nodes_index - 1
+        elif self.direction == 'DOWN':
+            if deco_layer.nodes_index < len(deco_layer.nodes) - 1:
+                deco_layer.nodes.move(deco_layer.nodes_index, deco_layer.nodes_index + 1)
+                deco_layer.nodes_index = deco_layer.nodes_index + 1
+
+        build_deco_layers(context.active_object)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_info_repair(Operator):
+    """
+    Repairs the terrain info mesh by ensuring that the X & Y coordinates of each vertex are correct.
+    This is needed because it is possible to manually edit the mesh and cause the coordinates to be misaligned.
+    In the future, we should also make sure that the rest of the topology is correct (e.g. the faces are all quads).
+    """
+    bl_idname = 'bdk.terrain_info_repair'
+    bl_label = 'Repair Terrain Info'
+    bl_description = 'Repair the terrain info by ensuring that the X & Y coordinates of each vertex are correct'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        vertex_coordinates = get_terrain_info_vertex_coordinates(resolution=terrain_info.x_size, size=terrain_info.x_size * terrain_info.terrain_scale)
+        mesh_data = context.active_object.data
+        vertex_repair_count = 0
+        for vertex in mesh_data.vertices:
+            co = next(vertex_coordinates)
+            if co[0] != vertex.co.x or co[1] != vertex.co.y:
+                vertex_repair_count += 1
+                vertex.co.x, vertex.co.y = co
+        if vertex_repair_count == 0:
+            self.report({'INFO'}, 'No repairs needed')
+            return {'CANCELLED'}
+        self.report({'INFO'}, f'Repaired {vertex_repair_count} vertices')
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
+    BDK_OT_terrain_info_export,
+    BDK_OT_terrain_info_repair,
     BDK_OT_terrain_layer_add,
     BDK_OT_terrain_layer_remove,
     BDK_OT_terrain_layer_move,
     BDK_OT_terrain_deco_layer_add,
     BDK_OT_terrain_deco_layer_remove,
-    BDK_OT_terrain_info_export,
     BDK_OT_terrain_deco_layers_hide,
     BDK_OT_terrain_deco_layers_show,
     BDK_OT_terrain_layers_show,
     BDK_OT_terrain_layers_hide,
+
+    BDK_OT_terrain_deco_layer_nodes_add,
+    BDK_OT_terrain_deco_layer_nodes_remove,
+    BDK_OT_terrain_deco_layer_nodes_move
 )

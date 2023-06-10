@@ -80,6 +80,7 @@ class BDK_OT_terrain_object_sculpt_layer_add(Operator):
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
         sculpt_layer = terrain_object.sculpt_layers.add()
+        sculpt_layer.id = uuid.uuid4().hex
         sculpt_layer.terrain_object = terrain_object.object
 
         # Update all the indices of the components.
@@ -88,7 +89,7 @@ class BDK_OT_terrain_object_sculpt_layer_add(Operator):
         # Update the geometry node tree.
         update_terrain_object_geometry_node_group(terrain_object)
 
-        # Set the sculpt component index to the new sculpt component.
+        # Set the sculpting component index to the new sculpting component.
         terrain_object.sculpt_layers_index = len(terrain_object.sculpt_layers) - 1
 
         return {'FINISHED'}
@@ -120,7 +121,7 @@ class BDK_OT_terrain_object_sculpt_layer_remove(Operator):
         return {'FINISHED'}
 
 
-# Add an operator that moves the sculpt component up and down in the list.
+# Add an operator that moves the sculpting component up and down in the list.
 class BDK_OT_terrain_object_sculpt_layer_move(Operator):
     bl_idname = 'bdk.terrain_object_sculpt_layer_move'
     bl_label = 'Move Sculpt Component'
@@ -268,6 +269,7 @@ class BDK_OT_terrain_object_paint_layer_add(Operator):
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
         paint_layer = terrain_object.paint_layers.add()
+        paint_layer.id = uuid.uuid4().hex
         paint_layer.terrain_object = terrain_object.object
 
         # Update all the indices of the components.
@@ -318,11 +320,14 @@ class BDK_OT_terrain_object_paint_layer_duplicate(Operator):
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
+        # TODO: wrap this into a function.
         terrain_info_object = context.active_object
         terrain_object = terrain_info_object.bdk.terrain_object
         paint_layer_copy = terrain_object.paint_layers.add()
 
         copy_simple_property_group(terrain_object.paint_layers[terrain_object.paint_layers_index], paint_layer_copy)
+
+        paint_layer_copy.id = uuid.uuid4().hex
 
         # Update all the indices of the components.
         update_terrain_object_indices(terrain_object)
@@ -348,6 +353,9 @@ class BDK_OT_terrain_object_sculpt_layer_duplicate(Operator):
         sculpt_layer_copy = terrain_object.sculpt_layers.add()
 
         copy_simple_property_group(terrain_object.sculpt_layers[terrain_object.sculpt_layers_index], sculpt_layer_copy)
+
+        # Make sure the copy has a unique id.
+        sculpt_layer_copy.id = uuid.uuid4().hex
 
         # Update all the indices of the components.
         update_terrain_object_indices(terrain_object)

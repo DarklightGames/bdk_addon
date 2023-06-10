@@ -19,5 +19,9 @@ This project is currently in active development towards a first beta release. If
 * [bdk-blender](https://projects.blender.org/cmbasnett/bdk-blender) - Custom fork of Blender that adds native functionality necessary for the functioning of the BDK.
 * [UEViewer](https://github.com/DarklightGames/UEViewer) - Custom fork of UEViewer that exports more data
 * [io_scene_psk_psa](https://github.com/DarklightGames/io_scene_psk_psa) - Blender addon used for importing PSKs into Blender
+* [t3d-python]()
+
+[![PyPi version](https://badgen.net/pypi/v/t3dpy/)](https://pypi.org/project/t3dpy)
+[![PyPI pyversions](https://img.shields.io/pypi/pyversions/t3dpy.svg)](https://pypi.python.org/pypi/t3dpy/)
 
 More information will be forthcoming as development continues.

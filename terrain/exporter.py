@@ -63,7 +63,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     # Layers.
     layers = []
     for terrain_layer in terrain_info.terrain_layers:
-        name = terrain_layer.color_attribute_name
+        name = terrain_layer.id
         texture = terrain_layer.material.get('bdk.reference', None) if terrain_layer.material else None
         layers.append({
             'Texture': texture,
@@ -196,7 +196,7 @@ def export_terrain_layers(terrain_info_object: Object, depsgraph: Depsgraph, dir
         raise RuntimeError('Invalid object')
 
     for terrain_layer in terrain_info.terrain_layers:
-        image = create_image_from_color_attribute(terrain_info_object, depsgraph, terrain_layer.color_attribute_name)
+        image = create_image_from_color_attribute(terrain_info_object, depsgraph, terrain_layer.id)
         # Write the image out to a file.
         image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
         # Now remove the image data block.

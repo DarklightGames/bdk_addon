@@ -1,7 +1,7 @@
 import bmesh
 import bpy
 from bpy.types import Mesh, Object
-from typing import cast, Union, Optional
+from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
@@ -129,7 +129,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
             material_outputs = material_builder.build(unreal_material, terrain_layer_uv_node.outputs['UV'])
 
         color_attribute_node = node_tree.nodes.new('ShaderNodeVertexColor')
-        color_attribute_node.layer_name = terrain_layer.color_attribute_name
+        color_attribute_node.layer_name = terrain_layer.id
 
         hide_node = node_tree.nodes.new('ShaderNodeMath')
         hide_node.operation = 'MULTIPLY'
@@ -162,33 +162,38 @@ def get_terrain_quad_size(size: float, resolution: int) -> float:
     return size / (resolution - 1)
 
 
+def get_terrain_info_vertex_coordinates(resolution: int, size: float) -> Iterator[Tuple[float, float]]:
+    """
+    Gets the horizontal (X,Y) coordinates of the vertices for a terrain info object given the resolution and size.
+    """
+    quad_length = float(size) / resolution
+    size_half = 0.5 * size
+    for y in range(resolution):
+        for x in range(resolution):
+            yield quad_length * x - size_half, quad_length * y - size_half + quad_length
+
+
 def create_terrain_info_object(resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
     # NOTE: There is a bug in Unreal where the terrain is off-center, so we deliberately
     # have to miscalculate things in order to replicate the behavior seen in the engine.
-    quad_length = float(size) / resolution
-    size_half = 0.5 * size
 
     bm = bmesh.new()
 
     if heightmap is None:
-        heightmap = np.full(resolution * resolution, fill_value=0.5, dtype=float)
+        heightmap = np.full(resolution * resolution, fill_value=0, dtype=float)
 
-    # TODO: there is a bug in here where the quad size is not large enough
+    coordinates_iter = get_terrain_info_vertex_coordinates(resolution, size)
+    coordinates = np.fromiter(((x, y, z) for ((x, y), z) in zip(coordinates_iter, heightmap)), dtype=np.dtype((float, 3)))
 
-    # Vertices
-    vertex_index = 0
-    for y in range(resolution):
-        for x in range(resolution):
-            co = (quad_length * x - size_half, quad_length * y - size_half + quad_length, heightmap[vertex_index])
-            bm.verts.new(co)
-            vertex_index += 1
+    for co in coordinates:
+        bm.verts.new(co)
 
     bm.verts.ensure_lookup_table()
 
     # Build the edge turn face indices set.
     # TODO: Would be nice to make a common function that can do this for both the edge turn bitmap and the quad vis.
     # TODO: Inefficient to be doing look-ups here I think. Would probably make more sense to build an actual bitmap
-    # and then flip it over Y so that the indexing of the edge turn bitmap and the quads actually lines up.
+    # and then flip it over Y so that the indexing of the edge turn bitmap and the quads lines up.
     edge_turn_face_indices = set()
     if edge_turn_bitmap is not None:
         edge_turn_bitmap_index = 0
@@ -228,10 +233,11 @@ def create_terrain_info_object(resolution: int, size: float, heightmap: Optional
     mesh_object.bdk.type = 'TERRAIN_INFO'
 
     # Custom properties
-    terrain_info: 'BDK_PG_TerrainInfoPropertyGroup' = getattr(mesh_object.bdk, 'terrain_info')
+    terrain_info: 'BDK_PG_terrain_info' = getattr(mesh_object.bdk, 'terrain_info')
     terrain_info.terrain_info_object = mesh_object
     terrain_info.x_size = resolution
     terrain_info.y_size = resolution
+    terrain_info.size = size
     terrain_info.terrain_scale = size / resolution
 
     # Create an empty material that will be used as the terrain material downstream.
@@ -240,6 +246,7 @@ def create_terrain_info_object(resolution: int, size: float, heightmap: Optional
     terrain_material.node_tree.nodes.clear()
 
     # Create the "hidden" material we will use for hiding quads.
+    # TODO: in future, use boolean attribute on the face domain once we can paint it
     hidden_material = bpy.data.materials.new(uuid.uuid4().hex)
     hidden_material.use_nodes = True
     hidden_material.node_tree.nodes.clear()

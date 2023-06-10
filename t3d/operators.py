@@ -17,7 +17,7 @@ from ..helpers import are_bdk_dependencies_installed
 class BDK_OT_t3d_import_from_clipboard(Operator):
     bl_idname = 'bdk.t3d_import_from_clipboard'
     bl_description = 'Import T3DMap from OS Clipboard'
-    bl_label = 'Import T3DMap from Clipboard'
+    bl_label = 'Paste T3D From Clipboard'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod

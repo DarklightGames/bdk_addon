@@ -224,7 +224,12 @@ class TerrainInfoImporter(ActorImporter):
         if terrain_map_reference is None:
             raise RuntimeError('No terrain map, nothing to import')
 
-        # Load the terrain map image (hail mary, we're going to assume it's in this package).
+        # Check that the terrain map exists in the package.
+        terrain_map_image_name = f'{terrain_map_reference.object_name}.tga'
+        if terrain_map_image_name not in bpy.data.images:
+            raise RuntimeError(f'Terrain map image {terrain_map_image_name} not found in local blend file')
+
+        # Load the terrain map image.
         terrain_map_image = bpy.data.images[f'{terrain_map_reference.object_name}.tga']
         resolution = int(terrain_map_image.size[0])
         heightmap = height_map_data_from_image(terrain_map_image)
@@ -266,7 +271,7 @@ class TerrainInfoImporter(ActorImporter):
             alpha_map_image_name = f'{terrain_layer_name}.tga'
             alpha_map_image = bpy.data.images[alpha_map_image_name]
             if alpha_map_image:
-                alpha_map_attribute = mesh_data.attributes[terrain_layer.color_attribute_name]
+                alpha_map_attribute = mesh_data.attributes[terrain_layer.id]
                 alpha_map_attribute.data.foreach_set('color', density_map_data_from_image(alpha_map_image))
 
             # Texture

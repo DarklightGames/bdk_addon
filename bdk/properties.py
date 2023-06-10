@@ -14,8 +14,7 @@ class BDK_PG_object(PropertyGroup):
                            ('TERRAIN_INFO', 'Terrain Info', ''),
                            ('TERRAIN_OBJECT', 'Terrain Object', ''),
                        ),
-                       default='NONE'
-                       )
+                       default='NONE')
     terrain_info: PointerProperty(type=BDK_PG_terrain_info)
     terrain_object: PointerProperty(type=BDK_PG_terrain_object)
 

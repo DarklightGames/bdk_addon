@@ -39,6 +39,7 @@ if 'bpy' in locals():
     importlib.reload(terrain_operators)
     importlib.reload(terrain_exporter)
 
+    importlib.reload(terrain_object_data)
     importlib.reload(terrain_object_builder)
     importlib.reload(terrain_object_properties)
     importlib.reload(terrain_object_operators)
@@ -85,6 +86,7 @@ else:
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
 
+    from .terrain.objects import data as terrain_object_data
     from .terrain.objects import builder as terrain_object_builder
     from .terrain.objects import operators as terrain_object_operators
     from .terrain.objects import properties as terrain_object_properties
