@@ -7,7 +7,7 @@ from typing import Optional, Iterable
 from ..helpers import get_terrain_info, auto_increment_name, add_operation_switch_nodes
 
 
-def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: str = 'DecoLayer'):
+def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer'):
     """
     Adds a deco layer to the terrain.
     This adds a new entry to the deco layers array in the terrain info and creates the associated deco layer object and
@@ -21,7 +21,7 @@ def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: 
     deco_layer = terrain_info.deco_layers.add()
     deco_layer.name = auto_increment_name(name, map(lambda x: x.name, terrain_info.deco_layers))
     deco_layer.id = uuid.uuid4().hex
-    deco_layer.object = create_deco_layer_object(context, terrain_info_object, deco_layer)
+    deco_layer.object = create_deco_layer_object(deco_layer)
     deco_layer.terrain_info_object = terrain_info_object
 
     # Link and parent the deco layer object to the terrain object.
@@ -34,7 +34,7 @@ def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: 
     deco_layer_modifier = terrain_info_object.modifiers.new(name=deco_layer.id, type='NODES')
     node_tree = bpy.data.node_groups.new(uuid.uuid4().hex, 'GeometryNodeTree')
     deco_layer_modifier.node_group = node_tree
-    update_terrain_deco_layer_node_group(node_tree, deco_layer, deco_layer_index)
+    update_terrain_layer_node_group(node_tree, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)
 
     # TODO: Re-sort the modifiers on the terrain object in the following order:
     # 1. Terrain Object Sculpt (so that the 3D geometry is locked in for the other modifiers)
@@ -51,7 +51,30 @@ def add_terrain_deco_layer(context: Context, terrain_info_object: Object, name: 
     return deco_layer
 
 
-def add_deco_layer_node_driver(deco_layer_index: int, node_index: int, terrain_info_object: Object, struct: bpy_struct, path: str, property_name: str, index: Optional[int] = None, invert: bool = False):
+def add_terrain_deco_layer_node_driver(
+        dataptr_index: int,
+        node_index: int,
+        terrain_info_object: Object,
+        struct: bpy_struct,
+        path: str,
+        property_name: str,
+        index: Optional[int] = None,
+        invert: bool = False
+):
+    add_terrain_layer_node_driver('deco_layers', dataptr_index, node_index, terrain_info_object, struct, path, property_name, index, invert)
+
+
+def add_terrain_layer_node_driver(
+        dataptr_name: str,
+        dataptr_index: int,
+        node_index: int,
+        terrain_info_object: Object,
+        struct: bpy_struct,
+        path: str,
+        property_name: str,
+        index: Optional[int] = None,
+        invert: bool = False
+):
     if index is None:
         fcurve = struct.driver_add(path)
     else:
@@ -71,18 +94,17 @@ def add_deco_layer_node_driver(deco_layer_index: int, node_index: int, terrain_i
     target.id = terrain_info_object
 
     if index is not None:
-        target.data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].nodes[{node_index}].{property_name}[{index}]'
+        target.data_path = f'bdk.terrain_info.{dataptr_name}[{dataptr_index}].nodes[{node_index}].{property_name}[{index}]'
     else:
-        target.data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].nodes[{node_index}].{property_name}'
+        target.data_path = f'bdk.terrain_info.{dataptr_name}[{dataptr_index}].nodes[{node_index}].{property_name}'
 
 
-def update_terrain_deco_layer_node_group(node_tree: NodeTree, deco_layer, deco_layer_index: int):
+def update_terrain_layer_node_group(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, dataptr_id: str, nodes: Iterable):
     node_tree.inputs.clear()
     node_tree.outputs.clear()
     node_tree.nodes.clear()
-    node_tree.links.clear()
 
-    density_socket = add_density_from_deco_layer_nodes(node_tree, deco_layer_index, deco_layer.nodes)
+    density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, nodes)
 
     node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
     node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
@@ -99,18 +121,18 @@ def update_terrain_deco_layer_node_group(node_tree: NodeTree, deco_layer, deco_l
     if density_socket:
         node_tree.links.new(density_socket, clamp_node.inputs['Value'])
 
-    density_store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
-    density_store_named_attribute_node.data_type = 'FLOAT'
-    density_store_named_attribute_node.domain = 'POINT'
-    density_store_named_attribute_node.inputs['Name'].default_value = deco_layer.id
+    store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
+    store_named_attribute_node.data_type = 'FLOAT'
+    store_named_attribute_node.domain = 'POINT'
+    store_named_attribute_node.inputs['Name'].default_value = dataptr_id
 
-    node_tree.links.new(clamp_node.outputs['Result'], density_store_named_attribute_node.inputs[4])
+    node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs[4])
 
-    node_tree.links.new(input_node.outputs[0], density_store_named_attribute_node.inputs['Geometry'])
-    node_tree.links.new(density_store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+    node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
+    node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
 
-def add_density_from_deco_layer_nodes(node_tree: NodeTree, deco_layer_index: int, nodes: Iterable) -> NodeSocket:
+def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, nodes: Iterable) -> NodeSocket:
     last_density_socket = None
 
     for node_index, node in reversed(list(enumerate(nodes))):
@@ -119,19 +141,19 @@ def add_density_from_deco_layer_nodes(node_tree: NodeTree, deco_layer_index: int
             paint_named_attribute_node.data_type = 'FLOAT'
             paint_named_attribute_node.inputs['Name'].default_value = node.id
             density_socket = paint_named_attribute_node.outputs[1]
-        elif node.type == 'TERRAIN_LAYER':
+        elif node.type == 'PAINT_LAYER':
             layer_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
             layer_named_attribute_node.data_type = 'FLOAT'
             layer_named_attribute_node.inputs['Name'].default_value = node.layer_id
 
             blur_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
             blur_switch_node.input_type = 'FLOAT'
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, blur_switch_node.inputs['Switch'], 'default_value', 'blur')
+            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, blur_switch_node.inputs['Switch'], 'default_value', 'blur')
 
             # Add a modifier that turns any non-zero value into 1.0.
             blur_attribute_node = node_tree.nodes.new('GeometryNodeBlurAttribute')
             blur_attribute_node.data_type = 'FLOAT'
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, blur_attribute_node.inputs['Iterations'], 'default_value', 'blur_iterations')
+            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, blur_attribute_node.inputs['Iterations'], 'default_value', 'blur_iterations')
 
             node_tree.links.new(layer_named_attribute_node.outputs[1], blur_attribute_node.inputs[0])
 
@@ -147,8 +169,7 @@ def add_density_from_deco_layer_nodes(node_tree: NodeTree, deco_layer_index: int
             if len(node.children) == 0:
                 # Group is empty, skip it.
                 continue
-            # TODO: figure out how to mute this...route it through a math node? YEP!
-            density_socket = add_density_from_deco_layer_nodes(node_tree, deco_layer_index, node.children)
+            density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, node.children)
         elif node.type == 'NOISE':
             white_noise_node = node_tree.nodes.new('ShaderNodeTexWhiteNoise')
             white_noise_node.noise_dimensions = '2D'
@@ -164,50 +185,51 @@ def add_density_from_deco_layer_nodes(node_tree: NodeTree, deco_layer_index: int
             arccosine_node.operation = 'ARCCOSINE'
 
             map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, map_range_node.inputs['From Min'], 'default_value', 'normal_angle_min')
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, map_range_node.inputs['From Max'], 'default_value', 'normal_angle_max')
+            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Min'], 'default_value', 'normal_angle_min')
+            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Max'], 'default_value', 'normal_angle_max')
 
             node_tree.links.new(normal_node.outputs['Normal'], dot_product_node.inputs[0])
             node_tree.links.new(dot_product_node.outputs['Value'], arccosine_node.inputs[0])
             node_tree.links.new(arccosine_node.outputs['Value'], map_range_node.inputs['Value'])
 
             density_socket = map_range_node.outputs['Result']
-        elif node.type == 'MAP_RANGE' and last_density_socket is not None:
-            map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, map_range_node.inputs['From Min'], 'default_value', 'map_range_from_min')
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, map_range_node.inputs['From Max'], 'default_value', 'map_range_from_max')
-            node_tree.links.new(last_density_socket, map_range_node.inputs['Value'])
-            density_socket = map_range_node.outputs['Result']
         else:
             raise RuntimeError(f'Unknown node type: {node.type}')
 
-        # Some node types, like the map range node, don't have an opacity socket or an operation socket and merely
-        # modify the density socket. This is the equivalent of a unary operation.
-        def is_unary_operation(node):
-            return node.type in ('MAP_RANGE',)
+        # Map Range Node
+        map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Min'], 'default_value', 'map_range_from_min')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Max'], 'default_value', 'map_range_from_max')
+        node_tree.links.new(density_socket, map_range_node.inputs['Value'])
 
-        if is_unary_operation(node):
-            last_density_socket = density_socket
-            continue
-        else:
-            # Add a math node to multiply the density socket by the node's opacity.
-            factor_multiply_node = node_tree.nodes.new('ShaderNodeMath')
-            factor_multiply_node.operation = 'MULTIPLY'
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, factor_multiply_node.inputs[0], 'default_value', 'factor')
-            node_tree.links.new(density_socket, factor_multiply_node.inputs[1])
-            density_socket = factor_multiply_node.outputs['Value']
+        # Map Range Switch Node
+        map_range_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+        map_range_switch_node.input_type = 'FLOAT'
+        map_range_switch_node.label = 'Map Range Switch'
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_switch_node.inputs['Switch'], 'default_value', 'use_map_range')
+        node_tree.links.new(density_socket, map_range_switch_node.inputs[2])  # False socket
+        node_tree.links.new(map_range_node.outputs['Result'], map_range_switch_node.inputs[3])  # True socket
 
-            operation_node = node_tree.nodes.new('FunctionNodeInputInt')
-            add_deco_layer_node_driver(deco_layer_index, node_index, node.terrain_info_object, operation_node, 'integer', 'operation')
-            operation_socket = operation_node.outputs['Integer']
+        density_socket = map_range_switch_node.outputs['Output']
 
-            density_socket = add_operation_switch_nodes(
-                node_tree,
-                operation_socket,
-                last_density_socket,
-                density_socket,
-                ['ADD', 'SUBTRACT', 'MULTIPLY', 'MAXIMUM', 'MINIMUM'],
-            )
+        # Add a math node to multiply the density socket by the node's opacity.
+        factor_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+        factor_multiply_node.operation = 'MULTIPLY'
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, factor_multiply_node.inputs[0], 'default_value', 'factor')
+        node_tree.links.new(density_socket, factor_multiply_node.inputs[1])
+        density_socket = factor_multiply_node.outputs['Value']
+
+        operation_node = node_tree.nodes.new('FunctionNodeInputInt')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, operation_node, 'integer', 'operation')
+        operation_socket = operation_node.outputs['Integer']
+
+        density_socket = add_operation_switch_nodes(
+            node_tree,
+            operation_socket,
+            last_density_socket,
+            density_socket,
+            ['ADD', 'SUBTRACT', 'MULTIPLY', 'MAXIMUM', 'MINIMUM'],
+        )
 
         switch_node = node_tree.nodes.new('GeometryNodeSwitch')
         switch_node.input_type = 'FLOAT'
@@ -220,8 +242,9 @@ def add_density_from_deco_layer_nodes(node_tree: NodeTree, deco_layer_index: int
         node_tree.links.new(density_socket, switch_node.inputs[3])  # True input.
 
         # Attach the mute property as a driver for the switch node's switch input.
-        add_deco_layer_node_driver(
-            deco_layer_index,
+        add_terrain_layer_node_driver(
+            dataptr_name,
+            dataptr_index,
             node_index,
             node.terrain_info_object,
             switch_node.inputs['Switch'],
@@ -330,6 +353,17 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     return node_tree
 
 
+def build_paint_layers(terrain_info_object: Object):
+    terrain_info = get_terrain_info(terrain_info_object)
+
+    # REALIZATION: we can't have paint layers with paint layer nodes due to circular dependencies.
+    #  This could be possible though, if we police what layers are allowed to be painted in each layer.
+    for paint_layer_index, paint_layer in enumerate(terrain_info.paint_layers):
+        if paint_layer.id in terrain_info_object.modifiers:
+            modifier = terrain_info_object.modifiers[paint_layer.id]
+            update_terrain_layer_node_group(modifier.node_group, 'paint_layers', paint_layer_index, paint_layer.id, paint_layer.nodes)
+
+
 def build_deco_layers(terrain_info_object: Object):
     terrain_info = get_terrain_info(terrain_info_object)
 
@@ -337,7 +371,7 @@ def build_deco_layers(terrain_info_object: Object):
         # Rebuild the terrain info's deco layer node group.
         if deco_layer.id in terrain_info_object.modifiers:
             modifier = terrain_info_object.modifiers[deco_layer.id]
-            update_terrain_deco_layer_node_group(modifier.node_group, deco_layer, deco_layer_index)
+            update_terrain_layer_node_group(modifier.node_group, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)
 
         if deco_layer.id not in deco_layer.object.modifiers:
             # Create the geometry nodes modifier and assign the node group.
@@ -345,7 +379,7 @@ def build_deco_layers(terrain_info_object: Object):
             modifier.node_group = build_deco_layer_node_group(terrain_info_object, deco_layer)
 
 
-def create_deco_layer_object(context: Context, terrain_info_object: Object, deco_layer) -> Object:
+def create_deco_layer_object(deco_layer) -> Object:
     # Create a new mesh object with empty data.
     mesh_data = bpy.data.meshes.new(deco_layer.id)
     deco_layer_object = bpy.data.objects.new(deco_layer.id, mesh_data)

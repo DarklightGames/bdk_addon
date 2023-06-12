@@ -104,7 +104,7 @@ class BDK_OT_terrain_deco_layer_add(Operator):
         return is_active_object_terrain_info(context)
 
     def execute(self, context: bpy.types.Context):
-        add_terrain_deco_layer(context, context.active_object)
+        add_terrain_deco_layer(context.active_object)
         return {'FINISHED'}
 
 
@@ -390,77 +390,107 @@ class BDK_OT_terrain_layers_hide(Operator):
         return {'FINISHED'}
 
 
+def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
+    node = nodes.add()
+    node.id = uuid.uuid4().hex
+    node.name = type
+    node.terrain_info_object = terrain_info_object
+    node.type = type
+
+    if type == 'PAINT':
+        mesh_data = terrain_info_object.data
+        # TODO: when we can paint non-color data, rewrite this!
+        # Add the density map attribute to the TerrainInfo mesh.
+        attribute = mesh_data.attributes.new(node.id, 'BYTE_COLOR', domain='POINT')
+        vertex_count = len(attribute.data)
+        color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
+        color_data[:] = (0.0, 0.0, 0.0, 0.0)
+        attribute.data.foreach_set('color', color_data.flatten())
+
+    # Move the node to the top of the list.
+    nodes.move(len(nodes) - 1, 0)
+    return node
+
+
+def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: int):
+    node = nodes[nodes_index]
+
+    if node.type == 'PAINT':
+        mesh_data = terrain_info_object.data
+        if node.id in mesh_data.attributes:
+            attribute = mesh_data.attributes[node.id]
+            mesh_data.attributes.remove(attribute)
+
+    nodes.remove(nodes_index)
+
+
+def move_terrain_layer_node(direction: str, nodes, nodes_index: int) -> int:
+    if direction == 'UP':
+        if nodes_index > 0:
+            nodes.move(nodes_index, nodes_index - 1)
+            nodes_index -= 1
+    elif direction == 'DOWN':
+        if nodes_index < len(nodes) - 1:
+            nodes.move(nodes_index, nodes_index + 1)
+            nodes_index += 1
+    return nodes_index
+
+
+def poll_is_active_object_terrain_object(cls, context):
+    if not is_active_object_terrain_info(context):
+        cls.poll_message_set('The active object is not a terrain info object')
+        return False
+    # TODO: should also have a selected layer.
+    return True
+
+
+terrain_layer_node_move_direction_items = [
+    ('UP', 'Up', 'Move the node up'),
+    ('DOWN', 'Down', 'Move the node down')
+]
+
+
 class BDK_OT_terrain_deco_layer_nodes_add(Operator):
     bl_idname = 'bdk.terrain_deco_layer_nodes_add'
-    bl_label = 'Add Layer Node'
+    bl_label = 'Add Deco Layer Node'
     bl_description = 'Add a node to the selected deco layer'
 
     type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
 
     @classmethod
     def poll(cls, context: Context):
-        return True
+        return poll_is_active_object_terrain_object(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index
         deco_layer = deco_layers[deco_layers_index]
 
-        # Create the new node.
-        node = deco_layer.nodes.add()
-        node.id = uuid.uuid4().hex
-        node.name = self.type
-        node.terrain_info_object = context.active_object
-        node.type = self.type
+        add_terrain_layer_node(context.active_object, deco_layer.nodes, self.type)
 
-        if self.type == 'PAINT':
-            mesh_data = context.active_object.data
-            # TODO: when we can paint non-color data, rewrite this!
-            # Add the density map attribute to the TerrainInfo mesh.
-            attribute = mesh_data.attributes.new(node.id, 'BYTE_COLOR', domain='POINT')
-            vertex_count = len(attribute.data)
-            color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
-            color_data[:] = (0.0, 0.0, 0.0, 0.0)
-            attribute.data.foreach_set('color', color_data.flatten())
-
-        # Move the node to the top of the list.
-        deco_layer.nodes.move(len(deco_layer.nodes) - 1, 0)
-
+        # TODO: for some reason, the factor driver is invalid when added [is this still true?]
         build_deco_layers(context.active_object)
-
-        # TODO: for some reason, the factor driver is invalid when added
 
         return {'FINISHED'}
 
 
 class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
     bl_idname = 'bdk.terrain_deco_layer_nodes_remove'
-    bl_label = 'Remove Layer Node'
-    bl_description = 'Remove the selected layer node'
+    bl_label = 'Remove Deco Layer Node'
+    bl_description = 'Remove the selected layer node from the selected deco layer'
 
     @classmethod
     def poll(cls, context: Context):
-        if not is_active_object_terrain_info(context):
-            cls.poll_message_set('The active object is not a terrain info object')
-            return False
-        # TODO: Make sure a node exists and is selected.
-        return True
+        return poll_is_active_object_terrain_object(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index
         deco_layer = deco_layers[deco_layers_index]
-        node = deco_layer.nodes[deco_layer.nodes_index]
 
-        if node.type == 'PAINT':
-            mesh_data = context.active_object.data
-            if node.id in mesh_data.attributes:
-                attribute = mesh_data.attributes[node.id]
-                mesh_data.attributes.remove(attribute)
-        deco_layer.nodes.remove(deco_layer.nodes_index)
+        remove_terrain_layer_node(context.active_object, deco_layer.nodes, deco_layer.nodes_index)
 
         build_deco_layers(context.active_object)
 
@@ -469,20 +499,14 @@ class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
 
 class BDK_OT_terrain_deco_layer_nodes_move(Operator):
     bl_idname = 'bdk.terrain_deco_layer_nodes_move'
-    bl_label = 'Move Layer Node'
+    bl_label = 'Move Deco Layer Node'
     bl_description = 'Move the selected layer node'
 
-    direction: EnumProperty(name='Direction', items=(
-        ('UP', 'Up', 'Move the node up'),
-        ('DOWN', 'Down', 'Move the node down')
-    ), default='UP')
+    direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
 
     @classmethod
     def poll(cls, context: Context):
-        if not is_active_object_terrain_info(context):
-            cls.poll_message_set('The active object is not a terrain info object')
-            return False
-        return True
+        return poll_is_active_object_terrain_object(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -490,18 +514,82 @@ class BDK_OT_terrain_deco_layer_nodes_move(Operator):
         deco_layers_index = terrain_info.deco_layers_index
         deco_layer = deco_layers[deco_layers_index]
 
-        if self.direction == 'UP':
-            if deco_layer.nodes_index > 0:
-                deco_layer.nodes.move(deco_layer.nodes_index, deco_layer.nodes_index - 1)
-                deco_layer.nodes_index = deco_layer.nodes_index - 1
-        elif self.direction == 'DOWN':
-            if deco_layer.nodes_index < len(deco_layer.nodes) - 1:
-                deco_layer.nodes.move(deco_layer.nodes_index, deco_layer.nodes_index + 1)
-                deco_layer.nodes_index = deco_layer.nodes_index + 1
+        deco_layer.nodes_index = move_terrain_layer_node(self.direction, deco_layer.nodes, deco_layer.nodes_index)
 
         build_deco_layers(context.active_object)
 
         return {'FINISHED'}
+
+
+class BDK_OT_terrain_paint_layer_nodes_add(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_nodes_add'
+    bl_label = 'Add Paint Layer Node'
+    bl_description = 'Add a node to the selected paint layer'
+
+    type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_is_active_object_terrain_object(cls, context)
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        paint_layers = terrain_info.terrain_layers
+        paint_layers_index = terrain_info.terrain_layers_index
+        paint_layer = paint_layers[paint_layers_index]
+
+        add_terrain_layer_node(context.active_object, paint_layer.nodes, self.type)
+
+        # TODO: rebuild paint layers
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_nodes_remove'
+    bl_label = 'Remove Paint Layer Node'
+    bl_description = 'Remove the selected layer node from the selected paint layer'
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_is_active_object_terrain_object(cls, context)
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        paint_layers = terrain_info.terrain_layers
+        paint_layers_index = terrain_info.terrain_layers_index
+        paint_layer = paint_layers[paint_layers_index]
+
+        remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index)
+
+        # build_paint_layers(context.active_object)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_paint_layer_nodes_move(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_nodes_move'
+    bl_label = 'Move Deco Layer Node'
+    bl_description = 'Move the selected layer node'
+
+    direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_is_active_object_terrain_object(cls, context)
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        paint_layers = terrain_info.terrain_layers
+        paint_layers_index = terrain_info.terrain_layers_index
+        paint_layer = paint_layers[paint_layers_index]
+
+        paint_layer.nodes_index = move_terrain_layer_node(self.direction, paint_layer.nodes, paint_layer.nodes_index)
+
+        # build_paint_layers(context.active_object)
+
+        return {'FINISHED'}
+
 
 
 class BDK_OT_terrain_info_repair(Operator):
@@ -552,5 +640,9 @@ classes = (
 
     BDK_OT_terrain_deco_layer_nodes_add,
     BDK_OT_terrain_deco_layer_nodes_remove,
-    BDK_OT_terrain_deco_layer_nodes_move
+    BDK_OT_terrain_deco_layer_nodes_move,
+
+    BDK_OT_terrain_paint_layer_nodes_add,
+    BDK_OT_terrain_paint_layer_nodes_remove,
+    BDK_OT_terrain_paint_layer_nodes_move,
 )

@@ -287,7 +287,7 @@ class TerrainInfoImporter(ActorImporter):
 
             deco_layer_name = static_mesh.object_name if static_mesh else 'DecoLayer'
             # TODO: current scheme assumes 1:1 density map; provide a way to flag that we have our own density map we want to use
-            terrain_deco_layer = add_terrain_deco_layer(context, mesh_object, name=deco_layer_name)
+            terrain_deco_layer = add_terrain_deco_layer(mesh_object, name=deco_layer_name)
 
             static_mesh_data = load_bdk_static_mesh(str(static_mesh))
             deco_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)

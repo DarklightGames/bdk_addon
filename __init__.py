@@ -191,6 +191,7 @@ def register():
 
 def unregister():
     for cls in reversed(classes):
+        print(cls)
         bpy.utils.unregister_class(cls)
 
     del bpy.types.Object.bdk

@@ -40,20 +40,18 @@ terrain_layer_node_type_icons = {
     'GROUP': 'FILE_FOLDER',
     'PAINT': 'BRUSH_DATA',
     'NOISE': 'MOD_NOISE',
-    'TERRAIN_LAYER': 'MATERIAL',
+    'PAINT_LAYER': 'TEXTURE',
     'CONSTANT': 'IMAGE_ALPHA',
     'NORMAL': 'DRIVER_ROTATIONAL_DIFFERENCE',
-    'MAP_RANGE': 'FCURVE',
 }
 
 terrain_layer_node_type_items = (
     ('GROUP', 'Group', 'Group', terrain_layer_node_type_icons['GROUP'], 0),
     ('PAINT', 'Paint', 'Paint', terrain_layer_node_type_icons['PAINT'], 1),
     ('NOISE', 'Noise', 'Noise', terrain_layer_node_type_icons['NOISE'], 2),
-    ('TERRAIN_LAYER', 'Terrain Layer', 'Terrain Layer', terrain_layer_node_type_icons['TERRAIN_LAYER'], 3),
+    ('PAINT_LAYER', 'Paint Layer', 'Paint Layer', terrain_layer_node_type_icons['PAINT_LAYER'], 3),
     ('CONSTANT', 'Constant', 'Constant', terrain_layer_node_type_icons['CONSTANT'], 4),
     ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector', terrain_layer_node_type_icons['NORMAL'], 5),
-    ('MAP_RANGE', 'Map Range', 'Values will be mapped to the specified range window', terrain_layer_node_type_icons['MAP_RANGE'], 6),
 )
 
 
@@ -91,16 +89,17 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     blur: BoolProperty(name='Blur', default=False)
     blur_iterations: IntProperty(name='Blur Iterations', default=1, min=1, max=10)
     # Layer
-    layer_name: StringProperty(name='Layer Name', options={'HIDDEN'},
+    layer_name: StringProperty(name='Paint Layer', options={'HIDDEN'},
                                search=terrain_layer_node_terrain_layer_name_search_cb,
                                update=terrain_layer_node_terrain_layer_name_update_cb)
     layer_id: StringProperty(name='Layer ID', options={'HIDDEN'})
-    # Map Range
-    map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR')
-    map_range_from_max: FloatProperty(name='From Max', default=1.0, min=0, max=1.0, subtype='FACTOR')
     # Normal
     normal_angle_min: FloatProperty(name='Angle Min', default=math.radians(5.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
     normal_angle_max: FloatProperty(name='Angle Max', default=math.radians(10.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
+    # Map Range
+    use_map_range: BoolProperty(name='Map Range', default=False)
+    map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR', options=set())
+    map_range_from_max: FloatProperty(name='From Max', default=1.0, min=0, max=1.0, subtype='FACTOR', options=set())
 
 
 # Add the children property to the node property group (this must be done after the class is defined).
@@ -128,6 +127,7 @@ class BDK_PG_terrain_layer(PropertyGroup):
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
     nodes: CollectionProperty(name='Nodes', type=BDK_PG_terrain_layer_node, options={'HIDDEN'})
+    nodes_index: IntProperty(name='Nodes Index', options={'HIDDEN'})
     texel_density: FloatProperty(name='Texel Density', get=terrain_layer_texel_density_get, description='The texel density of the layer measured in pixels per unit squared  (px/u²)',
                                  options={'HIDDEN', 'SKIP_SAVE'})
 
@@ -256,7 +256,7 @@ class BDK_PG_terrain_deco_layer(PropertyGroup):
     fadeout_radius_max: FloatProperty(name='Fadeout Radius Max', options=empty_set, subtype='DISTANCE')
     fadeout_radius_min: FloatProperty(name='Fadeout Radius Min', options=empty_set, subtype='DISTANCE')
     force_draw: BoolProperty(name='Force Draw', default=False, options=empty_set,
-                             description='Forces the deco to be drawn regardless of the client\'s graphics settings\n\nNote that this has no visible effect within the BDK')
+                             description='Forces the deco to be drawn regardless of the client\'s graphics settings. Enable this when the decos provide the player with concealment.\n\nNote that this has no visible effect within the BDK')
     max_per_quad: IntProperty(name='Max Per Quad', default=1, min=1, max=4, options=empty_set,
                               description='The maximum number of instances of this deco that can be placed on a single quad')
     object: PointerProperty(type=Object, options={'HIDDEN'})
@@ -313,7 +313,7 @@ def on_terrain_layer_index_update(self: 'BDK_PG_terrain_info', _: Context):
 class BDK_PG_terrain_info(PropertyGroup):
     terrain_info_object: PointerProperty(type=Object)
     terrain_scale: FloatProperty(name='TerrainScale', options={'HIDDEN'}, subtype='DISTANCE')
-    terrain_layers: CollectionProperty(name='TerrainLayers', type=BDK_PG_terrain_layer)
+    terrain_layers: CollectionProperty(name='TerrainLayers', type=BDK_PG_terrain_layer) # TODO: rename this to paint_layers
     terrain_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_layer_index_update)
     deco_layers: CollectionProperty(name='DecoLayers', type=BDK_PG_terrain_deco_layer)
     deco_layers_index: IntProperty(options={'HIDDEN'})
