@@ -10,7 +10,7 @@ from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 
 
-def _build_or_get_terrain_layer_uv_group_node() -> bpy.types.NodeTree:
+def _build_or_get_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
     group_name = 'BDK TerrainLayerUV'
     version = 1  # increment this if we need to regenerate this (for example, if we update this code)
 
@@ -85,7 +85,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
     terrain_info = get_terrain_info(terrain_info_object)
     if terrain_info is None:
         raise RuntimeError('Invalid object')
-    terrain_layers = terrain_info.terrain_layers
+    paint_layers = terrain_info.paint_layers
 
     mesh_data = cast(Mesh, terrain_info_object.data)
 
@@ -101,11 +101,11 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
     material_cache = MaterialCache(bdk_build_path)
     material_builder = MaterialBuilder(material_cache, node_tree)
 
-    for terrain_layer_index, terrain_layer in enumerate(terrain_layers):
-        terrain_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
-        terrain_layer_uv_node.node_tree = _build_or_get_terrain_layer_uv_group_node()
+    for paint_layer_index, paint_layer in enumerate(paint_layers):
+        paint_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
+        paint_layer_uv_node.node_tree = _build_or_get_terrain_paint_layer_uv_group_node()
 
-        def add_terrain_layer_input_driver(node, input_prop: Union[str | int], terrain_layer_prop: str):
+        def add_paint_layer_input_driver(node, input_prop: Union[str | int], paint_layer_prop: str):
             fcurve = node.inputs[input_prop].driver_add('default_value')
             fcurve.driver.type = 'AVERAGE'
             variable = fcurve.driver.variables.new()
@@ -113,27 +113,27 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
             target = variable.targets[0]
             target.id_type = 'OBJECT'
             target.id = terrain_info_object
-            target.data_path = f'bdk.terrain_info.terrain_layers[{terrain_layer_index}].{terrain_layer_prop}'
+            target.data_path = f'bdk.terrain_info.paint_layers[{paint_layer_index}].{paint_layer_prop}'
 
-        add_terrain_layer_input_driver(terrain_layer_uv_node, 'UScale', 'u_scale')
-        add_terrain_layer_input_driver(terrain_layer_uv_node, 'VScale', 'v_scale')
-        add_terrain_layer_input_driver(terrain_layer_uv_node, 'TextureRotation', 'texture_rotation')
+        add_paint_layer_input_driver(paint_layer_uv_node, 'UScale', 'u_scale')
+        add_paint_layer_input_driver(paint_layer_uv_node, 'VScale', 'v_scale')
+        add_paint_layer_input_driver(paint_layer_uv_node, 'TextureRotation', 'texture_rotation')
 
-        terrain_layer_uv_node.inputs['TerrainScale'].default_value = terrain_info.terrain_scale
+        paint_layer_uv_node.inputs['TerrainScale'].default_value = terrain_info.terrain_scale
 
-        material = terrain_layer.material
+        material = paint_layer.material
         material_outputs = None
         if material and 'bdk.reference' in material:
             reference = UReference.from_string(material['bdk.reference'])
             unreal_material = material_cache.load_material(reference)
-            material_outputs = material_builder.build(unreal_material, terrain_layer_uv_node.outputs['UV'])
+            material_outputs = material_builder.build(unreal_material, paint_layer_uv_node.outputs['UV'])
 
         color_attribute_node = node_tree.nodes.new('ShaderNodeVertexColor')
-        color_attribute_node.layer_name = terrain_layer.id
+        color_attribute_node.layer_name = paint_layer.id
 
         hide_node = node_tree.nodes.new('ShaderNodeMath')
         hide_node.operation = 'MULTIPLY'
-        add_terrain_layer_input_driver(hide_node, 1, 'is_visible')
+        add_paint_layer_input_driver(hide_node, 1, 'is_visible')
 
         node_tree.links.new(hide_node.inputs[0], color_attribute_node.outputs['Color'])
 

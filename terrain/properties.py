@@ -19,15 +19,15 @@ def material_poll(_: Context, material: Material) -> bool:
     return is_bdk_material(material)
 
 
-def terrain_layer_name_update_cb(self, context: Context):
+def terrain_paint_layer_name_update_cb(self, context: Context):
     # Find all terrain objects in the file.
     terrain_object_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_OBJECT', bpy.data.objects))
 
     # Update terrain object paint component names if the terrain layer's color attribute name matches.
     for terrain_object_object in terrain_object_objects:
         for paint_layer in terrain_object_object.bdk.terrain_object.paint_layers:
-            if paint_layer.terrain_layer_id == self.id:
-                paint_layer.terrain_layer_name = self.name
+            if paint_layer.paint_layer_id == self.id:
+                paint_layer.paint_layer_name = self.name
 
     # Update deco layer names if the linked terrain layer matches.
     # TODO: this will need to change when we add the terrain node system.
@@ -55,17 +55,17 @@ terrain_layer_node_type_items = (
 )
 
 
-def terrain_layer_node_terrain_layer_name_search_cb(self: 'BDK_PG_terrain_layer_node', context: Context,
-                                                    edit_text: str) -> List[str]:
-    return [terrain_layer.name for terrain_layer in self.terrain_info_object.bdk.terrain_info.terrain_layers]
+def terrain_layer_node_terrain_paint_layer_name_search_cb(self: 'BDK_PG_terrain_layer_node', context: Context,
+                                                          edit_text: str) -> List[str]:
+    return [paint_layer.name for paint_layer in self.terrain_info_object.bdk.terrain_info.paint_layers]
 
 
-def terrain_layer_node_terrain_layer_name_update_cb(self: 'BDK_PG_terrain_layer_node', context: Context):
-    terrain_layers = self.terrain_info_object.bdk.terrain_info.terrain_layers
-    if self.layer_name in terrain_layers:
-        self.layer_id = terrain_layers[self.layer_name].id
+def terrain_layer_node_terrain_paint_layer_name_update_cb(self: 'BDK_PG_terrain_layer_node', context: Context):
+    paint_layers = self.terrain_info_object.bdk.terrain_info.paint_layers
+    if self.paint_layer_name in paint_layers:
+        self.paint_layer_id = paint_layers[self.paint_layer_name].id
     else:
-        self.layer_id = ''
+        self.paint_layer_id = ''
 
     # Rebuild the deco node setup.
     build_deco_layers(self.terrain_info_object)
@@ -89,10 +89,10 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     blur: BoolProperty(name='Blur', default=False)
     blur_iterations: IntProperty(name='Blur Iterations', default=1, min=1, max=10)
     # Layer
-    layer_name: StringProperty(name='Paint Layer', options={'HIDDEN'},
-                               search=terrain_layer_node_terrain_layer_name_search_cb,
-                               update=terrain_layer_node_terrain_layer_name_update_cb)
-    layer_id: StringProperty(name='Layer ID', options={'HIDDEN'})
+    paint_layer_name: StringProperty(name='Paint Layer', options={'HIDDEN'},
+                                     search=terrain_layer_node_terrain_paint_layer_name_search_cb,
+                                     update=terrain_layer_node_terrain_paint_layer_name_update_cb)
+    paint_layer_id: StringProperty(name='Paint Layer ID', options={'HIDDEN'})
     # Normal
     normal_angle_min: FloatProperty(name='Angle Min', default=math.radians(5.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
     normal_angle_max: FloatProperty(name='Angle Max', default=math.radians(10.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
@@ -108,7 +108,7 @@ BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name=
                                                                            options={'HIDDEN'})
 
 
-def terrain_layer_texel_density_get(self: 'BDK_PG_terrain_layer') -> float:
+def terrain_paint_layer_texel_density_get(self: 'BDK_PG_terrain_paint_layer') -> float:
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
     x = self.material.get('UClamp', 0) if self.material else 0
     y = self.material.get('VClamp', 0) if self.material else 0
@@ -117,9 +117,9 @@ def terrain_layer_texel_density_get(self: 'BDK_PG_terrain_layer') -> float:
     return pixels_per_quad / quad_area
 
 
-class BDK_PG_terrain_layer(PropertyGroup):
+class BDK_PG_terrain_paint_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
-    name: StringProperty(name='Name', default='TerrainLayer', update=terrain_layer_name_update_cb)
+    name: StringProperty(name='Name', default='TerrainLayer', update=terrain_paint_layer_name_update_cb)
     u_scale: FloatProperty(name='UScale', default=2.0, options=set())
     v_scale: FloatProperty(name='VScale', default=2.0, options=set())
     texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE', options=set())
@@ -128,7 +128,9 @@ class BDK_PG_terrain_layer(PropertyGroup):
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
     nodes: CollectionProperty(name='Nodes', type=BDK_PG_terrain_layer_node, options={'HIDDEN'})
     nodes_index: IntProperty(name='Nodes Index', options={'HIDDEN'})
-    texel_density: FloatProperty(name='Texel Density', get=terrain_layer_texel_density_get, description='The texel density of the layer measured in pixels per unit squared  (px/u²)',
+    texel_density: FloatProperty(name='Texel Density', get=terrain_paint_layer_texel_density_get,
+                                 description='The texel density of the layer measured in pixels per unit squared  ('
+                                             'px/u²)',
                                  options={'HIDDEN', 'SKIP_SAVE'})
 
 
@@ -176,7 +178,7 @@ def deco_layer_linked_layer_name_search(self: 'BDK_PG_terrain_deco_layer', conte
     terrain_info = get_terrain_info(context.active_object)
     if terrain_info is None:
         return []
-    return [layer.name for layer in terrain_info.terrain_layers]
+    return [layer.name for layer in terrain_info.paint_layers]
 
 
 def deco_layer_is_linked_to_layer_update(self: 'BDK_PG_terrain_deco_layer', context: Context):
@@ -192,7 +194,7 @@ def deco_layer_linked_layer_name_update(self: 'BDK_PG_terrain_deco_layer', conte
     if terrain_info is None:
         return
     self.linked_layer_id = ''
-    for i, layer in enumerate(terrain_info.terrain_layers):
+    for i, layer in enumerate(terrain_info.paint_layers):
         if layer.name == self.linked_layer_name:
             self.linked_layer_id = layer.id
             break
@@ -291,15 +293,15 @@ class BDK_PG_terrain_deco_layer(PropertyGroup):
     nodes_index: IntProperty(options=empty_set, update=terrain_deco_layer_nodes_index_update_cb)
 
 
-# TODO: replace this with
-def on_terrain_layer_index_update(self: 'BDK_PG_terrain_info', _: Context):
+# TODO: this shouldn't be necessary anymore
+def on_terrain_info_paint_layers_index_update(self: 'BDK_PG_terrain_info', _: Context):
     if not self.terrain_info_object or self.terrain_info_object.type != 'MESH':
         return
     mesh_data: Mesh = self.terrain_info_object.data
-    terrain_layer: BDK_PG_terrain_layer = self.terrain_layers[self.terrain_layers_index]
+    paint_layer: BDK_PG_terrain_paint_layer = self.paint_layers[self.paint_layers_index]
     color_attribute_index = -1
     for i, color_attribute in enumerate(mesh_data.color_attributes):
-        if color_attribute.name == terrain_layer.id:
+        if color_attribute.name == paint_layer.id:
             color_attribute_index = i
             break
     if mesh_data.color_attributes.active_color_index != color_attribute_index:
@@ -307,15 +309,15 @@ def on_terrain_layer_index_update(self: 'BDK_PG_terrain_info', _: Context):
         # Push an undo state.
         # This is needed so that if the user selects a new layer, does some operation, and then does an undo,
         # it won't wipe out the active painting layer.
-        bpy.ops.ed.undo_push(message=f"Select '{terrain_layer.name}' Layer")
+        bpy.ops.ed.undo_push(message=f"Select '{paint_layer.name}' Layer")
 
 
 class BDK_PG_terrain_info(PropertyGroup):
     terrain_info_object: PointerProperty(type=Object)
-    terrain_scale: FloatProperty(name='TerrainScale', options={'HIDDEN'}, subtype='DISTANCE')
-    terrain_layers: CollectionProperty(name='TerrainLayers', type=BDK_PG_terrain_layer) # TODO: rename this to paint_layers
-    terrain_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_layer_index_update)
-    deco_layers: CollectionProperty(name='DecoLayers', type=BDK_PG_terrain_deco_layer)
+    terrain_scale: FloatProperty(name='Terrain Scale', options={'HIDDEN'}, subtype='DISTANCE')
+    paint_layers: CollectionProperty(name='Paint Layers', type=BDK_PG_terrain_paint_layer)
+    paint_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_info_paint_layers_index_update)
+    deco_layers: CollectionProperty(name='Deco Layers', type=BDK_PG_terrain_deco_layer)
     deco_layers_index: IntProperty(options={'HIDDEN'})
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
@@ -324,6 +326,6 @@ class BDK_PG_terrain_info(PropertyGroup):
 classes = (
     BDK_PG_terrain_layer_node,
     BDK_PG_terrain_deco_layer,
-    BDK_PG_terrain_layer,
+    BDK_PG_terrain_paint_layer,
     BDK_PG_terrain_info,
 )

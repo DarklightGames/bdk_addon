@@ -144,7 +144,7 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str,
         elif node.type == 'PAINT_LAYER':
             layer_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
             layer_named_attribute_node.data_type = 'FLOAT'
-            layer_named_attribute_node.inputs['Name'].default_value = node.layer_id
+            layer_named_attribute_node.inputs['Name'].default_value = node.paint_layer_id
 
             blur_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
             blur_switch_node.input_type = 'FLOAT'

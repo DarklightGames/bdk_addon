@@ -730,8 +730,8 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         paint_node.node_tree = paint_node_group
         paint_node.label = 'Paint'
 
-        if paint_layer.layer_type == 'TERRAIN':
-            paint_node.inputs['Attribute'].default_value = paint_layer.terrain_layer_id
+        if paint_layer.layer_type == 'PAINT':
+            paint_node.inputs['Attribute'].default_value = paint_layer.paint_layer_id
         elif paint_layer.layer_type == 'DECO':
             paint_node.inputs['Attribute'].default_value = paint_layer.deco_layer_id
 

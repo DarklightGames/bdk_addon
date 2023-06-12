@@ -79,7 +79,7 @@ else:
     # Terrain
     from .terrain import builder as terrain_builder
     from .terrain import exporter as terrain_exporter
-    from .terrain import layers as terrain_layers
+    from .terrain import layers as terrain_layers  # TODO: rename to paint??
     from .terrain import deco as terrain_deco
     from .terrain import g16 as terrain_g16
     from .terrain import properties as terrain_properties

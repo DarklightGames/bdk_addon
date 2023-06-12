@@ -60,20 +60,20 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
 
     actor = T3DActor(class_='TerrainInfo', name='TerrainInfo0')
 
-    # Layers.
+    # Paint Layers
     layers = []
-    for terrain_layer in terrain_info.terrain_layers:
-        name = terrain_layer.id
-        texture = terrain_layer.material.get('bdk.reference', None) if terrain_layer.material else None
+    for paint_layer in terrain_info.paint_layers:
+        name = paint_layer.id
+        texture = paint_layer.material.get('bdk.reference', None) if paint_layer.material else None
         layers.append({
             'Texture': texture,
             'AlphaMap': f'Texture\'myLevel.Terrain.{name}\'',  # TODO: make "reference" class, handle strings differently in writer
-            'UScale': terrain_layer.u_scale,
-            'VScale': terrain_layer.v_scale,
-            'TextureRotation': terrain_layer.texture_rotation,
+            'UScale': paint_layer.u_scale,
+            'VScale': paint_layer.v_scale,
+            'TextureRotation': paint_layer.texture_rotation,
         })
 
-    # DecoLayers.
+    # Deco Layers
     deco_layers = []
     for deco_layer in terrain_info.deco_layers:
         deco_layers.append({
@@ -189,14 +189,14 @@ def export_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, direct
         bpy.data.images.remove(image)
 
 
-def export_terrain_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
+def export_terrain_paint_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
         raise RuntimeError('Invalid object')
 
-    for terrain_layer in terrain_info.terrain_layers:
-        image = create_image_from_color_attribute(terrain_info_object, depsgraph, terrain_layer.id)
+    for paint_layer in terrain_info.paint_layers:
+        image = create_image_from_color_attribute(terrain_info_object, depsgraph, paint_layer.id)
         # Write the image out to a file.
         image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
         # Now remove the image data block.

@@ -10,8 +10,8 @@ from bpy.types import Operator, Context, Mesh, Object
 from bpy_extras.io_utils import ExportHelper
 
 from .deco import add_terrain_deco_layer, build_deco_layers
-from .exporter import export_terrain_heightmap, export_terrain_layers, export_deco_layers, write_terrain_t3d
-from .layers import add_terrain_layer
+from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
+from .layers import add_terrain_paint_layer
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
@@ -19,16 +19,16 @@ from .builder import build_terrain_material, create_terrain_info_object, get_ter
 from .properties import terrain_layer_node_type_items
 
 
-class BDK_OT_terrain_layer_remove(Operator):
-    bl_idname = 'bdk.terrain_layer_remove'
-    bl_label = 'Remove Terrain Layer'
+class BDK_OT_terrain_paint_layer_remove(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_remove'
+    bl_label = 'Remove Terrain Paint Layer'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context: Context):
         if not is_active_object_terrain_info(context):
             return False
-        return get_terrain_info(context.active_object).terrain_layers_index >= 0
+        return get_terrain_info(context.active_object).paint_layers_index >= 0
 
     def execute(self, context: Context):
         active_object = context.active_object
@@ -37,30 +37,30 @@ class BDK_OT_terrain_layer_remove(Operator):
             return {'CANCELLED'}
 
         terrain_info = get_terrain_info(active_object)
-        terrain_layers = terrain_info.terrain_layers
-        terrain_layers_index = terrain_info.terrain_layers_index
+        paint_layers = terrain_info.paint_layers
+        paint_layers_index = terrain_info.paint_layers_index
 
-        if terrain_layers_index >= 0:
+        if paint_layers_index >= 0:
             # Remove color attribute.
             terrain_object = context.active_object
             mesh_data = cast(Mesh, terrain_object.data)
-            terrain_layer_id = terrain_layers[terrain_layers_index].id
-            if terrain_layer_id in mesh_data.color_attributes:
-                color_attribute = mesh_data.color_attributes[terrain_layer_id]
+            paint_layer_id = paint_layers[paint_layers_index].id
+            if paint_layer_id in mesh_data.color_attributes:
+                color_attribute = mesh_data.color_attributes[paint_layer_id]
                 mesh_data.color_attributes.remove(color_attribute)
 
-            terrain_layers.remove(terrain_layers_index)
+            paint_layers.remove(paint_layers_index)
 
-            terrain_info.terrain_layers_index = min(len(terrain_layers) - 1, terrain_layers_index)
+            terrain_info.paint_layers_index = min(len(paint_layers) - 1, paint_layers_index)
 
             build_terrain_material(terrain_object)
 
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_layer_move(Operator):
-    bl_idname = 'bdk.terrain_layer_move'
-    bl_label = 'Move Terrain Layer'
+class BDK_OT_terrain_paint_layer_move(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_move'
+    bl_label = 'Move Terrain Paint Layer'
     bl_options = {'REGISTER', 'UNDO'}
 
     direction: EnumProperty(
@@ -79,16 +79,16 @@ class BDK_OT_terrain_layer_move(Operator):
     def execute(self, context: Context):
         active_object = context.active_object
         terrain_info = get_terrain_info(context.active_object)
-        terrain_layers = terrain_info.terrain_layers
-        terrain_layers_index = terrain_info.terrain_layers_index
+        paint_layers = terrain_info.paint_layers
+        paint_layers_index = terrain_info.paint_layers_index
 
-        if self.direction == 'UP' and terrain_layers_index > 0:
-            terrain_layers.move(terrain_layers_index, terrain_layers_index - 1)
-            terrain_info.terrain_layers_index -= 1
+        if self.direction == 'UP' and paint_layers_index > 0:
+            paint_layers.move(paint_layers_index, paint_layers_index - 1)
+            terrain_info.paint_layers_index -= 1
             build_terrain_material(active_object)
-        elif self.direction == 'DOWN' and terrain_layers_index < len(terrain_layers) - 1:
-            terrain_layers.move(terrain_layers_index, terrain_layers_index + 1)
-            terrain_info.terrain_layers_index += 1
+        elif self.direction == 'DOWN' and paint_layers_index < len(paint_layers) - 1:
+            paint_layers.move(paint_layers_index, paint_layers_index + 1)
+            terrain_info.paint_layers_index += 1
             build_terrain_material(active_object)
 
         return {'FINISHED'}
@@ -165,8 +165,8 @@ class BDK_OT_terrain_deco_layer_remove(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_layer_add(Operator):
-    bl_idname = 'bdk.terrain_layer_add'
+class BDK_OT_terrain_paint_layer_add(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_add'
     bl_label = 'Add Terrain Layer'
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -180,13 +180,13 @@ class BDK_OT_terrain_layer_add(Operator):
         if not is_active_object_terrain_info(context):
             return False
         terrain_info = get_terrain_info(context.active_object)
-        return len(terrain_info.terrain_layers) < 32
+        return len(terrain_info.paint_layers) < 32
 
     def execute(self, context: bpy.types.Context):
         active_object = context.active_object
 
         try:
-            add_terrain_layer(active_object, name='TerrainLayer', fill=self.alpha_fill)
+            add_terrain_paint_layer(active_object, name='TerrainLayer', fill=self.alpha_fill)
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -230,7 +230,7 @@ class BDK_OT_terrain_info_add(Operator):
             mesh_object.lock_rotations_4d = True
 
         # Add a base layer to start with.
-        add_terrain_layer(mesh_object, name='Base', fill=(1.0, 1.0, 1.0, 1.0))
+        add_terrain_paint_layer(mesh_object, name='Base', fill=(1.0, 1.0, 1.0, 1.0))
 
         context.scene.collection.objects.link(mesh_object)
 
@@ -268,7 +268,7 @@ class BDK_OT_terrain_info_export(Operator, ExportHelper):
             write_terrain_t3d(context.active_object, depsgraph, fp)
 
         export_terrain_heightmap(context.active_object, depsgraph, directory=self.directory)
-        export_terrain_layers(context.active_object, depsgraph, directory=self.directory)
+        export_terrain_paint_layers(context.active_object, depsgraph, directory=self.directory)
         export_deco_layers(context.active_object, depsgraph, directory=self.directory)
 
         self.report({'INFO'}, 'Exported TerrainInfo')
@@ -328,8 +328,8 @@ class BDK_OT_terrain_deco_layers_show(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_layers_show(Operator):
-    bl_idname = 'bdk.terrain_layers_show'
+class BDK_OT_terrain_paint_layers_show(Operator):
+    bl_idname = 'bdk.terrain_paint_layers_show'
     bl_label = 'Show Layers'
 
     mode: EnumProperty(name='Operation', items=(
@@ -343,8 +343,8 @@ class BDK_OT_terrain_layers_show(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        layers = terrain_info.terrain_layers
-        layers_index = terrain_info.terrain_layers_index
+        layers = terrain_info.paint_layers
+        layers_index = terrain_info.paint_layers_index
 
         for (layer_index, layer) in enumerate(layers):
             if self.mode == 'UNSELECTED' and layer_index == layers_index:
@@ -359,8 +359,8 @@ class BDK_OT_terrain_layers_show(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_layers_hide(Operator):
-    bl_idname = 'bdk.terrain_layers_hide'
+class BDK_OT_terrain_paint_layers_hide(Operator):
+    bl_idname = 'bdk.terrain_paint_layers_hide'
     bl_label = 'Hide Layers'
 
     mode: EnumProperty(name='Operation', items=(
@@ -374,8 +374,8 @@ class BDK_OT_terrain_layers_hide(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        layers = terrain_info.terrain_layers
-        layers_index = terrain_info.terrain_layers_index
+        layers = terrain_info.paint_layers
+        layers_index = terrain_info.paint_layers_index
 
         for (layer_index, layer) in enumerate(layers):
             if self.mode == 'UNSELECTED' and layer_index == layers_index:
@@ -534,8 +534,8 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        paint_layers = terrain_info.terrain_layers
-        paint_layers_index = terrain_info.terrain_layers_index
+        paint_layers = terrain_info.paint_layers
+        paint_layers_index = terrain_info.paint_layers_index
         paint_layer = paint_layers[paint_layers_index]
 
         add_terrain_layer_node(context.active_object, paint_layer.nodes, self.type)
@@ -556,8 +556,8 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        paint_layers = terrain_info.terrain_layers
-        paint_layers_index = terrain_info.terrain_layers_index
+        paint_layers = terrain_info.paint_layers
+        paint_layers_index = terrain_info.paint_layers_index
         paint_layer = paint_layers[paint_layers_index]
 
         remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index)
@@ -580,8 +580,8 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        paint_layers = terrain_info.terrain_layers
-        paint_layers_index = terrain_info.terrain_layers_index
+        paint_layers = terrain_info.paint_layers
+        paint_layers_index = terrain_info.paint_layers_index
         paint_layer = paint_layers[paint_layers_index]
 
         paint_layer.nodes_index = move_terrain_layer_node(self.direction, paint_layer.nodes, paint_layer.nodes_index)
@@ -628,21 +628,21 @@ classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
     BDK_OT_terrain_info_repair,
-    BDK_OT_terrain_layer_add,
-    BDK_OT_terrain_layer_remove,
-    BDK_OT_terrain_layer_move,
+
+    BDK_OT_terrain_paint_layer_add,
+    BDK_OT_terrain_paint_layer_remove,
+    BDK_OT_terrain_paint_layer_move,
+    BDK_OT_terrain_paint_layers_show,
+    BDK_OT_terrain_paint_layers_hide,
+    BDK_OT_terrain_paint_layer_nodes_add,
+    BDK_OT_terrain_paint_layer_nodes_remove,
+    BDK_OT_terrain_paint_layer_nodes_move,
+
     BDK_OT_terrain_deco_layer_add,
     BDK_OT_terrain_deco_layer_remove,
     BDK_OT_terrain_deco_layers_hide,
     BDK_OT_terrain_deco_layers_show,
-    BDK_OT_terrain_layers_show,
-    BDK_OT_terrain_layers_hide,
-
     BDK_OT_terrain_deco_layer_nodes_add,
     BDK_OT_terrain_deco_layer_nodes_remove,
     BDK_OT_terrain_deco_layer_nodes_move,
-
-    BDK_OT_terrain_paint_layer_nodes_add,
-    BDK_OT_terrain_paint_layer_nodes_remove,
-    BDK_OT_terrain_paint_layer_nodes_move,
 )

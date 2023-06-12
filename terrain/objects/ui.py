@@ -21,8 +21,8 @@ class BDK_UL_terrain_object_sculpt_layers(UIList):
 class BDK_UL_terrain_object_paint_layers(UIList):
 
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
-        if item.layer_type == 'TERRAIN':
-            layout.label(text=item.terrain_layer_name if item.terrain_layer_name else '<no layer selected>', icon='VPAINT_HLT')
+        if item.layer_type == 'PAINT':
+            layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='VPAINT_HLT')
         elif item.layer_type == 'DECO':
             layout.label(text=item.deco_layer_name if item.deco_layer_name else '<no layer selected>', icon='MONKEY')
         layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
@@ -51,8 +51,8 @@ class BDK_PT_terrain_object_paint_layer_settings(Panel):
         row = flow.row()
         row.prop(paint_layer, 'layer_type', expand=True)
 
-        if paint_layer.layer_type == 'TERRAIN':
-            flow.prop(paint_layer, 'terrain_layer_name')
+        if paint_layer.layer_type == 'PAINT':
+            flow.prop(paint_layer, 'paint_layer_name')
         elif paint_layer.layer_type == 'DECO':
             flow.prop(paint_layer, 'deco_layer_name')
 
@@ -80,7 +80,7 @@ class BDK_PT_terrain_object_paint_layer_settings(Panel):
 class BDK_PT_terrain_object_paint_layers(Panel):
     bl_label = 'Paint Layers'
     bl_idname = 'BDK_PT_terrain_object_paint_layers'
-    bl_category = 'Terrain'
+    bl_category = 'BDK'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_object'

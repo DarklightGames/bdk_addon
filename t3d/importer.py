@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any, cast, Type
 
 from ..projector.builder import build_projector_node_tree
 from ..terrain.builder import create_terrain_info_object
-from ..terrain.layers import add_terrain_layer
+from ..terrain.layers import add_terrain_paint_layer
 from ..terrain.deco import add_terrain_deco_layer
 from ..data import URotator, UReference
 from ..helpers import load_bdk_static_mesh, load_bdk_material
@@ -258,26 +258,26 @@ class TerrainInfoImporter(ActorImporter):
             alpha_map_reference = layer.get('AlphaMap', None)
 
             if alpha_map_reference is not None:
-                terrain_layer_name = UReference.from_string(str(alpha_map_reference)).object_name
+                paint_layer_name = UReference.from_string(str(alpha_map_reference)).object_name
             else:
-                terrain_layer_name = uuid.uuid4().hex
+                paint_layer_name = uuid.uuid4().hex
 
-            terrain_layer = add_terrain_layer(mesh_object, terrain_layer_name)
-            terrain_layer.u_scale = layer.get('UScale', 1.0)
-            terrain_layer.v_scale = layer.get('VScale', 1.0)
-            terrain_layer.texture_rotation = unreal_to_radians(layer.get('TextureRotation', 0))
+            paint_layer = add_terrain_paint_layer(mesh_object, paint_layer_name)
+            paint_layer.u_scale = layer.get('UScale', 1.0)
+            paint_layer.v_scale = layer.get('VScale', 1.0)
+            paint_layer.texture_rotation = unreal_to_radians(layer.get('TextureRotation', 0))
 
             # Alpha Map (actually)
-            alpha_map_image_name = f'{terrain_layer_name}.tga'
+            alpha_map_image_name = f'{paint_layer_name}.tga'
             alpha_map_image = bpy.data.images[alpha_map_image_name]
             if alpha_map_image:
-                alpha_map_attribute = mesh_data.attributes[terrain_layer.id]
+                alpha_map_attribute = mesh_data.attributes[paint_layer.id]
                 alpha_map_attribute.data.foreach_set('color', density_map_data_from_image(alpha_map_image))
 
             # Texture
             texture_reference = layer.get('Texture', None)
             if texture_reference is not None:
-                terrain_layer.material = load_bdk_material(str(texture_reference))
+                paint_layer.material = load_bdk_material(str(texture_reference))
 
         deco_density_maps: Dict[str, bpy.types.Attribute] = {}
 
@@ -287,35 +287,35 @@ class TerrainInfoImporter(ActorImporter):
 
             deco_layer_name = static_mesh.object_name if static_mesh else 'DecoLayer'
             # TODO: current scheme assumes 1:1 density map; provide a way to flag that we have our own density map we want to use
-            terrain_deco_layer = add_terrain_deco_layer(mesh_object, name=deco_layer_name)
+            deco_layer = add_terrain_deco_layer(mesh_object, name=deco_layer_name)
 
             static_mesh_data = load_bdk_static_mesh(str(static_mesh))
             deco_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)
 
             # TODO: make an object and link it, but it in a package to be sealed away from prying eyes lol
-            terrain_deco_layer.static_mesh = deco_object
+            deco_layer.static_mesh = deco_object
 
-            terrain_deco_layer.detail_mode = deco_layer.get('DetailMode', 'DM_Low')
-            terrain_deco_layer.show_on_terrain = deco_layer.get('ShowOnTerrain', 0)
-            terrain_deco_layer.max_per_quad = deco_layer.get('MaxPerQuad', 0)
-            terrain_deco_layer.seed = deco_layer.get('Seed', 0)
-            terrain_deco_layer.align_to_terrain = deco_layer.get('AlignToTerrain', 0)
-            terrain_deco_layer.force_draw = deco_layer.get('ForceDraw', 0)
-            terrain_deco_layer.show_on_invisible_terrain = deco_layer.get('ShowOnInvisibleTerrain', 0)
-            terrain_deco_layer.random_yaw = deco_layer.get('RandomYaw', 0)
-            terrain_deco_layer.draw_order = deco_layer.get('DrawOrder', 'SORT_NoSort')
+            deco_layer.detail_mode = deco_layer.get('DetailMode', 'DM_Low')
+            deco_layer.show_on_terrain = deco_layer.get('ShowOnTerrain', 0)
+            deco_layer.max_per_quad = deco_layer.get('MaxPerQuad', 0)
+            deco_layer.seed = deco_layer.get('Seed', 0)
+            deco_layer.align_to_terrain = deco_layer.get('AlignToTerrain', 0)
+            deco_layer.force_draw = deco_layer.get('ForceDraw', 0)
+            deco_layer.show_on_invisible_terrain = deco_layer.get('ShowOnInvisibleTerrain', 0)
+            deco_layer.random_yaw = deco_layer.get('RandomYaw', 0)
+            deco_layer.draw_order = deco_layer.get('DrawOrder', 'SORT_NoSort')
 
             # Density Multiplier
             density_multiplier = deco_layer.get('DensityMultiplier', None)
             if density_multiplier:
-                terrain_deco_layer.density_multiplier_min = density_multiplier.get('Min', 0.0)
-                terrain_deco_layer.density_multiplier_max = density_multiplier.get('Max', 0.0)
+                deco_layer.density_multiplier_min = density_multiplier.get('Min', 0.0)
+                deco_layer.density_multiplier_max = density_multiplier.get('Max', 0.0)
 
             # Fadeout Radius
             fadeout_radius = deco_layer.get('FadeoutRadius', None)
             if fadeout_radius:
-                terrain_deco_layer.fadeout_radius_min = fadeout_radius.get('Min', 0.0)
-                terrain_deco_layer.fadeout_radius_max = fadeout_radius.get('Max', 0.0)
+                deco_layer.fadeout_radius_min = fadeout_radius.get('Min', 0.0)
+                deco_layer.fadeout_radius_max = fadeout_radius.get('Max', 0.0)
 
             # Scale Multiplier
             scale_multiplier = deco_layer.get('ScaleMultiplier', None)
@@ -324,14 +324,14 @@ class TerrainInfoImporter(ActorImporter):
                 scale_multiplier_y = scale_multiplier.get('Y', None)
                 scale_multiplier_z = scale_multiplier.get('Z', None)
                 if scale_multiplier_x:
-                    terrain_deco_layer.scale_multiplier_min.x = scale_multiplier_x.get('Min', 0.0)
-                    terrain_deco_layer.scale_multiplier_max.x = scale_multiplier_x.get('Max', 0.0)
+                    deco_layer.scale_multiplier_min.x = scale_multiplier_x.get('Min', 0.0)
+                    deco_layer.scale_multiplier_max.x = scale_multiplier_x.get('Max', 0.0)
                 if scale_multiplier_y:
-                    terrain_deco_layer.scale_multiplier_min.y = scale_multiplier_y.get('Min', 0.0)
-                    terrain_deco_layer.scale_multiplier_max.y = scale_multiplier_y.get('Max', 0.0)
+                    deco_layer.scale_multiplier_min.y = scale_multiplier_y.get('Min', 0.0)
+                    deco_layer.scale_multiplier_max.y = scale_multiplier_y.get('Max', 0.0)
                 if scale_multiplier_y:
-                    terrain_deco_layer.scale_multiplier_min.z = scale_multiplier_z.get('Min', 0.0)
-                    terrain_deco_layer.scale_multiplier_max.z = scale_multiplier_z.get('Max', 0.0)
+                    deco_layer.scale_multiplier_min.z = scale_multiplier_z.get('Min', 0.0)
+                    deco_layer.scale_multiplier_max.z = scale_multiplier_z.get('Max', 0.0)
 
             # TODO: we need to make sure we don't delete attributes that are shared by multiple painting layers
             #  (current system assumes 1:1)
@@ -343,7 +343,7 @@ class TerrainInfoImporter(ActorImporter):
             if density_map_reference:
                 density_map_image_name = f'{density_map_reference.object_name}.tga'
                 density_map_image = bpy.data.images[density_map_image_name]
-                density_map_attribute = mesh_data.attributes[terrain_deco_layer.id]
+                density_map_attribute = mesh_data.attributes[deco_layer.id]
                 density_map_attribute.data.foreach_set('color', density_map_data_from_image(density_map_image))
 
                 deco_density_maps[density_map_image_name] = density_map_attribute

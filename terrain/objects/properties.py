@@ -113,11 +113,11 @@ class BDK_PG_terrain_object_sculpt_layer(PropertyGroup):
     interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
 
 
-def terrain_object_paint_layer_terrain_layer_name_search_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context, edit_text: str) -> List[str]:
+def terrain_object_paint_layer_paint_layer_name_search_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context, edit_text: str) -> List[str]:
     # Get a list of terrain layer names for the selected terrain info object.
     # TODO: This is insanely verbose.
-    terrain_layers = self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info.terrain_layers
-    return [terrain_layer.name for terrain_layer in terrain_layers]
+    paint_layers = self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info.paint_layers
+    return [paint_layer.name for paint_layer in paint_layers]
 
 
 def terrain_object_paint_layer_deco_layer_name_search_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context, edit_text: str) -> List[str]:
@@ -126,18 +126,18 @@ def terrain_object_paint_layer_deco_layer_name_search_cb(self: 'BDK_PG_terrain_o
     return [deco_layer.name for deco_layer in deco_layers]
 
 
-def terrain_object_paint_layer_terrain_layer_name_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
+def terrain_object_paint_layer_paint_layer_name_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
     # Update the terrain layer ID when the terrain layer name is changed.
-    terrain_layers = self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info.terrain_layers
+    paint_layers = self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info.paint_layers
 
     # Get the index of the terrain layer with the given name.
-    terrain_layer_names = [terrain_layer.name for terrain_layer in terrain_layers]
+    paint_layer_names = [paint_layer.name for paint_layer in paint_layers]
 
     try:
-        terrain_layer_index = terrain_layer_names.index(self.terrain_layer_name)
-        self.terrain_layer_id = terrain_layers[terrain_layer_index].id
+        paint_layer_index = paint_layer_names.index(self.paint_layer_name)
+        self.paint_layer_id = paint_layers[paint_layer_index].id
     except ValueError:
-        self.terrain_layer_id = ''
+        self.paint_layer_id = ''
 
     update_terrain_object_geometry_node_group(self.terrain_object.bdk.terrain_object)
 
@@ -158,7 +158,7 @@ def terrain_object_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_o
     update_terrain_object_geometry_node_group(self.terrain_object.bdk.terrain_object)
 
 
-class BDK_PG_terrain_object_paint_layer(PropertyGroup):
+class BDK_PG_terrain_object_paint_layer(PropertyGroup): # TODO: rename this to something less confusing and ambiguous.
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer')
     operation: EnumProperty(name='Operation', items=terrain_object_operation_items, default='ADD')
@@ -170,13 +170,13 @@ class BDK_PG_terrain_object_paint_layer(PropertyGroup):
     falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=0.0)
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     layer_type: EnumProperty(name='Layer Type', items=(
-        ('TERRAIN', 'Terrain', 'Terrain layer.'),
+        ('PAINT', 'Paint', 'Paint layer.'),
         ('DECO', 'Deco', 'Deco layer.'),
-    ), default='TERRAIN', update=terrain_object_update_cb)  # TODO: switch node this as well
-    terrain_layer_name: StringProperty(
-        name='Terrain Layer',
-        search=terrain_object_paint_layer_terrain_layer_name_search_cb,
-        update=terrain_object_paint_layer_terrain_layer_name_update_cb,
+    ), default='PAINT', update=terrain_object_update_cb)  # TODO: switch node this as well
+    paint_layer_name: StringProperty(
+        name='Paint Layer',
+        search=terrain_object_paint_layer_paint_layer_name_search_cb,
+        update=terrain_object_paint_layer_paint_layer_name_update_cb,
         search_options={'SORT'}
     )
     deco_layer_name: StringProperty(
@@ -185,7 +185,7 @@ class BDK_PG_terrain_object_paint_layer(PropertyGroup):
         update=terrain_object_paint_layer_deco_layer_name_update_cb,
         search_options={'SORT'}
     )
-    terrain_layer_id: StringProperty(name='Terrain Layer ID', default='', options={'HIDDEN'})
+    paint_layer_id: StringProperty(name='Terrain Layer ID', default='', options={'HIDDEN'})
     deco_layer_id: StringProperty(name='Deco Layer ID', default='', options={'HIDDEN'})
     mute: BoolProperty(name='Mute', default=False)
 
