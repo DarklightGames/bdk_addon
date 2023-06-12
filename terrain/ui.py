@@ -186,11 +186,11 @@ def get_selected_terrain_paint_layer(context: Context) -> BDK_PG_terrain_paint_l
 
 
 def get_selected_terrain_paint_layer_node(context: Context) -> Optional[BDK_PG_terrain_layer_node]:
-    if has_terrain_paint_layer_selected(context):
+    if not has_terrain_paint_layer_selected(context):
         return None
     paint_layer = get_selected_terrain_paint_layer(context)
-    nodes = paint_layer.nodes[paint_layer.nodes_index]
     nodes_index = paint_layer.nodes_index
+    nodes = paint_layer.nodes
     return nodes[nodes_index] if 0 <= nodes_index < len(nodes) else None
 
 
@@ -273,6 +273,7 @@ class BDK_PT_terrain_paint_layer_nodes(Panel):
                                      move_operator=BDK_OT_terrain_paint_layer_nodes_move.bl_idname)
 
         node = get_selected_terrain_paint_layer_node(context)
+        print(node)
         draw_terrain_layer_node_settings(layout, node)
 
 
@@ -477,8 +478,8 @@ class BDK_UL_terrain_layer_nodes(UIList):
             row.label(text='', icon='VPAINT_HLT')
 
         if item.type == 'PAINT_LAYER':
-            if item.layer_name:
-                col.label(text=item.layer_name, icon=terrain_layer_node_type_icons[item.type])
+            if item.paint_layer_name:
+                col.label(text=item.paint_layer_name, icon=terrain_layer_node_type_icons[item.type])
             else:
                 col.label(text='<no layer selected>', icon=terrain_layer_node_type_icons[item.type])
         else:

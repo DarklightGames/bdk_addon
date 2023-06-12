@@ -17,14 +17,23 @@ def get_terrain_objects_for_terrain_info_object(context: Context, terrain_info_o
 
 
 def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
+    """
+    Sort the modifiers on the terrain info object in the following order:
+    1. Terrain Object Sculpt (so that the 3D geometry is locked in for the other modifiers)
+    2. Paint Nodes (so that deco layers can read the paint layer alpha values)
+    3. Deco Nodes (final consumer of the geo & paint layer alpha values)
+    :param context:
+    :param terrain_info:
+    :return:
+    """
+
     terrain_info_object = terrain_info.terrain_info_object
 
     # The modifier ID list will contain a list of modifier IDs in the order that they should be sorted.
     modifier_ids = []
 
-    # TODO: add in the list of terrain layer modifiers
-
-    # Get a list of all the deco layers.
+    # Add in the list of all paint and deco layers.
+    modifier_ids.extend(map(lambda paint_layer: paint_layer.id, terrain_info.paint_layers))
     modifier_ids.extend(map(lambda deco_layer: deco_layer.id, terrain_info.deco_layers))
 
     # Get list of all terrain objects that are part of the same terrain info object.
@@ -39,7 +48,7 @@ def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_
 
     for terrain_object in terrain_objects:
         for paint_layer in terrain_object.paint_layers:
-            if paint_layer.type == 'LAYER':
+            if paint_layer.type == 'PAINT':
                 pass
 
     for terrain_object in terrain_objects:
@@ -49,9 +58,6 @@ def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_
 
     # TODO: we need to split the terrain objects into two passes of modifiers each terrain object then needs two
     #  modifier IDs (maybe even 3 if we have one for the deco?)
-
-    # modifier_ids.extend(map(lambda x: x.id, terrain_objects))
-
     # Make note of what the current mode is so that we can restore it later.
     current_mode = bpy.context.object.mode
     current_active_object = bpy.context.view_layer.objects.active

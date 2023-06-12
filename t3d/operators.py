@@ -24,7 +24,7 @@ class BDK_OT_t3d_import_from_clipboard(Operator):
     def poll(cls, context: Context):
         # Return false if the clipboard doesn't contain text
         if not context.window_manager.clipboard:
-            cls.poll_message_set(message='Clipboard is empty')
+            cls.poll_message_set('Clipboard is empty')
             return False
         return True
 
@@ -60,7 +60,7 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
     @classmethod
     def poll(cls, context: Context):
         if not are_bdk_dependencies_installed():
-            cls.poll_message_set(message='Dependencies are not installed')
+            cls.poll_message_set('Dependencies are not installed')
             return False
         return True
 

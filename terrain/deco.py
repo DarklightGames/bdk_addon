@@ -1,7 +1,7 @@
 import bpy
 import uuid
 
-from bpy.types import Context, Object, NodeTree, Collection, NodeSocket, bpy_struct
+from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct
 from typing import Optional, Iterable
 
 from ..helpers import get_terrain_info, auto_increment_name, add_operation_switch_nodes
@@ -34,16 +34,7 @@ def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer')
     deco_layer_modifier = terrain_info_object.modifiers.new(name=deco_layer.id, type='NODES')
     node_tree = bpy.data.node_groups.new(uuid.uuid4().hex, 'GeometryNodeTree')
     deco_layer_modifier.node_group = node_tree
-    update_terrain_layer_node_group(node_tree, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)
-
-    # TODO: Re-sort the modifiers on the terrain object in the following order:
-    # 1. Terrain Object Sculpt (so that the 3D geometry is locked in for the other modifiers)
-    # 2. Layer Nodes (so that deco layers can read the layer attributes)
-    # 3. Deco Layer Nodes (final consumer of the geo & layer attributes)
-    # We also need to make the terrain objects insert un-editable TERRAIN_OBJECT into the layer and deco layer nodes,
-    # thus unify the systems.
-    # This should completely resolve the issue of the modifiers not being applied in the correct order, so long as the
-    # sort order of the terrain objects triggers a recalculation of the modifier stack.
+    update_terrain_layer_node_group(node_tree, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)  # TODO: replace with sugared version
 
     # Generates the deco layer geometry node.
     build_deco_layers(terrain_info_object)

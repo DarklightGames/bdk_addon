@@ -9,9 +9,10 @@ from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolPrope
 from bpy.types import Operator, Context, Mesh, Object
 from bpy_extras.io_utils import ExportHelper
 
-from .deco import add_terrain_deco_layer, build_deco_layers
+from .deco import add_terrain_deco_layer, build_deco_layers, update_terrain_layer_node_group
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
+from .objects.properties import sort_terrain_info_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
@@ -40,20 +41,30 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
         paint_layers = terrain_info.paint_layers
         paint_layers_index = terrain_info.paint_layers_index
 
-        if paint_layers_index >= 0:
-            # Remove color attribute.
-            terrain_object = context.active_object
-            mesh_data = cast(Mesh, terrain_object.data)
-            paint_layer_id = paint_layers[paint_layers_index].id
-            if paint_layer_id in mesh_data.color_attributes:
-                color_attribute = mesh_data.color_attributes[paint_layer_id]
-                mesh_data.color_attributes.remove(color_attribute)
+        if paint_layers_index < 0:
+            return {'CANCELLED'}
 
-            paint_layers.remove(paint_layers_index)
+        # Remove color attribute.
+        terrain_object = context.active_object
+        mesh_data = cast(Mesh, terrain_object.data)
+        paint_layer_id = paint_layers[paint_layers_index].id
+        if paint_layer_id in mesh_data.color_attributes:
+            color_attribute = mesh_data.color_attributes[paint_layer_id]
+            mesh_data.color_attributes.remove(color_attribute)
 
-            terrain_info.paint_layers_index = min(len(paint_layers) - 1, paint_layers_index)
+        paint_layers.remove(paint_layers_index)
 
-            build_terrain_material(terrain_object)
+        terrain_info.paint_layers_index = min(len(paint_layers) - 1, paint_layers_index)
+
+        # Delete the associated modifier and node group.
+        if paint_layer_id in terrain_object.modifiers:
+            paint_layer_modifier = terrain_object.modifiers[paint_layer_id]
+            terrain_object.modifiers.remove(paint_layer_modifier)
+
+        if paint_layer_id in bpy.data.node_groups:
+            bpy.data.node_groups.remove(bpy.data.node_groups[paint_layer_id])
+
+        build_terrain_material(terrain_object)
 
         return {'FINISHED'}
 
@@ -104,7 +115,9 @@ class BDK_OT_terrain_deco_layer_add(Operator):
         return is_active_object_terrain_info(context)
 
     def execute(self, context: bpy.types.Context):
+        terrain_info = get_terrain_info(context.active_object)
         add_terrain_deco_layer(context.active_object)
+        sort_terrain_info_modifiers(context, terrain_info)
         return {'FINISHED'}
 
 
@@ -180,13 +193,17 @@ class BDK_OT_terrain_paint_layer_add(Operator):
         if not is_active_object_terrain_info(context):
             return False
         terrain_info = get_terrain_info(context.active_object)
-        return len(terrain_info.paint_layers) < 32
+        if len(terrain_info.paint_layers) >= 32:
+            cls.poll_message_set('Cannot have more than 32 terrain layers')
+            return False
+        return True
 
     def execute(self, context: bpy.types.Context):
         active_object = context.active_object
-
+        terrain_info = get_terrain_info(context.active_object)
         try:
-            add_terrain_paint_layer(active_object, name='TerrainLayer', fill=self.alpha_fill)
+            add_terrain_paint_layer(active_object, name='TerrainLayer')
+            sort_terrain_info_modifiers(context, terrain_info)
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -230,7 +247,7 @@ class BDK_OT_terrain_info_add(Operator):
             mesh_object.lock_rotations_4d = True
 
         # Add a base layer to start with.
-        add_terrain_paint_layer(mesh_object, name='Base', fill=(1.0, 1.0, 1.0, 1.0))
+        add_terrain_paint_layer(mesh_object, name='Base')
 
         context.scene.collection.objects.link(mesh_object)
 
@@ -540,7 +557,9 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
 
         add_terrain_layer_node(context.active_object, paint_layer.nodes, self.type)
 
-        # TODO: rebuild paint layers
+        if paint_layer.id in bpy.data.node_groups:
+            node_tree = bpy.data.node_groups[paint_layer.id]
+            update_terrain_layer_node_group(node_tree, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
 
         return {'FINISHED'}
 
@@ -562,7 +581,9 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
         remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index)
 
-        # build_paint_layers(context.active_object)
+        if paint_layer.id in bpy.data.node_groups:
+            node_tree = bpy.data.node_groups[paint_layer.id]
+            update_terrain_layer_node_group(node_tree, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
 
         return {'FINISHED'}
 
