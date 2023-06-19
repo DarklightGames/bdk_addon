@@ -1,13 +1,8 @@
-from bpy.types import Panel,  UIList, UILayout, AnyType, Menu, Context, Mesh
-from typing import Optional, Any, cast
-from .properties import BDK_PG_terrain_deco_layer, terrain_layer_node_type_icons, BDK_PG_terrain_layer_node, \
-    BDK_PG_terrain_paint_layer
-from .operators import BDK_OT_terrain_paint_layer_add, BDK_OT_terrain_paint_layer_remove, BDK_OT_terrain_paint_layer_move, \
-    BDK_OT_terrain_deco_layer_add, BDK_OT_terrain_deco_layer_remove, BDK_OT_terrain_deco_layers_hide, \
-    BDK_OT_terrain_deco_layers_show, BDK_OT_terrain_paint_layers_show, BDK_OT_terrain_paint_layers_hide, \
-    BDK_OT_terrain_deco_layer_nodes_add, BDK_OT_terrain_deco_layer_nodes_remove, BDK_OT_terrain_deco_layer_nodes_move, \
-    BDK_OT_terrain_info_repair, BDK_OT_terrain_paint_layer_nodes_add, BDK_OT_terrain_paint_layer_nodes_remove, \
-    BDK_OT_terrain_paint_layer_nodes_move
+from bpy.types import Panel,  UIList, UILayout, AnyType, Menu
+from typing import Optional, Any
+from .properties import terrain_layer_node_type_icons, BDK_PG_terrain_layer_node, has_terrain_paint_layer_selected, \
+    get_selected_terrain_paint_layer, get_selected_deco_layer, has_deco_layer_selected
+from .operators import *
 from ..helpers import is_active_object_terrain_info, get_terrain_info, should_show_bdk_developer_extras
 
 
@@ -164,40 +159,6 @@ class BDK_MT_terrain_deco_layers_context_menu(Menu):
         operator.mode = 'UNSELECTED'
 
 
-def has_deco_layer_selected(context: Context) -> bool:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info and 0 <= terrain_info.deco_layers_index < len(terrain_info.deco_layers)
-
-
-def get_selected_deco_layer(context: Context) -> BDK_PG_terrain_deco_layer:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info.deco_layers[terrain_info.deco_layers_index]
-
-
-def has_terrain_paint_layer_selected(context: Context) -> bool:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info and 0 <= terrain_info.paint_layers_index < len(terrain_info.paint_layers)
-
-
-# TODO: replace this with a context property (i.e. context.terrain_layer)
-def get_selected_terrain_paint_layer(context: Context) -> BDK_PG_terrain_paint_layer:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info.paint_layers[terrain_info.paint_layers_index]
-
-
-def get_selected_terrain_paint_layer_node(context: Context) -> Optional[BDK_PG_terrain_layer_node]:
-    if not has_terrain_paint_layer_selected(context):
-        return None
-    paint_layer = get_selected_terrain_paint_layer(context)
-    nodes_index = paint_layer.nodes_index
-    nodes = paint_layer.nodes
-    return nodes[nodes_index] if 0 <= nodes_index < len(nodes) else None
-
-
-def has_selected_terrain_paint_layer_node(context) -> bool:
-    return get_selected_terrain_paint_layer_node(context) is not None
-
-
 def has_selected_deco_layer_node(context: Context) -> bool:
     deco_layer = get_selected_deco_layer(context)
     deco_layer_nodes = deco_layer.nodes
@@ -233,6 +194,10 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
         if node.use_map_range:
             flow.prop(node, 'map_range_from_min')
             flow.prop(node, 'map_range_from_max', text='Max')
+
+    if node.type == 'PAINT':
+        layout.operator(BDK_OT_terrain_paint_layer_node_fill.bl_idname, text='Fill')
+        layout.operator(BDK_OT_terrain_paint_layer_node_invert.bl_idname, text='Invert')
 
 
 def draw_terrain_layer_node_list(layout: 'UILayout', dataptr: Any, add_operator: str, remove_operator: str, move_operator: str):
@@ -273,7 +238,6 @@ class BDK_PT_terrain_paint_layer_nodes(Panel):
                                      move_operator=BDK_OT_terrain_paint_layer_nodes_move.bl_idname)
 
         node = get_selected_terrain_paint_layer_node(context)
-        print(node)
         draw_terrain_layer_node_settings(layout, node)
 
 

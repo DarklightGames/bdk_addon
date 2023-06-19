@@ -17,7 +17,7 @@ from .objects.properties import sort_terrain_info_modifiers
 from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
-from .properties import terrain_layer_node_type_items
+from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node
 
 
 class BDK_OT_terrain_paint_layer_remove(Operator):
@@ -426,6 +426,7 @@ def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
 
     # Move the node to the top of the list.
     nodes.move(len(nodes) - 1, 0)
+
     return node
 
 
@@ -612,7 +613,6 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
         return {'FINISHED'}
 
 
-
 class BDK_OT_terrain_info_repair(Operator):
     """
     Repairs the terrain info mesh by ensuring that the X & Y coordinates of each vertex are correct.
@@ -645,6 +645,69 @@ class BDK_OT_terrain_info_repair(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_paint_layer_node_fill(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_node_fill'
+    bl_label = 'Fill Terrain Paint Layer Node'
+    bl_description = 'Fill the selected paint layer node with the selected value'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    value: FloatProperty(name='Value', default=1.0, min=0.0, max=1.0)
+
+    @classmethod
+    def poll(cls, context: Context):
+        node = get_selected_terrain_paint_layer_node(context)
+        return node and node.type == 'PAINT'
+
+    def execute(self, context: Context):
+        node = get_selected_terrain_paint_layer_node(context)
+        if node.id not in node.terrain_info_object.data.attributes:
+            self.report({'ERROR'}, f'Layer node attribute {node.id} does not exist')
+            return {'CANCELLED'}
+        attribute = node.terrain_info_object.data.attributes[node.id]
+        vertex_count = len(attribute.data)
+        color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
+        color_data[:] = (self.value, self.value, self.value, 0.0)
+        attribute.data.foreach_set('color', color_data.flatten())
+        # Tag the object to be updated and redraw all regions.
+        context.active_object.update_tag()
+        for window in context.window_manager.windows:
+            for area in window.screen.areas:
+                area.tag_redraw()
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_paint_layer_node_invert(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_node_invert'
+    bl_label = 'Invert Terrain Paint Layer Node'
+    bl_description = 'Invert the selected paint layer node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        node = get_selected_terrain_paint_layer_node(context)
+        return node and node.type == 'PAINT'
+
+    def execute(self, context: Context):
+        node = get_selected_terrain_paint_layer_node(context)
+        if node.id not in node.terrain_info_object.data.attributes:
+            self.report({'ERROR'}, f'Layer node attribute {node.id} does not exist')
+            return {'CANCELLED'}
+        attribute = node.terrain_info_object.data.attributes[node.id]
+        vertex_count = len(attribute.data)
+        color_data = [0.0] * vertex_count * 4
+        attribute.data.foreach_get('color', color_data)
+        color_data = numpy.array(color_data)
+        color_data.resize((vertex_count, 4))
+        color_data[:, 0:3] = 1.0 - color_data[:, 0:3]
+        attribute.data.foreach_set('color', color_data.flatten())
+        # Tag the object to be updated and redraw all regions.
+        context.active_object.update_tag()
+        for window in context.window_manager.windows:
+            for area in window.screen.areas:
+                area.tag_redraw()
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
@@ -658,6 +721,8 @@ classes = (
     BDK_OT_terrain_paint_layer_nodes_add,
     BDK_OT_terrain_paint_layer_nodes_remove,
     BDK_OT_terrain_paint_layer_nodes_move,
+    BDK_OT_terrain_paint_layer_node_fill,
+    BDK_OT_terrain_paint_layer_node_invert,
 
     BDK_OT_terrain_deco_layer_add,
     BDK_OT_terrain_deco_layer_remove,

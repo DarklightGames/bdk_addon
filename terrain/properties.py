@@ -1,5 +1,5 @@
 import math
-from typing import cast, List
+from typing import cast, List, Optional
 
 import bpy.ops
 from bpy.types import PropertyGroup, Object, Context, Mesh, Material
@@ -73,6 +73,7 @@ def terrain_layer_node_terrain_paint_layer_name_update_cb(self: 'BDK_PG_terrain_
 
 class BDK_PG_terrain_layer_node(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
+    depth: IntProperty(name='Depth', options={'HIDDEN'})
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     name: StringProperty(name='Name', default='Node')
     type: EnumProperty(name='Type', items=terrain_layer_node_type_items, default='PAINT')
@@ -97,7 +98,7 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     normal_angle_min: FloatProperty(name='Angle Min', default=math.radians(5.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
     normal_angle_max: FloatProperty(name='Angle Max', default=math.radians(10.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
     # Map Range
-    use_map_range: BoolProperty(name='Map Range', default=False)
+    use_map_range: BoolProperty(name='Map Range', default=False, options=set())
     map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR', options=set())
     map_range_from_max: FloatProperty(name='From Max', default=1.0, min=0, max=1.0, subtype='FACTOR', options=set())
 
@@ -117,6 +118,15 @@ def terrain_paint_layer_texel_density_get(self: 'BDK_PG_terrain_paint_layer') ->
     return pixels_per_quad / quad_area
 
 
+def terrain_paint_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_paint_layer', context: Context):
+    node = self.nodes[self.nodes_index]
+    if node.type == 'PAINT':
+        pass
+    mesh_data: Mesh = self.terrain_info_object.data
+    node: 'BDK_PG_terrain_layer_node' = self.nodes[self.nodes_index]
+    set_active_color_index_for_terrain_layer_node(node, mesh_data)
+
+
 class BDK_PG_terrain_paint_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='TerrainLayer', update=terrain_paint_layer_name_update_cb)
@@ -127,7 +137,7 @@ class BDK_PG_terrain_paint_layer(PropertyGroup):
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
     nodes: CollectionProperty(name='Nodes', type=BDK_PG_terrain_layer_node, options={'HIDDEN'})
-    nodes_index: IntProperty(name='Nodes Index', options={'HIDDEN'})
+    nodes_index: IntProperty(name='Nodes Index', options={'HIDDEN'}, update=terrain_paint_layer_nodes_index_update_cb)
     texel_density: FloatProperty(name='Texel Density', get=terrain_paint_layer_texel_density_get,
                                  description='The texel density of the layer measured in pixels per unit squared  ('
                                              'px/u²)',
@@ -221,14 +231,10 @@ def deco_layer_name_update_cb(self, context):
                 paint_layer.deco_layer_name = self.name
 
 
-def terrain_deco_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_deco_layer', _: Context):
-    if not self.terrain_info_object or self.terrain_info_object.type != 'MESH':
-        return
-    mesh_data: Mesh = self.terrain_info_object.data
-    color_attribute_index = -1
-    node: 'BDK_PG_terrain_layer_node' = self.nodes[self.nodes_index]
+def set_active_color_index_for_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', mesh_data: Mesh):
     if node.type != 'PAINT':
         return
+    color_attribute_index = -1
     for i, color_attribute in enumerate(mesh_data.color_attributes):
         if color_attribute.name == node.id:
             color_attribute_index = i
@@ -238,7 +244,15 @@ def terrain_deco_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_deco_layer', 
         # Push an undo state.
         # This is needed so that if the user selects a new layer, does some operation, and then does an undo,
         # it won't wipe out the active painting layer.
-        bpy.ops.ed.undo_push(message=f"Select '{self.name}' Node Paint Layer")
+        bpy.ops.ed.undo_push(message=f"Select '{node.name}' Node Paint Layer")
+
+
+def terrain_deco_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_deco_layer', _: Context):
+    if not self.terrain_info_object or self.nodes_index < 0:
+        return
+    mesh_data: Mesh = self.terrain_info_object.data
+    node: 'BDK_PG_terrain_layer_node' = self.nodes[self.nodes_index]
+    set_active_color_index_for_terrain_layer_node(node, mesh_data)
 
 
 class BDK_PG_terrain_deco_layer(PropertyGroup):
@@ -291,6 +305,7 @@ class BDK_PG_terrain_deco_layer(PropertyGroup):
     linked_layer_id: StringProperty(options={'HIDDEN'})
     nodes: CollectionProperty(type=BDK_PG_terrain_layer_node, options=empty_set)
     nodes_index: IntProperty(options=empty_set, update=terrain_deco_layer_nodes_index_update_cb)
+    nodes_dfs: CollectionProperty(type=BDK_PG_terrain_layer_node, options={'HIDDEN'})
 
 
 # TODO: this shouldn't be necessary anymore
@@ -321,6 +336,41 @@ class BDK_PG_terrain_info(PropertyGroup):
     deco_layers_index: IntProperty(options={'HIDDEN'})
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
+
+
+# TODO: maybe all of these should be in their own file?
+def has_deco_layer_selected(context: Context) -> bool:
+    terrain_info = get_terrain_info(context.active_object)
+    return terrain_info and 0 <= terrain_info.deco_layers_index < len(terrain_info.deco_layers)
+
+
+def get_selected_deco_layer(context: Context) -> BDK_PG_terrain_deco_layer:
+    terrain_info = get_terrain_info(context.active_object)
+    return terrain_info.deco_layers[terrain_info.deco_layers_index]
+
+
+def has_terrain_paint_layer_selected(context: Context) -> bool:
+    terrain_info = get_terrain_info(context.active_object)
+    return terrain_info and 0 <= terrain_info.paint_layers_index < len(terrain_info.paint_layers)
+
+
+# TODO: replace this with a context property (i.e. context.terrain_layer)
+def get_selected_terrain_paint_layer(context: Context) -> BDK_PG_terrain_paint_layer:
+    terrain_info = get_terrain_info(context.active_object)
+    return terrain_info.paint_layers[terrain_info.paint_layers_index]
+
+
+def get_selected_terrain_paint_layer_node(context: Context) -> Optional[BDK_PG_terrain_layer_node]:
+    if not has_terrain_paint_layer_selected(context):
+        return None
+    paint_layer = get_selected_terrain_paint_layer(context)
+    nodes_index = paint_layer.nodes_index
+    nodes = paint_layer.nodes
+    return nodes[nodes_index] if 0 <= nodes_index < len(nodes) else None
+
+
+def has_selected_terrain_paint_layer_node(context) -> bool:
+    return get_selected_terrain_paint_layer_node(context) is not None
 
 
 classes = (

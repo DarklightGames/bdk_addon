@@ -20,6 +20,8 @@ def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_
     """
     Sort the modifiers on the terrain info object in the following order:
     1. Terrain Object Sculpt (so that the 3D geometry is locked in for the other modifiers)
+     > the question is whether or not we should combine all sculpts into one mega-modifier or have them separated.
+     > might need to inquire about performance implications of either approach.
     2. Paint Nodes (so that deco layers can read the paint layer alpha values)
     3. Deco Nodes (final consumer of the geo & paint layer alpha values)
     :param context:
@@ -48,12 +50,12 @@ def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_
 
     for terrain_object in terrain_objects:
         for paint_layer in terrain_object.paint_layers:
-            if paint_layer.type == 'PAINT':
+            if paint_layer.layer_type == 'PAINT':
                 pass
 
     for terrain_object in terrain_objects:
         for paint_layer in terrain_object.paint_layers:
-            if paint_layer.type == 'DECO':
+            if paint_layer.layer_type == 'DECO':
                 pass
 
     # TODO: we need to split the terrain objects into two passes of modifiers each terrain object then needs two
@@ -80,6 +82,7 @@ def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_
     # TODO: it would be nice if we could move the modifiers without needing to use the ops API, or at least suspend
     #  evaluation of the node tree while we do it.
 
+    # TODO: we can use the data API to do this, but we need to know the index of the modifier in the list.
     # Update the modifiers on the terrain info object to reflect the new sort order.
     for i, modifier_id in enumerate(modifier_ids):
         bpy.ops.object.modifier_move_to_index(modifier=modifier_id, index=i)

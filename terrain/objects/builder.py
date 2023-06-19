@@ -408,7 +408,8 @@ def create_paint_node_group() -> NodeTree:
     value_socket = add_interpolation_type_switch_nodes(
         node_tree,
         input_node.outputs['Interpolation Type'],
-        divide_node.outputs['Value']
+        divide_node.outputs['Value'],
+        [x[0] for x in map_range_interpolation_type_items],
     )
 
     # Link the geometry output of the input node to the geometry input of the store named attribute node.

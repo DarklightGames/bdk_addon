@@ -113,11 +113,11 @@ def update_terrain_layer_node_group(node_tree: NodeTree, dataptr_name: str, data
         node_tree.links.new(density_socket, clamp_node.inputs['Value'])
 
     store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
-    store_named_attribute_node.data_type = 'FLOAT'
+    store_named_attribute_node.data_type = 'BYTE_COLOR'
     store_named_attribute_node.domain = 'POINT'
     store_named_attribute_node.inputs['Name'].default_value = dataptr_id
 
-    node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs[4])
+    node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs[5])
 
     node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
     node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])

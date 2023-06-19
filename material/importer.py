@@ -282,12 +282,13 @@ class MaterialBuilder:
         return outputs
 
     def _import_detail_material(self, detail_material: UMaterial, detail_scale: float,
-                                color_socket: bpy.types.NodeSocket, uv_source_socket: bpy.types.NodeSocket) -> bpy.types.NodeSocket:
+                                color_socket: bpy.types.NodeSocket, uv_source_socket: Optional[bpy.types.NodeSocket]) -> bpy.types.NodeSocket:
         # Create UV scaling sockets.
         scale_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         scale_node.operation = 'SCALE'
         scale_node.inputs['Scale'].default_value = detail_scale
-        self._node_tree.links.new(scale_node.inputs[0], uv_source_socket)
+        if uv_source_socket:
+            self._node_tree.links.new(scale_node.inputs[0], uv_source_socket)
         detail_socket_inputs = MaterialSocketInputs()
         detail_socket_inputs.uv_socket = scale_node.outputs['Vector']
 

@@ -44,7 +44,7 @@ def add_movement_properties_to_actor(actor: T3DActor, bpy_object: Object, asset_
 def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optional[Object] = None) -> T3DActor:
     actor = T3DActor(class_='StaticMeshActor', name=static_mesh_object.name)
 
-    actor['StaticMesh'] = static_mesh_object.data.name
+    actor['StaticMesh'] = static_mesh_object.bdk.package_reference
     add_movement_properties_to_actor(actor, static_mesh_object, asset_instance)
 
     # Skin Overrides
@@ -168,11 +168,6 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     actor['Location'] = Vector(terrain_info_object.location) - Vector((32.0, 32.0, 32.0))
 
     return actor
-
-
-def sanitize_name(name: str) -> str:
-    # TODO: remove special characters etc.
-    return name.replace(' ', '_')
 
 
 def export_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):

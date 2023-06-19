@@ -1,5 +1,5 @@
 from bpy.types import PropertyGroup
-from bpy.props import PointerProperty, EnumProperty
+from bpy.props import PointerProperty, EnumProperty, StringProperty
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.objects.properties import BDK_PG_terrain_object
 
@@ -17,6 +17,7 @@ class BDK_PG_object(PropertyGroup):
                        default='NONE')
     terrain_info: PointerProperty(type=BDK_PG_terrain_info)
     terrain_object: PointerProperty(type=BDK_PG_terrain_object)
+    package_reference: StringProperty(name='Package Reference', options={'HIDDEN'})
 
 
 classes = (
