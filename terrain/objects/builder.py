@@ -696,9 +696,6 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
     distance_socket = distance_attribute_node.outputs[1]
     geometry_node_socket = store_distance_attribute_node.outputs['Geometry']
 
-    # TODO: there is some sort of issue where it's reusing the same node group for different objects?
-    #  you can have one, but as soon as you add another, the old one breaks
-
     # Now chain the node components together.
     for sculpt_layer in terrain_object.sculpt_layers:
         sculpt_node_group = create_sculpt_node_group(sculpt_layer.id)
@@ -707,8 +704,11 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         sculpt_node.node_tree = sculpt_node_group
         sculpt_node.label = 'Sculpt'
 
-        # TODO: drivers for muting are apparently bad form according to some Blender devs; change this to a switch node.
-        add_sculpt_layer_driver_to_node(sculpt_node, 'mute', sculpt_layer, 'mute')
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'GEOMETRY'
+
+        add_sculpt_layer_driver_to_node_socket(switch_node.inputs[1], sculpt_layer, 'mute')
+
         add_sculpt_layer_driver_to_node_socket(sculpt_node.inputs['Radius'], sculpt_layer, 'radius')
         add_sculpt_layer_driver_to_node_socket(sculpt_node.inputs['Falloff Radius'], sculpt_layer, 'falloff_radius')
         add_sculpt_layer_driver_to_node_socket(sculpt_node.inputs['Depth'], sculpt_layer, 'depth')
@@ -723,7 +723,10 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         node_tree.links.new(geometry_node_socket, sculpt_node.inputs['Geometry'])
         node_tree.links.new(distance_socket, sculpt_node.inputs['Distance'])
 
-        geometry_node_socket = sculpt_node.outputs['Geometry']
+        node_tree.links.new(sculpt_node.outputs['Geometry'], switch_node.inputs[14])  # False (not muted)
+        node_tree.links.new(geometry_node_socket, switch_node.inputs[15])  # True (muted)
+
+        geometry_node_socket = switch_node.outputs[6]
 
     for paint_layer in terrain_object.paint_layers:
         paint_node_group = create_paint_node_group()
@@ -736,7 +739,10 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         elif paint_layer.layer_type == 'DECO':
             paint_node.inputs['Attribute'].default_value = paint_layer.deco_layer_id
 
-        add_paint_layer_driver_to_node(paint_node, 'mute', paint_layer, 'mute')
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'GEOMETRY'
+        add_paint_layer_driver_to_node_socket(switch_node.inputs[1], paint_layer, 'mute')
+
         add_paint_layer_driver_to_node_socket(paint_node.inputs['Radius'], paint_layer, 'radius')
         add_paint_layer_driver_to_node_socket(paint_node.inputs['Falloff Radius'], paint_layer, 'falloff_radius')
         add_paint_layer_driver_to_node_socket(paint_node.inputs['Strength'], paint_layer, 'strength')
@@ -751,7 +757,10 @@ def update_terrain_object_geometry_node_group(terrain_object: 'BDK_PG_terrain_ob
         node_tree.links.new(geometry_node_socket, paint_node.inputs['Geometry'])
         node_tree.links.new(distance_socket, paint_node.inputs['Distance'])
 
-        geometry_node_socket = paint_node.outputs['Geometry']
+        node_tree.links.new(paint_node.outputs['Geometry'], switch_node.inputs[14])  # False (not muted)
+        node_tree.links.new(geometry_node_socket, switch_node.inputs[15])  # True (muted)
+
+        geometry_node_socket = switch_node.outputs[6]  # Output
 
     # Add a remove attribute node to remove the distance attribute.
     remove_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeRemoveAttribute')
