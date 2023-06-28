@@ -1,10 +1,11 @@
 import bmesh
 import bpy
-from bpy.types import Mesh, Object
-from typing import cast, Union, Optional, Tuple, Iterator
+from bpy.types import Mesh, Object, Context, NodeTree
+from typing import cast, Union, Optional, Tuple, Iterator, List, Iterable
 import uuid
 import numpy as np
 
+from .objects.properties import BDK_PG_terrain_object
 from ..helpers import get_terrain_info
 from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
@@ -246,7 +247,7 @@ def create_terrain_info_object(resolution: int, size: float, heightmap: Optional
     terrain_material.node_tree.nodes.clear()
 
     # Create the "hidden" material we will use for hiding quads.
-    # TODO: in future, use boolean attribute on the face domain once we can paint it
+    # TODO: in future, use boolean attribute on the face domain once we can paint it.
     hidden_material = bpy.data.materials.new(uuid.uuid4().hex)
     hidden_material.use_nodes = True
     hidden_material.node_tree.nodes.clear()

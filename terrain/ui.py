@@ -37,9 +37,18 @@ class BDK_PT_terrain_info_debug(Panel):
 
     def draw(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        self.layout.prop(terrain_info, 'x_size')
-        self.layout.prop(terrain_info, 'y_size')
-        self.layout.prop(terrain_info, 'terrain_scale')
+
+        flow = self.layout.grid_flow()
+        flow.use_property_split = True
+
+        col = flow.column(align=True)
+        col.prop(terrain_info, 'x_size')
+        col.prop(terrain_info, 'y_size')
+        flow.prop(terrain_info, 'terrain_scale')
+
+        flow.prop(terrain_info, 'terrain_object_sculpt_modifier_id')
+        flow.prop(terrain_info, 'terrain_object_paint_modifier_id')
+        flow.prop(terrain_info, 'terrain_object_deco_modifier_id')
 
 
 class BDK_PT_terrain_paint_layers(Panel):
@@ -131,6 +140,7 @@ class BDK_PT_terrain_paint_layer_debug(Panel):
     bl_region_type = 'UI'
     bl_category = 'BDK'
     bl_options = {'DEFAULT_CLOSED'}
+    bl_order = 100
 
     @classmethod
     def poll(cls, context: Context):
@@ -179,8 +189,12 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
         return
 
     layout.separator()
+
     flow = layout.grid_flow(align=True)
     flow.use_property_split = True
+
+    flow.prop(node, 'id')
+    flow.separator()
 
     if node.type == 'PAINT_LAYER':
         flow.column().prop(node, 'paint_layer_name')

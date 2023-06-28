@@ -12,12 +12,13 @@ from bpy_extras.io_utils import ExportHelper
 from .deco import add_terrain_deco_layer, build_deco_layers, update_terrain_layer_node_group
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
-from .objects.properties import sort_terrain_info_modifiers
+from .objects.properties import ensure_terrain_info_object_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
-from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node
+from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node, \
+    terrain_layer_node_type_item_names
 
 
 class BDK_OT_terrain_paint_layer_remove(Operator):
@@ -117,7 +118,7 @@ class BDK_OT_terrain_deco_layer_add(Operator):
     def execute(self, context: bpy.types.Context):
         terrain_info = get_terrain_info(context.active_object)
         add_terrain_deco_layer(context.active_object)
-        sort_terrain_info_modifiers(context, terrain_info)
+        ensure_terrain_info_object_modifiers(context, terrain_info)
         return {'FINISHED'}
 
 
@@ -410,7 +411,7 @@ class BDK_OT_terrain_paint_layers_hide(Operator):
 def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node = nodes.add()
     node.id = uuid.uuid4().hex
-    node.name = type
+    node.name = terrain_layer_node_type_item_names[type]
     node.terrain_info_object = terrain_info_object
     node.type = type
 
@@ -558,6 +559,7 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
 
         add_terrain_layer_node(context.active_object, paint_layer.nodes, self.type)
 
+        # TODO: this should be wrapped up in a function
         if paint_layer.id in bpy.data.node_groups:
             node_tree = bpy.data.node_groups[paint_layer.id]
             update_terrain_layer_node_group(node_tree, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)

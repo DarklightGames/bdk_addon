@@ -8,10 +8,11 @@ import t3dpy
 from bpy.types import Context, Object, Mesh, Image, Camera
 from typing import List, Optional, Dict, Any, cast, Type
 
+from ..terrain.operators import add_terrain_layer_node
 from ..projector.builder import build_projector_node_tree
 from ..terrain.builder import create_terrain_info_object
 from ..terrain.layers import add_terrain_paint_layer
-from ..terrain.deco import add_terrain_deco_layer
+from ..terrain.deco import add_terrain_deco_layer, update_terrain_layer_node_group
 from ..data import URotator, UReference
 from ..helpers import load_bdk_static_mesh, load_bdk_material
 from ..units import unreal_to_radians
@@ -233,6 +234,7 @@ class TerrainInfoImporter(ActorImporter):
         terrain_map_image = bpy.data.images[f'{terrain_map_reference.object_name}.tga']
         resolution = int(terrain_map_image.size[0])
         heightmap = height_map_data_from_image(terrain_map_image)
+
         # Translate the height values based on the terrain scale.
         heightmap = (0.5 - heightmap) * terrain_scale_z * -256.0  # TODO: i think umodel might be doing this wrong!
 
@@ -267,11 +269,25 @@ class TerrainInfoImporter(ActorImporter):
             paint_layer.v_scale = layer.get('VScale', 1.0)
             paint_layer.texture_rotation = unreal_to_radians(layer.get('TextureRotation', 0))
 
-            # Alpha Map (actually)
+            # Add the node group and rebuild the node tree.
+            paint_node = add_terrain_layer_node(mesh_object, paint_layer.nodes, type='PAINT')
+
+            if paint_layer.id in bpy.data.node_groups:
+                node_tree = bpy.data.node_groups[paint_layer.id]
+                update_terrain_layer_node_group(node_tree, 'paint_layers', layer_index, paint_layer.id, paint_layer.nodes)
+
+            # Alpha Map
             alpha_map_image_name = f'{paint_layer_name}.tga'
             alpha_map_image = bpy.data.images[alpha_map_image_name]
             if alpha_map_image:
-                alpha_map_attribute = mesh_data.attributes[paint_layer.id]
+                if terrain_map_image.size != alpha_map_image.size:
+                    # Print out a warning if the alpha map image is not the same size as the terrain map image.
+                    print(f'Warning: Alpha map image {alpha_map_image_name} is not the same size as the terrain map '
+                          f'image {terrain_map_image_name}. The alpha map image will be resized to match the terrain '
+                          f'map image.')
+                    # Resize the alpha map image to match the terrain map image.
+                    alpha_map_image.scale(terrain_map_image.size[0], terrain_map_image.size[1])
+                alpha_map_attribute = mesh_data.attributes[paint_node.id]
                 alpha_map_attribute.data.foreach_set('color', density_map_data_from_image(alpha_map_image))
 
             # Texture
@@ -282,43 +298,42 @@ class TerrainInfoImporter(ActorImporter):
         deco_density_maps: Dict[str, bpy.types.Attribute] = {}
 
         # Deco Layers
-        for deco_layer_index, deco_layer in deco_layers:
-            static_mesh = UReference.from_string(str(deco_layer.get('StaticMesh', 'None')))
+        for deco_layer_index, deco_layer_data in deco_layers:
+            static_mesh = UReference.from_string(str(deco_layer_data.get('StaticMesh', 'None')))
 
             deco_layer_name = static_mesh.object_name if static_mesh else 'DecoLayer'
-            # TODO: current scheme assumes 1:1 density map; provide a way to flag that we have our own density map we want to use
+
+            # TODO: current scheme assumes 1:1 density map; provide a way to flag that we have our own density map we
+            #  want to use (i.e. reuse the deco layers)
             deco_layer = add_terrain_deco_layer(mesh_object, name=deco_layer_name)
 
             static_mesh_data = load_bdk_static_mesh(str(static_mesh))
-            deco_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)
-
-            # TODO: make an object and link it, but it in a package to be sealed away from prying eyes lol
-            deco_layer.static_mesh = deco_object
-
-            deco_layer.detail_mode = deco_layer.get('DetailMode', 'DM_Low')
-            deco_layer.show_on_terrain = deco_layer.get('ShowOnTerrain', 0)
-            deco_layer.max_per_quad = deco_layer.get('MaxPerQuad', 0)
-            deco_layer.seed = deco_layer.get('Seed', 0)
-            deco_layer.align_to_terrain = deco_layer.get('AlignToTerrain', 0)
-            deco_layer.force_draw = deco_layer.get('ForceDraw', 0)
-            deco_layer.show_on_invisible_terrain = deco_layer.get('ShowOnInvisibleTerrain', 0)
-            deco_layer.random_yaw = deco_layer.get('RandomYaw', 0)
-            deco_layer.draw_order = deco_layer.get('DrawOrder', 'SORT_NoSort')
+            deco_static_mesh_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)
+            deco_layer.static_mesh = deco_static_mesh_object
+            deco_layer.detail_mode = deco_layer_data.get('DetailMode', 'DM_Low')
+            deco_layer.show_on_terrain = deco_layer_data.get('ShowOnTerrain', 0)
+            deco_layer.max_per_quad = deco_layer_data.get('MaxPerQuad', 0)
+            deco_layer.seed = deco_layer_data.get('Seed', 0)
+            deco_layer.align_to_terrain = deco_layer_data.get('AlignToTerrain', 0)
+            deco_layer.force_draw = deco_layer_data.get('ForceDraw', 0)
+            deco_layer.show_on_invisible_terrain = deco_layer_data.get('ShowOnInvisibleTerrain', 0)
+            deco_layer.random_yaw = deco_layer_data.get('RandomYaw', 0)
+            deco_layer.draw_order = deco_layer_data.get('DrawOrder', 'SORT_NoSort')
 
             # Density Multiplier
-            density_multiplier = deco_layer.get('DensityMultiplier', None)
+            density_multiplier = deco_layer_data.get('DensityMultiplier', None)
             if density_multiplier:
                 deco_layer.density_multiplier_min = density_multiplier.get('Min', 0.0)
                 deco_layer.density_multiplier_max = density_multiplier.get('Max', 0.0)
 
             # Fadeout Radius
-            fadeout_radius = deco_layer.get('FadeoutRadius', None)
+            fadeout_radius = deco_layer_data.get('FadeoutRadius', None)
             if fadeout_radius:
                 deco_layer.fadeout_radius_min = fadeout_radius.get('Min', 0.0)
                 deco_layer.fadeout_radius_max = fadeout_radius.get('Max', 0.0)
 
             # Scale Multiplier
-            scale_multiplier = deco_layer.get('ScaleMultiplier', None)
+            scale_multiplier = deco_layer_data.get('ScaleMultiplier', None)
             if scale_multiplier:
                 scale_multiplier_x = scale_multiplier.get('X', None)
                 scale_multiplier_y = scale_multiplier.get('Y', None)
@@ -337,16 +352,30 @@ class TerrainInfoImporter(ActorImporter):
             #  (current system assumes 1:1)
 
             # Density Map
-            density_map_reference = UReference.from_string(str(deco_layer.get('DensityMap', 'None')))
+            density_map_reference = UReference.from_string(str(deco_layer_data.get('DensityMap', 'None')))
 
             # TODO: create the density maps for each unique texture/image (map the name to a generated uuid attribute)
             if density_map_reference:
                 density_map_image_name = f'{density_map_reference.object_name}.tga'
                 density_map_image = bpy.data.images[density_map_image_name]
-                density_map_attribute = mesh_data.attributes[deco_layer.id]
-                density_map_attribute.data.foreach_set('color', density_map_data_from_image(density_map_image))
+                if density_map_image:
+                    print(f'density map image found for deco layer {density_map_image}')
+                    # Create the paint node for the deco layer.
+                    paint_node = add_terrain_layer_node(mesh_object, deco_layer.nodes, type='PAINT')
+                    if terrain_map_image.size != density_map_image.size:
+                        # Print out a warning if the alpha map image is not the same size as the terrain map image.
+                        print(
+                            f'Warning: Deco density map {density_map_image} is not the same size as the terrain map'
+                            f'The density map will be resized to match the terrain '
+                            f'map image.')
+                        # Resize the alpha map image to match the terrain map image.
+                        density_map_image.scale(terrain_map_image.size[0], terrain_map_image.size[1])
 
-                deco_density_maps[density_map_image_name] = density_map_attribute
+                    density_map_attribute = mesh_data.attributes[paint_node.id]
+                    density_map_attribute.data.foreach_set('color', density_map_data_from_image(density_map_image))
+                    deco_density_maps[density_map_image_name] = density_map_attribute
+                else:
+                    print(f'Could not find density map image: {density_map_image_name}')
 
         # Quad Visibility Bitmap.
         quad_visibility_bitmap = np.zeros(shape=int(math.ceil((resolution * resolution) / 32)), dtype=np.int32)
@@ -417,7 +446,7 @@ def height_map_data_from_image(image: Image) -> np.array:
 
 def density_map_data_from_image(image: Image) -> np.array:
     """
-    Converts the alpha channel of an image to RGBA data used for density maps.
+    Converts the alpha channel of an image to RGBA data used for density maps. [THIS IS TECHNICALLY WRONG, WE NEED TO FIGURE OUT HOW TO DO THE LUMA CALCULATION CORRECTLY]
     :param image:
     :return:
     """
@@ -425,12 +454,16 @@ def density_map_data_from_image(image: Image) -> np.array:
         raise RuntimeError('image does not have an alpha channel!')
     alpha_data = np.array(list(image.pixels)[3::4], dtype=float)
     color_data = np.ones(len(alpha_data) * 4, dtype=float)
+    luma_coefficients = np.array((0.2126, 0.7152, 0.0722))
     for index, datum in enumerate(alpha_data):
+        # Sets the first three values to the alpha value.
         start = index * 4
         stop = start + 3
         color_data[start:stop] = datum
     color_data[:] = tuple(color_data)
-    return color_data
+    # Multiply every value by 255 and change the type to int.
+    color_data *= 255
+    return color_data.astype(int)
 
 
 def import_t3d(contents: str, context: Context):

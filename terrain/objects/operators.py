@@ -1,11 +1,12 @@
 import uuid
 
 import bpy
-from bpy.types import Operator, Context, Collection, Event
+from bpy.types import Operator, Context, Collection, Event, Object
 from bpy.props import EnumProperty
 
+from .properties import ensure_terrain_info_object_modifiers
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group
-from .builder import create_terrain_object, update_terrain_object_geometry_node_group
+from .builder import create_terrain_object
 
 
 class BDK_OT_terrain_object_add(Operator):
@@ -77,8 +78,8 @@ class BDK_OT_terrain_object_sculpt_layer_add(Operator):
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
-        terrain_info_object = context.active_object
-        terrain_object = terrain_info_object.bdk.terrain_object
+        terrain_object_object = context.active_object
+        terrain_object = terrain_object_object.bdk.terrain_object
         sculpt_layer = terrain_object.sculpt_layers.add()
         sculpt_layer.id = uuid.uuid4().hex
         sculpt_layer.terrain_object = terrain_object.object
@@ -86,11 +87,11 @@ class BDK_OT_terrain_object_sculpt_layer_add(Operator):
         # Update all the indices of the components.
         update_terrain_object_indices(terrain_object)
 
-        # Update the geometry node tree.
-        update_terrain_object_geometry_node_group(terrain_object)
-
         # Set the sculpting component index to the new sculpting component.
         terrain_object.sculpt_layers_index = len(terrain_object.sculpt_layers) - 1
+
+        # Update the geometry node tree.
+        ensure_terrain_info_object_modifiers(context, terrain_object.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
@@ -105,8 +106,8 @@ class BDK_OT_terrain_object_sculpt_layer_remove(Operator):
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
-        terrain_info_object = context.active_object
-        terrain_object = terrain_info_object.bdk.terrain_object
+        terrain_object_object = context.active_object
+        terrain_object = terrain_object_object.bdk.terrain_object
         sculpt_layers_index = terrain_object.sculpt_layers_index
 
         terrain_object.sculpt_layers.remove(sculpt_layers_index)
@@ -116,7 +117,7 @@ class BDK_OT_terrain_object_sculpt_layer_remove(Operator):
         update_terrain_object_indices(terrain_object)
 
         # Update the geometry node tree.
-        update_terrain_object_geometry_node_group(terrain_object)
+        ensure_terrain_info_object_modifiers(context, terrain_object.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
@@ -140,8 +141,8 @@ class BDK_OT_terrain_object_sculpt_layer_move(Operator):
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
-        terrain_info_object = context.active_object
-        terrain_object = terrain_info_object.bdk.terrain_object
+        terrain_object_object = context.active_object
+        terrain_object = terrain_object_object.bdk.terrain_object
         sculpt_layers_index = terrain_object.sculpt_layers_index
         if self.direction == 'UP':
             terrain_object.sculpt_layers.move(sculpt_layers_index, sculpt_layers_index - 1)
@@ -151,7 +152,7 @@ class BDK_OT_terrain_object_sculpt_layer_move(Operator):
             terrain_object.sculpt_layers_index += 1
 
         update_terrain_object_indices(terrain_object)
-        update_terrain_object_geometry_node_group(terrain_object)
+        ensure_terrain_info_object_modifiers(context, terrain_object.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
@@ -182,21 +183,13 @@ class BDK_OT_terrain_object_duplicate(Operator):
 
         copy_simple_property_group(terrain_object_object.bdk.terrain_object, object_copy.bdk.terrain_object)
 
-        # Make a new node group for the new object.
-        node_group = bpy.data.node_groups.new(name=new_id, type='GeometryNodeTree')
-
         terrain_object = object_copy.bdk.terrain_object
         terrain_object.id = new_id
         terrain_object.object = object_copy
-        terrain_object.node_tree = node_group
-
-        # Build the geometry node tree.
-        update_terrain_object_geometry_node_group(terrain_object)
 
         # Add a new modifier to the terrain info object.
         terrain_info_object = terrain_object.terrain_info_object
-        modifier = terrain_info_object.modifiers.new(name=new_id, type='NODES')
-        modifier.node_group = node_group
+        ensure_terrain_info_object_modifiers(context, terrain_info_object.bdk.terrain_info)
 
         # Deselect the active object.
         terrain_object_object.select_set(False)
@@ -218,6 +211,8 @@ class BDK_OT_terrain_object_bake(Operator):
 
     @classmethod
     def poll(cls, context: Context):
+        cls.poll_message_set('Not yet implemented')
+        return False
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
@@ -266,8 +261,8 @@ class BDK_OT_terrain_object_paint_layer_add(Operator):
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
-        terrain_info_object = context.active_object
-        terrain_object = terrain_info_object.bdk.terrain_object
+        terrain_object_object = context.active_object
+        terrain_object = terrain_object_object.bdk.terrain_object
         paint_layer = terrain_object.paint_layers.add()
         paint_layer.id = uuid.uuid4().hex
         paint_layer.terrain_object = terrain_object.object
@@ -276,7 +271,7 @@ class BDK_OT_terrain_object_paint_layer_add(Operator):
         update_terrain_object_indices(terrain_object)
 
         # Update the geometry node tree.
-        update_terrain_object_geometry_node_group(terrain_object)
+        ensure_terrain_info_object_modifiers(context, terrain_object.terrain_info_object.bdk.terrain_info)
 
         # Set the paint component index to the new paint component.
         terrain_object.paint_layers_index = len(terrain_object.paint_layers) - 1
@@ -294,8 +289,8 @@ class BDK_OT_terrain_object_paint_layer_remove(Operator):
         return context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
-        terrain_info_object = context.active_object
-        terrain_object = terrain_info_object.bdk.terrain_object
+        terrain_object_object = context.active_object
+        terrain_object = terrain_object_object.bdk.terrain_object
         paint_layers_index = terrain_object.paint_layers_index
 
         terrain_object.paint_layers.remove(paint_layers_index)
@@ -305,7 +300,7 @@ class BDK_OT_terrain_object_paint_layer_remove(Operator):
         update_terrain_object_indices(terrain_object)
 
         # Update the geometry node tree.
-        update_terrain_object_geometry_node_group(terrain_object)
+        ensure_terrain_info_object_modifiers(context, terrain_object.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
@@ -321,8 +316,8 @@ class BDK_OT_terrain_object_paint_layer_duplicate(Operator):
 
     def execute(self, context: Context):
         # TODO: wrap this into a function.
-        terrain_info_object = context.active_object
-        terrain_object = terrain_info_object.bdk.terrain_object
+        terrain_object_object = context.active_object
+        terrain_object = terrain_object_object.bdk.terrain_object
         paint_layer_copy = terrain_object.paint_layers.add()
 
         copy_simple_property_group(terrain_object.paint_layers[terrain_object.paint_layers_index], paint_layer_copy)
@@ -333,7 +328,7 @@ class BDK_OT_terrain_object_paint_layer_duplicate(Operator):
         update_terrain_object_indices(terrain_object)
 
         # Update the geometry node tree.
-        update_terrain_object_geometry_node_group(terrain_object)
+        ensure_terrain_info_object_modifiers(context, terrain_object.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
@@ -361,9 +356,22 @@ class BDK_OT_terrain_object_sculpt_layer_duplicate(Operator):
         update_terrain_object_indices(terrain_object)
 
         # Update the geometry node tree.
-        update_terrain_object_geometry_node_group(terrain_object)
+        ensure_terrain_info_object_modifiers(context, terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
+
+
+def delete_terrain_object(context: Context, terrain_object_object: Object):
+    terrain_object = terrain_object_object.bdk.terrain_object
+
+    # Delete the modifier from the terrain info object.
+    terrain_info_object = terrain_object.terrain_info_object
+
+    # Delete the terrain object.
+    bpy.data.objects.remove(terrain_object_object)
+
+    # Rebuild the terrain doodad modifiers.
+    ensure_terrain_info_object_modifiers(context, terrain_info_object.bdk.terrain_info)
 
 
 class BDK_OT_terrain_object_delete(Operator):
@@ -376,21 +384,7 @@ class BDK_OT_terrain_object_delete(Operator):
         return context.active_object and context.active_object.bdk.type == 'TERRAIN_OBJECT'
 
     def execute(self, context: Context):
-        terrain_object_object = context.active_object
-        terrain_object = terrain_object_object.bdk.terrain_object
-
-        # Delete the modifier from the terrain info object.
-        terrain_info_object = terrain_object.terrain_info_object
-        terrain_info_object.modifiers.remove(terrain_info_object.modifiers[terrain_object.id])
-
-        # Delete the node group.
-        bpy.data.node_groups.remove(terrain_object.node_tree)
-
-        # Delete the terrain object.
-        bpy.data.objects.remove(terrain_object_object)
-
-        # TODO: delete the node groups etc. for the sculpt and paint layers.
-
+        delete_terrain_object(context, context.active_object)
         return {'FINISHED'}
 
 

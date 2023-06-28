@@ -51,8 +51,11 @@ terrain_layer_node_type_items = (
     ('NOISE', 'Noise', 'Noise', terrain_layer_node_type_icons['NOISE'], 2),
     ('PAINT_LAYER', 'Paint Layer', 'Paint Layer', terrain_layer_node_type_icons['PAINT_LAYER'], 3),
     ('CONSTANT', 'Constant', 'Constant', terrain_layer_node_type_icons['CONSTANT'], 4),
-    ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector', terrain_layer_node_type_icons['NORMAL'], 5),
+    ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector',
+     terrain_layer_node_type_icons['NORMAL'], 5),
 )
+
+terrain_layer_node_type_item_names = {item[0]: item[1] for item in terrain_layer_node_type_items}
 
 
 def terrain_layer_node_terrain_paint_layer_name_search_cb(self: 'BDK_PG_terrain_layer_node', context: Context,
@@ -73,7 +76,6 @@ def terrain_layer_node_terrain_paint_layer_name_update_cb(self: 'BDK_PG_terrain_
 
 class BDK_PG_terrain_layer_node(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
-    depth: IntProperty(name='Depth', options={'HIDDEN'})
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     name: StringProperty(name='Name', default='Node')
     type: EnumProperty(name='Type', items=terrain_layer_node_type_items, default='PAINT')
@@ -104,6 +106,8 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
 
 
 # Add the children property to the node property group (this must be done after the class is defined).
+BDK_PG_terrain_layer_node.__annotations__["parent"] = PointerProperty(name='Parent', type=BDK_PG_terrain_layer_node,
+                                                                       options={'HIDDEN'})
 BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name='Children',
                                                                            type=BDK_PG_terrain_layer_node,
                                                                            options={'HIDDEN'})
@@ -115,7 +119,7 @@ def terrain_paint_layer_texel_density_get(self: 'BDK_PG_terrain_paint_layer') ->
     y = self.material.get('VClamp', 0) if self.material else 0
     pixels_per_quad = ((x / self.u_scale) * (y / self.v_scale))
     quad_area = pow(terrain_info.terrain_scale, 2)
-    return pixels_per_quad / quad_area
+    return abs(pixels_per_quad / quad_area)
 
 
 def terrain_paint_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_paint_layer', context: Context):
@@ -336,6 +340,11 @@ class BDK_PG_terrain_info(PropertyGroup):
     deco_layers_index: IntProperty(options={'HIDDEN'})
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
+
+    # Modifier IDs for the terrain object passes.
+    terrain_object_sculpt_modifier_id: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier ID')
+    terrain_object_paint_modifier_id: StringProperty(options={'HIDDEN'}, name='Paint Modifier ID')
+    terrain_object_deco_modifier_id: StringProperty(options={'HIDDEN'}, name='Deco Modifier ID')
 
 
 # TODO: maybe all of these should be in their own file?

@@ -1,106 +1,25 @@
 from typing import List
 
-import bpy
 from bpy.props import IntProperty, PointerProperty, CollectionProperty, FloatProperty, BoolProperty, StringProperty, \
     EnumProperty
 from bpy.types import PropertyGroup, Object, NodeTree, Context
 
 from ...helpers import get_terrain_info
-from .builder import update_terrain_object_geometry_node_group
 from ...units import meters_to_unreal
+from .builder import ensure_terrain_info_object_modifiers
 from .data import terrain_object_noise_type_items, terrain_object_operation_items, map_range_interpolation_type_items, \
     terrain_object_type_items
 
 
-def get_terrain_objects_for_terrain_info_object(context: Context, terrain_info_object: Object) -> List['BDK_PG_terrain_object']:
-    return [obj.bdk.terrain_object for obj in context.scene.objects if obj.bdk.type == 'TERRAIN_OBJECT' and obj.bdk.terrain_object.terrain_info_object == terrain_info_object]
-
-
-def sort_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
-    """
-    Sort the modifiers on the terrain info object in the following order:
-    1. Terrain Object Sculpt (so that the 3D geometry is locked in for the other modifiers)
-     > the question is whether or not we should combine all sculpts into one mega-modifier or have them separated.
-     > might need to inquire about performance implications of either approach.
-    2. Paint Nodes (so that deco layers can read the paint layer alpha values)
-    3. Deco Nodes (final consumer of the geo & paint layer alpha values)
-    :param context:
-    :param terrain_info:
-    :return:
-    """
-
-    terrain_info_object = terrain_info.terrain_info_object
-
-    # The modifier ID list will contain a list of modifier IDs in the order that they should be sorted.
-    modifier_ids = []
-
-    # Add in the list of all paint and deco layers.
-    modifier_ids.extend(map(lambda paint_layer: paint_layer.id, terrain_info.paint_layers))
-    modifier_ids.extend(map(lambda deco_layer: deco_layer.id, terrain_info.deco_layers))
-
-    # Get list of all terrain objects that are part of the same terrain info object.
-    terrain_objects = get_terrain_objects_for_terrain_info_object(context, terrain_info_object)
-
-    # Sort the terrain objects by sort order, then ID.
-    terrain_objects.sort(key=lambda x: (x.sort_order, x.id))
-
-    for terrain_object in terrain_objects:
-        for sculpt_layer in terrain_object.sculpt_layers:
-            pass
-
-    for terrain_object in terrain_objects:
-        for paint_layer in terrain_object.paint_layers:
-            if paint_layer.layer_type == 'PAINT':
-                pass
-
-    for terrain_object in terrain_objects:
-        for paint_layer in terrain_object.paint_layers:
-            if paint_layer.layer_type == 'DECO':
-                pass
-
-    # TODO: we need to split the terrain objects into two passes of modifiers each terrain object then needs two
-    #  modifier IDs (maybe even 3 if we have one for the deco?)
-    # Make note of what the current mode is so that we can restore it later.
-    current_mode = bpy.context.object.mode
-    current_active_object = bpy.context.view_layer.objects.active
-
-    # Set the mode to OBJECT so that we can move the modifiers.
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Make the active object the terrain info object.
-    bpy.context.view_layer.objects.active = terrain_info_object
-
-    # It's theoretically possible that the modifiers don't exist (e.g., having been deleted by the user, debugging etc.)
-    # Get a list of missing modifiers.
-    missing_modifier_ids = set(modifier_ids).difference(set(terrain_info_object.modifiers.keys()))
-    if len(missing_modifier_ids) > 0:
-        print(f'Missing modifiers: {missing_modifier_ids}')
-
-    # Remove any modifier IDs that do not have a corresponding modifier in the terrain info object.
-    modifier_ids = [x for x in modifier_ids if x in terrain_info_object.modifiers]
-
-    # TODO: it would be nice if we could move the modifiers without needing to use the ops API, or at least suspend
-    #  evaluation of the node tree while we do it.
-
-    # TODO: we can use the data API to do this, but we need to know the index of the modifier in the list.
-    # Update the modifiers on the terrain info object to reflect the new sort order.
-    for i, modifier_id in enumerate(modifier_ids):
-        bpy.ops.object.modifier_move_to_index(modifier=modifier_id, index=i)
-
-    # Restore the mode and active object to what it was before.
-    bpy.context.view_layer.objects.active = current_active_object
-    bpy.ops.object.mode_set(mode=current_mode)
-
-
 def terrain_object_sort_order_update_cb(self: 'BDK_PG_terrain_object', context: Context):
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
-    sort_terrain_info_modifiers(context, terrain_info)
+    ensure_terrain_info_object_modifiers(context, terrain_info)
 
 
 def terrain_object_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
     # We update the node group whe the operation is changed since we don't want to use drivers to control the
-    # operation for performance reasons.
-    update_terrain_object_geometry_node_group(self.terrain_object.bdk.terrain_object)
+    # operation for performance reasons. (TODO: NOT TRUE!)
+    ensure_terrain_info_object_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
 
 
 class BDK_PG_terrain_object_sculpt_layer(PropertyGroup):
@@ -148,7 +67,7 @@ def terrain_object_paint_layer_paint_layer_name_update_cb(self: 'BDK_PG_terrain_
     except ValueError:
         self.paint_layer_id = ''
 
-    update_terrain_object_geometry_node_group(self.terrain_object.bdk.terrain_object)
+    ensure_terrain_info_object_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
 
 
 def terrain_object_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
@@ -164,7 +83,7 @@ def terrain_object_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_o
     except ValueError:
         self.deco_layer_id = ''
 
-    update_terrain_object_geometry_node_group(self.terrain_object.bdk.terrain_object)
+    ensure_terrain_info_object_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
 
 
 class BDK_PG_terrain_object_paint_layer(PropertyGroup): # TODO: rename this to something less confusing and ambiguous.

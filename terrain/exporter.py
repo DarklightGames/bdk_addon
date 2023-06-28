@@ -177,7 +177,7 @@ def export_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, direct
         raise RuntimeError('Invalid object')
 
     for deco_layer in terrain_info.deco_layers:
-        image = create_image_from_color_attribute(terrain_info_object, depsgraph, deco_layer.id)
+        image = create_image_from_attribute(terrain_info_object, depsgraph, deco_layer.id)
         # Write the image out to a file.
         image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
         # Now remove the image data block.
@@ -191,14 +191,14 @@ def export_terrain_paint_layers(terrain_info_object: Object, depsgraph: Depsgrap
         raise RuntimeError('Invalid object')
 
     for paint_layer in terrain_info.paint_layers:
-        image = create_image_from_color_attribute(terrain_info_object, depsgraph, paint_layer.id)
+        image = create_image_from_attribute(terrain_info_object, depsgraph, paint_layer.id)
         # Write the image out to a file.
         image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
         # Now remove the image data block.
         bpy.data.images.remove(image)
 
 
-def create_image_from_color_attribute(terrain_info_object: Object, depsgraph: Depsgraph, color_attribute_name: str) -> Image:
+def create_image_from_attribute(terrain_info_object: Object, depsgraph: Depsgraph, attribute_name: str) -> Image:
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
@@ -208,37 +208,51 @@ def create_image_from_color_attribute(terrain_info_object: Object, depsgraph: De
     terrain_info_object = terrain_info_object.evaluated_get(depsgraph)
     mesh_data = cast(Mesh, terrain_info_object.data)
 
-    attribute = mesh_data.color_attributes[color_attribute_name]
+    if attribute_name not in mesh_data.attributes:
+        raise RuntimeError(f'Attribute {attribute_name} not found')
+
+    attribute = mesh_data.attributes[attribute_name]
+
+    if attribute.domain != 'POINT':
+        raise RuntimeError(f'Attribute {attribute_name} has unexpected domain ({attribute.domain})')
+
+    if attribute.data_type not in {'FLOAT', 'FLOAT_COLOR', 'BYTE_COLOR'}:
+        raise RuntimeError(f'Attribute {attribute_name} is not a float or color attribute')
+
     pixel_count = len(attribute.data)
 
-    image = bpy.data.images.new(name=color_attribute_name, width=terrain_info.x_size, height=terrain_info.y_size, alpha=True)
+    image = bpy.data.images.new(name=attribute_name, width=terrain_info.x_size, height=terrain_info.y_size, alpha=True)
     image.file_format = 'TARGA'
-
-    rgb_colors = np.ndarray(shape=(pixel_count, 3), dtype=float)
-
-    rgb_colors[:] = [datum.color[:3] for datum in attribute.data]
-
-    # Reshape this to a 2D array based on the terrain size.
-    rgb_colors = rgb_colors.reshape((terrain_info.y_size, terrain_info.x_size, 3))
-
-    # Flip along the first axis and then the second axis.
-    rgb_colors = np.flip(rgb_colors, axis=0)
-
-    # Now set the shape back to a 1D array.
-    rgb_colors = rgb_colors.reshape((pixel_count, 3))
 
     # Fill the data in with a middle-grey RGB layer and a 100% alpha.
     data = np.ndarray(shape=(pixel_count, 4), dtype=float)
     data[:] = (0.5, 0.5, 0.5, 1.0)
 
-    # Convert the RGB values to B/W values and assign those to the alpha channel of the data.
-    '''
-    Note that these coefficients are identical to the ones that Blender uses
-    when it converts an RGB color to a B/W value. Our terrain shader uses
-    the behavior, so we must replicate it here.
-    '''
-    luma_coefficients = (0.2126, 0.7152, 0.0722)
-    data[:, 3] = np.dot(rgb_colors, luma_coefficients)
+    if attribute.data_type in {'FLOAT_COLOR', 'BYTE_COLOR'}:
+        rgb_colors = np.ndarray(shape=(pixel_count, 3), dtype=float)
+        rgb_colors[:] = [datum.color[:3] for datum in attribute.data]
+
+        # Reshape this to a 2D array based on the terrain size.
+        rgb_colors = rgb_colors.reshape((terrain_info.y_size, terrain_info.x_size, 3))
+
+        # Flip along the first axis and then the second axis.
+        rgb_colors = np.flip(rgb_colors, axis=0)
+
+        # Now set the shape back to a 1D array.
+        rgb_colors = rgb_colors.reshape((pixel_count, 3))
+
+        # Convert the RGB values to B/W values and assign those to the alpha channel of the data.
+        '''
+        Note that these coefficients are identical to the ones that Blender uses
+        when it converts an RGB color to a B/W value. Our terrain shader uses
+        the behavior, so we must replicate it here.
+
+        When we can finally just paint float values, this will be unnecessary.
+        '''
+        luma_coefficients = (0.2126, 0.7152, 0.0722)
+        data[:, 3] = np.dot(rgb_colors, luma_coefficients)
+    else:
+        data[:, 3] = [datum.value for datum in attribute.data]
 
     # Assign the image pixels.
     image.pixels[:] = data.flatten()

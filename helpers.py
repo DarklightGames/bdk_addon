@@ -1,12 +1,13 @@
+import os
 import re
 import bpy
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Dict, Tuple, AbstractSet
 from bpy.types import Material, Object, Context, Mesh, NodeTree, NodeSocket
 from pathlib import Path
 from .data import UReference
 
 
-def auto_increment_name(name, names: Iterable[str]):
+def ensure_name_unique(name, names: Iterable[str]):
     while name in names:
         match = re.match(r'(.+)\.(\d+)', name)
         if match:
@@ -69,8 +70,33 @@ def get_blend_file_for_package(package_name: str) -> Optional[str]:
     return str(blend_files[0])
 
 
+def guess_package_reference_from_names(names: Iterable[str]) -> Dict[str, Optional[UReference]]:
+    """
+    Guesses a package reference from a name. Returns None if no reference could be guessed.
+    :param names:
+    :return:
+    """
+    # Iterate through all the libraries in the asset library and try to find a match.
+    asset_library_path = get_bdk_asset_library_path()
+    name_references = dict()
+
+    if asset_library_path is None:
+        return name_references
+
+    for blend_file in asset_library_path.glob('**/*.blend'):
+        if not blend_file.is_file():
+            continue
+        package = os.path.splitext(os.path.basename(blend_file))[0]
+        with bpy.data.libraries.load(str(blend_file), link=True, relative=False, assets_only=True) as (data_in, data_out):
+            for name in set(data_in.materials).intersection(names):
+                name_references[name] = UReference.from_string(f'Texture\'{package}.{name}\'')
+
+    return name_references
+
+
 def load_bdk_material(reference: str):
     reference = UReference.from_string(reference)
+
     if reference is None:
         return None
 
@@ -88,11 +114,20 @@ def load_bdk_material(reference: str):
         else:
             return None
 
-    # TODO: there is (i think) a bug here if we try to load the same material multiple times;
-    #  it's making loads of local materials for skin overrides for some reason.
-    material = bpy.data.materials[reference.object_name]
+    # The bug here is that NAMES are the same! You can have a material with the same name as another material, but
+    #  only if one is linked and the other is local. So we need to check if the material is local or not.
+    materials = [material for material in bpy.data.materials if material.name == reference.object_name]
 
-    return material
+    if len(materials) == 0:
+        return None
+
+    # If there are multiple materials with the same name, we need to find the one that is linked.
+    # If there are no linked materials, we just return the first one.
+    for material in materials:
+        if material.library is not None:
+            return material
+
+    return materials[0]
 
 
 # TODO: should actually do the object, not the mesh data
@@ -283,3 +318,33 @@ def add_noise_type_switch_nodes(
         last_output_node_socket = switch_node.outputs[0]  # Output
 
     return last_output_node_socket
+
+
+def ensure_node_tree_inputs_and_outputs(node_group_id: str, inputs: AbstractSet[Tuple[str, str]], output_names: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    if node_group_id in bpy.data.node_groups:
+        node_tree = bpy.data.node_groups[node_group_id]
+    else:
+        node_tree = bpy.data.node_groups.new(name=node_group_id, type='GeometryNodeTree')
+
+    # Compare the inputs and outputs of the node tree with the given inputs and outputs.
+    # If they are different, clear the inputs and outputs and add the new ones.
+    node_tree_inputs = set(map(lambda x: (x.type, x.name), node_tree.inputs))
+    node_tree_outputs = set(map(lambda x: (x.type, x.name), node_tree.outputs))
+
+    # For inputs that do not exist in the node tree, add them.
+    for input_type, input_name in inputs - node_tree_inputs:
+        node_tree.inputs.new(input_type, input_name)
+
+    # For inputs that exist in the node tree but not in the given inputs, remove them.
+    for input_type, input_name in node_tree_inputs - inputs:
+        node_tree.inputs.remove(node_tree.inputs[input_name])
+
+    # For outputs that do not exist in the node tree, add them.
+    for output_type, output_name in output_names - node_tree_outputs:
+        node_tree.outputs.new(output_type, output_name)
+
+    # For outputs that exist in the node tree but not in the given outputs, remove them.
+    for output_type, output_name in node_tree_outputs - output_names:
+        node_tree.outputs.remove(node_tree.outputs[output_name])
+
+    return node_tree

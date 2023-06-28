@@ -3,8 +3,7 @@ from typing import cast
 from bpy.types import Panel, Context, UIList
 
 from ...helpers import should_show_bdk_developer_extras
-from .operators import BDK_OT_terrain_object_sculpt_layer_add, \
-    BDK_OT_terrain_object_sculpt_layer_remove, BDK_OT_terrain_object_sculpt_layer_move, \
+from .operators import BDK_OT_terrain_object_sculpt_layer_add, BDK_OT_terrain_object_sculpt_layer_remove, \
     BDK_OT_terrain_object_paint_layer_add, BDK_OT_terrain_object_paint_layer_remove, \
     BDK_OT_terrain_object_paint_layer_duplicate, BDK_OT_terrain_object_sculpt_layer_duplicate, \
     BDK_OT_terrain_object_bake, BDK_OT_terrain_object_duplicate, BDK_OT_terrain_object_delete
@@ -123,8 +122,9 @@ class BDK_PT_terrain_object_bake(Panel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context: 'Context'):
-        self.layout.operator(BDK_OT_terrain_object_bake.bl_idname)
-        self.layout.operator(BDK_OT_terrain_object_duplicate.bl_idname)
+        self.layout.operator(BDK_OT_terrain_object_bake.bl_idname, icon='RENDER_RESULT')
+        self.layout.operator(BDK_OT_terrain_object_duplicate.bl_idname, icon='DUPLICATE')
+        self.layout.operator(BDK_OT_terrain_object_delete.bl_idname, icon='X')
 
 
 class BDK_PT_terrain_object_debug(Panel):
@@ -263,8 +263,6 @@ class BDK_PT_terrain_object(Panel):
         terrain_object = context.active_object.bdk.terrain_object
         layout = self.layout
         row = layout.row()
-        row.prop(terrain_object.terrain_info_object.modifiers[terrain_object.id], 'show_viewport', icon_only=True)
-        self.layout.operator(BDK_OT_terrain_object_delete.bl_idname, icon='X')
 
 
 class BDK_PT_terrain_object_paint_layer_debug(Panel):

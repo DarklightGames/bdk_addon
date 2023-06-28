@@ -3,7 +3,7 @@ import uuid
 from bpy.types import Object
 
 from .deco import update_terrain_layer_node_group
-from ..helpers import get_terrain_info, auto_increment_name
+from ..helpers import get_terrain_info, ensure_name_unique
 from .builder import build_terrain_material
 from .properties import BDK_PG_terrain_paint_layer
 
@@ -12,7 +12,7 @@ def add_terrain_paint_layer(terrain_info_object: Object, name: str):
     terrain_info = get_terrain_info(terrain_info_object)
 
     # Auto-increment the names if there is a conflict.
-    name = auto_increment_name(name, map(lambda x: x.name, terrain_info.paint_layers))
+    name = ensure_name_unique(name, map(lambda x: x.name, terrain_info.paint_layers))
 
     paint_layer_index = len(terrain_info.paint_layers)
 

@@ -4,7 +4,7 @@ import uuid
 from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct
 from typing import Optional, Iterable
 
-from ..helpers import get_terrain_info, auto_increment_name, add_operation_switch_nodes
+from ..helpers import get_terrain_info, ensure_name_unique, add_operation_switch_nodes
 
 
 def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer'):
@@ -19,7 +19,7 @@ def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer')
 
     # Create the deco layer object.
     deco_layer = terrain_info.deco_layers.add()
-    deco_layer.name = auto_increment_name(name, map(lambda x: x.name, terrain_info.deco_layers))
+    deco_layer.name = ensure_name_unique(name, map(lambda x: x.name, terrain_info.deco_layers))
     deco_layer.id = uuid.uuid4().hex
     deco_layer.object = create_deco_layer_object(deco_layer)
     deco_layer.terrain_info_object = terrain_info_object
