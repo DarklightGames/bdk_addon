@@ -25,6 +25,7 @@ class BDK_UL_terrain_object_paint_layers(UIList):
             layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='VPAINT_HLT')
         elif item.layer_type == 'DECO':
             layout.label(text=item.deco_layer_name if item.deco_layer_name else '<no layer selected>', icon='MONKEY')
+        layout.prop(item, 'operation', emboss=False, text='')
         layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
 
@@ -62,7 +63,6 @@ class BDK_PT_terrain_object_paint_layer_settings(Panel):
 
         flow.separator()
 
-        flow.prop(paint_layer, 'operation')
         flow.prop(paint_layer, 'interpolation_type')
 
         col = flow.column(align=True)
