@@ -2,7 +2,7 @@ import os
 import re
 import bpy
 from typing import Iterable, Optional, Dict, Tuple, AbstractSet
-from bpy.types import Material, Object, Context, Mesh, NodeTree, NodeSocket
+from bpy.types import Material, Object, Context, Mesh, NodeTree, NodeSocket, Node
 from pathlib import Path
 from .data import UReference
 
@@ -320,31 +320,51 @@ def add_noise_type_switch_nodes(
     return last_output_node_socket
 
 
-def ensure_node_tree_inputs_and_outputs(node_group_id: str, inputs: AbstractSet[Tuple[str, str]], output_names: AbstractSet[Tuple[str, str]]) -> NodeTree:
-    if node_group_id in bpy.data.node_groups:
-        node_tree = bpy.data.node_groups[node_group_id]
+def ensure_geometry_node_tree(name: str, inputs: AbstractSet[Tuple[str, str]], outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    return ensure_node_tree(name, 'GeometryNodeTree', inputs, outputs)
+
+
+def ensure_shader_node_tree(name: str, inputs: AbstractSet[Tuple[str, str]], outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    return ensure_node_tree(name, 'ShaderNodeTree', inputs, outputs)
+
+
+def ensure_node_tree(name: str, node_group_type: str, inputs: AbstractSet[Tuple[str, str]], outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    if name in bpy.data.node_groups:
+        node_tree = bpy.data.node_groups[name]
     else:
-        node_tree = bpy.data.node_groups.new(name=node_group_id, type='GeometryNodeTree')
+        node_tree = bpy.data.node_groups.new(name=name, type=node_group_type)
 
     # Compare the inputs and outputs of the node tree with the given inputs and outputs.
     # If they are different, clear the inputs and outputs and add the new ones.
-    node_tree_inputs = set(map(lambda x: (x.type, x.name), node_tree.inputs))
-    node_tree_outputs = set(map(lambda x: (x.type, x.name), node_tree.outputs))
+    node_tree_inputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree.inputs))
+    node_tree_outputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree.outputs))
 
     # For inputs that do not exist in the node tree, add them.
     for input_type, input_name in inputs - node_tree_inputs:
+        print(f'Adding input {input_name} of type {input_type}')
         node_tree.inputs.new(input_type, input_name)
 
     # For inputs that exist in the node tree but not in the given inputs, remove them.
     for input_type, input_name in node_tree_inputs - inputs:
+        print(f'Removing input {input_name} of type {input_type}')
         node_tree.inputs.remove(node_tree.inputs[input_name])
 
     # For outputs that do not exist in the node tree, add them.
-    for output_type, output_name in output_names - node_tree_outputs:
+    for output_type, output_name in outputs - node_tree_outputs:
+        print(f'Adding output {output_name} of type {output_type}')
         node_tree.outputs.new(output_type, output_name)
 
     # For outputs that exist in the node tree but not in the given outputs, remove them.
-    for output_type, output_name in node_tree_outputs - output_names:
+    for output_type, output_name in node_tree_outputs - outputs:
+        print(f'Removing output {output_name} of type {output_type}')
         node_tree.outputs.remove(node_tree.outputs[output_name])
 
+    node_tree.nodes.clear()
+
     return node_tree
+
+
+def add_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
+    input_node = node_tree.nodes.new(type='NodeGroupInput')
+    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+    return input_node, output_node

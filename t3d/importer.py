@@ -12,7 +12,8 @@ from ..terrain.operators import add_terrain_layer_node
 from ..projector.builder import build_projector_node_tree
 from ..terrain.builder import create_terrain_info_object
 from ..terrain.layers import add_terrain_paint_layer
-from ..terrain.deco import add_terrain_deco_layer, update_terrain_layer_node_group
+from ..terrain.deco import add_terrain_deco_layer, ensure_terrain_layer_node_group, ensure_paint_layers, \
+    ensure_deco_layers
 from ..data import URotator, UReference
 from ..helpers import load_bdk_static_mesh, load_bdk_material
 from ..units import unreal_to_radians
@@ -272,10 +273,6 @@ class TerrainInfoImporter(ActorImporter):
             # Add the node group and rebuild the node tree.
             paint_node = add_terrain_layer_node(mesh_object, paint_layer.nodes, type='PAINT')
 
-            if paint_layer.id in bpy.data.node_groups:
-                node_tree = bpy.data.node_groups[paint_layer.id]
-                update_terrain_layer_node_group(node_tree, 'paint_layers', layer_index, paint_layer.id, paint_layer.nodes)
-
             # Alpha Map
             alpha_map_image_name = f'{paint_layer_name}.tga'
             alpha_map_image = bpy.data.images[alpha_map_image_name]
@@ -392,6 +389,10 @@ class TerrainInfoImporter(ActorImporter):
                     mesh_data.polygons[polygon_index].material_index = 1
                 bitmap_index += 1
             bitmap_index += 1
+
+        # Ensure the paint layers are set up correctly.
+        ensure_paint_layers(mesh_object)
+        ensure_deco_layers(mesh_object)
 
         return mesh_object
 

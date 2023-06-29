@@ -1,55 +1,41 @@
 import bmesh
 import bpy
-from bpy.types import Mesh, Object, Context, NodeTree
-from typing import cast, Union, Optional, Tuple, Iterator, List, Iterable
+from bpy.types import Mesh, Object
+from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
-from .objects.properties import BDK_PG_terrain_object
-from ..helpers import get_terrain_info
+from ..helpers import get_terrain_info, ensure_shader_node_tree, add_input_and_output_nodes
 from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 
 
-def _build_or_get_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
-    group_name = 'BDK TerrainLayerUV'
-    version = 1  # increment this if we need to regenerate this (for example, if we update this code)
-
-    should_create = False
-    if group_name in bpy.data.node_groups:
-        node_tree = bpy.data.node_groups[group_name]
-        if 'version' not in node_tree or version >= node_tree['version']:
-            node_tree['version'] = version
-            should_create = True
-    else:
-        should_create = True
-
-    if should_create:
-        node_tree = bpy.data.node_groups.new(group_name, 'ShaderNodeTree')
-        node_tree.nodes.clear()
-        node_tree.inputs.clear()
-        node_tree.inputs.new('NodeSocketFloat', 'UScale')
-        node_tree.inputs.new('NodeSocketFloat', 'VScale')
-        node_tree.inputs.new('NodeSocketFloat', 'TextureRotation')
-        node_tree.inputs.new('NodeSocketFloat', 'TerrainScale')
-        node_tree.outputs.clear()
-        node_tree.outputs.new('NodeSocketVector', 'UV')
-
-    group_input_node = node_tree.nodes.new('NodeGroupInput')
+def _ensure_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
+    inputs = {
+        ('NodeSocketFloat', 'UScale'),
+        ('NodeSocketFloat', 'VScale'),
+        ('NodeSocketFloat', 'TextureRotation'),
+        ('NodeSocketFloat', 'TerrainScale'),
+    }
+    outputs = {
+        ('NodeSocketVector', 'UV'),
+    }
+    node_tree = ensure_shader_node_tree('BDK TerrainLayerUV', inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     # UScale Multiply
     u_multiply_node = node_tree.nodes.new('ShaderNodeMath')
     u_multiply_node.operation = 'MULTIPLY'
 
-    node_tree.links.new(u_multiply_node.inputs[0], group_input_node.outputs['UScale'])
-    node_tree.links.new(u_multiply_node.inputs[1], group_input_node.outputs['TerrainScale'])
+    node_tree.links.new(u_multiply_node.inputs[0], input_node.outputs['UScale'])
+    node_tree.links.new(u_multiply_node.inputs[1], input_node.outputs['TerrainScale'])
 
     # VScale Multiply
     v_multiply_node = node_tree.nodes.new('ShaderNodeMath')
     v_multiply_node.operation = 'MULTIPLY'
 
-    node_tree.links.new(v_multiply_node.inputs[0], group_input_node.outputs['VScale'])
-    node_tree.links.new(v_multiply_node.inputs[1], group_input_node.outputs['TerrainScale'])
+    node_tree.links.new(v_multiply_node.inputs[0], input_node.outputs['VScale'])
+    node_tree.links.new(v_multiply_node.inputs[1], input_node.outputs['TerrainScale'])
 
     # Combine XYZ
     combine_xyz_node = node_tree.nodes.new('ShaderNodeCombineXYZ')
@@ -72,12 +58,9 @@ def _build_or_get_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
     rotate_node.rotation_type = 'Z_AXIS'
 
     node_tree.links.new(rotate_node.inputs['Vector'], divide_node.outputs['Vector'])
-    node_tree.links.new(rotate_node.inputs['Angle'], group_input_node.outputs['TextureRotation'])
+    node_tree.links.new(rotate_node.inputs['Angle'], input_node.outputs['TextureRotation'])
 
-    # Group Output
-    group_output_node = node_tree.nodes.new('NodeGroupOutput')
-
-    node_tree.links.new(group_output_node.inputs['UV'], rotate_node.outputs['Vector'])
+    node_tree.links.new(output_node.inputs['UV'], rotate_node.outputs['Vector'])
 
     return node_tree
 
@@ -104,7 +87,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
     for paint_layer_index, paint_layer in enumerate(paint_layers):
         paint_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
-        paint_layer_uv_node.node_tree = _build_or_get_terrain_paint_layer_uv_group_node()
+        paint_layer_uv_node.node_tree = _ensure_terrain_paint_layer_uv_group_node()
 
         def add_paint_layer_input_driver(node, input_prop: Union[str | int], paint_layer_prop: str):
             fcurve = node.inputs[input_prop].driver_add('default_value')

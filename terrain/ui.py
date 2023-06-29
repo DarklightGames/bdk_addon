@@ -46,9 +46,9 @@ class BDK_PT_terrain_info_debug(Panel):
         col.prop(terrain_info, 'y_size')
         flow.prop(terrain_info, 'terrain_scale')
 
-        flow.prop(terrain_info, 'terrain_object_sculpt_modifier_id')
-        flow.prop(terrain_info, 'terrain_object_paint_modifier_id')
-        flow.prop(terrain_info, 'terrain_object_deco_modifier_id')
+        flow.prop(terrain_info, 'terrain_object_sculpt_modifier_name')
+        flow.prop(terrain_info, 'terrain_object_paint_modifier_name')
+        flow.prop(terrain_info, 'terrain_object_deco_modifier_name')
 
 
 class BDK_PT_terrain_paint_layers(Panel):

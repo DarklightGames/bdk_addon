@@ -1,5 +1,6 @@
 from typing import cast
 
+import bpy
 from bpy.types import Panel, Context, UIList
 
 from ...helpers import should_show_bdk_developer_extras
@@ -53,7 +54,11 @@ class BDK_PT_terrain_object_paint_layer_settings(Panel):
         if paint_layer.layer_type == 'PAINT':
             flow.prop(paint_layer, 'paint_layer_name')
         elif paint_layer.layer_type == 'DECO':
-            flow.prop(paint_layer, 'deco_layer_name')
+            row = flow.row()
+            row.prop(paint_layer, 'deco_layer_name')
+            deco_layer_object = bpy.data.objects[paint_layer.deco_layer_id] if paint_layer.deco_layer_id in bpy.data.objects else None
+            if deco_layer_object:
+                row.prop(deco_layer_object, 'hide_viewport', icon_only=True)
 
         flow.separator()
 
@@ -110,10 +115,9 @@ class BDK_PT_terrain_object_paint_layers(Panel):
         col.operator(BDK_OT_terrain_object_paint_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
 
-class BDK_PT_terrain_object_bake(Panel):
-    bl_idname = 'BDK_PT_terrain_object_bake'
-    bl_label = 'Bake'
-    bl_description = 'Bake the object to the mesh'
+class BDK_PT_terrain_object_operators(Panel):
+    bl_idname = 'BDK_PT_terrain_object_operators'
+    bl_label = 'Operators'
     bl_category = 'BDK'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -322,6 +326,6 @@ classes = (
     BDK_PT_terrain_object_paint_layer_settings,
     BDK_PT_terrain_object_paint_layer_debug,
     BDK_PT_terrain_object_advanced,
-    BDK_PT_terrain_object_bake,
+    BDK_PT_terrain_object_operators,
     BDK_PT_terrain_object_debug,
 )

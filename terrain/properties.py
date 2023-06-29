@@ -6,7 +6,7 @@ from bpy.types import PropertyGroup, Object, Context, Mesh, Material
 from bpy.props import PointerProperty, BoolProperty, FloatProperty, CollectionProperty, IntProperty, StringProperty, \
     FloatVectorProperty, EnumProperty
 
-from .deco import build_deco_layers
+from .deco import ensure_deco_layers
 from ..helpers import is_bdk_material, is_bdk_static_mesh_actor, get_terrain_info
 from .builder import build_terrain_material
 
@@ -29,11 +29,16 @@ def terrain_paint_layer_name_update_cb(self, context: Context):
             if paint_layer.paint_layer_id == self.id:
                 paint_layer.paint_layer_name = self.name
 
-    # Update deco layer names if the linked terrain layer matches.
-    # TODO: this will need to change when we add the terrain node system.
+    # Update the name of the paint layer in terrain object nodes.
+    for paint_layer in self.terrain_info_object.bdk.terrain_info.paint_layers:
+        for node in paint_layer.nodes:
+            if node.paint_layer_id == self.id:
+                node.paint_layer_name = self.name
+
     for deco_layer in self.terrain_info_object.bdk.terrain_info.deco_layers:
-        if deco_layer.linked_layer_id == self.id:
-            deco_layer.linked_layer_name = self.name
+        for node in deco_layer.nodes:
+            if node.paint_layer_id == self.id:
+                node.paint_layer_name = self.name
 
 
 terrain_layer_node_type_icons = {
@@ -71,7 +76,7 @@ def terrain_layer_node_terrain_paint_layer_name_update_cb(self: 'BDK_PG_terrain_
         self.paint_layer_id = ''
 
     # Rebuild the deco node setup.
-    build_deco_layers(self.terrain_info_object)
+    ensure_deco_layers(self.terrain_info_object)
 
 
 class BDK_PG_terrain_layer_node(PropertyGroup):
@@ -196,7 +201,7 @@ def deco_layer_linked_layer_name_search(self: 'BDK_PG_terrain_deco_layer', conte
 
 
 def deco_layer_is_linked_to_layer_update(self: 'BDK_PG_terrain_deco_layer', context: Context):
-    build_deco_layers(context.active_object)
+    ensure_deco_layers(context.active_object)
 
     # Push an undo state.
     bpy.ops.ed.undo_push(message='Update Linked Layer')
@@ -214,7 +219,7 @@ def deco_layer_linked_layer_name_update(self: 'BDK_PG_terrain_deco_layer', conte
             break
     # Trigger an update of the deco layers.
     # TODO: Have the density map attribute ID in the geometry node be driven by a property.
-    build_deco_layers(context.active_object)
+    ensure_deco_layers(context.active_object)
 
     # Push an undo state.
     bpy.ops.ed.undo_push(message='Update Linked Layer')
@@ -261,6 +266,7 @@ def terrain_deco_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_deco_layer', 
 
 class BDK_PG_terrain_deco_layer(PropertyGroup):
     id: StringProperty(options={'HIDDEN'}, name='ID')
+    modifier_name: StringProperty(options={'HIDDEN'}, description='The name of the modifier that this deco layer is associated with')
     name: StringProperty(name='Name', default='DecoLayer', options=empty_set, update=deco_layer_name_update_cb)
     align_to_terrain: BoolProperty(name='Align To Terrain', default=False, options=empty_set,
                                    description='Aligned the deco to the terrain surface')
@@ -341,10 +347,10 @@ class BDK_PG_terrain_info(PropertyGroup):
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
 
-    # Modifier IDs for the terrain object passes.
-    terrain_object_sculpt_modifier_id: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier ID')
-    terrain_object_paint_modifier_id: StringProperty(options={'HIDDEN'}, name='Paint Modifier ID')
-    terrain_object_deco_modifier_id: StringProperty(options={'HIDDEN'}, name='Deco Modifier ID')
+    # Modifier IDs for the terrain object passes. (why not just has a pointer to the modifier?)
+    terrain_object_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')
+    terrain_object_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
+    terrain_object_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
 
 
 # TODO: maybe all of these should be in their own file?

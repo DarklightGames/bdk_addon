@@ -9,10 +9,10 @@ from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolPrope
 from bpy.types import Operator, Context, Mesh, Object
 from bpy_extras.io_utils import ExportHelper
 
-from .deco import add_terrain_deco_layer, build_deco_layers, update_terrain_layer_node_group
+from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
-from .objects.properties import ensure_terrain_info_object_modifiers
+from .objects.builder import ensure_terrain_info_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
@@ -67,6 +67,8 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
 
         build_terrain_material(terrain_object)
 
+        ensure_paint_layers(active_object)
+
         return {'FINISHED'}
 
 
@@ -103,6 +105,12 @@ class BDK_OT_terrain_paint_layer_move(Operator):
             terrain_info.paint_layers_index += 1
             build_terrain_material(active_object)
 
+        # The order of the paint layers changed. Therefore, we need to:
+        # 1. Rebuild the paint layer node groups.
+        # 2. Ensure the sorting of the paint layer modifiers.
+        # TODO: For now, we just rebuild the whole thing, but this should be optimized later.
+        ensure_terrain_info_modifiers(context, terrain_info)
+
         return {'FINISHED'}
 
 
@@ -116,9 +124,8 @@ class BDK_OT_terrain_deco_layer_add(Operator):
         return is_active_object_terrain_info(context)
 
     def execute(self, context: bpy.types.Context):
-        terrain_info = get_terrain_info(context.active_object)
         add_terrain_deco_layer(context.active_object)
-        ensure_terrain_info_object_modifiers(context, terrain_info)
+        ensure_terrain_info_modifiers(context, get_terrain_info(context.active_object))
         return {'FINISHED'}
 
 
@@ -174,7 +181,7 @@ class BDK_OT_terrain_deco_layer_remove(Operator):
 
         # Build all deco layers. This is necessary because the drivers in the geometry node modifiers
         # reference the deco_layers array by index, and removing an entry can mess up other node setups.
-        build_deco_layers(context.active_object)
+        ensure_deco_layers(context.active_object)
 
         return {'FINISHED'}
 
@@ -201,10 +208,9 @@ class BDK_OT_terrain_paint_layer_add(Operator):
 
     def execute(self, context: bpy.types.Context):
         active_object = context.active_object
-        terrain_info = get_terrain_info(context.active_object)
         try:
             add_terrain_paint_layer(active_object, name='TerrainLayer')
-            sort_terrain_info_modifiers(context, terrain_info)
+            ensure_paint_layers(active_object)
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -489,7 +495,7 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
         add_terrain_layer_node(context.active_object, deco_layer.nodes, self.type)
 
         # TODO: for some reason, the factor driver is invalid when added [is this still true?]
-        build_deco_layers(context.active_object)
+        ensure_deco_layers(context.active_object)
 
         return {'FINISHED'}
 
@@ -511,7 +517,7 @@ class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
 
         remove_terrain_layer_node(context.active_object, deco_layer.nodes, deco_layer.nodes_index)
 
-        build_deco_layers(context.active_object)
+        ensure_deco_layers(context.active_object)
 
         return {'FINISHED'}
 
@@ -535,7 +541,7 @@ class BDK_OT_terrain_deco_layer_nodes_move(Operator):
 
         deco_layer.nodes_index = move_terrain_layer_node(self.direction, deco_layer.nodes, deco_layer.nodes_index)
 
-        build_deco_layers(context.active_object)
+        ensure_deco_layers(context.active_object)
 
         return {'FINISHED'}
 
@@ -558,11 +564,7 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
         paint_layer = paint_layers[paint_layers_index]
 
         add_terrain_layer_node(context.active_object, paint_layer.nodes, self.type)
-
-        # TODO: this should be wrapped up in a function
-        if paint_layer.id in bpy.data.node_groups:
-            node_tree = bpy.data.node_groups[paint_layer.id]
-            update_terrain_layer_node_group(node_tree, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
 
         return {'FINISHED'}
 
@@ -584,9 +586,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
         remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index)
 
-        if paint_layer.id in bpy.data.node_groups:
-            node_tree = bpy.data.node_groups[paint_layer.id]
-            update_terrain_layer_node_group(node_tree, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
 
         return {'FINISHED'}
 
@@ -607,10 +607,9 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
         paint_layers = terrain_info.paint_layers
         paint_layers_index = terrain_info.paint_layers_index
         paint_layer = paint_layers[paint_layers_index]
-
         paint_layer.nodes_index = move_terrain_layer_node(self.direction, paint_layer.nodes, paint_layer.nodes_index)
 
-        # build_paint_layers(context.active_object)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
 
         return {'FINISHED'}
 

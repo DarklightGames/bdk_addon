@@ -6,8 +6,9 @@ import bpy
 from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, Node, bpy_struct
 
+from ..deco import ensure_paint_layers, ensure_deco_layers
 from ...helpers import add_interpolation_type_switch_nodes, add_operation_switch_nodes, add_noise_type_switch_nodes, \
-    ensure_node_tree_inputs_and_outputs
+    ensure_geometry_node_tree, add_input_and_output_nodes
 from .data import map_range_interpolation_type_items, terrain_object_noise_type_items, terrain_object_operation_items
 from ...units import meters_to_unreal
 
@@ -78,19 +79,15 @@ def add_terrain_object_driver_to_node(struct: bpy_struct, node_path: str, terrai
 
 
 def ensure_distance_to_curve_node_group() -> NodeTree:
-    if distance_to_curve_node_group_id in bpy.data.node_groups:
-        node_tree = bpy.data.node_groups[distance_to_curve_node_group_id]
-    else:
-        node_tree = bpy.data.node_groups.new(name=distance_to_curve_node_group_id, type='GeometryNodeTree')
-        node_tree.inputs.new('NodeSocketGeometry', 'Curve')
-        node_tree.inputs.new('NodeSocketBool', 'Is 3D')
-        node_tree.outputs.new('NodeSocketFloat', 'Distance')
-
-    node_tree.nodes.clear()
-
-    # Create input and output nodes.
-    input_node = node_tree.nodes.new(type='NodeGroupInput')
-    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+    inputs = {
+        ('NodeSocketGeometry', 'Curve'),
+        ('NodeSocketBool', 'Is 3D'),
+    }
+    outputs = {
+        ('NodeSocketFloat', 'Distance'),
+    }
+    node_tree = ensure_geometry_node_tree(distance_to_curve_node_group_id, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     # Add a curve to mesh node.
     curve_to_mesh_node = node_tree.nodes.new(type='GeometryNodeCurveToMesh')
@@ -139,19 +136,16 @@ def ensure_distance_to_curve_node_group() -> NodeTree:
 
 def create_noise_node_group():
     # Create a new geometry node group.
-    node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
-
-    node_tree.inputs.new('NodeSocketFloat', 'Distance')
-    node_tree.inputs.new('NodeSocketFloat', 'Radius')
-    node_tree.inputs.new('NodeSocketFloat', 'Noise Strength')
-    node_tree.inputs.new('NodeSocketFloat', 'Noise Roughness')
-    node_tree.inputs.new('NodeSocketFloat', 'Noise Distortion')
-
-    node_tree.outputs.new('NodeSocketFloat', 'Offset')
-
-    # Create an input and output node.
-    input_node = node_tree.nodes.new(type='NodeGroupInput')
-    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+    inputs = {
+        ('NodeSocketFloat', 'Distance'),
+        ('NodeSocketFloat', 'Radius'),
+        ('NodeSocketFloat', 'Noise Strength'),
+        ('NodeSocketFloat', 'Noise Roughness'),
+        ('NodeSocketFloat', 'Noise Distortion'),
+    }
+    outputs = {('NodeSocketFloat', 'Offset')}
+    node_tree = ensure_geometry_node_tree(uuid.uuid4().hex, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     # Add a multiply node.
     multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
@@ -216,35 +210,24 @@ def create_noise_node_group():
 
 
 def create_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
-    if sculpt_layer_id in bpy.data.node_groups:
-        node_tree = bpy.data.node_groups[sculpt_layer_id]
-    else:
-        node_tree = bpy.data.node_groups.new(name=sculpt_layer_id, type='GeometryNodeTree')
-
-    node_tree.inputs.clear()
-    node_tree.outputs.clear()
-    node_tree.nodes.clear()
-
-    node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
-    node_tree.inputs.new('NodeSocketFloat', 'Distance')
-    node_tree.inputs.new('NodeSocketInt', 'Interpolation Type')
-
-    node_tree.inputs.new('NodeSocketFloat', 'Radius')
-    node_tree.inputs.new('NodeSocketFloat', 'Falloff Radius')
-    node_tree.inputs.new('NodeSocketFloat', 'Depth')
-    node_tree.inputs.new('NodeSocketFloat', 'Noise Strength')
-    node_tree.inputs.new('NodeSocketFloat', 'Noise Roughness')
-    node_tree.inputs.new('NodeSocketFloat', 'Noise Distortion')
-    node_tree.inputs.new('NodeSocketBool', 'Use Noise')
-    node_tree.inputs.new('NodeSocketFloat', 'Noise Radius Factor')
-
-    node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
-
-    # Create the input nodes.
-    input_node = node_tree.nodes.new(type='NodeGroupInput')
-
-    # Create the output nodes.
-    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+    inputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+        ('NodeSocketFloat', 'Distance'),
+        ('NodeSocketInt', 'Interpolation Type'),
+        ('NodeSocketFloat', 'Radius'),
+        ('NodeSocketFloat', 'Falloff Radius'),
+        ('NodeSocketFloat', 'Depth'),
+        ('NodeSocketFloat', 'Noise Strength'),
+        ('NodeSocketFloat', 'Noise Roughness'),
+        ('NodeSocketFloat', 'Noise Distortion'),
+        ('NodeSocketBool', 'Use Noise'),
+        ('NodeSocketFloat', 'Noise Radius Factor'),
+    }
+    outputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+    }
+    node_tree = ensure_geometry_node_tree(sculpt_layer_id, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     # Add a subtract node.
     subtract_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
@@ -344,26 +327,26 @@ def create_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
 
 
 def ensure_paint_node_group() -> NodeTree:
-    # Create a new node group.
-    node_tree = bpy.data.node_groups.new(name=uuid4().hex, type='GeometryNodeTree')
-    node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
-    node_tree.inputs.new('NodeSocketInt', 'Interpolation Type')
-    node_tree.inputs.new('NodeSocketInt', 'Operation')
-    node_tree.inputs.new('NodeSocketInt', 'Noise Type')
-    node_tree.inputs.new('NodeSocketFloat', 'Distance')
-    node_tree.inputs.new('NodeSocketString', 'Attribute')
-    node_tree.inputs.new('NodeSocketFloat', 'Radius')
-    node_tree.inputs.new('NodeSocketFloat', 'Falloff Radius')
-    node_tree.inputs.new('NodeSocketFloat', 'Strength')
-    node_tree.inputs.new('NodeSocketFloat', 'Distance Noise Factor')
-    node_tree.inputs.new('NodeSocketFloat', 'Distance Noise Distortion')
-    node_tree.inputs.new('NodeSocketFloat', 'Distance Noise Offset')
-    node_tree.inputs.new('NodeSocketBool', 'Use Distance Noise')
-    node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
-
-    # Create the input and output nodes.
-    input_node = node_tree.nodes.new(type='NodeGroupInput')
-    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+    inputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+        ('NodeSocketInt', 'Interpolation Type'),
+        ('NodeSocketInt', 'Operation'),
+        ('NodeSocketInt', 'Noise Type'),
+        ('NodeSocketFloat', 'Distance'),
+        ('NodeSocketString', 'Attribute'),
+        ('NodeSocketFloat', 'Radius'),
+        ('NodeSocketFloat', 'Falloff Radius'),
+        ('NodeSocketFloat', 'Strength'),
+        ('NodeSocketFloat', 'Distance Noise Factor'),
+        ('NodeSocketFloat', 'Distance Noise Distortion'),
+        ('NodeSocketFloat', 'Distance Noise Offset'),
+        ('NodeSocketBool', 'Use Distance Noise'),
+    }
+    outputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+    }
+    node_tree = ensure_geometry_node_tree(uuid4().hex, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     # Create a new Store Named Attribute node.
     store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
@@ -481,14 +464,8 @@ def ensure_paint_node_group() -> NodeTree:
 def ensure_distance_to_mesh_node_group() -> NodeTree:
     inputs = {('NodeSocketGeometry', 'Geometry'), ('NodeSocketBool', 'Is 3D')}
     outputs = {('NodeSocketFloat', 'Distance')}
-
-    node_tree = ensure_node_tree_inputs_and_outputs(distance_to_mesh_node_group_id, inputs, outputs)
-
-    node_tree.nodes.clear()
-
-    # Create input and output nodes.
-    input_node = node_tree.nodes.new(type='NodeGroupInput')
-    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+    node_tree = ensure_geometry_node_tree(distance_to_mesh_node_group_id, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
@@ -541,20 +518,13 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
 
 
 def ensure_distance_to_empty_node_group() -> NodeTree:
-    inputs = {('NodeSocketVector', 'Location'), ('NodeSocketBool', 'Is 3D')}
+    inputs = {
+        ('NodeSocketVector', 'Location'),
+        ('NodeSocketBool', 'Is 3D')
+    }
     outputs = {('NodeSocketFloat', 'Distance')}
-
-    node_tree = ensure_node_tree_inputs_and_outputs(distance_to_empty_node_group_id, inputs, outputs)
-
-    node_tree.nodes.clear()
-
-    node_tree.inputs.new('NodeSocketVector', 'Location')
-    node_tree.inputs.new('NodeSocketBool', 'Is 3D')
-    node_tree.outputs.new('NodeSocketFloat', 'Distance')
-
-    # Create input and output nodes.
-    input_node = node_tree.nodes.new(type='NodeGroupInput')
-    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+    node_tree = ensure_geometry_node_tree(distance_to_empty_node_group_id, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     # Add a new Position and Separate XYZ node.
     position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
@@ -686,8 +656,6 @@ def create_terrain_object(context: Context, terrain_info_object: Object, object_
     # Set the location of the curve object to the 3D cursor.
     bpy_object.location = context.scene.cursor.location
 
-    ensure_terrain_info_object_modifiers(context, terrain_info_object.bdk.terrain_info)
-
     return bpy_object
 
 
@@ -695,43 +663,38 @@ def get_terrain_objects_for_terrain_info_object(context: Context, terrain_info_o
     return [obj.bdk.terrain_object for obj in context.scene.objects if obj.bdk.type == 'TERRAIN_OBJECT' and obj.bdk.terrain_object.terrain_info_object == terrain_info_object]
 
 
-def ensure_terrain_info_object_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
+def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
     terrain_info_object = terrain_info.terrain_info_object
 
     # Ensure that the modifier IDs have been generated.
-    if terrain_info.terrain_object_sculpt_modifier_id == '':
-        terrain_info.terrain_object_sculpt_modifier_id = uuid.uuid4().hex
+    if terrain_info.terrain_object_sculpt_modifier_name == '':
+        terrain_info.terrain_object_sculpt_modifier_name = uuid.uuid4().hex
 
-    if terrain_info.terrain_object_paint_modifier_id == '':
-        terrain_info.terrain_object_paint_modifier_id = uuid.uuid4().hex
+    if terrain_info.terrain_object_paint_modifier_name == '':
+        terrain_info.terrain_object_paint_modifier_name = uuid.uuid4().hex
 
-    if terrain_info.terrain_object_deco_modifier_id == '':
-        terrain_info.terrain_object_deco_modifier_id = uuid.uuid4().hex
+    if terrain_info.terrain_object_deco_modifier_name == '':
+        terrain_info.terrain_object_deco_modifier_name = uuid.uuid4().hex
 
-    # Ensure that the terrain info object has the required pass modifiers.
-    if terrain_info.terrain_object_sculpt_modifier_id not in terrain_info_object.modifiers:
-        modifier = terrain_info_object.modifiers.new(name=terrain_info.terrain_object_sculpt_modifier_id, type='NODES')
-        modifier.node_group = bpy.data.node_groups.new(terrain_info.terrain_object_sculpt_modifier_id, 'GeometryNodeTree')
-
-    if terrain_info.terrain_object_paint_modifier_id not in terrain_info_object.modifiers:
-        modifier = terrain_info_object.modifiers.new(name=terrain_info.terrain_object_paint_modifier_id, type='NODES')
-        modifier.node_group = bpy.data.node_groups.new(terrain_info.terrain_object_paint_modifier_id, 'GeometryNodeTree')
-
-    if terrain_info.terrain_object_deco_modifier_id not in terrain_info_object.modifiers:
-        modifier = terrain_info_object.modifiers.new(name=terrain_info.terrain_object_deco_modifier_id, type='NODES')
-        modifier.node_group = bpy.data.node_groups.new(terrain_info.terrain_object_deco_modifier_id, 'GeometryNodeTree')
-
+    # Gather and sort the terrain objects by the sort order and ID.
     terrain_objects = get_terrain_objects_for_terrain_info_object(context, terrain_info.terrain_info_object)
     terrain_objects.sort(key=lambda x: (x.sort_order, x.id))
 
-    node_tree = terrain_info.terrain_info_object.modifiers[terrain_info.terrain_object_sculpt_modifier_id].node_group
-    _update_terrain_object_sculpt_modifier_node_group(node_tree, terrain_objects)
+    # Ensure that the terrain info object has the required pass modifiers.
+    modifier_names = [terrain_info.terrain_object_sculpt_modifier_name, terrain_info.terrain_object_paint_modifier_name, terrain_info.terrain_object_deco_modifier_name]
+    for modifier_name in modifier_names:
+        if modifier_name not in terrain_info_object.modifiers:
+            terrain_info_object.modifiers.new(name=modifier_name, type='NODES')
 
-    node_tree = terrain_info.terrain_info_object.modifiers[terrain_info.terrain_object_paint_modifier_id].node_group
-    _update_terrain_object_paint_modifier_node_group(node_tree, terrain_objects)
+    # Ensure the node groups for the pass modifiers.
+    modifiers = terrain_info_object.modifiers
+    modifiers[terrain_info.terrain_object_sculpt_modifier_name].node_group = _ensure_terrain_object_sculpt_modifier_node_group(terrain_info.terrain_object_sculpt_modifier_name, terrain_objects)
+    modifiers[terrain_info.terrain_object_paint_modifier_name].node_group = _ensure_terrain_object_paint_modifier_node_group(terrain_info.terrain_object_paint_modifier_name, terrain_objects)
+    modifiers[terrain_info.terrain_object_deco_modifier_name].node_group = _ensure_terrain_object_deco_modifier_node_group(terrain_info.terrain_object_deco_modifier_name, terrain_objects)
 
-    node_tree = terrain_info.terrain_info_object.modifiers[terrain_info.terrain_object_deco_modifier_id].node_group
-    _update_terrain_object_deco_modifier_node_group(node_tree, terrain_objects)
+    # Rebuild the modifier node trees for the paint and deco layers.
+    ensure_paint_layers(terrain_info_object)
+    ensure_deco_layers(terrain_info_object)
 
     """
     Sort the modifiers on the terrain info object in the following order:
@@ -744,11 +707,11 @@ def ensure_terrain_info_object_modifiers(context: Context, terrain_info: 'BDK_PG
 
     # The modifier ID list will contain a list of modifier IDs in the order that they should be sorted.
     modifier_ids = list()
-    modifier_ids.append(terrain_info.terrain_object_sculpt_modifier_id)
+    modifier_ids.append(terrain_info.terrain_object_sculpt_modifier_name)
     modifier_ids.extend(map(lambda paint_layer: paint_layer.id, terrain_info.paint_layers))
-    modifier_ids.append(terrain_info.terrain_object_paint_modifier_id)
+    modifier_ids.append(terrain_info.terrain_object_paint_modifier_name)
     modifier_ids.extend(map(lambda deco_layer: deco_layer.id, terrain_info.deco_layers))
-    modifier_ids.append(terrain_info.terrain_object_deco_modifier_id)
+    modifier_ids.append(terrain_info.terrain_object_deco_modifier_name)
 
     # Make note of what the current mode is so that we can restore it later.
     current_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
@@ -784,17 +747,11 @@ def ensure_terrain_info_object_modifiers(context: Context, terrain_info: 'BDK_PG
         bpy.ops.object.mode_set(mode=current_mode)
 
 
-def _update_terrain_object_sculpt_modifier_node_group(node_tree: NodeTree, terrain_objects: Iterable['BDK_PG_terrain_object']):
-    node_tree.inputs.clear()
-    node_tree.outputs.clear()
-    node_tree.nodes.clear()
-    node_tree.links.clear()
-
-    node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
-    node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
-
-    input_node = node_tree.nodes.new('NodeGroupInput')
-    output_node = node_tree.nodes.new('NodeGroupOutput')
+def _ensure_terrain_object_sculpt_modifier_node_group(name: str, terrain_objects: Iterable['BDK_PG_terrain_object']) -> NodeTree:
+    inputs = {('NodeSocketGeometry', 'Geometry')}
+    outputs = {('NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(name, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     geometry_socket = input_node.outputs['Geometry']
 
@@ -820,7 +777,6 @@ def _update_terrain_object_sculpt_modifier_node_group(node_tree: NodeTree, terra
                                               'is_3d')
 
             distance_socket = distance_to_curve_node.outputs['Distance']
-
         elif terrain_object.object_type == 'MESH':
             distance_to_mesh_node_group = ensure_distance_to_mesh_node_group()
 
@@ -832,7 +788,6 @@ def _update_terrain_object_sculpt_modifier_node_group(node_tree: NodeTree, terra
             node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_mesh_node.inputs['Geometry'])
 
             distance_socket = distance_to_mesh_node.outputs['Distance']
-            pass
         elif terrain_object.object_type == 'EMPTY':
             distance_to_empty_node_group = ensure_distance_to_empty_node_group()
 
@@ -854,7 +809,7 @@ def _update_terrain_object_sculpt_modifier_node_group(node_tree: NodeTree, terra
         store_distance_attribute_node.domain = 'POINT'
 
         # Link the geometry from the input node to the input of the store distance attribute node.
-        node_tree.links.new(input_node.outputs['Geometry'], store_distance_attribute_node.inputs['Geometry'])
+        node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
 
         # Link the distance socket to the input of the store distance attribute node.
         node_tree.links.new(distance_socket, store_distance_attribute_node.inputs[4])
@@ -905,6 +860,8 @@ def _update_terrain_object_sculpt_modifier_node_group(node_tree: NodeTree, terra
 
     node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
 
+    return node_tree
+
 
 def _add_paint_layer(distance_socket: NodeSocket, geometry_socket: NodeSocket, node_tree: NodeTree, paint_layer: 'BDK_PG_terrain_object_paint_layer'):
     paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
@@ -942,17 +899,11 @@ def _add_paint_layer(distance_socket: NodeSocket, geometry_socket: NodeSocket, n
     return geometry_socket
 
 
-def _update_terrain_object_paint_modifier_node_group(node_tree: NodeTree, terrain_objects: Iterable['BDK_PG_terrain_object']):
-    node_tree.inputs.clear()
-    node_tree.outputs.clear()
-    node_tree.nodes.clear()
-    node_tree.links.clear()
-
-    node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
-    node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
-
-    input_node = node_tree.nodes.new('NodeGroupInput')
-    output_node = node_tree.nodes.new('NodeGroupOutput')
+def _ensure_terrain_object_paint_modifier_node_group(name: str, terrain_objects: Iterable['BDK_PG_terrain_object']) -> NodeTree:
+    inputs = {('NodeSocketGeometry', 'Geometry')}
+    outputs = {('NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(name, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     geometry_socket = input_node.outputs['Geometry']
 
@@ -970,18 +921,14 @@ def _update_terrain_object_paint_modifier_node_group(node_tree: NodeTree, terrai
 
     node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
 
+    return node_tree
 
-def _update_terrain_object_deco_modifier_node_group(node_tree: NodeTree, terrain_objects: Iterable['BDK_PG_terrain_object']):
-    node_tree.inputs.clear()
-    node_tree.outputs.clear()
-    node_tree.nodes.clear()
-    node_tree.links.clear()
 
-    node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
-    node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
-
-    input_node = node_tree.nodes.new('NodeGroupInput')
-    output_node = node_tree.nodes.new('NodeGroupOutput')
+def _ensure_terrain_object_deco_modifier_node_group(name: str, terrain_objects: Iterable['BDK_PG_terrain_object']) -> NodeTree:
+    inputs = {('NodeSocketGeometry', 'Geometry')}
+    outputs = {('NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(name, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     geometry_socket = input_node.outputs['Geometry']
 
@@ -999,3 +946,12 @@ def _update_terrain_object_deco_modifier_node_group(node_tree: NodeTree, terrain
             geometry_socket = _add_paint_layer(distance_socket, geometry_socket, node_tree, paint_layer)
 
     node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+
+    return node_tree
+
+
+def create_terrain_object_bake_node_tree(terrain_object: 'BDK_PG_terrain_object'):
+    inputs = {('NodeSocketGeometry', 'Geometry')}
+    outputs = {('NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(uuid.uuid4().hex, inputs, outputs)
+    return node_tree

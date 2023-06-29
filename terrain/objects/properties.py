@@ -6,20 +6,20 @@ from bpy.types import PropertyGroup, Object, NodeTree, Context
 
 from ...helpers import get_terrain_info
 from ...units import meters_to_unreal
-from .builder import ensure_terrain_info_object_modifiers
+from .builder import ensure_terrain_info_modifiers
 from .data import terrain_object_noise_type_items, terrain_object_operation_items, map_range_interpolation_type_items, \
     terrain_object_type_items
 
 
 def terrain_object_sort_order_update_cb(self: 'BDK_PG_terrain_object', context: Context):
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
-    ensure_terrain_info_object_modifiers(context, terrain_info)
+    ensure_terrain_info_modifiers(context, terrain_info)
 
 
 def terrain_object_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
     # We update the node group whe the operation is changed since we don't want to use drivers to control the
     # operation for performance reasons. (TODO: NOT TRUE!)
-    ensure_terrain_info_object_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
+    ensure_terrain_info_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
 
 
 class BDK_PG_terrain_object_sculpt_layer(PropertyGroup):
@@ -67,7 +67,7 @@ def terrain_object_paint_layer_paint_layer_name_update_cb(self: 'BDK_PG_terrain_
     except ValueError:
         self.paint_layer_id = ''
 
-    ensure_terrain_info_object_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
+    ensure_terrain_info_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
 
 
 def terrain_object_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_object_paint_layer', context: Context):
@@ -83,7 +83,7 @@ def terrain_object_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_o
     except ValueError:
         self.deco_layer_id = ''
 
-    ensure_terrain_info_object_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
+    ensure_terrain_info_modifiers(context, self.terrain_object.bdk.terrain_object.terrain_info_object.bdk.terrain_info)
 
 
 class BDK_PG_terrain_object_paint_layer(PropertyGroup): # TODO: rename this to something less confusing and ambiguous.

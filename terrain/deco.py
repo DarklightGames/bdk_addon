@@ -4,7 +4,8 @@ import uuid
 from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct
 from typing import Optional, Iterable
 
-from ..helpers import get_terrain_info, ensure_name_unique, add_operation_switch_nodes
+from ..helpers import get_terrain_info, ensure_name_unique, add_operation_switch_nodes, add_input_and_output_nodes, \
+    ensure_geometry_node_tree
 
 
 def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer'):
@@ -15,12 +16,11 @@ def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer')
     """
     terrain_info = get_terrain_info(terrain_info_object)
 
-    deco_layer_index = len(terrain_info.deco_layers)
-
     # Create the deco layer object.
     deco_layer = terrain_info.deco_layers.add()
     deco_layer.name = ensure_name_unique(name, map(lambda x: x.name, terrain_info.deco_layers))
     deco_layer.id = uuid.uuid4().hex
+    deco_layer.modifier_name = uuid.uuid4().hex
     deco_layer.object = create_deco_layer_object(deco_layer)
     deco_layer.terrain_info_object = terrain_info_object
 
@@ -28,16 +28,6 @@ def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer')
     collection: Collection = terrain_info_object.users_collection[0]
     collection.objects.link(deco_layer.object)
     deco_layer.object.parent = terrain_info_object
-
-    # Create the deco layer modifier for the terrain.
-    # This will write the density map attribute to be used by the deco layer object.
-    deco_layer_modifier = terrain_info_object.modifiers.new(name=deco_layer.id, type='NODES')
-    node_tree = bpy.data.node_groups.new(uuid.uuid4().hex, 'GeometryNodeTree')
-    deco_layer_modifier.node_group = node_tree
-    update_terrain_layer_node_group(node_tree, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)  # TODO: replace with sugared version
-
-    # Generates the deco layer geometry node.
-    build_deco_layers(terrain_info_object)
 
     return deco_layer
 
@@ -90,18 +80,13 @@ def add_terrain_layer_node_driver(
         target.data_path = f'bdk.terrain_info.{dataptr_name}[{dataptr_index}].nodes[{node_index}].{property_name}'
 
 
-def update_terrain_layer_node_group(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, dataptr_id: str, nodes: Iterable):
-    node_tree.inputs.clear()
-    node_tree.outputs.clear()
-    node_tree.nodes.clear()
+def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index: int, dataptr_id: str, nodes: Iterable) -> NodeTree:
+    inputs = {('NodeSocketGeometry', 'Geometry')}
+    outputs = {('NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(name, inputs, outputs)
+    input_node, output_node = add_input_and_output_nodes(node_tree)
 
     density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, nodes)
-
-    node_tree.inputs.new('NodeSocketGeometry', 'Geometry')
-    node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
-
-    input_node = node_tree.nodes.new('NodeGroupInput')
-    output_node = node_tree.nodes.new('NodeGroupOutput')
 
     # Add a clamp node to clamp the density values between 0 and 1.
     clamp_node = node_tree.nodes.new('ShaderNodeClamp')
@@ -121,6 +106,8 @@ def update_terrain_layer_node_group(node_tree: NodeTree, dataptr_name: str, data
 
     node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
     node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return node_tree
 
 
 def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, nodes: Iterable) -> NodeSocket:
@@ -251,18 +238,9 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str,
 
 def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> NodeTree:
     terrain_info = get_terrain_info(terrain_info_object)
-
     deco_layer_index = list(terrain_info.deco_layers).index(deco_layer)
 
-    if deco_layer.id in bpy.data.node_groups:
-        node_tree = bpy.data.node_groups[deco_layer.id]
-    else:
-        node_tree = bpy.data.node_groups.new(deco_layer.id, type='GeometryNodeTree')
-
-    node_tree.outputs.clear()
-    node_tree.outputs.new(type='NodeSocketGeometry', name='Geometry')
-
-    node_tree.nodes.clear()
+    node_tree = ensure_geometry_node_tree(deco_layer.id, set(), {('NodeSocketGeometry', 'Geometry')})
 
     terrain_object_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
     terrain_object_info_node.inputs[0].default_value = terrain_info_object
@@ -344,26 +322,32 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     return node_tree
 
 
-def build_paint_layers(terrain_info_object: Object):
+# TODO: this should not be in the "deco" module
+def ensure_paint_layers(terrain_info_object: Object):
     terrain_info = get_terrain_info(terrain_info_object)
 
     # REALIZATION: we can't have paint layers with paint layer nodes due to circular dependencies.
     #  This could be possible though, if we police what layers are allowed to be painted in each layer.
     for paint_layer_index, paint_layer in enumerate(terrain_info.paint_layers):
-        if paint_layer.id in terrain_info_object.modifiers:
-            modifier = terrain_info_object.modifiers[paint_layer.id]
-            update_terrain_layer_node_group(modifier.node_group, 'paint_layers', paint_layer_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layer_index, paint_layer.id, paint_layer.nodes)
 
 
-def build_deco_layers(terrain_info_object: Object):
+def ensure_deco_layers(terrain_info_object: Object):
     terrain_info = get_terrain_info(terrain_info_object)
 
     for deco_layer_index, deco_layer in enumerate(terrain_info.deco_layers):
         # Rebuild the terrain info's deco layer node group.
-        if deco_layer.id in terrain_info_object.modifiers:
-            modifier = terrain_info_object.modifiers[deco_layer.id]
-            update_terrain_layer_node_group(modifier.node_group, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)
+        node_tree = ensure_terrain_layer_node_group(deco_layer.modifier_name, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)
 
+        # Ensure the terrain info object has a geometry nodes modifier with the deco layer node group.
+        if deco_layer.id not in terrain_info_object.modifiers:
+            modifier = terrain_info_object.modifiers.new(name=deco_layer.id, type='NODES')
+        else:
+            modifier = terrain_info_object.modifiers[deco_layer.id]
+
+        modifier.node_group = node_tree
+
+        # TODO: Extract this to a function.
         if deco_layer.id not in deco_layer.object.modifiers:
             # Create the geometry nodes modifier and assign the node group.
             modifier = deco_layer.object.modifiers.new(name=deco_layer.id, type='NODES')
