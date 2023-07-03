@@ -20,7 +20,8 @@ def ensure_name_unique(name, names: Iterable[str]):
 
 
 def is_bdk_material(material: Material) -> bool:
-    return 'bdk.reference' in material.keys()
+    # TOD: don't use custom properties for this, use a property group instead.
+    return material.bdk.package_reference != ''
 
 
 def is_bdk_actor(obj: Object) -> bool:
@@ -34,6 +35,12 @@ def is_bdk_static_mesh_actor(obj: Object) -> bool:
 def get_terrain_info(terrain_info_object: Object):
     if terrain_info_object.bdk.type == 'TERRAIN_INFO':
         return terrain_info_object.bdk.terrain_info
+    return None
+
+
+def get_terrain_doodad(terrain_doodad_object: Object):
+    if terrain_doodad_object.bdk.type == 'TERRAIN_DOODAD':
+        return terrain_doodad_object.bdk.terrain_doodad
     return None
 
 
@@ -276,8 +283,20 @@ def add_noise_type_switch_nodes(
         vector_socket: NodeSocket,
         noise_type_socket: NodeSocket,
         noise_distortion_socket: NodeSocket,
-        noise_types: Iterable[str]
+        noise_roughness_socket: NodeSocket,
 ) -> NodeSocket:
+
+    """
+    Adds a noise type node setup to the node tree.
+    :param node_tree: The node tree to add the nodes to.
+    :param vector_socket: The node socket that has the vector value.
+    :param noise_type_socket: The node socket that has the noise type value.
+    :param noise_distortion_socket: The node socket for the noise distortion value.
+    :param noise_roughness_socket:
+    :return: The noise value node socket.
+    """
+
+    noise_types = ['PERLIN', 'WHITE']
 
     last_output_node_socket: Optional[NodeSocket] = None
 
@@ -302,7 +321,12 @@ def add_noise_type_switch_nodes(
             noise_node.inputs['Detail'].default_value = 16
             noise_node.inputs['Distortion'].default_value = 0.5
 
-            node_tree.links.new(noise_distortion_socket, noise_node.inputs['Distortion'])
+            if noise_distortion_socket:
+                node_tree.links.new(noise_distortion_socket, noise_node.inputs['Distortion'])
+
+            if noise_roughness_socket:
+                node_tree.links.new(noise_roughness_socket, noise_node.inputs['Roughness'])
+
             node_tree.links.new(vector_socket, noise_node.inputs['Vector'])
             noise_value_socket = noise_node.outputs['Fac']
         elif noise_type == 'WHITE':
@@ -321,14 +345,23 @@ def add_noise_type_switch_nodes(
 
 
 def ensure_geometry_node_tree(name: str, inputs: AbstractSet[Tuple[str, str]], outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    """
+    Ensures that a geometry node tree with the given name, inputs and outputs exists.
+    """
     return ensure_node_tree(name, 'GeometryNodeTree', inputs, outputs)
 
 
 def ensure_shader_node_tree(name: str, inputs: AbstractSet[Tuple[str, str]], outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    """
+    Ensures that a shader node tree with the given name, inputs and outputs exists.
+    """
     return ensure_node_tree(name, 'ShaderNodeTree', inputs, outputs)
 
 
 def ensure_node_tree(name: str, node_group_type: str, inputs: AbstractSet[Tuple[str, str]], outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    """
+    Ensures that a node tree with the given name, type, inputs and outputs exists.
+    """
     if name in bpy.data.node_groups:
         node_tree = bpy.data.node_groups[name]
     else:
@@ -341,22 +374,18 @@ def ensure_node_tree(name: str, node_group_type: str, inputs: AbstractSet[Tuple[
 
     # For inputs that do not exist in the node tree, add them.
     for input_type, input_name in inputs - node_tree_inputs:
-        print(f'Adding input {input_name} of type {input_type}')
         node_tree.inputs.new(input_type, input_name)
 
     # For inputs that exist in the node tree but not in the given inputs, remove them.
     for input_type, input_name in node_tree_inputs - inputs:
-        print(f'Removing input {input_name} of type {input_type}')
         node_tree.inputs.remove(node_tree.inputs[input_name])
 
     # For outputs that do not exist in the node tree, add them.
     for output_type, output_name in outputs - node_tree_outputs:
-        print(f'Adding output {output_name} of type {output_type}')
         node_tree.outputs.new(output_type, output_name)
 
     # For outputs that exist in the node tree but not in the given outputs, remove them.
     for output_type, output_name in node_tree_outputs - outputs:
-        print(f'Removing output {output_name} of type {output_type}')
         node_tree.outputs.remove(node_tree.outputs[output_name])
 
     node_tree.nodes.clear()
@@ -364,7 +393,24 @@ def ensure_node_tree(name: str, node_group_type: str, inputs: AbstractSet[Tuple[
     return node_tree
 
 
-def add_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
-    input_node = node_tree.nodes.new(type='NodeGroupInput')
-    output_node = node_tree.nodes.new(type='NodeGroupOutput')
+def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
+    """
+    Ensures that the node tree has input and output nodes.
+    :param node_tree: The node tree to check and potentially add input and output nodes to.
+    :return: The input and output nodes.
+    """
+
+    # Check if the node tree already has input and output nodes.
+    # If it does, return them.
+    input_node = None
+    output_node = None
+    for node in node_tree.nodes:
+        if node.bl_idname == 'NodeGroupInput':
+            input_node = node
+        elif node.bl_idname == 'NodeGroupOutput':
+            output_node = node
+
+    input_node = node_tree.nodes.new(type='NodeGroupInput') if input_node is None else input_node
+    output_node = node_tree.nodes.new(type='NodeGroupOutput') if output_node is None else output_node
+
     return input_node, output_node

@@ -82,14 +82,14 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
 # TODO: Copying from the outliner
 class BDK_OT_t3d_copy_to_clipboard(Operator):
     bl_idname = 'bdk.t3d_copy_objects_to_clipboard'
-    bl_description = 'Copy to clipboard as Unreal T3DMap objects'
+    bl_description = 'Copy to clipboard as Unreal T3DMap doodad'
     bl_label = 'Copy as Unreal T3DMap'
 
     @classmethod
     def poll(cls, context: Context):
-        # Return false if no objects are selected.
+        # Return false if no doodad are selected.
         if len(context.selected_objects) == 0:
-            cls.poll_message_set('No objects selected')
+            cls.poll_message_set('No doodad selected')
             return False
         return True
 

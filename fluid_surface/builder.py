@@ -1,6 +1,6 @@
 import bpy
 from bpy.types import NodeTree
-from ..helpers import add_input_and_output_nodes
+from ..helpers import ensure_input_and_output_nodes
 
 
 def create_fluid_surface_node_tree() -> NodeTree:
@@ -14,7 +14,7 @@ def create_fluid_surface_node_tree() -> NodeTree:
 
     node_tree.outputs.new('NodeSocketGeometry', 'Geometry')
 
-    input_node, output_node = add_input_and_output_nodes(node_tree)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     fluid_surface_node = node_tree.nodes.new('GeometryNodeBDKFluidSurface')
 

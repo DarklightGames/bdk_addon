@@ -21,7 +21,7 @@ class BDK_OT_projector_add(Operator):
     max_trace_distance: FloatProperty(name='Max Trace Distance', default=1024.0, min=0.0, soft_min=1.0, soft_max=4096.0, subtype='DISTANCE')
 
     def draw(self, context: Context):
-        self.layout.prop_search(self, 'target', bpy.data, 'objects')
+        self.layout.prop_search(self, 'target', bpy.data, 'doodad')
         self.layout.prop_search(self, 'material_name', bpy.data, 'materials')
         self.layout.prop(self, 'fov')
         self.layout.prop(self, 'max_trace_distance')
@@ -66,7 +66,7 @@ class BDK_OT_projector_add(Operator):
         modifier["Input_5"] = material['UClamp'] if material else 256
         modifier["Input_6"] = material['VClamp'] if material else 256
 
-        # Deselect all objects.
+        # Deselect all doodad.
         for obj in context.selected_objects:
             obj.select_set(False)
 

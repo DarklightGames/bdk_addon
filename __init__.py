@@ -39,11 +39,11 @@ if 'bpy' in locals():
     importlib.reload(terrain_operators)
     importlib.reload(terrain_exporter)
 
-    importlib.reload(terrain_object_data)
-    importlib.reload(terrain_object_builder)
-    importlib.reload(terrain_object_properties)
-    importlib.reload(terrain_object_operators)
-    importlib.reload(terrain_object_ui)
+    importlib.reload(terrain_doodad_data)
+    importlib.reload(terrain_doodad_builder)
+    importlib.reload(terrain_doodad_properties)
+    importlib.reload(terrain_doodad_operators)
+    importlib.reload(terrain_doodad_ui)
 
     if bdk_helpers.are_bdk_dependencies_installed():
         importlib.reload(t3d_data)
@@ -86,11 +86,11 @@ else:
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
 
-    from .terrain.objects import data as terrain_object_data
-    from .terrain.objects import builder as terrain_object_builder
-    from .terrain.objects import operators as terrain_object_operators
-    from .terrain.objects import properties as terrain_object_properties
-    from .terrain.objects import ui as terrain_object_ui
+    from .terrain.doodad import data as terrain_doodad_data
+    from .terrain.doodad import builder as terrain_doodad_builder
+    from .terrain.doodad import operators as terrain_doodad_operators
+    from .terrain.doodad import properties as terrain_doodad_properties
+    from .terrain.doodad import ui as terrain_doodad_ui
 
     # T3DMap
     if bdk_helpers.are_bdk_dependencies_installed():
@@ -113,9 +113,9 @@ classes = material_importer.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
-          terrain_object_operators.classes + \
-          terrain_object_properties.classes + \
-          terrain_object_ui.classes + \
+          terrain_doodad_operators.classes + \
+          terrain_doodad_properties.classes + \
+          terrain_doodad_ui.classes + \
           asset_browser_operators.classes + \
           bdk_preferences.classes + \
           bdk_operators.classes + \
@@ -143,7 +143,7 @@ def bdk_select_menu_func(self, _context: bpy.types.Context):
 
 def bdk_object_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(terrain_object_operators.BDK_OT_convert_to_terrain_object.bl_idname)
+    self.layout.operator(terrain_doodad_operators.BDK_OT_convert_to_terrain_doodad.bl_idname)
 
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
@@ -179,7 +179,7 @@ def register():
 
     bpy.types.VIEW3D_MT_select_object.append(bdk_select_menu_func)
 
-    # T3DMap Copy (objects/collections)
+    # T3DMap Copy (doodad/collections)
     if bdk_helpers.are_bdk_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)
         bpy.types.VIEW3D_MT_object_context_menu.append(bdk_t3d_copy_func)
@@ -203,7 +203,7 @@ def unregister():
     bpy.types.VIEW3D_MT_object.remove(bdk_object_menu_func)
     bpy.types.VIEW3D_MT_select_object.remove(bdk_select_menu_func)
 
-    # T3DMap Copy (objects/collections)
+    # T3DMap Copy (doodad/collections)
     if bdk_helpers.are_bdk_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.remove(bdk_t3d_import_func)
         bpy.types.VIEW3D_MT_object_context_menu.remove(bdk_t3d_copy_func)

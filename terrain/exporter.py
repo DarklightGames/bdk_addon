@@ -49,8 +49,10 @@ def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optiona
 
     # Skin Overrides
     for material_index, material_slot in enumerate(static_mesh_object.material_slots):
-        if material_slot.link == 'OBJECT' and material_slot.material is not None and 'bdk.reference' in material_slot.material:
-            actor[f'Skins({material_index})'] = material_slot.material['bdk.reference']
+        if material_slot.link == 'OBJECT' \
+                and material_slot.material is not None \
+                and material_slot.material.bdk.package_reference:
+            actor[f'Skins({material_index})'] = material_slot.material.bdk.package_reference
 
     return actor
 
@@ -64,7 +66,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     layers = []
     for paint_layer in terrain_info.paint_layers:
         name = paint_layer.id
-        texture = paint_layer.material.get('bdk.reference', None) if paint_layer.material else None
+        texture = paint_layer.material.bdk.preference if paint_layer.material else None
         layers.append({
             'Texture': texture,
             'AlphaMap': f'Texture\'myLevel.Terrain.{name}\'',  # TODO: make "reference" class, handle strings differently in writer

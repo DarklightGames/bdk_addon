@@ -47,9 +47,9 @@ class BDK_OT_select_all_of_active_class(Operator):
 
     @classmethod
     def poll(cls, context):
-        # Return false if no objects are selected.
+        # Return false if no doodad are selected.
         if len(context.selected_objects) == 0:
-            cls.poll_message_set('No objects selected')
+            cls.poll_message_set('No doodad selected')
             return False
         # Return false if the active object does not have a class.
         if 'Class' not in context.object:

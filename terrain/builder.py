@@ -5,7 +5,7 @@ from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
-from ..helpers import get_terrain_info, ensure_shader_node_tree, add_input_and_output_nodes
+from ..helpers import get_terrain_info, ensure_shader_node_tree, ensure_input_and_output_nodes
 from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 
@@ -21,7 +21,7 @@ def _ensure_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
         ('NodeSocketVector', 'UV'),
     }
     node_tree = ensure_shader_node_tree('BDK TerrainLayerUV', inputs, outputs)
-    input_node, output_node = add_input_and_output_nodes(node_tree)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     # UScale Multiply
     u_multiply_node = node_tree.nodes.new('ShaderNodeMath')
@@ -107,8 +107,8 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
         material = paint_layer.material
         material_outputs = None
-        if material and 'bdk.reference' in material:
-            reference = UReference.from_string(material['bdk.reference'])
+        if material and material.bdk.package_reference:
+            reference = UReference.from_string(material.bdk.package_reference)
             unreal_material = material_cache.load_material(reference)
             material_outputs = material_builder.build(unreal_material, paint_layer_uv_node.outputs['UV'])
 

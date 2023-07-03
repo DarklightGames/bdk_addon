@@ -4,7 +4,7 @@ import uuid
 from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct
 from typing import Optional, Iterable
 
-from ..helpers import get_terrain_info, ensure_name_unique, add_operation_switch_nodes, add_input_and_output_nodes, \
+from ..helpers import get_terrain_info, ensure_name_unique, add_operation_switch_nodes, ensure_input_and_output_nodes, \
     ensure_geometry_node_tree
 
 
@@ -24,7 +24,7 @@ def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer')
     deco_layer.object = create_deco_layer_object(deco_layer)
     deco_layer.terrain_info_object = terrain_info_object
 
-    # Link and parent the deco layer object to the terrain object.
+    # Link and parent the deco layer object to the terrain info object.
     collection: Collection = terrain_info_object.users_collection[0]
     collection.objects.link(deco_layer.object)
     deco_layer.object.parent = terrain_info_object
@@ -84,7 +84,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
     inputs = {('NodeSocketGeometry', 'Geometry')}
     outputs = {('NodeSocketGeometry', 'Geometry')}
     node_tree = ensure_geometry_node_tree(name, inputs, outputs)
-    input_node, output_node = add_input_and_output_nodes(node_tree)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, nodes)
 
@@ -242,8 +242,8 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
 
     node_tree = ensure_geometry_node_tree(deco_layer.id, set(), {('NodeSocketGeometry', 'Geometry')})
 
-    terrain_object_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
-    terrain_object_info_node.inputs[0].default_value = terrain_info_object
+    terrain_doodad_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
+    terrain_doodad_info_node.inputs[0].default_value = terrain_info_object
 
     deco_layer_node = node_tree.nodes.new('GeometryNodeBDKDecoLayer')
     deco_layer_node.inputs['Heightmap X'].default_value = terrain_info.x_size
@@ -300,7 +300,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     # Link the attribute output of the named attribute node to the capture attribute node.
     node_tree.links.new(named_attribute_node.outputs[1], capture_attribute_node.inputs[2])
 
-    node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_object_info_node.outputs['Geometry'])
+    node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
     node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
 
     node_tree.links.new(capture_attribute_node.outputs[2], deco_layer_node.inputs['Density Map'])

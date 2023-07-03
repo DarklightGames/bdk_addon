@@ -20,16 +20,16 @@ def material_poll(_: Context, material: Material) -> bool:
 
 
 def terrain_paint_layer_name_update_cb(self, context: Context):
-    # Find all terrain objects in the file.
-    terrain_object_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_OBJECT', bpy.data.objects))
+    # Find all terrain doodad in the file.
+    terrain_doodad_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
 
-    # Update terrain object paint component names if the terrain layer's color attribute name matches.
-    for terrain_object_object in terrain_object_objects:
-        for paint_layer in terrain_object_object.bdk.terrain_object.paint_layers:
+    # Update terrain doodad paint component names if the terrain layer's color attribute name matches.
+    for terrain_doodad_object in terrain_doodad_objects:
+        for paint_layer in terrain_doodad_object.bdk.terrain_doodad.paint_layers:
             if paint_layer.paint_layer_id == self.id:
                 paint_layer.paint_layer_name = self.name
 
-    # Update the name of the paint layer in terrain object nodes.
+    # Update the name of the paint layer in terrain info nodes.
     for paint_layer in self.terrain_info_object.bdk.terrain_info.paint_layers:
         for node in paint_layer.nodes:
             if node.paint_layer_id == self.id:
@@ -229,13 +229,13 @@ empty_set = set()
 
 
 def deco_layer_name_update_cb(self, context):
-    # Find all terrain objects in the file.
-    terrain_object_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_OBJECT', bpy.data.objects))
+    # Find all terrain doodad in the file.
+    terrain_doodad_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
 
     # TODO: add handling for nodes system, once implemented
-    # Update terrain object paint component names if the terrain layer's color attribute name matches.
-    for terrain_object_object in terrain_object_objects:
-        for paint_layer in terrain_object_object.bdk.terrain_object.paint_layers:
+    # Update terrain doodad paint component names if the terrain layer's color attribute name matches.
+    for terrain_doodad_object in terrain_doodad_objects:
+        for paint_layer in terrain_doodad_object.bdk.terrain_doodad.paint_layers:
             if paint_layer.deco_layer_id == self.id:
                 paint_layer.deco_layer_name = self.name
 
@@ -347,10 +347,10 @@ class BDK_PG_terrain_info(PropertyGroup):
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
 
-    # Modifier IDs for the terrain object passes. (why not just has a pointer to the modifier?)
-    terrain_object_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')
-    terrain_object_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
-    terrain_object_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
+    # Modifier IDs for the terrain doodad passes. (why not just has a pointer to the modifier?)
+    terrain_doodad_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')
+    terrain_doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
+    terrain_doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
 
 
 # TODO: maybe all of these should be in their own file?

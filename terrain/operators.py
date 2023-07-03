@@ -12,7 +12,7 @@ from bpy_extras.io_utils import ExportHelper
 from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
-from .objects.builder import ensure_terrain_info_modifiers
+from .doodad.builder import ensure_terrain_info_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
@@ -46,8 +46,8 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
             return {'CANCELLED'}
 
         # Remove color attribute.
-        terrain_object = context.active_object
-        mesh_data = cast(Mesh, terrain_object.data)
+        terrain_doodad = context.active_object
+        mesh_data = cast(Mesh, terrain_doodad.data)
         paint_layer_id = paint_layers[paint_layers_index].id
         if paint_layer_id in mesh_data.color_attributes:
             color_attribute = mesh_data.color_attributes[paint_layer_id]
@@ -58,14 +58,14 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
         terrain_info.paint_layers_index = min(len(paint_layers) - 1, paint_layers_index)
 
         # Delete the associated modifier and node group.
-        if paint_layer_id in terrain_object.modifiers:
-            paint_layer_modifier = terrain_object.modifiers[paint_layer_id]
-            terrain_object.modifiers.remove(paint_layer_modifier)
+        if paint_layer_id in terrain_doodad.modifiers:
+            paint_layer_modifier = terrain_doodad.modifiers[paint_layer_id]
+            terrain_doodad.modifiers.remove(paint_layer_modifier)
 
         if paint_layer_id in bpy.data.node_groups:
             bpy.data.node_groups.remove(bpy.data.node_groups[paint_layer_id])
 
-        build_terrain_material(terrain_object)
+        build_terrain_material(terrain_doodad)
 
         ensure_paint_layers(active_object)
 
@@ -154,7 +154,7 @@ class BDK_OT_terrain_deco_layer_remove(Operator):
         deco_layer = deco_layers[deco_layers_index]
         deco_layer_object = cast(Object, deco_layers[deco_layers_index].object)
 
-        # Remove the deco layer modifier from the terrain object.
+        # Remove the deco layer modifier from the terrain info object.
         if deco_layer.id in context.active_object.modifiers:
             context.active_object.modifiers.remove(context.active_object.modifiers[deco_layer.id])
 
@@ -242,25 +242,27 @@ class BDK_OT_terrain_info_add(Operator):
         return self.execute(context)
 
     def execute(self, context: bpy.types.Context):
-        mesh_object = create_terrain_info_object(resolution=self.resolution, size=self.size)
-        mesh_object.location = self.location
+        terrain_info_object = create_terrain_info_object(resolution=self.resolution, size=self.size)
+        terrain_info_object.location = self.location
 
         if self.lock_transforms:
             # Lock transforms so that levelers don't accidentally move the terrain.
-            mesh_object.lock_location = [True] * 3
-            mesh_object.lock_scale = [True] * 3
-            mesh_object.lock_rotation = [True] * 3
-            mesh_object.lock_rotation_w = True
-            mesh_object.lock_rotations_4d = True
+            terrain_info_object.lock_location = [True] * 3
+            terrain_info_object.lock_scale = [True] * 3
+            terrain_info_object.lock_rotation = [True] * 3
+            terrain_info_object.lock_rotation_w = True
+            terrain_info_object.lock_rotations_4d = True
 
-        # Add a base layer to start with.
-        add_terrain_paint_layer(mesh_object, name='Base')
+        # Add a constant base layer to start with.
+        paint_layer = add_terrain_paint_layer(terrain_info_object, name='Base')
+        add_terrain_layer_node(terrain_info_object, paint_layer.nodes, type='CONSTANT')
+        ensure_paint_layers(terrain_info_object)
 
-        context.scene.collection.objects.link(mesh_object)
+        context.scene.collection.objects.link(terrain_info_object)
 
         # Select the new object.
-        context.view_layer.objects.active = mesh_object
-        mesh_object.select_set(True)
+        context.view_layer.objects.active = terrain_info_object
+        terrain_info_object.select_set(True)
 
         return {'FINISHED'}
 
@@ -461,7 +463,7 @@ def move_terrain_layer_node(direction: str, nodes, nodes_index: int) -> int:
     return nodes_index
 
 
-def poll_is_active_object_terrain_object(cls, context):
+def poll_is_active_object_terrain_doodad(cls, context):
     if not is_active_object_terrain_info(context):
         cls.poll_message_set('The active object is not a terrain info object')
         return False
@@ -484,7 +486,7 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_object(cls, context)
+        return poll_is_active_object_terrain_doodad(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -507,7 +509,7 @@ class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_object(cls, context)
+        return poll_is_active_object_terrain_doodad(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -531,7 +533,7 @@ class BDK_OT_terrain_deco_layer_nodes_move(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_object(cls, context)
+        return poll_is_active_object_terrain_doodad(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -555,7 +557,7 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_object(cls, context)
+        return poll_is_active_object_terrain_doodad(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -576,7 +578,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_object(cls, context)
+        return poll_is_active_object_terrain_doodad(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -600,7 +602,7 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_object(cls, context)
+        return poll_is_active_object_terrain_doodad(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)

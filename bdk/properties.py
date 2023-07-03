@@ -1,7 +1,7 @@
 from bpy.types import PropertyGroup
 from bpy.props import PointerProperty, EnumProperty, StringProperty
 from ..terrain.properties import BDK_PG_terrain_info
-from ..terrain.objects.properties import BDK_PG_terrain_object
+from ..terrain.doodad.properties import BDK_PG_terrain_doodad
 
 
 class BDK_PG_object(PropertyGroup):
@@ -12,14 +12,19 @@ class BDK_PG_object(PropertyGroup):
                        items=(
                            ('NONE', 'None', ''),
                            ('TERRAIN_INFO', 'Terrain Info', ''),
-                           ('TERRAIN_OBJECT', 'Terrain Object', ''),
+                           ('TERRAIN_DOODAD', 'Terrain Doodad', ''),
                        ),
                        default='NONE')
     terrain_info: PointerProperty(type=BDK_PG_terrain_info)
-    terrain_object: PointerProperty(type=BDK_PG_terrain_object)
+    terrain_doodad: PointerProperty(type=BDK_PG_terrain_doodad)
+    package_reference: StringProperty(name='Package Reference', options={'HIDDEN'})
+
+
+class BDK_PG_material(PropertyGroup):
     package_reference: StringProperty(name='Package Reference', options={'HIDDEN'})
 
 
 classes = (
     BDK_PG_object,
+    BDK_PG_material,
 )

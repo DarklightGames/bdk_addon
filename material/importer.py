@@ -749,7 +749,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
         material_data.preview_render_type = 'FLAT'
 
         # Add custom property with Unreal reference.
-        material_data['bdk.reference'] = str(reference)
+        material_data.bdk.package_reference = str(reference)
 
         node_tree = material_data.node_tree
         node_tree.nodes.clear()
