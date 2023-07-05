@@ -66,7 +66,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     layers = []
     for paint_layer in terrain_info.paint_layers:
         name = paint_layer.id
-        texture = paint_layer.material.bdk.preference if paint_layer.material else None
+        texture = paint_layer.material.bdk.package_reference if paint_layer.material else None
         layers.append({
             'Texture': texture,
             'AlphaMap': f'Texture\'myLevel.Terrain.{name}\'',  # TODO: make "reference" class, handle strings differently in writer
