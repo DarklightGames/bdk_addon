@@ -5,7 +5,8 @@ from bpy.types import Operator, Context, Collection, Event, Object
 from bpy.props import EnumProperty
 
 from .properties import ensure_terrain_info_modifiers
-from ...helpers import is_active_object_terrain_info, copy_simple_property_group
+from .scatter.builder import ensure_scatter_layer_modifiers, add_scatter_layer_object, add_scatter_layer
+from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad
 from .builder import create_terrain_doodad
 
 
@@ -63,12 +64,16 @@ class BDK_OT_terrain_doodad_add(Operator):
 
 
 def ensure_terrain_doodad_layer_indices(terrain_doodad):
-    # Sculpt Components
+    # Sculpt Layers
     for i, sculpt_layer in enumerate(terrain_doodad.sculpt_layers):
         sculpt_layer.index = i
-    # Paint Components
+    # Paint Layers
     for i, paint_layer in enumerate(terrain_doodad.paint_layers):
         paint_layer.index = i
+    # Scatter Layers
+    for i, scatter_layer in enumerate(terrain_doodad.scatter_layers):
+        scatter_layer.index = i
+
 
 
 class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
@@ -437,6 +442,117 @@ class BDK_OT_convert_to_terrain_doodad(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_doodad_scatter_layer_add(Operator):
+    bl_label = 'Add Scatter Layer'
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_add'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+
+    def execute(self, context: Context):
+        terrain_doodad_object = context.active_object
+        terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
+
+        # Add a new sculpting layer.
+        scatter_layer = add_scatter_layer(terrain_doodad)
+        add_scatter_layer_object(scatter_layer)
+
+        # Update all the indices of the components.
+        ensure_terrain_doodad_layer_indices(terrain_doodad)
+
+        terrain_doodad.scatter_layers_index = len(terrain_doodad.scatter_layers) - 1
+
+        ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_doodad_scatter_layer_remove(Operator):
+    bl_label = 'Remove Scatter Layer'
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_remove'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+
+    def execute(self, context: Context):
+        terrain_doodad_object = context.active_object
+        terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
+        scatter_layers_index = terrain_doodad.scatter_layers_index
+
+        scatter_layer_id = terrain_doodad.scatter_layers[scatter_layers_index].id
+
+        terrain_doodad.scatter_layers.remove(scatter_layers_index)
+        terrain_doodad.scatter_layers_index = min(len(terrain_doodad.scatter_layers) - 1, scatter_layers_index)
+
+        # Update all the indices of the components.
+        ensure_terrain_doodad_layer_indices(terrain_doodad)
+
+        # Delete the associated node group.
+        if scatter_layer_id in bpy.data.node_groups:
+            bpy.data.node_groups.remove(bpy.data.node_groups[scatter_layer_id])
+
+        # Update the scatter layer modifiers.
+        ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_doodad_scatter_layer_objects_add(Operator):
+    bl_label = 'Add Scatter Layer Object'
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_objects_add'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        return terrain_doodad and terrain_doodad.scatter_layers and terrain_doodad.scatter_layers_index >= 0
+
+    def execute(self, context: Context):
+        terrain_doodad_object = context.active_object
+        terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        # Add a new scatter layer object.
+        add_scatter_layer_object(scatter_layer)
+
+        # Set the sculpting component index to the new sculpting component.
+        scatter_layer.objects_index = len(scatter_layer.objects) - 1
+
+        # TODO: do less here, just ensure the modifier for this scatter layer.
+        ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_doodad_scatter_layer_objects_remove(Operator):
+    bl_label = 'Remove Scatter Layer Object'
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_objects_remove'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        return terrain_doodad and terrain_doodad.scatter_layers and terrain_doodad.scatter_layers_index >= 0
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        objects_index = scatter_layer.objects_index
+        scatter_layer.objects.remove(scatter_layer.objects_index)
+        scatter_layer.objects_index = min(len(scatter_layer.objects) - 1, objects_index)
+
+        # TODO: do less here, just ensure the modifier for this scatter layer.
+        # Update the scatter layer modifiers.
+        ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_convert_to_terrain_doodad,
     BDK_OT_terrain_doodad_add,
@@ -449,5 +565,9 @@ classes = (
     BDK_OT_terrain_doodad_sculpt_layer_duplicate,
     BDK_OT_terrain_doodad_paint_layer_add,
     BDK_OT_terrain_doodad_paint_layer_remove,
-    BDK_OT_terrain_doodad_paint_layer_duplicate
+    BDK_OT_terrain_doodad_paint_layer_duplicate,
+    BDK_OT_terrain_doodad_scatter_layer_add,
+    BDK_OT_terrain_doodad_scatter_layer_remove,
+    BDK_OT_terrain_doodad_scatter_layer_objects_add,
+    BDK_OT_terrain_doodad_scatter_layer_objects_remove,
 )

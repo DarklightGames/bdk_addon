@@ -282,8 +282,8 @@ def add_noise_type_switch_nodes(
         node_tree: NodeTree,
         vector_socket: NodeSocket,
         noise_type_socket: NodeSocket,
-        noise_distortion_socket: NodeSocket,
-        noise_roughness_socket: NodeSocket,
+        noise_distortion_socket: Optional[NodeSocket],
+        noise_roughness_socket: Optional[NodeSocket],
 ) -> NodeSocket:
 
     """

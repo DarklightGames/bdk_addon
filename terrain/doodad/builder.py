@@ -9,23 +9,13 @@ from bpy.types import NodeTree, Context, Object, NodeSocket, Node, bpy_struct
 from ..deco import ensure_paint_layers, ensure_deco_layers
 from ...helpers import add_interpolation_type_switch_nodes, add_operation_switch_nodes, add_noise_type_switch_nodes, \
     ensure_geometry_node_tree, ensure_input_and_output_nodes
-from .data import map_range_interpolation_type_items, terrain_doodad_noise_type_items, terrain_doodad_operation_items
+from .data import map_range_interpolation_type_items, terrain_doodad_operation_items
 from ...units import meters_to_unreal
 
 
 distance_to_mesh_node_group_id = 'ccce0a8209484685a13a2734f4304204'
 distance_to_empty_node_group_id = '3e2f8ae601ae4a498a4f2c2472e6f496'
 distance_to_curve_node_group_id = 'c3924a2941134af09bd10f7749882562'
-
-
-def add_driver_to_node_socket(node_socket: NodeSocket, target_object: Object, data_path: str):
-    driver = node_socket.driver_add('default_value').driver
-    driver.type = 'AVERAGE'
-    var = driver.variables.new()
-    var.name = data_path
-    var.type = 'SINGLE_PROP'
-    var.targets[0].id = target_object
-    var.targets[0].data_path = f"[\"{data_path}\"]"
 
 
 def add_sculpt_layer_driver_to_node(node: Node, node_path: str, sculpt_layer: 'BDK_PG_terrain_doodad_sculpt_layer', data_path: str):
@@ -423,7 +413,7 @@ def ensure_paint_node_group() -> NodeTree:
         position_node.outputs['Position'],
         input_node.outputs['Noise Type'],
         input_node.outputs['Distance Noise Distortion'],
-        input_node.outputs['Distance Noise Roughness']
+        None
     )
 
     # Add an add noise node.

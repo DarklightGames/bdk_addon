@@ -87,9 +87,9 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        # Return false if no doodad are selected.
+        # Return false if no objects are selected.
         if len(context.selected_objects) == 0:
-            cls.poll_message_set('No doodad selected')
+            cls.poll_message_set('No object selected')
             return False
         return True
 
@@ -103,6 +103,7 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
         for obj in context.selected_objects:
             # TODO: add handlers for other object types (outside of this function)
+            # TODO: add handler for doodads
             if obj.type == 'CAMERA':
                 # Create a SpectatorCam actor
                 actor = T3DActor('SpectatorCam', obj.name)

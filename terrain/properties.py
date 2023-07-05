@@ -48,6 +48,7 @@ terrain_layer_node_type_icons = {
     'PAINT_LAYER': 'TEXTURE',
     'CONSTANT': 'IMAGE_ALPHA',
     'NORMAL': 'DRIVER_ROTATIONAL_DIFFERENCE',
+    'PLANE_DISTANCE': 'GRADIENT'
 }
 
 terrain_layer_node_type_items = (
@@ -58,6 +59,7 @@ terrain_layer_node_type_items = (
     ('CONSTANT', 'Constant', 'Constant', terrain_layer_node_type_icons['CONSTANT'], 4),
     ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector',
      terrain_layer_node_type_icons['NORMAL'], 5),
+    ('PLANE_DISTANCE', 'Plane Distance', 'Plane Distance', terrain_layer_node_type_icons['PLANE_DISTANCE'], 6),
 )
 
 terrain_layer_node_type_item_names = {item[0]: item[1] for item in terrain_layer_node_type_items}
@@ -93,17 +95,21 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     ], default='ADD')
     factor: FloatProperty(name='Factor', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
     mute: BoolProperty(name='Mute', default=False)
+
     # Blur (currently not exposed due to performance concerns)
     blur: BoolProperty(name='Blur', default=False)
     blur_iterations: IntProperty(name='Blur Iterations', default=1, min=1, max=10)
+
     # Layer
     paint_layer_name: StringProperty(name='Paint Layer', options={'HIDDEN'},
                                      search=terrain_layer_node_terrain_paint_layer_name_search_cb,
                                      update=terrain_layer_node_terrain_paint_layer_name_update_cb)
     paint_layer_id: StringProperty(name='Paint Layer ID', options={'HIDDEN'})
+
     # Normal
     normal_angle_min: FloatProperty(name='Angle Min', default=math.radians(5.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
     normal_angle_max: FloatProperty(name='Angle Max', default=math.radians(10.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
+
     # Map Range
     use_map_range: BoolProperty(name='Map Range', default=False, options=set())
     map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR', options=set())

@@ -1,10 +1,11 @@
 from typing import List
 
 from bpy.props import IntProperty, PointerProperty, CollectionProperty, FloatProperty, BoolProperty, StringProperty, \
-    EnumProperty
+    EnumProperty, FloatVectorProperty
 from bpy.types import PropertyGroup, Object, NodeTree, Context
 
-from ...helpers import get_terrain_info
+from .scatter.builder import ensure_scatter_layer_modifiers
+from ...helpers import get_terrain_info, get_terrain_doodad
 from ...units import meters_to_unreal
 from .builder import ensure_terrain_info_modifiers
 from .data import terrain_doodad_noise_type_items, terrain_doodad_operation_items, map_range_interpolation_type_items, \
@@ -124,6 +125,86 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup): # TODO: rename this to s
     distance_noise_offset: FloatProperty(name='Distance Noise Offset', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
 
 
+axis_enum_items = [
+    ('X', 'X', ''),
+    ('Y', 'Y', ''),
+    ('Z', 'Z', ''),
+    ('-X', '-X', ''),
+    ('-Y', '-Y', ''),
+    ('-Z', '-Z', ''),
+]
+
+
+def terrain_doodad_scatter_layer_object_object_poll_cb(_self, bpy_object: Object):
+    # Only allow objects that are static meshes.
+    return bpy_object.type == 'MESH' and bpy_object['Class'] == 'StaticMeshActor'
+
+
+def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer_object', context: Context):
+    print(self, self.terrain_doodad_object)
+    terrain_doodad = get_terrain_doodad(self.terrain_doodad_object)
+    ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+
+class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
+    id: StringProperty(name='ID', options={'HIDDEN'})
+    name: StringProperty(name='Name', default='Name')
+    mute: BoolProperty(name='Mute', default=False)
+
+    terrain_doodad_object: PointerProperty(type=Object, name='Object', options={'HIDDEN'})
+    object: PointerProperty(type=Object, name='Object',
+                            poll=terrain_doodad_scatter_layer_object_object_poll_cb,
+                            update=terrain_doodad_scatter_layer_update_cb)
+
+    random_weight: FloatProperty(name='Random Weight', default=1.0, min=0.0, max=1.0)
+
+    is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
+    align_axis: EnumProperty(name='Align Axis', items=axis_enum_items, default='Z')
+
+    curve_spacing_method: EnumProperty(name='Spacing Method', items=(
+        ('RELATIVE', 'Relative', ''),
+        ('ABSOLUTE', 'Absolute', ''),
+    ), default='RELATIVE')
+    curve_spacing_relative_min: FloatProperty(name='Spacing Min', default=0.0, min=0.0, subtype='FACTOR')
+    curve_spacing_relative_max: FloatProperty(name='Spacing Max', default=1.0, min=0.0, subtype='FACTOR')
+    curve_spacing_absolute_min: FloatProperty(name='Spacing', default=1.0, min=0.0, subtype='DISTANCE')
+    curve_spacing_absolute_max: FloatProperty(name='Spacing', default=1.0, min=0.0, subtype='DISTANCE')
+
+    curve_trim_mode: EnumProperty(name='Trim Mode', items=(
+        ('FACTOR', 'Factor', '', 0),
+        ('LENGTH', 'Distance', '', 1),
+    ), default='FACTOR')
+    curve_trim_factor_start: FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+    curve_trim_factor_end: FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+    curve_trim_length_start: FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
+    curve_trim_length_end: FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
+
+    curve_normal_offset_min: FloatProperty(name='Normal Offset Min', default=0.0, subtype='DISTANCE')
+    curve_normal_offset_max: FloatProperty(name='Normal Offset Max', default=0.0, subtype='DISTANCE')
+    curve_normal_offset_seed: IntProperty(name='Normal Offset Seed', default=0, min=0)
+
+    random_rotation_max: FloatProperty(name='Random Rotation', default=0.0, min=0.0, max=360.0, subtype='ANGLE')
+    random_rotation_seed: IntProperty(name='Random Rotation Seed', default=0, min=0)
+
+    scale_min: FloatVectorProperty(name='Scale Min', min=0.0, default=(1.0, 1.0, 1.0))
+    scale_max: FloatVectorProperty(name='Scale Max', min=0.0, default=(1.0, 1.0, 1.0))
+    scale_seed: IntProperty(name='Random Scale Seed', default=0, min=0)
+
+
+class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
+    id: StringProperty(name='ID', options={'HIDDEN'})
+    index: IntProperty(name='Index', options={'HIDDEN'})
+    name: StringProperty(name='Name', default='Scatter Layer')
+    mute: BoolProperty(name='Mute', default=False)
+    terrain_doodad_object: PointerProperty(type=Object, name='Terrain Doodad Object', options={'HIDDEN'})
+    scatter_type: EnumProperty(name='Scatter Type', items=(
+        ('ORDER', 'Order', 'The objects will be scattered in the order that they appear in the object list.'),
+        ('RANDOM', 'Random', 'The objects will be scattered randomly based on the probability weight.'),
+    ))
+    objects: CollectionProperty(name='Scatter Objects', type=BDK_PG_terrain_doodad_scatter_layer_object)
+    objects_index: IntProperty()
+
+
 class BDK_PG_terrain_doodad(PropertyGroup):
     id: StringProperty(options={'HIDDEN'}, name='ID')
     object_type: EnumProperty(name='Object Type', items=terrain_doodad_type_items, default='CURVE')
@@ -141,10 +222,14 @@ class BDK_PG_terrain_doodad(PropertyGroup):
     sort_order: IntProperty(name='Sort Order', default=0, description='The order in which the terrain doodad are '
                                                                       'evaluated (lower values are evaluated first)',
                             update=terrain_doodad_sort_order_update_cb)
+    scatter_layers: CollectionProperty(name='Scatter Layers', type=BDK_PG_terrain_doodad_scatter_layer)
+    scatter_layers_index: IntProperty()
 
 
 classes = (
     BDK_PG_terrain_doodad_paint_layer,
     BDK_PG_terrain_doodad_sculpt_layer,
+    BDK_PG_terrain_doodad_scatter_layer_object,
+    BDK_PG_terrain_doodad_scatter_layer,
     BDK_PG_terrain_doodad,
 )

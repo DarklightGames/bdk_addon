@@ -45,6 +45,8 @@ if 'bpy' in locals():
     importlib.reload(terrain_doodad_operators)
     importlib.reload(terrain_doodad_ui)
 
+    importlib.reload(terrain_doodad_scatter_builder)
+
     if bdk_helpers.are_bdk_dependencies_installed():
         importlib.reload(t3d_data)
         importlib.reload(t3d_operators)
@@ -86,11 +88,14 @@ else:
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
 
+    # Terrain Doodad
     from .terrain.doodad import data as terrain_doodad_data
     from .terrain.doodad import builder as terrain_doodad_builder
     from .terrain.doodad import operators as terrain_doodad_operators
     from .terrain.doodad import properties as terrain_doodad_properties
     from .terrain.doodad import ui as terrain_doodad_ui
+
+    from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
 
     # T3DMap
     if bdk_helpers.are_bdk_dependencies_installed():
@@ -169,6 +174,7 @@ def register():
         bpy.utils.register_class(cls)
 
     bpy.types.Object.bdk = PointerProperty(type=bdk_properties.BDK_PG_object)
+    bpy.types.Material.bdk = PointerProperty(type=bdk_properties.BDK_PG_material)
 
     bpy.types.TOPBAR_MT_file_import.append(material_import_menu_func)
 
@@ -194,6 +200,7 @@ def unregister():
         bpy.utils.unregister_class(cls)
 
     del bpy.types.Object.bdk
+    del bpy.types.Material.bdk
 
     bpy.types.TOPBAR_MT_file_import.remove(material_import_menu_func)
 
