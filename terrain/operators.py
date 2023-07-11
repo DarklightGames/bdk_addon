@@ -208,13 +208,8 @@ class BDK_OT_terrain_paint_layer_add(Operator):
 
     def execute(self, context: bpy.types.Context):
         active_object = context.active_object
-        try:
-            add_terrain_paint_layer(active_object, name='TerrainLayer')
-            ensure_paint_layers(active_object)
-        except RuntimeError as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
-
+        add_terrain_paint_layer(active_object, name='TerrainLayer')
+        ensure_paint_layers(active_object)
         return {'FINISHED'}
 
 

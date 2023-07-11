@@ -38,7 +38,7 @@ class BDK_PT_terrain_info_debug(Panel):
     def draw(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
 
-        flow = self.layout.grid_flow()
+        flow = self.layout.grid_flow(columns=1)
         flow.use_property_split = True
 
         col = flow.column(align=True)
@@ -46,9 +46,9 @@ class BDK_PT_terrain_info_debug(Panel):
         col.prop(terrain_info, 'y_size')
         flow.prop(terrain_info, 'terrain_scale')
 
-        flow.prop(terrain_info, 'terrain_doodad_sculpt_modifier_name')
-        flow.prop(terrain_info, 'terrain_doodad_paint_modifier_name')
-        flow.prop(terrain_info, 'terrain_doodad_deco_modifier_name')
+        flow.prop(terrain_info, 'doodad_sculpt_modifier_name')
+        flow.prop(terrain_info, 'doodad_paint_modifier_name')
+        flow.prop(terrain_info, 'doodad_deco_modifier_name')
 
 
 class BDK_PT_terrain_paint_layers(Panel):
@@ -100,7 +100,7 @@ class BDK_PT_terrain_paint_layer_settings(Panel):
     def draw(self, context: Context):
         paint_layer = get_selected_terrain_paint_layer(context)
 
-        flow = self.layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
+        flow = self.layout.grid_flow(columns=1)
         flow.use_property_split = True
 
         flow.column(align=True).prop(paint_layer, 'material')
@@ -190,7 +190,7 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
 
     layout.separator()
 
-    flow = layout.grid_flow(align=True)
+    flow = layout.grid_flow(align=True, columns=1)
     flow.use_property_split = True
 
     flow.prop(node, 'id')
@@ -323,7 +323,7 @@ class BDK_PT_terrain_deco_layers_mesh(Panel):
 
         self.layout.separator()
 
-        flow = self.layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
+        flow = self.layout.grid_flow(row_major=True, columns=1, even_columns=True, even_rows=False, align=False)
         flow.use_property_split = True
 
         flow.column().prop(deco_layer, 'static_mesh', text='Static Mesh')
@@ -347,7 +347,7 @@ class BDK_PT_terrain_deco_layer_settings(Panel):
         deco_layers_index = terrain_info.deco_layers_index
         deco_layer = deco_layers[deco_layers_index]
 
-        flow = self.layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=False)
+        flow = self.layout.grid_flow(columns=1)
         flow.use_property_split = True
 
         flow.column().prop(deco_layer, 'max_per_quad')
@@ -439,7 +439,7 @@ class BDK_UL_terrain_deco_layers(UIList):
         if color_attribute_index == mesh.color_attributes.active_color_index:
             row.label(text='', icon='VPAINT_HLT')
 
-        row.prop(item.object, 'hide_viewport', icon='HIDE_OFF' if not item.object.hide_viewport else 'HIDE_ON', text='', emboss=False)
+        row.prop(item.object, 'hide_viewport', icon=('HIDE_OFF' if not item.object.hide_viewport else 'HIDE_ON'), text='', emboss=False)
 
 
 class BDK_UL_terrain_layer_nodes(UIList):

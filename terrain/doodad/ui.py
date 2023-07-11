@@ -3,7 +3,7 @@ from typing import cast
 import bpy
 from bpy.types import Panel, Context, UIList
 
-from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad
+from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad, is_active_object_terrain_doodad
 from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
     BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doodad_paint_layer_remove, \
     BDK_OT_terrain_doodad_paint_layer_duplicate, BDK_OT_terrain_doodad_sculpt_layer_duplicate, \
@@ -55,13 +55,16 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object and context.active_object.bdk.terrain_doodad
+        if not is_active_object_terrain_doodad(context):
+            return False
+        terrain_doodad = context.active_object.bdk.terrain_doodad
+        return len(terrain_doodad.paint_layers) > 0 and terrain_doodad.paint_layers_index >= 0
 
     def draw(self, context: 'Context'):
         layout = self.layout
         terrain_doodad = context.active_object.bdk.terrain_doodad
         paint_layer = terrain_doodad.paint_layers[terrain_doodad.paint_layers_index]
-        flow = layout.grid_flow()
+        flow = layout.grid_flow(columns=1)
 
         row = flow.row()
         row.prop(paint_layer, 'layer_type', expand=True)
@@ -113,7 +116,7 @@ class BDK_PT_terrain_doodad_paint_layers(Panel):
         layout = self.layout
         terrain_doodad = cast(BDK_PG_terrain_doodad, context.active_object.bdk.terrain_doodad)
 
-        # Paint Components
+        # Paint Layers
         row = layout.row()
 
         row.template_list(
@@ -180,7 +183,7 @@ class BDK_PT_terrain_doodad_advanced(Panel):
 
     def draw(self, context: 'Context'):
         terrain_doodad: 'BDK_PG_terrain_doodad' = context.active_object.bdk.terrain_doodad
-        flow = self.layout.grid_flow(align=True)
+        flow = self.layout.grid_flow(align=True, columns=1)
         flow.prop(terrain_doodad, 'sort_order')
 
 
@@ -201,7 +204,7 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
         layout = self.layout
         terrain_doodad = context.active_object.bdk.terrain_doodad
         sculpt_layer = terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index]
-        flow = layout.grid_flow(align=True)
+        flow = layout.grid_flow(align=True, columns=1)
         flow.use_property_split = True
 
         col = flow.column(align=True)
@@ -320,9 +323,9 @@ class BDK_PT_terrain_doodad_scatter_layers(Panel):
         col.operator(BDK_OT_terrain_doodad_scatter_layer_remove.bl_idname, icon='REMOVE', text='')
 
 
-class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
-    bl_label = 'Settings'
-    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_settings'
+class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
+    bl_label = 'Objects'
+    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_objects'
     bl_category = 'BDK'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -331,7 +334,7 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
     @classmethod
     def poll(cls, context: 'Context'):
         terrain_doodad = get_terrain_doodad(context.active_object)
-        return terrain_doodad and len(terrain_doodad.scatter_layers) and terrain_doodad.scatter_layers_index >= 0
+        return len(terrain_doodad.scatter_layers) > 0
 
     def draw(self, context: 'Context'):
         layout = self.layout
@@ -339,7 +342,6 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
 
         row = layout.row()
-
         row.template_list('BDK_UL_terrain_doodad_scatter_layer_objects', '',
                           scatter_layer,
                           'objects',
@@ -352,13 +354,16 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         col.operator(BDK_OT_terrain_doodad_scatter_layer_objects_add.bl_idname, icon='ADD', text='')
         col.operator(BDK_OT_terrain_doodad_scatter_layer_objects_remove.bl_idname, icon='REMOVE', text='')
 
-        scatter_layer_object = scatter_layer.objects[scatter_layer.objects_index] if len(scatter_layer.objects) else None
+        col.separator()
+
+        scatter_layer_object = scatter_layer.objects[scatter_layer.objects_index] if len(
+            scatter_layer.objects) else None
 
         if scatter_layer_object:
             row = layout.row()
             row.prop(scatter_layer_object, 'object', text='Object')
 
-            flow = layout.grid_flow(align=True)
+            flow = layout.grid_flow(align=True, columns=1)
             flow.use_property_split = True
             flow.use_property_decorate = False
 
@@ -406,12 +411,35 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
                 col.prop(scatter_layer_object, 'curve_normal_offset_max', text='Max')
                 col.prop(scatter_layer_object, 'curve_normal_offset_seed', text='Seed')
 
-                flow.separator()
+                # flow.separator()
+                #
+                # col = flow.column(align=True)
+                # col.prop(scatter_layer_object, 'curve_tangent_offset_min')
+                # col.prop(scatter_layer_object, 'curve_tangent_offset_max', text='Max')
+                # col.prop(scatter_layer_object, 'curve_tangent_offset_seed', text='Seed')
 
-                col = flow.column(align=True)
-                col.prop(scatter_layer_object, 'curve_tangent_offset_min')
-                col.prop(scatter_layer_object, 'curve_tangent_offset_max', text='Max')
-                col.prop(scatter_layer_object, 'curve_tangent_offset_seed', text='Seed')
+
+class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
+    bl_label = 'Settings'
+    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_settings'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        return terrain_doodad and len(terrain_doodad.scatter_layers) and terrain_doodad.scatter_layers_index >= 0
+
+    def draw(self, context: 'Context'):
+        layout = self.layout
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        flow = layout.grid_flow(align=True, columns=1)
+        flow.prop(scatter_layer, 'snap_to_terrain')
+        flow.prop(scatter_layer, 'align_to_terrain')
 
 
 class BDK_PT_terrain_doodad_paint_layer_debug(Panel):
@@ -432,7 +460,7 @@ class BDK_PT_terrain_doodad_paint_layer_debug(Panel):
         layout = self.layout
         terrain_doodad = context.active_object.bdk.terrain_doodad
         paint_layer = terrain_doodad.paint_layers[terrain_doodad.paint_layers_index]
-        flow = layout.grid_flow(align=True)
+        flow = layout.grid_flow(align=True, columns=1)
         flow.use_property_split = True
         flow.row().prop(paint_layer, 'id')
 
@@ -455,9 +483,9 @@ class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
         layout = self.layout
         terrain_doodad = context.active_object.bdk.terrain_doodad
         sculpt_layer = terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index]
-        flow = layout.grid_flow(align=True)
+        flow = layout.grid_flow(align=True, columns=1)
         flow.use_property_split = True
-        flow.row().prop(sculpt_layer, 'id')
+        flow.prop(sculpt_layer, 'id')
 
 
 classes = (
@@ -473,6 +501,7 @@ classes = (
     BDK_UL_terrain_doodad_scatter_layers,
     BDK_PT_terrain_doodad_scatter_layers,
     BDK_UL_terrain_doodad_scatter_layer_objects,
+    BDK_PT_terrain_doodad_scatter_layer_objects,
     BDK_PT_terrain_doodad_scatter_layer_settings,
     BDK_PT_terrain_doodad_advanced,
     BDK_PT_terrain_doodad_operators,

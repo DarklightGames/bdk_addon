@@ -5,7 +5,7 @@ from ..helpers import load_bdk_material
 
 
 # This is a wrapper for linking a material
-class BDK_OT_LinkMaterial(Operator):
+class BDK_OT_link_material(Operator):
     bl_idname = 'bdk.link_material'
     bl_label = 'Load Material'
     bl_options = {'REGISTER', 'INTERNAL'}
@@ -20,5 +20,5 @@ class BDK_OT_LinkMaterial(Operator):
 
 
 classes = (
-    BDK_OT_LinkMaterial,
+    BDK_OT_link_material,
 )

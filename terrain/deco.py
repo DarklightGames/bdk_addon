@@ -18,7 +18,9 @@ def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer')
 
     # Create the deco layer object.
     deco_layer = terrain_info.deco_layers.add()
+    print('A')
     deco_layer.name = ensure_name_unique(name, map(lambda x: x.name, terrain_info.deco_layers))
+    print('B')
     deco_layer.id = uuid.uuid4().hex
     deco_layer.modifier_name = uuid.uuid4().hex
     deco_layer.object = create_deco_layer_object(deco_layer)
@@ -322,30 +324,40 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     return node_tree
 
 
-# TODO: this should not be in the "deco" module
 def ensure_paint_layers(terrain_info_object: Object):
+    print('ENSURE PAINT LAYERS')
     terrain_info = get_terrain_info(terrain_info_object)
 
     # REALIZATION: we can't have paint layers with paint layer nodes due to circular dependencies.
     #  This could be possible though, if we police what layers are allowed to be painted in each layer.
     for paint_layer_index, paint_layer in enumerate(terrain_info.paint_layers):
-        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layer_index, paint_layer.id, paint_layer.nodes)
+        # Ensure the terrain info object has a geometry nodes modifier for the paint layer.
+        if paint_layer.id == '':
+            # TODO: Somehow, we have a paint layer with no id. Track this down!
+            continue
+        if  paint_layer.id not in terrain_info_object.modifiers.keys():
+            modifier = terrain_info_object.modifiers.new(name=paint_layer.id, type='NODES')
+        else:
+            modifier = terrain_info_object.modifiers[paint_layer.id]
+        # Rebuild the paint layer node group.
+        modifier.node_group = ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layer_index, paint_layer.id, paint_layer.nodes)
 
 
 def ensure_deco_layers(terrain_info_object: Object):
     terrain_info = get_terrain_info(terrain_info_object)
 
     for deco_layer_index, deco_layer in enumerate(terrain_info.deco_layers):
-        # Rebuild the terrain info's deco layer node group.
-        node_tree = ensure_terrain_layer_node_group(deco_layer.modifier_name, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)
-
-        # Ensure the terrain info object has a geometry nodes modifier with the deco layer node group.
-        if deco_layer.id not in terrain_info_object.modifiers:
-            modifier = terrain_info_object.modifiers.new(name=deco_layer.id, type='NODES')
+        if deco_layer.id == '' or deco_layer.modifier_name == '':
+            # Paranoid check for empty deco layers.
+            continue
+        # Ensure the terrain info object has a geometry nodes modifier for the deco layer.
+        if deco_layer.modifier_name not in terrain_info_object.modifiers.keys():
+            modifier = terrain_info_object.modifiers.new(name=deco_layer.modifier_name, type='NODES')
         else:
-            modifier = terrain_info_object.modifiers[deco_layer.id]
+            modifier = terrain_info_object.modifiers[deco_layer.modifier_name]
 
-        modifier.node_group = node_tree
+        # Rebuild the deco layer node group.
+        modifier.node_group = ensure_terrain_layer_node_group(deco_layer.modifier_name, 'deco_layers', deco_layer_index, deco_layer.id, deco_layer.nodes)
 
         # TODO: Extract this to a function.
         if deco_layer.id not in deco_layer.object.modifiers:

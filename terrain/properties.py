@@ -23,7 +23,7 @@ def terrain_paint_layer_name_update_cb(self, context: Context):
     # Find all terrain doodad in the file.
     terrain_doodad_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
 
-    # Update terrain doodad paint component names if the terrain layer's color attribute name matches.
+    # Update terrain doodad paint layer names if the terrain layer's color attribute name matches.
     for terrain_doodad_object in terrain_doodad_objects:
         for paint_layer in terrain_doodad_object.bdk.terrain_doodad.paint_layers:
             if paint_layer.paint_layer_id == self.id:
@@ -144,7 +144,7 @@ def terrain_paint_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_paint_layer'
 
 class BDK_PG_terrain_paint_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
-    name: StringProperty(name='Name', default='TerrainLayer', update=terrain_paint_layer_name_update_cb)
+    name: StringProperty(name='Name', default='Paint Layer', update=terrain_paint_layer_name_update_cb)
     u_scale: FloatProperty(name='UScale', default=2.0, options=set())
     v_scale: FloatProperty(name='VScale', default=2.0, options=set())
     texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE', options=set())
@@ -239,7 +239,7 @@ def deco_layer_name_update_cb(self, context):
     terrain_doodad_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
 
     # TODO: add handling for nodes system, once implemented
-    # Update terrain doodad paint component names if the terrain layer's color attribute name matches.
+    # Update terrain doodad paint layer names if the terrain layer's color attribute name matches.
     for terrain_doodad_object in terrain_doodad_objects:
         for paint_layer in terrain_doodad_object.bdk.terrain_doodad.paint_layers:
             if paint_layer.deco_layer_id == self.id:
@@ -353,10 +353,10 @@ class BDK_PG_terrain_info(PropertyGroup):
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
 
-    # Modifier IDs for the terrain doodad passes. (why not just has a pointer to the modifier?)
-    terrain_doodad_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')
-    terrain_doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
-    terrain_doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
+    # Modifier IDs for the terrain doodad passes. (why not just have a pointer to the modifier?)
+    doodad_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')
+    doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
+    doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
 
 
 # TODO: maybe all of these should be in their own file?

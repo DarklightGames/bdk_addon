@@ -159,7 +159,6 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     actor['EdgeTurnBitmap'] = edge_turn_bitmap.tolist()
     actor['QuadVisibilityBitmap'] = quad_visibility_bitmap.tolist()
     actor['bNoDelete'] = True
-    actor['bMoveable'] = False
     actor['bLockLocation'] = True
     actor['TerrainSectorSize'] = min(16, terrain_info.y_size, terrain_info.x_size)
     actor['TerrainScale'] = Vector((

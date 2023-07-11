@@ -50,6 +50,12 @@ def is_active_object_terrain_info(context: Context):
     return get_terrain_info(context.active_object) is not None
 
 
+def is_active_object_terrain_doodad(context: Context):
+    if context.active_object is None:
+        return False
+    return get_terrain_doodad(context.active_object) is not None
+
+
 def get_bdk_asset_library_path() -> Optional[Path]:
     asset_libraries = bpy.context.preferences.filepaths.asset_libraries
     asset_library_name = 'BDK Library'
@@ -183,10 +189,12 @@ def are_bdk_dependencies_installed() -> bool:
 
 
 # https://blenderartists.org/t/duplicating-pointerproperty-propertygroup-and-collectionproperty/1419096/2
-def copy_simple_property_group(source, target):
+def copy_simple_property_group(source, target, ignore: Iterable[str] = set()):
     if not hasattr(source, "__annotations__"):
         return
     for prop_name in source.__annotations__.keys():
+        if prop_name in ignore:
+            continue
         try:
             setattr(target, prop_name, getattr(source, prop_name))
         except (AttributeError, TypeError):

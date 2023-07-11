@@ -138,7 +138,7 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.menu(bdk_ui.BDK_MT_object_add_menu.bl_idname, text='BDK', icon='BDK_UNREAL')
+    self.layout.menu(bdk_ui.BDK_MT_object_add_menu.bl_idname, text='BDK')
 
 
 def bdk_select_menu_func(self, _context: bpy.types.Context):
