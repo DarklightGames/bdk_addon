@@ -7,7 +7,7 @@ import numpy as np
 from bpy.types import Object, Mesh, Image, Depsgraph
 from typing import cast, Optional
 
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Euler
 
 from ..t3d.data import T3DActor, T3DMap
 from ..t3d.writer import T3DWriter
@@ -23,6 +23,21 @@ def get_instance_offset(asset_instance: Object) -> Matrix:
         return Matrix()
 
 
+# TODO: just make a conversion matrix?
+def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, Euler, Vector):
+    """
+    Converts a Blender world matrix to units suitable for exporting to Unreal Engine.
+    This also corrects for the offset that occurs when pasting an actor into the Unreal Editor.
+    :param matrix: The Blender world matrix.
+    :return: The location, rotation and scale.
+    """
+    # Location is corrected by 32 units as it gets offset when actor is pasted into the Unreal Editor.
+    loc: Vector = matrix.to_translation() - Vector((32.0, -32.0, 32.0))
+    # Y-Axis is inverted in Unreal Engine.
+    loc.y = -loc.y
+    return loc, matrix.to_euler('XYZ'), matrix.to_scale()
+
+
 # TODO: kind of ugly
 def add_movement_properties_to_actor(actor: T3DActor, bpy_object: Object, asset_instance: Optional[Object] = None) -> None:
     if asset_instance:
@@ -30,15 +45,10 @@ def add_movement_properties_to_actor(actor: T3DActor, bpy_object: Object, asset_
     else:
         matrix_world = bpy_object.matrix_world
 
-    # Location is corrected by 32 units as it gets offset when actor
-    # is pasted into the Unreal Editor.
-    loc: Vector = matrix_world.to_translation() - Vector((32.0, -32.0, 32.0))
-    # Y-Axis is inverted in UE.
-    loc.y = -loc.y
-
-    actor['Location'] = loc
-    actor['Rotation'] = matrix_world.to_euler('XYZ')
-    actor['DrawScale3D'] = matrix_world.to_scale()
+    location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix_world)
+    actor['Location'] = location
+    actor['Rotation'] = rotation
+    actor['DrawScale3D'] = scale
 
 
 def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optional[Object] = None) -> T3DActor:
@@ -165,7 +175,8 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
         terrain_info.terrain_scale,
         max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
     actor['DecoLayerOffset'] = 0.0
-    actor['Location'] = Vector(terrain_info_object.location) - Vector((32.0, 32.0, 32.0))
+
+    add_movement_properties_to_actor(actor, terrain_info_object)
 
     return actor
 

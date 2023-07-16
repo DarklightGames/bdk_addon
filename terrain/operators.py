@@ -237,7 +237,7 @@ class BDK_OT_terrain_info_add(Operator):
         return self.execute(context)
 
     def execute(self, context: bpy.types.Context):
-        terrain_info_object = create_terrain_info_object(resolution=self.resolution, size=self.size)
+        terrain_info_object = create_terrain_info_object(name='TerrainInfo', resolution=self.resolution, size=self.size)
         terrain_info_object.location = self.location
 
         if self.lock_transforms:
