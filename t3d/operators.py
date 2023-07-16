@@ -6,7 +6,7 @@ from bpy.types import Operator, Context, Object
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
-from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor
+from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, get_terrain_heightmap
 from .data import T3DMap, T3DActor
 from pathlib import Path
 from .importer import import_t3d
