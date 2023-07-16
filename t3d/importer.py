@@ -12,8 +12,7 @@ from ..terrain.operators import add_terrain_layer_node
 from ..projector.builder import build_projector_node_tree
 from ..terrain.builder import create_terrain_info_object
 from ..terrain.layers import add_terrain_paint_layer
-from ..terrain.deco import add_terrain_deco_layer, ensure_terrain_layer_node_group, ensure_paint_layers, \
-    ensure_deco_layers
+from ..terrain.deco import add_terrain_deco_layer, ensure_paint_layers, ensure_deco_layers
 from ..data import URotator, UReference
 from ..helpers import load_bdk_static_mesh, load_bdk_material
 from ..units import unreal_to_radians
@@ -270,22 +269,23 @@ class TerrainInfoImporter(ActorImporter):
             paint_layer.v_scale = layer.get('VScale', 1.0)
             paint_layer.texture_rotation = unreal_to_radians(layer.get('TextureRotation', 0))
 
-            # Add the node group and rebuild the node tree.
-            paint_node = add_terrain_layer_node(mesh_object, paint_layer.nodes, type='PAINT')
+            if alpha_map_reference:
+                # Add the node group and rebuild the node tree.
+                paint_node = add_terrain_layer_node(mesh_object, paint_layer.nodes, type='PAINT')
 
-            # Alpha Map
-            alpha_map_image_name = f'{paint_layer_name}.tga'
-            alpha_map_image = bpy.data.images[alpha_map_image_name]
-            if alpha_map_image:
-                if terrain_map_image.size != alpha_map_image.size:
-                    # Print out a warning if the alpha map image is not the same size as the terrain map image.
-                    print(f'Warning: Alpha map image {alpha_map_image_name} is not the same size as the terrain map '
-                          f'image {terrain_map_image_name}. The alpha map image will be resized to match the terrain '
-                          f'map image.')
-                    # Resize the alpha map image to match the terrain map image.
-                    alpha_map_image.scale(terrain_map_image.size[0], terrain_map_image.size[1])
-                alpha_map_attribute = mesh_data.attributes[paint_node.id]
-                alpha_map_attribute.data.foreach_set('color', density_map_data_from_image(alpha_map_image))
+                # Alpha Map
+                alpha_map_image_name = f'{paint_layer_name}.tga'
+                alpha_map_image = bpy.data.images[alpha_map_image_name]
+                if alpha_map_image:
+                    if terrain_map_image.size != alpha_map_image.size:
+                        # Print out a warning if the alpha map image is not the same size as the terrain map image.
+                        print(f'Warning: Alpha map image {alpha_map_image_name} is not the same size as the terrain map '
+                              f'image {terrain_map_image_name}. The alpha map image will be resized to match the terrain '
+                              f'map image.')
+                        # Resize the alpha map image to match the terrain map image.
+                        alpha_map_image.scale(terrain_map_image.size[0], terrain_map_image.size[1])
+                    alpha_map_attribute = mesh_data.attributes[paint_node.id]
+                    alpha_map_attribute.data.foreach_set('color', density_map_data_from_image(alpha_map_image))
 
             # Texture
             texture_reference = layer.get('Texture', None)

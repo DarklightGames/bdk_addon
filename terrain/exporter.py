@@ -65,11 +65,10 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     # Paint Layers
     layers = []
     for paint_layer in terrain_info.paint_layers:
-        name = paint_layer.id
         texture = paint_layer.material.bdk.package_reference if paint_layer.material else None
         layers.append({
             'Texture': texture,
-            'AlphaMap': f'Texture\'myLevel.Terrain.{name}\'',  # TODO: make "reference" class, handle strings differently in writer
+            'AlphaMap': f'Texture\'myLevel.Terrain.{paint_layer.name}\'',
             'UScale': paint_layer.u_scale,
             'VScale': paint_layer.v_scale,
             'TextureRotation': paint_layer.texture_rotation,
@@ -180,7 +179,7 @@ def export_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, direct
     for deco_layer in terrain_info.deco_layers:
         image = create_image_from_attribute(terrain_info_object, depsgraph, deco_layer.id)
         # Write the image out to a file.
-        image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
+        image.save(filepath=os.path.join(directory, f'{deco_layer.name}.tga'))
         # Now remove the image data block.
         bpy.data.images.remove(image)
 
@@ -194,7 +193,7 @@ def export_terrain_paint_layers(terrain_info_object: Object, depsgraph: Depsgrap
     for paint_layer in terrain_info.paint_layers:
         image = create_image_from_attribute(terrain_info_object, depsgraph, paint_layer.id)
         # Write the image out to a file.
-        image.save(filepath=os.path.join(directory, f'{image.name}.tga'))
+        image.save(filepath=os.path.join(directory, f'{paint_layer.name}.tga'))
         # Now remove the image data block.
         bpy.data.images.remove(image)
 

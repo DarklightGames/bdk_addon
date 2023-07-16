@@ -101,10 +101,16 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
             # TODO: SpectatorCam, Projector, FluidSurface etc.
             return bpy_object.type == 'MESH' and bpy_object.data is not None
 
+        depsgraph = context.evaluated_depsgraph_get()
+
         for obj in context.selected_objects:
+            if obj.bdk.type == 'TERRAIN_INFO':
+                # TODO: terrain scale might be an issue for people just editing existing maps
+                heightmap, terrain_scale_z = get_terrain_heightmap(obj, depsgraph)
+                copy_actors.append(create_terrain_info_actor(obj, terrain_scale_z))
             # TODO: add handlers for other object types (outside of this function)
             # TODO: add handler for doodads
-            if obj.type == 'CAMERA':
+            elif obj.type == 'CAMERA':
                 # Create a SpectatorCam actor
                 actor = T3DActor('SpectatorCam', obj.name)
                 add_movement_properties_to_actor(actor, obj)
