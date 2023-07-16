@@ -68,7 +68,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
         texture = paint_layer.material.bdk.package_reference if paint_layer.material else None
         layers.append({
             'Texture': texture,
-            'AlphaMap': f'Texture\'myLevel.Terrain.{paint_layer.name}\'',
+            'AlphaMap': f'Texture\'myLevel.{paint_layer.name}\'',
             'UScale': paint_layer.u_scale,
             'VScale': paint_layer.v_scale,
             'TextureRotation': paint_layer.texture_rotation,
@@ -79,7 +79,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     for deco_layer in terrain_info.deco_layers:
         deco_layers.append({
             'ShowOnTerrain': int(deco_layer.show_on_terrain),
-            'DensityMap': f'Texture\'myLevel.Terrain.{deco_layer.name}\'',
+            'DensityMap': f'Texture\'myLevel.{deco_layer.name}\'',
             'StaticMesh': deco_layer.static_mesh.data.name if deco_layer.static_mesh else None,
             'ScaleMultiplier': {
                 'X': {
@@ -152,7 +152,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
             bitmap_index += 1
         bitmap_index += 1
 
-    actor['TerrainMap'] = f'Texture\'myLevel.Terrain.{terrain_info_object.name}\''
+    actor['TerrainMap'] = f'Texture\'myLevel.{terrain_info_object.name}\''
     actor['Layers'] = layers
     actor['DecoLayers'] = deco_layers
     actor['EdgeTurnBitmap'] = edge_turn_bitmap.tolist()
