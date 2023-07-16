@@ -79,7 +79,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     for deco_layer in terrain_info.deco_layers:
         deco_layers.append({
             'ShowOnTerrain': int(deco_layer.show_on_terrain),
-            'DensityMap': f'Texture\'myLevel.Terrain.{deco_layer.id}\'',
+            'DensityMap': f'Texture\'myLevel.Terrain.{deco_layer.name}\'',
             'StaticMesh': deco_layer.static_mesh.data.name if deco_layer.static_mesh else None,
             'ScaleMultiplier': {
                 'X': {

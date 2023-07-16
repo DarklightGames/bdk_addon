@@ -157,7 +157,7 @@ def get_terrain_info_vertex_coordinates(resolution: int, size: float) -> Iterato
             yield quad_length * x - size_half, quad_length * y - size_half + quad_length
 
 
-def create_terrain_info_object(resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
+def create_terrain_info_object(name: str, resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
     # NOTE: There is a bug in Unreal where the terrain is off-center, so we deliberately
     # have to miscalculate things in order to replicate the behavior seen in the engine.
 
@@ -211,7 +211,7 @@ def create_terrain_info_object(resolution: int, size: float, heightmap: Optional
     bm.to_mesh(mesh_data)
     del bm
 
-    mesh_object = bpy.data.objects.new('TerrainInfo', mesh_data)
+    mesh_object = bpy.data.objects.new(name, mesh_data)
 
     # Set the BDK object type.
     mesh_object.bdk.type = 'TERRAIN_INFO'

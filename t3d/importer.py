@@ -244,7 +244,8 @@ class TerrainInfoImporter(ActorImporter):
             edge_turn_bitmap[index] = value
 
         # TODO: make create_terrain_info_object take quad_size instead of full resolution
-        mesh_object = create_terrain_info_object(resolution=resolution, size=resolution * size, heightmap=heightmap,
+        mesh_object = create_terrain_info_object(name=terrain_map_reference.object_name,
+                                                 resolution=resolution, size=resolution * size, heightmap=heightmap,
                                                  edge_turn_bitmap=edge_turn_bitmap)
         mesh_data: Mesh = cast(Mesh, mesh_object.data)
 
