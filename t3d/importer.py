@@ -297,15 +297,17 @@ class TerrainInfoImporter(ActorImporter):
 
         # Deco Layers
         for deco_layer_index, deco_layer_data in deco_layers:
-            static_mesh = UReference.from_string(str(deco_layer_data.get('StaticMesh', 'None')))
 
-            deco_layer_name = static_mesh.object_name if static_mesh else 'DecoLayer'
+            # Density Map
+            density_map_reference = UReference.from_string(str(deco_layer_data.get('DensityMap', 'None')))
+            static_mesh_reference = UReference.from_string(str(deco_layer_data.get('StaticMesh', 'None')))
+            deco_layer_name = density_map_reference.object_name if density_map_reference else 'DecoLayer'
 
             # TODO: current scheme assumes 1:1 density map; provide a way to flag that we have our own density map we
             #  want to use (i.e. reuse the deco layers)
             deco_layer = add_terrain_deco_layer(mesh_object, name=deco_layer_name)
 
-            static_mesh_data = load_bdk_static_mesh(str(static_mesh))
+            static_mesh_data = load_bdk_static_mesh(str(static_mesh_reference))
             deco_static_mesh_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)
             deco_layer.static_mesh = deco_static_mesh_object
             deco_layer.detail_mode = deco_layer_data.get('DetailMode', 'DM_Low')
@@ -348,9 +350,6 @@ class TerrainInfoImporter(ActorImporter):
 
             # TODO: we need to make sure we don't delete attributes that are shared by multiple painting layers
             #  (current system assumes 1:1)
-
-            # Density Map
-            density_map_reference = UReference.from_string(str(deco_layer_data.get('DensityMap', 'None')))
 
             # TODO: create the density maps for each unique texture/image (map the name to a generated uuid attribute)
             if density_map_reference:

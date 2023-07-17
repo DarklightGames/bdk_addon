@@ -18,9 +18,7 @@ def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer')
 
     # Create the deco layer object.
     deco_layer = terrain_info.deco_layers.add()
-    print('A')
-    deco_layer.name = ensure_name_unique(name, map(lambda x: x.name, terrain_info.deco_layers))
-    print('B')
+    deco_layer.name = name
     deco_layer.id = uuid.uuid4().hex
     deco_layer.modifier_name = uuid.uuid4().hex
     deco_layer.object = create_deco_layer_object(deco_layer)
