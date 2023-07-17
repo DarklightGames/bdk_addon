@@ -15,6 +15,8 @@ bl_info = {
 if 'bpy' in locals():
     import importlib
 
+    importlib.reload(node_helpers)
+
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
@@ -58,6 +60,7 @@ if 'bpy' in locals():
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
 else:
+    from . import node_helpers as node_helpers
     from . import helpers as bdk_helpers
     from .bdk import operators as bdk_operators
     from .bdk import properties as bdk_properties

@@ -1,7 +1,10 @@
 import math
 from io import StringIO
+from typing import List
 
 import bpy
+import numpy
+from mathutils import Euler, Matrix
 from bpy.types import Operator, Context, Object
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
@@ -80,6 +83,52 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
         return {'FINISHED'}
 
 
+def terrain_doodad_to_actors(context: Context, terrain_doodad_object: Object) -> List[T3DActor]:
+    # Look up the seed object for the terrain doodad.
+    depsgraph = context.evaluated_depsgraph_get()
+    terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
+
+    actors = []
+
+    for scatter_layer in terrain_doodad.scatter_layers:
+        # Get evaluated mesh data for the seed object.
+        mesh_data = scatter_layer.seed_object.evaluated_get(depsgraph).data
+        vertex_count = len(mesh_data.vertices)
+
+        # Position
+        attribute = mesh_data.attributes['position']
+        position_data = [0.0] * vertex_count * 3
+        attribute.data.foreach_get('vector', position_data)
+        positions = numpy.array(position_data).reshape((vertex_count, 3))
+
+        # Rotation
+        attribute = mesh_data.attributes['rotation']
+        rotation_data = [0.0] * vertex_count * 3
+        attribute.data.foreach_get('vector', rotation_data)
+        rotations = numpy.array(rotation_data).reshape((vertex_count, 3))
+
+        # Scale
+        attribute = mesh_data.attributes['scale']
+        scale_data = [0.0] * vertex_count * 3
+        attribute.data.foreach_get('vector', scale_data)
+        scales = numpy.array(scale_data).reshape((vertex_count, 3))
+
+        for position, rotation, scale in zip(positions, rotations, scales):
+            # TODO: The order of operations here is probably wrong.
+            matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
+
+            static_mesh_object = scatter_layer.objects[0].object
+            actor = T3DActor(class_='StaticMeshActor', name=static_mesh_object.name)
+            actor['StaticMesh'] = static_mesh_object.bdk.package_reference
+            location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
+            actor['Location'] = location
+            actor['Rotation'] = rotation
+            actor['DrawScale3D'] = scale
+            actors.append(actor)
+
+    return actors
+
+
 # TODO: Copying from the outliner
 class BDK_OT_t3d_copy_to_clipboard(Operator):
     bl_idname = 'bdk.t3d_copy_objects_to_clipboard'
@@ -105,7 +154,9 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         depsgraph = context.evaluated_depsgraph_get()
 
         for obj in context.selected_objects:
-            if obj.bdk.type == 'TERRAIN_INFO':
+            if obj.bdk.type == 'TERRAIN_DOODAD':
+                copy_actors += terrain_doodad_to_actors(context, obj)
+            elif obj.bdk.type == 'TERRAIN_INFO':
                 # TODO: terrain scale might be an issue for people just editing existing maps
                 heightmap, terrain_scale_z = get_terrain_heightmap(obj, depsgraph)
                 copy_actors.append(create_terrain_info_actor(obj, terrain_scale_z))

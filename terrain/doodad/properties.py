@@ -141,11 +141,10 @@ axis_enum_items = [
 
 def terrain_doodad_scatter_layer_object_object_poll_cb(_self, bpy_object: Object):
     # Only allow objects that are static meshes.
-    return bpy_object.type == 'MESH' and bpy_object['Class'] == 'StaticMeshActor'
+    return bpy_object.type == 'MESH' and bpy_object.get('Class', None) == 'StaticMeshActor'
 
 
 def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer_object', context: Context):
-    print(self, self.terrain_doodad_object)
     terrain_doodad = get_terrain_doodad(self.terrain_doodad_object)
     ensure_scatter_layer_modifiers(context, terrain_doodad)
 
@@ -164,24 +163,6 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
 
     is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
     align_axis: EnumProperty(name='Align Axis', items=axis_enum_items, default='Z')
-
-    curve_spacing_method: EnumProperty(name='Spacing Method', items=(
-        ('RELATIVE', 'Relative', ''),
-        ('ABSOLUTE', 'Absolute', ''),
-    ), default='RELATIVE')
-    curve_spacing_relative_min: FloatProperty(name='Spacing Min', default=0.0, min=0.0, subtype='FACTOR')
-    curve_spacing_relative_max: FloatProperty(name='Spacing Max', default=1.0, min=0.0, subtype='FACTOR')
-    curve_spacing_absolute_min: FloatProperty(name='Spacing', default=1.0, min=0.0, subtype='DISTANCE')
-    curve_spacing_absolute_max: FloatProperty(name='Spacing', default=1.0, min=0.0, subtype='DISTANCE')
-
-    curve_trim_mode: EnumProperty(name='Trim Mode', items=(
-        ('FACTOR', 'Factor', '', 0),
-        ('LENGTH', 'Distance', '', 1),
-    ), default='FACTOR')
-    curve_trim_factor_start: FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
-    curve_trim_factor_end: FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
-    curve_trim_length_start: FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
-    curve_trim_length_end: FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
 
     curve_normal_offset_min: FloatProperty(name='Normal Offset Min', default=0.0, subtype='DISTANCE')
     curve_normal_offset_max: FloatProperty(name='Normal Offset Max', default=0.0, subtype='DISTANCE')
@@ -210,6 +191,30 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
 
     snap_to_terrain: BoolProperty(name='Snap to Terrain', default=False)
     align_to_terrain: BoolProperty(name='Align to Terrain', default=False)
+
+    curve_spacing_method: EnumProperty(name='Spacing Method', items=(
+        ('RELATIVE', 'Relative', ''),
+        ('ABSOLUTE', 'Absolute', ''),
+    ), default='RELATIVE')
+    curve_spacing_relative: FloatProperty(name='Spacing Min', default=1.0, min=0.1, soft_max=10.0, subtype='FACTOR')
+    curve_spacing_absolute: FloatProperty(name='Spacing', default=1.0, min=0.0, subtype='DISTANCE')
+    is_curve_reversed: BoolProperty(name='Reverse Curve', default=False)
+
+    curve_trim_mode: EnumProperty(name='Trim Mode', items=(
+        ('FACTOR', 'Factor', '', 0),
+        ('LENGTH', 'Distance', '', 1),
+    ), default='FACTOR')
+    curve_trim_factor_start: FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+    curve_trim_factor_end: FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+    curve_trim_length_start: FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
+    curve_trim_length_end: FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
+
+    curve_normal_offset: FloatProperty(name='Normal Offset', default=0.0, subtype='DISTANCE')
+
+    seed_object: PointerProperty(type=Object, name='Seed Object', options={'HIDDEN'})
+    sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
+
+    global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
 
 
 class BDK_PG_terrain_doodad(PropertyGroup):

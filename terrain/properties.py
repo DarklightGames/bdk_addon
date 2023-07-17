@@ -352,6 +352,7 @@ class BDK_PG_terrain_info(PropertyGroup):
     deco_layers_index: IntProperty(options={'HIDDEN'})
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
+    deco_layer_offset: FloatProperty(name='Deco Layer Offset', options={'HIDDEN'}, subtype='DISTANCE')
 
     # Modifier IDs for the terrain doodad passes. (why not just have a pointer to the modifier?)
     doodad_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')

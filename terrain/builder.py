@@ -5,7 +5,8 @@ from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
-from ..helpers import get_terrain_info, ensure_shader_node_tree, ensure_input_and_output_nodes
+from ..helpers import get_terrain_info
+from ..node_helpers import ensure_shader_node_tree, ensure_input_and_output_nodes
 from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 

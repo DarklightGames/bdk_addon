@@ -1,19 +1,54 @@
 import uuid
 
-from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
+import bpy
+from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, Node
 
 from ....units import meters_to_unreal
-from ....helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes
-
-
-snap_and_align_to_terrain_node_group_name = 'Snap and Align to Terrain'
+from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, \
+    ensure_curve_normal_offset_node_tree
 
 
 def add_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad') -> 'BDK_PG_terrain_doodad_scatter_layer':
     scatter_layer = terrain_doodad.scatter_layers.add()
     scatter_layer.id = uuid.uuid4().hex
     scatter_layer.terrain_doodad_object = terrain_doodad.object
+
     return scatter_layer
+
+
+def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
+    """
+    Ensures that the given scatter layer has a geometry node tree and input and output nodes.
+    :param scatter_layer:
+    :return:
+    """
+    # Create the seed object. This is the object that will have vertices with instance attributes scattered on it.
+    # This will be used by the sprout object, but also by the T3D exporter.
+    if scatter_layer.seed_object is None:
+        name = uuid.uuid4().hex
+        seed_object = bpy.data.objects.new(name=name, object_data=bpy.data.meshes.new(name))
+        seed_object.hide_select = True
+        seed_object.lock_location = (True, True, True)
+        seed_object.lock_rotation = (True, True, True)
+        seed_object.lock_scale = (True, True, True)
+        scatter_layer.seed_object = seed_object
+
+    # Create the sprout object. This is the object that will create the instances from the seed object.
+    if scatter_layer.sprout_object is None:
+        name = uuid.uuid4().hex
+        sprout_object = bpy.data.objects.new(name=name, object_data=bpy.data.meshes.new(name))
+        sprout_object.hide_select = True
+        sprout_object.lock_location = (True, True, True)
+        sprout_object.lock_rotation = (True, True, True)
+        sprout_object.lock_scale = (True, True, True)
+        scatter_layer.sprout_object = sprout_object
+
+    # Add the seed object and the sprout object into the scene and parent them to the terrain doodad.
+    bpy.context.scene.collection.objects.link(scatter_layer.seed_object)
+    bpy.context.scene.collection.objects.link(scatter_layer.sprout_object)
+
+    scatter_layer.seed_object.parent = scatter_layer.terrain_doodad_object
+    scatter_layer.sprout_object.parent = scatter_layer.terrain_doodad_object
 
 
 def add_scatter_layer_object(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> 'BDK_PG_terrain_doodad_scatter_layer_object':
@@ -34,22 +69,27 @@ class TrimCurveSockets:
         self.length_end_socket = length_end_socket
 
 
-def add_trim_curve(node_tree: NodeTree, curve_socket: NodeSocket, mode_socket: NodeSocket) -> TrimCurveSockets:
-    """
-    Adds a set of nodes to the node tree that will output a trim curve based on the mode specified by the socket.
-    :param node_tree:
-    :param curve_socket:
-    :param mode_socket:
-    :return: The output socket of the trim curve node.
-    """
+def ensure_trim_curve_node_tree() -> NodeTree:
+    inputs = {
+        ('NodeSocketGeometry', 'Curve'),
+        ('NodeSocketInt', 'Mode'),
+        ('NodeSocketFloat', 'Factor Start'),
+        ('NodeSocketFloat', 'Factor End'),
+        ('NodeSocketFloat', 'Length Start'),
+        ('NodeSocketFloat', 'Length End'),
+    }
+    outputs = {('NodeSocketGeometry', 'Curve')}
+    node_tree = ensure_geometry_node_tree('BDK Trim Curve', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
     trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
     trim_curve_factor_node.mode = 'FACTOR'
 
     trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
     trim_curve_length_node.mode = 'LENGTH'
 
-    node_tree.links.new(curve_socket, trim_curve_factor_node.inputs['Curve'])
-    node_tree.links.new(curve_socket, trim_curve_length_node.inputs['Curve'])
+    node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
+    node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
 
     compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
     compare_node.data_type = 'INT'
@@ -58,7 +98,7 @@ def add_trim_curve(node_tree: NodeTree, curve_socket: NodeSocket, mode_socket: N
     switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
     switch_node.input_type = 'GEOMETRY'
 
-    node_tree.links.new(mode_socket, compare_node.inputs[2])
+    node_tree.links.new(input_node.outputs['Mode'], compare_node.inputs[2])
 
     node_tree.links.new(compare_node.outputs[0], switch_node.inputs[1])  # Result -> Switch
     node_tree.links.new(trim_curve_factor_node.outputs['Curve'], switch_node.inputs[15])  # True
@@ -66,63 +106,22 @@ def add_trim_curve(node_tree: NodeTree, curve_socket: NodeSocket, mode_socket: N
 
     # Add curve length subtract node.
     curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
-    node_tree.links.new(curve_socket, curve_length_node.inputs['Curve'])
+    node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
     subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
     subtract_node.operation = 'SUBTRACT'
     node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
     node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
 
-    sockets = TrimCurveSockets(
-        curve_socket=switch_node.outputs[6],
-        factor_start_socket=trim_curve_factor_node.inputs[2],
-        factor_end_socket=trim_curve_factor_node.inputs[3],
-        length_start_socket=trim_curve_length_node.inputs[4],
-        length_end_socket=subtract_node.inputs[1]
-    )
+    node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
 
-    return sockets
+    node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
+    node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
 
+    node_tree.links.new(input_node.outputs['Length Start'], subtract_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs['Start'])
+    node_tree.links.new(input_node.outputs['Length End'], trim_curve_length_node.inputs['End'])
 
-def add_vector_xyz_switch(node_tree: NodeTree, vector_socket: NodeSocket, index_socket: NodeSocket) -> NodeSocket:
-    """
-    Adds a set of nodes to the node tree that will output the vector component specified by the index socket.
-    :param node_tree:
-    :param vector_socket:
-    :param index_socket:
-    :return:
-    """
-    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-    node_tree.links.new(vector_socket, separate_xyz_node.inputs['Vector'])
-
-    compare_index_x_node = node_tree.nodes.new(type='FunctionNodeCompare')
-    compare_index_x_node.data_type = 'INT'
-    compare_index_x_node.operation = 'EQUAL'
-
-    node_tree.links.new(index_socket, compare_index_x_node.inputs[2])  # A
-
-    switch_x_yz_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_x_yz_node.input_type = 'FLOAT'
-
-    node_tree.links.new(compare_index_x_node.outputs['Result'], switch_x_yz_node.inputs[0])  # Result -> Switch
-    node_tree.links.new(separate_xyz_node.outputs['X'], switch_x_yz_node.inputs[3])  # True
-
-    compare_index_y_node = node_tree.nodes.new(type='FunctionNodeCompare')
-    compare_index_y_node.data_type = 'INT'
-    compare_index_y_node.operation = 'EQUAL'
-    compare_index_y_node.inputs[3].default_value = 1
-
-    switch_yz_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_yz_node.input_type = 'FLOAT'
-
-    node_tree.links.new(index_socket, compare_index_y_node.inputs[2])  # A
-
-    node_tree.links.new(compare_index_y_node.outputs['Result'], switch_yz_node.inputs[0])  # Result -> Switch
-    node_tree.links.new(separate_xyz_node.outputs['Y'], switch_yz_node.inputs[3])  # True
-    node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[4])  # False
-
-    node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[4])  # False
-
-    return switch_x_yz_node.outputs[0]  # Output
+    return node_tree
 
 
 def add_object_extents(node_tree: NodeTree, bpy_object: Object) -> NodeSocket:
@@ -135,16 +134,12 @@ def add_object_extents(node_tree: NodeTree, bpy_object: Object) -> NodeSocket:
     object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
     object_info_node.inputs[0].default_value = bpy_object
 
-    bounding_box_node = node_tree.nodes.new(type='GeometryNodeBoundBox')
+    geometry_size_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    geometry_size_group_node.node_tree = ensure_geometry_size_node_tree()
 
-    vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-    vector_math_node.operation = 'SUBTRACT'
+    node_tree.links.new(object_info_node.outputs['Geometry'], geometry_size_group_node.inputs['Geometry'])
 
-    node_tree.links.new(object_info_node.outputs['Geometry'], bounding_box_node.inputs['Geometry'])
-    node_tree.links.new(bounding_box_node.outputs['Max'], vector_math_node.inputs[0])
-    node_tree.links.new(bounding_box_node.outputs['Min'], vector_math_node.inputs[1])
-
-    return vector_math_node.outputs['Vector']
+    return geometry_size_group_node.outputs['Size']
 
 
 def get_data_path_for_scatter_layer_object(scatter_layer_index: int, scatter_layer_object_index: int, data_path: str) -> str:
@@ -189,7 +184,7 @@ def ensure_terrain_snap_and_align_node_tree() -> NodeTree:
     outputs = {
         ('NodeSocketGeometry', 'Geometry'),
     }
-    node_tree = ensure_geometry_node_tree(snap_and_align_to_terrain_node_group_name, inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Snap and Align to Terrain', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
@@ -198,7 +193,7 @@ def ensure_terrain_snap_and_align_node_tree() -> NodeTree:
     is_hit_switch_node.input_type = 'VECTOR'
 
     raycast_node = node_tree.nodes.new(type='GeometryNodeRaycast')
-    raycast_node.inputs['Ray Length'].default_value = meters_to_unreal(100)
+    raycast_node.inputs['Ray Length'].default_value = meters_to_unreal(200)
 
     input_position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
@@ -227,7 +222,115 @@ def ensure_terrain_snap_and_align_node_tree() -> NodeTree:
     return node_tree
 
 
-def ensure_scatter_layer_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
+def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
+    inputs = set()
+    outputs = {('NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(scatter_layer.sprout_object.name, inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    seed_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+    seed_object_info_node.transform_space = 'RELATIVE'
+    seed_object_info_node.inputs['Object'].default_value = scatter_layer.seed_object
+
+    join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
+    # For each scatter layer, add an object info node and pipe them all into a join geometry node.
+    # Then pipe that into the instance on points node.
+    for obj in scatter_layer.objects:
+        object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+        object_info_node.inputs['Object'].default_value = obj.object
+        object_info_node.inputs['As Instance'].default_value = True
+        node_tree.links.new(object_info_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
+
+    instance_on_points_node = node_tree.nodes.new(type='GeometryNodeInstanceOnPoints')
+
+    rotation_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    rotation_attribute_node.inputs['Name'].default_value = 'rotation'
+    rotation_attribute_node.data_type = 'FLOAT_VECTOR'
+
+    scale_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    scale_attribute_node.inputs['Name'].default_value = 'scale'
+    scale_attribute_node.data_type = 'FLOAT_VECTOR'
+
+    node_tree.links.new(rotation_attribute_node.outputs[0], instance_on_points_node.inputs['Rotation'])
+    node_tree.links.new(scale_attribute_node.outputs[0], instance_on_points_node.inputs['Scale'])
+
+    node_tree.links.new(join_geometry_node.outputs['Geometry'], instance_on_points_node.inputs['Instance'])
+    node_tree.links.new(seed_object_info_node.outputs['Geometry'], instance_on_points_node.inputs['Points'])
+    node_tree.links.new(instance_on_points_node.outputs['Instances'], output_node.inputs['Geometry'])
+
+    return node_tree
+
+
+def ensure_geometry_size_node_tree() -> NodeTree:
+    inputs = {('NodeSocketGeometry', 'Geometry')}
+    outputs = {('NodeSocketVector', 'Size')}
+    node_tree = ensure_geometry_node_tree('BDK Bounding Box Size', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    # Add Bounding Box node
+    bounding_box_node = node_tree.nodes.new(type='GeometryNodeBoundBox')
+
+    # Subtract Vector node
+    subtract_vector_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+    subtract_vector_node.operation = 'SUBTRACT'
+
+    node_tree.links.new(input_node.outputs['Geometry'], bounding_box_node.inputs['Geometry'])
+    node_tree.links.new(bounding_box_node.outputs['Max'], subtract_vector_node.inputs[0])
+    node_tree.links.new(bounding_box_node.outputs['Min'], subtract_vector_node.inputs[1])
+    node_tree.links.new(subtract_vector_node.outputs['Vector'], output_node.inputs['Size'])
+
+    return node_tree
+
+
+def ensure_vector_component_node_tree() -> NodeTree:
+    inputs = {('NodeSocketVector', 'Vector'), ('NodeSocketInt', 'Index')}
+    outputs = {('NodeSocketFloat', 'Value')}
+    node_tree = ensure_geometry_node_tree('BDK Vector Component', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    # Separate XYZ node
+    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+    node_tree.links.new(input_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
+
+    compare_index_x_node = node_tree.nodes.new(type='FunctionNodeCompare')
+    compare_index_x_node.data_type = 'INT'
+    compare_index_x_node.operation = 'EQUAL'
+
+    node_tree.links.new(input_node.outputs['Index'], compare_index_x_node.inputs[2])  # A
+
+    switch_x_yz_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_x_yz_node.input_type = 'FLOAT'
+    switch_x_yz_node.label = 'Switch X/YZ'
+
+    node_tree.links.new(compare_index_x_node.outputs['Result'], switch_x_yz_node.inputs[0])  # Result -> Switch
+    node_tree.links.new(separate_xyz_node.outputs['X'], switch_x_yz_node.inputs[3])  # True
+
+    compare_index_y_node = node_tree.nodes.new(type='FunctionNodeCompare')
+    compare_index_y_node.data_type = 'INT'
+    compare_index_y_node.operation = 'EQUAL'
+    compare_index_y_node.inputs[3].default_value = 1
+
+    switch_yz_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_yz_node.input_type = 'FLOAT'
+    switch_yz_node.label = 'Switch Y/Z'
+
+    node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[2])  # False
+    node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[2])  # False
+
+    node_tree.links.new(input_node.outputs['Index'], compare_index_y_node.inputs[2])  # A
+
+    node_tree.links.new(compare_index_y_node.outputs['Result'], switch_yz_node.inputs[0])  # Result -> Switch
+    node_tree.links.new(separate_xyz_node.outputs['Y'], switch_yz_node.inputs[3])  # True
+    node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[4])  # False
+
+    node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[4])  # False
+
+    node_tree.links.new(switch_x_yz_node.outputs[0], output_node.inputs['Value'])
+
+    return node_tree
+
+
+def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
     terrain_doodad_object = scatter_layer.terrain_doodad_object
     terrain_info_object = scatter_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object
 
@@ -252,47 +355,68 @@ def ensure_scatter_layer_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter
             scatter_layer_index=scatter_layer.index
         )
 
-    inputs = {('NodeSocketGeometry', 'Geometry')}
+    def add_scatter_object_seed_node(scatter_object_path: str) -> NodeSocket:
+        seed_add_node = node_tree.nodes.new(type='ShaderNodeMath')
+        seed_add_node.operation = 'ADD'
+        add_scatter_layer_object_driver(seed_add_node.inputs[0], scatter_object_path)
+        add_scatter_layer_driver(seed_add_node.inputs[1], 'global_seed')
+        return seed_add_node.outputs['Value']
+
+    inputs = set()
     outputs = {('NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(scatter_layer.id, inputs, outputs)
+    node_tree = ensure_geometry_node_tree(scatter_layer.seed_object.name, inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
+    doodad_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+    doodad_object_info_node.inputs[0].default_value = terrain_doodad_object
+    doodad_object_info_node.transform_space = 'RELATIVE'
+
     join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
+    set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
+    # Add "Curve Trim" node.
+    trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
+    node_tree.links.new(doodad_object_info_node.outputs['Geometry'], trim_curve_group_node.outputs['Curve'])
+    add_scatter_layer_driver(trim_curve_group_node.inputs['Mode'], 'curve_trim_mode')
+    add_scatter_layer_driver(trim_curve_group_node.inputs['Factor Start'], 'curve_trim_factor_start')
+    add_scatter_layer_driver(trim_curve_group_node.inputs['Factor End'], 'curve_trim_factor_end')
+    add_scatter_layer_driver(trim_curve_group_node.inputs['Length Start'], 'curve_trim_length_start')
+    add_scatter_layer_driver(trim_curve_group_node.inputs['Length End'], 'curve_trim_length_end')
+
+    # Add BDK Normal Offset node.
+    curve_normal_offset_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
+    add_scatter_layer_driver(curve_normal_offset_group_node.inputs['Normal Offset'], 'curve_normal_offset')
+
+    node_tree.links.new(doodad_object_info_node.outputs['Geometry'], trim_curve_group_node.inputs['Curve'])
+    node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
+
+    # Add "Curve to Points" node.
+    curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
+    curve_to_points_node.mode = 'LENGTH'
+
+    # TODO: we need to refactor this so that the objects are just here to be selected at random (aside from perhaps the scale)
     for scatter_layer_object_index, scatter_layer_object in enumerate(scatter_layer.objects):
-        # Add an Object Info node.
-        object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-        object_info_node.inputs[0].default_value = scatter_layer_object.object
-        object_info_node.inputs['As Instance'].default_value = True
+        size_socket = add_object_extents(node_tree, scatter_layer_object.object)
+        vector_component_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        vector_component_group_node.node_tree = ensure_vector_component_node_tree()
 
-        separate_components_node = node_tree.nodes.new(type='GeometryNodeSeparateComponents')
-        instance_on_points_node = node_tree.nodes.new(type='GeometryNodeInstanceOnPoints')
-        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+        node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
 
-        trim_curve_mode_node = node_tree.nodes.new(type='FunctionNodeInputInt')
-        add_scatter_layer_object_driver(trim_curve_mode_node, 'curve_trim_mode', path='integer')
+        # Spacing
+        spacing_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
+        spacing_factor_node.operation = 'MULTIPLY'
+        node_tree.links.new(vector_component_group_node.outputs['Value'], spacing_factor_node.inputs[0])
+        add_scatter_layer_driver(spacing_factor_node.inputs[1], 'curve_spacing_relative')
 
-        trim_curve_sockets = add_trim_curve(
-            node_tree,
-            separate_components_node.outputs['Curve'],
-            trim_curve_mode_node.outputs['Integer']
-        )
+        spacing_length_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        spacing_length_node.input_type = 'FLOAT'
+        add_scatter_layer_driver(spacing_length_node.inputs['Switch'], 'curve_spacing_method')
+        node_tree.links.new(spacing_factor_node.outputs['Value'], spacing_length_node.inputs['False'])
+        add_scatter_layer_driver(spacing_length_node.inputs['True'], 'curve_spacing_absolute')
 
-        add_scatter_layer_object_driver(trim_curve_sockets.factor_start_socket, 'curve_trim_factor_start')
-        add_scatter_layer_object_driver(trim_curve_sockets.factor_end_socket, 'curve_trim_factor_end')
-        add_scatter_layer_object_driver(trim_curve_sockets.length_start_socket, 'curve_trim_length_start')
-        add_scatter_layer_object_driver(trim_curve_sockets.length_end_socket, 'curve_trim_length_end')
-
-        # Add "Curve to Points" node.
-        curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
-        curve_to_points_node.mode = 'LENGTH'
-
-        # Length axis.
-        length_axis_node = node_tree.nodes.new(type='FunctionNodeInputInt')
-        length_axis_node.integer = 0
-        extents_socket = add_object_extents(node_tree, scatter_layer_object.object)
-        length_socket = add_vector_xyz_switch(node_tree, extents_socket, length_axis_node.outputs['Integer'])
-        node_tree.links.new(length_socket, curve_to_points_node.inputs['Length'])
+        node_tree.links.new(spacing_length_node.outputs['Output'], curve_to_points_node.inputs['Length'])
 
         vector_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         vector_scale_node.operation = 'SCALE'
@@ -306,7 +430,7 @@ def ensure_scatter_layer_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter
 
         add_scatter_layer_object_driver(normal_offset_random_value_node.inputs[2], 'curve_normal_offset_min')
         add_scatter_layer_object_driver(normal_offset_random_value_node.inputs[3], 'curve_normal_offset_max')
-        add_scatter_layer_object_driver(normal_offset_random_value_node.inputs['Seed'], 'curve_normal_offset_seed')
+        node_tree.links.new(add_scatter_object_seed_node('curve_normal_offset_seed'), normal_offset_random_value_node.inputs['Seed'])
 
         # Scale Mix
         scale_mix_node = node_tree.nodes.new(type='ShaderNodeMix')
@@ -323,13 +447,8 @@ def ensure_scatter_layer_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter
         scale_random_value_node.label = 'Scale Random'
         scale_random_value_node.data_type = 'FLOAT'
 
-        add_scatter_layer_object_driver(scale_random_value_node.inputs['Seed'], 'scale_seed')
-
+        node_tree.links.new(add_scatter_object_seed_node('scale_seed'), scale_random_value_node.inputs['Seed'])
         node_tree.links.new(scale_random_value_node.outputs[1], scale_mix_node.inputs['Factor'])
-
-        index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
-        node_tree.links.new(index_node.outputs['Index'], normal_offset_random_value_node.inputs['ID'])
-        node_tree.links.new(index_node.outputs['Index'], scale_random_value_node.inputs['ID'])
 
         # Snap and Align to Terrain
         snap_and_align_to_terrain_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
@@ -338,72 +457,69 @@ def ensure_scatter_layer_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter
 
         snap_and_align_to_terrain_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         snap_and_align_to_terrain_switch_node.input_type = 'GEOMETRY'
-        snap_and_align_to_terrain_switch_node.label = 'Snap and Align to Terrain'
+        snap_and_align_to_terrain_switch_node.label = 'Snap and Align to Terrain?'
         add_scatter_layer_driver(snap_and_align_to_terrain_switch_node.inputs[1], 'snap_to_terrain')
 
         node_tree.links.new(set_position_node.outputs['Geometry'], snap_and_align_to_terrain_group_node.inputs['Geometry'])
         node_tree.links.new(set_position_node.outputs['Geometry'], snap_and_align_to_terrain_switch_node.inputs[14])  # False
         node_tree.links.new(snap_and_align_to_terrain_group_node.outputs['Geometry'], snap_and_align_to_terrain_switch_node.inputs[15])  # True
 
-        node_tree.links.new(input_node.outputs['Geometry'], separate_components_node.inputs['Geometry'])
-        node_tree.links.new(trim_curve_sockets.curve_socket, curve_to_points_node.inputs['Curve'])
+        node_tree.links.new(curve_normal_offset_group_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
         node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
-        node_tree.links.new(object_info_node.outputs['Geometry'], instance_on_points_node.inputs['Instance'])
-        node_tree.links.new(scale_mix_node.outputs[1], instance_on_points_node.inputs['Scale'])
+
         node_tree.links.new(normal_offset_random_value_node.outputs[1], vector_scale_node.inputs['Scale'])
 
-        # Mute
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'GEOMETRY'
-        add_scatter_layer_object_driver(switch_node.inputs[1], 'mute')
+        # Mute Switch
+        mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        mute_switch_node.input_type = 'GEOMETRY'
+        mute_switch_node.label = 'Mute'
+        add_scatter_layer_object_driver(mute_switch_node.inputs[1], 'mute')
 
-        node_tree.links.new(instance_on_points_node.outputs['Instances'], switch_node.inputs[14])    # False
-        node_tree.links.new(switch_node.outputs[6], join_geometry_node.inputs['Geometry'])
+        # Store Rotation Attribute
+        store_rotation_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+        store_rotation_attribute_node.inputs['Name'].default_value = 'rotation'
+        store_rotation_attribute_node.domain = 'POINT'
+        store_rotation_attribute_node.data_type = 'FLOAT_VECTOR'
+        store_rotation_attribute_node.label = 'Store Rotation Attribute'
 
-        # Add store named attribute node.
-        store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-        store_named_attribute_node.inputs['Name'].default_value = 'rotation'
-        store_named_attribute_node.domain = 'POINT'
-        store_named_attribute_node.data_type = 'FLOAT_VECTOR'
+        # Store Scale Attribute
+        store_scale_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+        store_scale_attribute_node.inputs['Name'].default_value = 'scale'
+        store_scale_attribute_node.domain = 'POINT'
+        store_scale_attribute_node.data_type = 'FLOAT_VECTOR'
+        store_scale_attribute_node.label = 'Store Scale Attribute'
 
-        node_tree.links.new(curve_to_points_node.outputs['Rotation'], store_named_attribute_node.inputs[3])  # Value
+        node_tree.links.new(scale_mix_node.outputs[1], store_scale_attribute_node.inputs[3])  # Result -> Value
+        # node_tree.links.new(curve_to_points_node.outputs['Rotation'], store_rotation_attribute_node.inputs[3])  # Value
+        node_tree.links.new(snap_and_align_to_terrain_switch_node.outputs[6], store_rotation_attribute_node.inputs['Geometry'])
+        node_tree.links.new(store_rotation_attribute_node.outputs['Geometry'], store_scale_attribute_node.inputs['Geometry'])
+        node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True
 
-        # Add named attribute node.
-        named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-        named_attribute_node.inputs['Name'].default_value = 'rotation'
-        named_attribute_node.data_type = 'FLOAT_VECTOR'
+        # Link the geometry from the join geometry node to the output node.
+        node_tree.links.new(mute_switch_node.outputs[6], join_geometry_node.inputs['Geometry'])
 
-        node_tree.links.new(named_attribute_node.outputs[0], instance_on_points_node.inputs['Rotation'])  # Attribute -> Rotation
-
-        node_tree.links.new(snap_and_align_to_terrain_switch_node.outputs[6], store_named_attribute_node.inputs['Geometry'])
-        node_tree.links.new(store_named_attribute_node.outputs['Geometry'], instance_on_points_node.inputs['Points'])
-
-    # Join the geometry from the join geometry node to the output node.
-    node_tree.links.new(input_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
-
-    # Link the geometry from the join geometry node to the output node.
-    node_tree.links.new(join_geometry_node.outputs['Geometry'], output_node.inputs['Geometry'])
-
-    # Add named attribute node.
+    # We need to convert the point cloud to a mesh so that we can inspect the attributes for T3D export.
+    points_to_vertices_node = node_tree.nodes.new(type='GeometryNodePointsToVertices')
+    node_tree.links.new(join_geometry_node.outputs['Geometry'], points_to_vertices_node.inputs['Points'])
+    node_tree.links.new(points_to_vertices_node.outputs['Mesh'], output_node.inputs['Geometry'])
 
     return node_tree
 
 
 def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_terrain_doodad'):
-    terrain_doodad_object = terrain_doodad.object
-
-    scatter_layer_ids = {scatter_layer.id for scatter_layer in terrain_doodad.scatter_layers}
-    modifier_names = {modifier.name for modifier in terrain_doodad_object.modifiers}
-
-    # Remove any modifiers that are not associated with a scatter layer.
-    for modifier_name in modifier_names:
-        if modifier_name not in scatter_layer_ids:
-            terrain_doodad_object.modifiers.remove(terrain_doodad_object.modifiers[modifier_name])
-
     # Add modifiers for any scatter layers that do not have a modifier and ensure the node tree.
     for scatter_layer in terrain_doodad.scatter_layers:
-        if scatter_layer.id not in terrain_doodad_object.modifiers:
-            modifier = terrain_doodad_object.modifiers.new(name=scatter_layer.name, type='NODES')
+        # Seed
+        seed_object = scatter_layer.seed_object
+        if scatter_layer.id not in seed_object.modifiers.keys():
+            modifier = seed_object.modifiers.new(name=scatter_layer.id, type='NODES')
         else:
-            modifier = terrain_doodad_object.modifiers[scatter_layer.id]
-        modifier.node_group = ensure_scatter_layer_node_tree(scatter_layer)
+            modifier = seed_object.modifiers[scatter_layer.id]
+        modifier.node_group = ensure_scatter_layer_seed_node_tree(scatter_layer)
+        # Sprout
+        sprout_object = scatter_layer.sprout_object
+        if scatter_layer.id not in sprout_object.modifiers.keys():
+            modifier = sprout_object.modifiers.new(name=sprout_object.name, type='NODES')
+        else:
+            modifier = sprout_object.modifiers[scatter_layer.id]
+        modifier.node_group = ensure_scatter_layer_sprout_node_tree(scatter_layer)
