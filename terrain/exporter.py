@@ -174,7 +174,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
         terrain_info.terrain_scale,
         terrain_info.terrain_scale,
         max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
-    actor['DecoLayerOffset'] = 0.0
+    actor['DecoLayerOffset'] = terrain_info_object.bdk.terrain_info.deco_layer_offset
 
     add_movement_properties_to_actor(actor, terrain_info_object)
 

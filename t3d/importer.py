@@ -374,6 +374,9 @@ class TerrainInfoImporter(ActorImporter):
                 else:
                     print(f'Could not find density map image: {density_map_image_name}')
 
+        # Deco Layer Offset
+        terrain_info_object.bdk.terrain_info.deco_layer_offset = deco_layer_offset
+
         # Quad Visibility Bitmap.
         quad_visibility_bitmap = np.zeros(shape=int(math.ceil((resolution * resolution) / 32)), dtype=np.int32)
         for index, value in quad_visibility_bitmap_entries:

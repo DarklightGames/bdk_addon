@@ -394,9 +394,10 @@ class BDK_PT_terrain_deco_layers(Panel):
         return is_active_object_terrain_info(context)
 
     def draw(self, context: Context):
+        layout = self.layout
         terrain_info = get_terrain_info(context.active_object)
 
-        row = self.layout.row()
+        row = layout.row()
         row.template_list('BDK_UL_terrain_deco_layers', '',
                           terrain_info, 'deco_layers',
                           terrain_info, 'deco_layers_index', rows=3, sort_lock=True)
@@ -408,6 +409,13 @@ class BDK_PT_terrain_deco_layers(Panel):
         col.separator()
 
         col.menu(BDK_MT_terrain_deco_layers_context_menu.bl_idname, icon='DOWNARROW_HLT', text='')
+
+        flow = layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        # TODO: Add this to an "Advanced" panel so this isn't so cluttered
+        flow.prop(terrain_info, 'deco_layer_offset')
 
 
 class BDK_UL_terrain_paint_layers(UIList):

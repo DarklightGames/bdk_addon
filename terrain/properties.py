@@ -350,6 +350,7 @@ class BDK_PG_terrain_info(PropertyGroup):
     paint_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_info_paint_layers_index_update)
     deco_layers: CollectionProperty(name='Deco Layers', type=BDK_PG_terrain_deco_layer)
     deco_layers_index: IntProperty(options={'HIDDEN'})
+    deco_layer_offset: FloatProperty(name='Deco Layer Offset', options={'HIDDEN'}, subtype='DISTANCE', description='Global z-offset for all deco layers')
     x_size: IntProperty(name='X Size', options={'HIDDEN'})
     y_size: IntProperty(name='Y Size', options={'HIDDEN'})
 
