@@ -1,7 +1,7 @@
 import bpy
 import uuid
 
-from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct
+from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct, ID
 from typing import Optional, Iterable
 
 from ..helpers import get_terrain_info, ensure_name_unique, add_operation_switch_nodes, ensure_input_and_output_nodes, \
@@ -250,22 +250,43 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     deco_layer_node.inputs['Heightmap Y'].default_value = terrain_info.y_size
     deco_layer_node.inputs['Density Map'].default_value = 0.0
 
-    def add_deco_layer_driver(input_name: str, property_name: str, index: Optional[int] = None):
-        if index is None:
-            fcurve = deco_layer_node.inputs[input_name].driver_add('default_value')
-        else:
-            fcurve = deco_layer_node.inputs[input_name].driver_add('default_value', index)
+    def get_deco_layer_target_data_path(deco_layer_index: int, property_name: str, index: Optional[int] = None) -> str:
+        target_data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}'
+        if index is not None:
+            target_data_path += f'[{index}]'
+        return target_data_path
 
+    def get_terrain_info_target_data_path(property_name: str, index: Optional[int] = None) -> str:
+        target_data_path = f'bdk.terrain_info.{property_name}'
+        if index is not None:
+            target_data_path += f'[{index}]'
+        return target_data_path
+
+    # TODO: move this to a helper file that can be used elsewhere (this pattern is very common!)
+    def add_driver_ex(struct: bpy_struct, target_id: ID, target_data_path: str, path: str = 'default_value', index: Optional[int] = None):
+        fcurve = struct.driver_add(path, index) if index is not None else struct.driver_add(path)
         fcurve.driver.type = 'AVERAGE'
         variable = fcurve.driver.variables.new()
         variable.type = 'SINGLE_PROP'
         target = variable.targets[0]
         target.id_type = 'OBJECT'
-        target.id = terrain_info_object
-        if index is not None:
-            target.data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}[{index}]'
-        else:
-            target.data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}'
+        target.id = target_id
+        target.data_path = target_data_path
+
+    def add_deco_layer_driver_ex(struct: bpy_struct, target_id: ID, property_name: str, path: str = 'default_value', index: Optional[int] = None):
+        add_driver_ex(struct, target_id, get_deco_layer_target_data_path(deco_layer_index, property_name, index), path, index)
+
+    def add_terrain_info_driver_ex(struct: bpy_struct, property_name: str, path: str = 'default_value', index: Optional[int] = None):
+        add_driver_ex(struct, terrain_info_object, get_terrain_info_target_data_path(property_name, index), path, index)
+
+    def add_deco_layer_driver(input_name: str, property_name: str, index: Optional[int] = None):
+        add_deco_layer_driver_ex(deco_layer_node.inputs[input_name], target_id=terrain_info_object, property_name=property_name, index=index)
+
+    def add_terrain_info_driver(input_name: str, property_name: str, index: Optional[int] = None):
+        add_terrain_info_driver_ex(deco_layer_node.inputs[input_name], property_name, index=index)
+
+    add_terrain_info_driver('Offset', 'deco_layer_offset')
+    # add_terrain_info_driver('Inverted', 'inverted')
 
     add_deco_layer_driver('Max Per Quad', 'max_per_quad')
     add_deco_layer_driver('Seed', 'seed')
@@ -273,7 +294,6 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     add_deco_layer_driver('Show On Invisible Terrain', 'show_on_invisible_terrain')
     add_deco_layer_driver('Align To Terrain', 'align_to_terrain')
     add_deco_layer_driver('Random Yaw', 'random_yaw')
-    # add_deco_layer_driver('Inverted', 'inverted')  # TODO: point to the top level object
     add_deco_layer_driver('Density Multiplier Min', 'density_multiplier_min')
     add_deco_layer_driver('Density Multiplier Max', 'density_multiplier_max')
     add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 0)
@@ -323,7 +343,6 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
 
 
 def ensure_paint_layers(terrain_info_object: Object):
-    print('ENSURE PAINT LAYERS')
     terrain_info = get_terrain_info(terrain_info_object)
 
     # REALIZATION: we can't have paint layers with paint layer nodes due to circular dependencies.
