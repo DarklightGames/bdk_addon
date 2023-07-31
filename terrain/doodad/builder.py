@@ -4,18 +4,18 @@ from typing import List, Iterable, Optional
 import bmesh
 import bpy
 from uuid import uuid4
-from bpy.types import NodeTree, Context, Object, NodeSocket, Node, bpy_struct
+from bpy.types import NodeTree, Context, Object, NodeSocket, bpy_struct
 
 from ..deco import ensure_paint_layers, ensure_deco_layers
-from ...helpers import add_interpolation_type_switch_nodes, add_operation_switch_nodes, add_noise_type_switch_nodes, \
-    ensure_geometry_node_tree, ensure_input_and_output_nodes
+from ...node_helpers import add_interpolation_type_switch_nodes, add_operation_switch_nodes,\
+    add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes
 from .data import map_range_interpolation_type_items, terrain_doodad_operation_items
 from ...units import meters_to_unreal
 
 
-distance_to_mesh_node_group_id = 'ccce0a8209484685a13a2734f4304204'
-distance_to_empty_node_group_id = '3e2f8ae601ae4a498a4f2c2472e6f496'
-distance_to_curve_node_group_id = 'c3924a2941134af09bd10f7749882562'
+distance_to_mesh_node_group_id = 'BDK Distance to Mesh'
+distance_to_empty_node_group_id = 'BDK Distance to Empty'
+distance_to_curve_node_group_id = 'BDK Distance to Curve'
 
 
 def ensure_distance_to_curve_node_group() -> NodeTree:
@@ -149,7 +149,7 @@ def create_noise_node_group():
     return node_tree
 
 
-def create_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
+def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
     inputs = {
         ('NodeSocketGeometry', 'Geometry'),
         ('NodeSocketFloat', 'Distance'),
@@ -551,7 +551,7 @@ def create_terrain_doodad(context: Context, terrain_info_object: Object, object_
         bm.to_mesh(object_data)
         del bm
 
-    bpy_object = bpy.data.objects.new(name=terrain_doodad_id, object_data=object_data)
+    bpy_object = bpy.data.objects.new(name='Doodad', object_data=object_data)
 
     if object_type == 'EMPTY':
         bpy_object.empty_display_type = 'SPHERE'
@@ -574,7 +574,6 @@ def create_terrain_doodad(context: Context, terrain_info_object: Object, object_
 
     bpy_object.bdk.type = 'TERRAIN_DOODAD'
     bpy_object.bdk.terrain_doodad.id = terrain_doodad_id
-    bpy_object.bdk.terrain_doodad.object_type = object_type
     bpy_object.bdk.terrain_doodad.terrain_info_object = terrain_info_object
     bpy_object.bdk.terrain_doodad.object = bpy_object
     bpy_object.bdk.terrain_doodad.node_tree = bpy.data.node_groups.new(name=terrain_doodad_id, type='GeometryNodeTree')
@@ -732,7 +731,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
 
     distance_socket = None
 
-    if terrain_doodad.object_type == 'CURVE':
+    if terrain_doodad.object.type == 'CURVE':
         # Create a new distance to curve node group.
         distance_to_curve_node_group = ensure_distance_to_curve_node_group()
 
@@ -745,7 +744,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         add_doodad_driver(distance_to_curve_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
 
         distance_socket = distance_to_curve_node.outputs['Distance']
-    elif terrain_doodad.object_type == 'MESH':
+    elif terrain_doodad.object.type == 'MESH':
         distance_to_mesh_node_group = ensure_distance_to_mesh_node_group()
 
         # Add a new node group node.
@@ -756,7 +755,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_mesh_node.inputs['Geometry'])
 
         distance_socket = distance_to_mesh_node.outputs['Distance']
-    elif terrain_doodad.object_type == 'EMPTY':
+    elif terrain_doodad.object.type == 'EMPTY':
         distance_to_empty_node_group = ensure_distance_to_empty_node_group()
 
         distance_to_empty_node = node_tree.nodes.new(type='GeometryNodeGroup')
@@ -791,10 +790,8 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
 
     # Now chain the node components together.
     for sculpt_layer in terrain_doodad.sculpt_layers:
-        sculpt_node_group = create_sculpt_node_group(sculpt_layer.id)
-
         sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        sculpt_node.node_tree = sculpt_node_group
+        sculpt_node.node_tree = ensure_sculpt_node_group(sculpt_layer.id)
         sculpt_node.label = 'Sculpt'
 
         switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
@@ -934,7 +931,6 @@ def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_doodads: 
 def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad') -> NodeTree:
     """
     Creates a node tree for baking a terrain doodad.
-    This
     :param terrain_doodad: The terrain doodad to make a baking node tree for.
     :return: The terrain doodad baking node tree.
     """

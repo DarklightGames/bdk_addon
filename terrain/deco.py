@@ -4,8 +4,8 @@ import uuid
 from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct, ID
 from typing import Optional, Iterable
 
-from ..helpers import get_terrain_info, ensure_name_unique, add_operation_switch_nodes, ensure_input_and_output_nodes, \
-    ensure_geometry_node_tree
+from ..helpers import get_terrain_info
+from ..node_helpers import add_operation_switch_nodes, ensure_input_and_output_nodes, ensure_geometry_node_tree
 
 
 def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer'):

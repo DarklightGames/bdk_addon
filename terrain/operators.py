@@ -33,12 +33,8 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
         return get_terrain_info(context.active_object).paint_layers_index >= 0
 
     def execute(self, context: Context):
-        active_object = context.active_object
-
-        if active_object is None:
-            return {'CANCELLED'}
-
-        terrain_info = get_terrain_info(active_object)
+        terrain_info_object = context.active_object
+        terrain_info = get_terrain_info(terrain_info_object)
         paint_layers = terrain_info.paint_layers
         paint_layers_index = terrain_info.paint_layers_index
 
@@ -46,8 +42,7 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
             return {'CANCELLED'}
 
         # Remove color attribute.
-        terrain_doodad = context.active_object
-        mesh_data = cast(Mesh, terrain_doodad.data)
+        mesh_data = cast(Mesh, terrain_info_object.data)
         paint_layer_id = paint_layers[paint_layers_index].id
         if paint_layer_id in mesh_data.color_attributes:
             color_attribute = mesh_data.color_attributes[paint_layer_id]
@@ -58,16 +53,16 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
         terrain_info.paint_layers_index = min(len(paint_layers) - 1, paint_layers_index)
 
         # Delete the associated modifier and node group.
-        if paint_layer_id in terrain_doodad.modifiers:
-            paint_layer_modifier = terrain_doodad.modifiers[paint_layer_id]
-            terrain_doodad.modifiers.remove(paint_layer_modifier)
+        if paint_layer_id in terrain_info_object.modifiers:
+            paint_layer_modifier = terrain_info_object.modifiers[paint_layer_id]
+            terrain_info_object.modifiers.remove(paint_layer_modifier)
 
         if paint_layer_id in bpy.data.node_groups:
             bpy.data.node_groups.remove(bpy.data.node_groups[paint_layer_id])
 
-        build_terrain_material(terrain_doodad)
+        build_terrain_material(terrain_info_object)
 
-        ensure_paint_layers(active_object)
+        ensure_paint_layers(terrain_info_object)
 
         return {'FINISHED'}
 

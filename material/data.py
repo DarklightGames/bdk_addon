@@ -60,6 +60,19 @@ class UConstantColor(UConstantMaterial):
     Color: UColor = UColor(0, 0, 0, 255)
 
 
+class EColorFadeType(Enum):
+    FC_Linear = 0,
+    FC_Sinusoidal = 1
+
+
+class UFadeColor(UConstantMaterial):
+    Color1: UColor = UColor(0, 0, 0, 0)
+    Color2: UColor = UColor(0, 0, 0, 0)
+    FadePeriod: float = 0.0
+    FadeOffset: float = 0.0
+    ColorFadeType: EColorFadeType = EColorFadeType.FC_Linear
+
+
 class ETextureFormat(Enum):
     TEXF_P8 = 0,  # used 8-bit palette
     TEXF_RGBA7 = 1,
@@ -275,6 +288,34 @@ class UVariableTexPanner(UTexModifier):
     PanRate: float = 0.0
 
 
+class EEMaterialSequenceAction(Enum):
+    MSA_ShowMaterial = 0,
+    MSA_FadeToMaterial = 1,
+
+
+class EMaterialSequenceTriggerActon(Enum):
+    MSTA_Ignore = 0,
+    MSTA_Reset = 1,
+    MSTA_Pause = 2,
+    MSTA_Stop = 3
+
+
+class FMaterialSequenceItem:
+    Material: Optional[UReference] = None
+    Time: float
+    Action: EEMaterialSequenceAction = EEMaterialSequenceAction.MSA_ShowMaterial
+
+
+class UMaterialSequence(UMaterial):
+    SequenceItems: List[FMaterialSequenceItem] = []
+    TriggerAction: EMaterialSequenceTriggerActon = EMaterialSequenceTriggerActon.MSTA_Ignore
+    bLoop: bool = False
+    bPaused: bool = False
+    CurrentTime: float = 0.0
+    LastTime: float = 0.0
+    TotalTime: float = 0.0
+
+
 class MaterialTypeRegistry:
 
     _material_type_map: typing.Dict[str, type] = {
@@ -293,6 +334,7 @@ class MaterialTypeRegistry:
         'Texture': UTexture,
         'VariableTexPanner': UVariableTexPanner,
         'VertexColor': UVertexColor,
+        'FadeColor': UFadeColor,
     }
 
     @classmethod

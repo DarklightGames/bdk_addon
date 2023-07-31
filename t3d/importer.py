@@ -215,7 +215,7 @@ class TerrainInfoImporter(ActorImporter):
         terrain_scale: Dict[str, float] = t3d_actor.properties.get('TerrainScale', {'X': 0.0, 'Y': 0.0, 'Z': 0.0})
         layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('Layers', [])
         deco_layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('DecoLayers', [])
-        deco_layer_offset: float = t3d_actor.properties.get('DecoLayerOffset', 0.0)  # TODO: handle this
+        deco_layer_offset: float = t3d_actor.properties.get('DecoLayerOffset', 0.0)
         quad_visibility_bitmap_entries: List[(int, int)] = t3d_actor.properties.get('QuadVisibilityBitmap', [])
         edge_turn_bitmap_entries: List[(int, int)] = t3d_actor.properties.get('EdgeTurnBitmap', [])
 

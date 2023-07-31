@@ -9,7 +9,8 @@ from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_do
     BDK_OT_terrain_doodad_paint_layer_duplicate, BDK_OT_terrain_doodad_sculpt_layer_duplicate, \
     BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
     BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove
+    BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
+    BDK_OT_terrain_doodad_scatter_layer_duplicate
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -65,6 +66,8 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
         terrain_doodad = context.active_object.bdk.terrain_doodad
         paint_layer = terrain_doodad.paint_layers[terrain_doodad.paint_layers_index]
         flow = layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
 
         row = flow.row()
         row.prop(paint_layer, 'layer_type', expand=True)
@@ -82,7 +85,8 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
 
         flow.prop(paint_layer, 'interpolation_type')
 
-        col = flow.column(align=True)
+        col = flow.column()
+
         col.prop(paint_layer, 'radius')
         col.prop(paint_layer, 'falloff_radius')
         col.prop(paint_layer, 'strength')
@@ -183,7 +187,9 @@ class BDK_PT_terrain_doodad_advanced(Panel):
 
     def draw(self, context: 'Context'):
         terrain_doodad: 'BDK_PG_terrain_doodad' = context.active_object.bdk.terrain_doodad
-        flow = self.layout.grid_flow(align=True, columns=1)
+        flow = self.layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
         flow.prop(terrain_doodad, 'sort_order')
 
 
@@ -204,15 +210,16 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
         layout = self.layout
         terrain_doodad = context.active_object.bdk.terrain_doodad
         sculpt_layer = terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index]
-        flow = layout.grid_flow(align=True, columns=1)
+        flow = layout.grid_flow(columns=1)
         flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        flow.prop(sculpt_layer, 'depth')
 
         col = flow.column(align=True)
         col.prop(sculpt_layer, 'radius')
         col.prop(sculpt_layer, 'falloff_radius')
         col.prop(sculpt_layer, 'interpolation_type')
-
-        col.prop(sculpt_layer, 'depth')
 
         flow.separator()
 
@@ -221,9 +228,8 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
         if sculpt_layer.use_noise:
             flow.prop(sculpt_layer, 'noise_type')
 
-            col = flow.column(align=True)
-
             if sculpt_layer.use_noise:
+                col = flow.column(align=True)
                 col.prop(sculpt_layer, 'noise_radius_factor')
                 if sculpt_layer.noise_type == 'PERLIN':
                     col.prop(sculpt_layer, 'noise_distortion')
@@ -321,6 +327,8 @@ class BDK_PT_terrain_doodad_scatter_layers(Panel):
         col = row.column(align=True)
         col.operator(BDK_OT_terrain_doodad_scatter_layer_add.bl_idname, icon='ADD', text='')
         col.operator(BDK_OT_terrain_doodad_scatter_layer_remove.bl_idname, icon='REMOVE', text='')
+        col.separator()
+        col.operator(BDK_OT_terrain_doodad_scatter_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
 
 class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
@@ -330,6 +338,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
+    bl_order = 1
 
     @classmethod
     def poll(cls, context: 'Context'):
@@ -360,12 +369,13 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
             scatter_layer.objects) else None
 
         if scatter_layer_object:
-            row = layout.row()
-            row.prop(scatter_layer_object, 'object', text='Object')
-
             flow = layout.grid_flow(align=True, columns=1)
             flow.use_property_split = True
             flow.use_property_decorate = False
+
+            flow.prop(scatter_layer_object, 'object', text='Object')
+
+            flow.separator()
 
             flow.prop(scatter_layer_object, 'scale_min')
             flow.prop(scatter_layer_object, 'scale_max', text='Max')
@@ -375,48 +385,13 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.prop(scatter_layer_object, 'random_rotation_max')
 
-            if terrain_doodad.object_type == 'CURVE':
-                flow.separator()
-
-                # flow.prop(scatter_layer_object, 'is_aligned_to_curve')
-                # flow.prop(scatter_layer_object, 'align_axis')
-                # flow.prop(scatter_layer_object, 'curve_spacing_method')
-
-                flow.prop(scatter_layer_object, 'curve_trim_mode')
-
-                if scatter_layer_object.curve_trim_mode == 'FACTOR':
-                    col = flow.column(align=True)
-                    col.prop(scatter_layer_object, 'curve_trim_factor_start', text='Trim Start')
-                    col.prop(scatter_layer_object, 'curve_trim_factor_end', text='End')
-                elif scatter_layer_object.curve_trim_mode == 'LENGTH':
-                    col = flow.column(align=True)
-                    col.prop(scatter_layer_object, 'curve_trim_length_start', text='Trim Start')
-                    col.prop(scatter_layer_object, 'curve_trim_length_end', text='End')
-
-                flow.separator()
-
-                if scatter_layer_object.curve_spacing_method == 'RELATIVE':
-                    col = flow.column(align=True)
-                    col.prop(scatter_layer_object, 'curve_spacing_relative_min', text='Spacing Min')
-                    col.prop(scatter_layer_object, 'curve_spacing_relative_max', text='Max')
-                elif scatter_layer_object.curve_spacing_method == 'ABSOLUTE':
-                    col = flow.column(align=True)
-                    col.prop(scatter_layer_object, 'curve_spacing_absolute_min', text='Spacing Min')
-                    col.prop(scatter_layer_object, 'curve_spacing_absolute_min', text='Max')
-
+            if terrain_doodad.object.type == 'CURVE':
                 flow.separator()
 
                 col = flow.column(align=True)
                 col.prop(scatter_layer_object, 'curve_normal_offset_min')
                 col.prop(scatter_layer_object, 'curve_normal_offset_max', text='Max')
                 col.prop(scatter_layer_object, 'curve_normal_offset_seed', text='Seed')
-
-                # flow.separator()
-                #
-                # col = flow.column(align=True)
-                # col.prop(scatter_layer_object, 'curve_tangent_offset_min')
-                # col.prop(scatter_layer_object, 'curve_tangent_offset_max', text='Max')
-                # col.prop(scatter_layer_object, 'curve_tangent_offset_seed', text='Seed')
 
 
 class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
@@ -426,6 +401,7 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
+    bl_order = 0
 
     @classmethod
     def poll(cls, context: 'Context'):
@@ -437,9 +413,36 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         terrain_doodad = get_terrain_doodad(context.active_object)
         scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
 
-        flow = layout.grid_flow(align=True, columns=1)
+        flow = layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+        flow.prop(scatter_layer, 'global_seed')
         flow.prop(scatter_layer, 'snap_to_terrain')
         flow.prop(scatter_layer, 'align_to_terrain')
+
+        if terrain_doodad.object.type == 'CURVE':
+            # Curve settings
+            flow.prop(scatter_layer, 'is_curve_reversed')
+            flow.prop(scatter_layer, 'curve_normal_offset')
+            flow.prop(scatter_layer, 'curve_trim_mode')
+
+            if scatter_layer.curve_trim_mode == 'FACTOR':
+                col = flow.column(align=True)
+                col.prop(scatter_layer, 'curve_trim_factor_start', text='Trim Start')
+                col.prop(scatter_layer, 'curve_trim_factor_end', text='End')
+            elif scatter_layer.curve_trim_mode == 'LENGTH':
+                col = flow.column(align=True)
+                col.prop(scatter_layer, 'curve_trim_length_start', text='Trim Start')
+                col.prop(scatter_layer, 'curve_trim_length_end', text='End')
+
+            flow.separator()
+
+            flow.prop(scatter_layer, 'curve_spacing_method')
+
+            if scatter_layer.curve_spacing_method == 'RELATIVE':
+                flow.prop(scatter_layer, 'curve_spacing_relative', text='Spacing Factor')
+            elif scatter_layer.curve_spacing_method == 'ABSOLUTE':
+                flow.prop(scatter_layer, 'curve_spacing_absolute', text='Spacing Distance')
 
 
 class BDK_PT_terrain_doodad_paint_layer_debug(Panel):

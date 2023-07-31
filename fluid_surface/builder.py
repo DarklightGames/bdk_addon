@@ -1,6 +1,6 @@
 import bpy
 from bpy.types import NodeTree
-from ..helpers import ensure_input_and_output_nodes
+from ..node_helpers import ensure_input_and_output_nodes
 
 
 def create_fluid_surface_node_tree() -> NodeTree:

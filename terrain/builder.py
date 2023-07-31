@@ -5,7 +5,8 @@ from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
-from ..helpers import get_terrain_info, ensure_shader_node_tree, ensure_input_and_output_nodes
+from ..helpers import get_terrain_info
+from ..node_helpers import ensure_shader_node_tree, ensure_input_and_output_nodes
 from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 
@@ -81,9 +82,9 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
     last_shader_socket = None
 
-    bdk_build_path = getattr(bpy.context.preferences.addons['bdk_addon'].preferences, 'build_path')
-    material_cache = MaterialCache(bdk_build_path)
-    material_builder = MaterialBuilder(material_cache, node_tree)
+    bdk_build_paths = getattr(bpy.context.preferences.addons['bdk_addon'].preferences, 'build_paths')
+    material_caches = [MaterialCache(bdk_build_path) for bdk_build_path in bdk_build_paths]
+    material_builder = MaterialBuilder(material_caches, node_tree)
 
     for paint_layer_index, paint_layer in enumerate(paint_layers):
         paint_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
@@ -109,7 +110,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
         material_outputs = None
         if material and material.bdk.package_reference:
             reference = UReference.from_string(material.bdk.package_reference)
-            unreal_material = material_cache.load_material(reference)
+            unreal_material = material_builder.load_material(reference)
             material_outputs = material_builder.build(unreal_material, paint_layer_uv_node.outputs['UV'])
 
         color_attribute_node = node_tree.nodes.new('ShaderNodeVertexColor')
