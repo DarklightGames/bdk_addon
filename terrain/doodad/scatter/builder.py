@@ -1,11 +1,12 @@
 import uuid
+from typing import Iterable, List
 
 import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, Node
 
 from ....units import meters_to_unreal
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, \
-    ensure_curve_normal_offset_node_tree
+    ensure_curve_normal_offset_node_tree, add_chained_math_nodes
 
 
 def add_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad') -> 'BDK_PG_terrain_doodad_scatter_layer':
@@ -316,16 +317,73 @@ def ensure_vector_component_node_tree() -> NodeTree:
 
     node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[2])  # False
     node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[2])  # False
-
     node_tree.links.new(input_node.outputs['Index'], compare_index_y_node.inputs[2])  # A
-
     node_tree.links.new(compare_index_y_node.outputs['Result'], switch_yz_node.inputs[0])  # Result -> Switch
     node_tree.links.new(separate_xyz_node.outputs['Y'], switch_yz_node.inputs[3])  # True
     node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[4])  # False
-
     node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[4])  # False
-
     node_tree.links.new(switch_x_yz_node.outputs[0], output_node.inputs['Value'])
+
+    return node_tree
+
+
+def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
+    inputs = {('NodeSocketGeometry', 'Curve'),
+              ('NodeSocketInt', 'Trim Mode'),
+              ('NodeSocketFloat', 'Trim Factor Start'),
+              ('NodeSocketFloat', 'Trim Factor End'),
+              ('NodeSocketFloat', 'Trim Length Start'),
+              ('NodeSocketFloat', 'Trim Length End'),
+              ('NodeSocketFloat', 'Normal Offset'),
+              ('NodeSocketFloat', 'Spacing Length'),
+              }
+    outputs = {('NodeSocketGeometry', 'Points'),
+               ('NodeSocketVector', 'Normal'),
+               ('NodeSocketVector', 'Tangent'),
+               }
+    node_tree = ensure_geometry_node_tree('BDK Scatter Layer Curve To Points', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+
+    # Add "Curve Trim" node.
+    trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
+    node_tree.links.new(input_node.outputs['Curve'], trim_curve_group_node.outputs['Curve'])
+    node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
+    node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
+    node_tree.links.new(input_node.outputs['Trim Factor End'], trim_curve_group_node.inputs['Factor End'])
+    node_tree.links.new(input_node.outputs['Trim Length Start'], trim_curve_group_node.inputs['Length Start'])
+    node_tree.links.new(input_node.outputs['Trim Length End'], trim_curve_group_node.inputs['Length End'])
+
+    # Add BDK Normal Offset node.
+    curve_normal_offset_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
+    node_tree.links.new(input_node.outputs['Normal Offset'], curve_normal_offset_group_node.inputs['Normal Offset'])
+
+    node_tree.links.new(input_node.outputs['Curve'], trim_curve_group_node.inputs['Curve'])
+    node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
+
+    # Add "Curve to Points" node.
+    curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
+    curve_to_points_node.mode = 'LENGTH'
+
+    node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
+    node_tree.links.new(curve_normal_offset_group_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
+
+    node_tree.links.new(curve_to_points_node.outputs['Normal'], output_node.inputs['Normal'])
+    node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
+
+    normal_offset_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+    normal_offset_random_value_node.label = 'Normal Random Scale'
+    normal_offset_random_value_node.data_type = 'FLOAT'
+
+    node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Points'])
+
+    # node_tree.links.new(add_scatter_object_seed_node('curve_normal_offset_seed'), normal_offset_random_value_node.inputs['Seed'])
+    # add_scatter_layer_object_driver(normal_offset_random_value_node.inputs[2], 'curve_normal_offset_min')
+    # add_scatter_layer_object_driver(normal_offset_random_value_node.inputs[3], 'curve_normal_offset_max')
+    # node_tree.links.new(normal_offset_random_value_node.outputs[1], vector_scale_node.inputs['Scale'])
 
     return node_tree
 
@@ -367,71 +425,56 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
     node_tree = ensure_geometry_node_tree(scatter_layer.seed_object.name, inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    doodad_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-    doodad_object_info_node.inputs[0].default_value = terrain_doodad_object
-    doodad_object_info_node.transform_space = 'RELATIVE'
-
     join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
-    set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
-    # Add "Curve Trim" node.
-    trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-    trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
-    node_tree.links.new(doodad_object_info_node.outputs['Geometry'], trim_curve_group_node.outputs['Curve'])
-    add_scatter_layer_driver(trim_curve_group_node.inputs['Mode'], 'curve_trim_mode')
-    add_scatter_layer_driver(trim_curve_group_node.inputs['Factor Start'], 'curve_trim_factor_start')
-    add_scatter_layer_driver(trim_curve_group_node.inputs['Factor End'], 'curve_trim_factor_end')
-    add_scatter_layer_driver(trim_curve_group_node.inputs['Length Start'], 'curve_trim_length_start')
-    add_scatter_layer_driver(trim_curve_group_node.inputs['Length End'], 'curve_trim_length_end')
+    if scatter_layer.terrain_doodad_object.type == 'CURVE':
 
-    # Add BDK Normal Offset node.
-    curve_normal_offset_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-    curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
-    add_scatter_layer_driver(curve_normal_offset_group_node.inputs['Normal Offset'], 'curve_normal_offset')
+        # Get the maximum length of all the objects in the scatter layer.
+        length_sockets = []
+        for scatter_layer_object in scatter_layer.objects:
+            size_socket = add_object_extents(node_tree, scatter_layer_object.object)
+            vector_component_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+            vector_component_group_node.node_tree = ensure_vector_component_node_tree()
+            node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
+            length_sockets.append(vector_component_group_node.outputs['Value'])
+        spacing_length = add_chained_math_nodes(node_tree, 'MAX', length_sockets)
 
-    node_tree.links.new(doodad_object_info_node.outputs['Geometry'], trim_curve_group_node.inputs['Curve'])
-    node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
+        spacing_mode_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        spacing_mode_switch_node.input_type = 'FLOAT'
+        add_scatter_layer_driver(spacing_mode_switch_node.inputs['Switch'], 'curve_spacing_method')
+        add_scatter_layer_driver(spacing_mode_switch_node.inputs[3], 'curve_spacing_absolute')  # False
 
-    # Add "Curve to Points" node.
-    curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
-    curve_to_points_node.mode = 'LENGTH'
+        spacing_relative_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
+        spacing_relative_factor_node.operation = 'MULTIPLY'
+        node_tree.links.new(spacing_length, spacing_relative_factor_node.inputs[0])
+        add_scatter_layer_driver(spacing_relative_factor_node.inputs[1], 'curve_spacing_relative')
+
+        node_tree.links.new(spacing_relative_factor_node.outputs['Value'], spacing_mode_switch_node.inputs[2])
+
+        spacing_length = spacing_mode_switch_node.outputs[0]
+
+        curve_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+        curve_object_info_node.inputs['Object'].default_value = terrain_doodad_object
+
+        curve_to_points_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        curve_to_points_group_node.node_tree = ensure_scatter_layer_curve_to_points_node_tree()
+        node_tree.links.new(curve_object_info_node.outputs['Geometry'], curve_to_points_group_node.inputs['Curve'])
+        add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Mode'], 'curve_trim_mode')
+        add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Factor Start'], 'curve_trim_factor_start')
+        add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Factor End'], 'curve_trim_factor_end')
+        add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Length Start'], 'curve_trim_length_start')
+        add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Length End'], 'curve_trim_length_end')
+        add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset'], 'curve_normal_offset')
+
+        if spacing_length is not None:
+            node_tree.links.new(spacing_length, curve_to_points_group_node.inputs['Spacing Length'])
+
+        points_socket = curve_to_points_group_node.outputs['Points']
+    else:
+        raise RuntimeError('Unsupported terrain doodad object type: ' + scatter_layer.terrain_doodad_object.type)
 
     # TODO: we need to refactor this so that the objects are just here to be selected at random (aside from perhaps the scale)
     for scatter_layer_object_index, scatter_layer_object in enumerate(scatter_layer.objects):
-        size_socket = add_object_extents(node_tree, scatter_layer_object.object)
-        vector_component_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        vector_component_group_node.node_tree = ensure_vector_component_node_tree()
-
-        node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
-
-        # Spacing
-        spacing_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
-        spacing_factor_node.operation = 'MULTIPLY'
-        node_tree.links.new(vector_component_group_node.outputs['Value'], spacing_factor_node.inputs[0])
-        add_scatter_layer_driver(spacing_factor_node.inputs[1], 'curve_spacing_relative')
-
-        spacing_length_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        spacing_length_node.input_type = 'FLOAT'
-        add_scatter_layer_driver(spacing_length_node.inputs['Switch'], 'curve_spacing_method')
-        node_tree.links.new(spacing_factor_node.outputs['Value'], spacing_length_node.inputs['False'])
-        add_scatter_layer_driver(spacing_length_node.inputs['True'], 'curve_spacing_absolute')
-
-        node_tree.links.new(spacing_length_node.outputs['Output'], curve_to_points_node.inputs['Length'])
-
-        vector_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        vector_scale_node.operation = 'SCALE'
-
-        node_tree.links.new(curve_to_points_node.outputs['Normal'], vector_scale_node.inputs[0])
-        node_tree.links.new(vector_scale_node.outputs['Vector'], set_position_node.inputs['Offset'])
-
-        normal_offset_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
-        normal_offset_random_value_node.label = 'Normal Random Scale'
-        normal_offset_random_value_node.data_type = 'FLOAT'
-
-        add_scatter_layer_object_driver(normal_offset_random_value_node.inputs[2], 'curve_normal_offset_min')
-        add_scatter_layer_object_driver(normal_offset_random_value_node.inputs[3], 'curve_normal_offset_max')
-        node_tree.links.new(add_scatter_object_seed_node('curve_normal_offset_seed'), normal_offset_random_value_node.inputs['Seed'])
-
         # Scale Mix
         scale_mix_node = node_tree.nodes.new(type='ShaderNodeMix')
         scale_mix_node.data_type = 'VECTOR'
@@ -460,14 +503,9 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         snap_and_align_to_terrain_switch_node.label = 'Snap and Align to Terrain?'
         add_scatter_layer_driver(snap_and_align_to_terrain_switch_node.inputs[1], 'snap_to_terrain')
 
-        node_tree.links.new(set_position_node.outputs['Geometry'], snap_and_align_to_terrain_group_node.inputs['Geometry'])
-        node_tree.links.new(set_position_node.outputs['Geometry'], snap_and_align_to_terrain_switch_node.inputs[14])  # False
+        node_tree.links.new(points_socket, snap_and_align_to_terrain_group_node.inputs['Geometry'])
+        node_tree.links.new(points_socket, snap_and_align_to_terrain_switch_node.inputs[14])  # False
         node_tree.links.new(snap_and_align_to_terrain_group_node.outputs['Geometry'], snap_and_align_to_terrain_switch_node.inputs[15])  # True
-
-        node_tree.links.new(curve_normal_offset_group_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
-        node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
-
-        node_tree.links.new(normal_offset_random_value_node.outputs[1], vector_scale_node.inputs['Scale'])
 
         # Mute Switch
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')

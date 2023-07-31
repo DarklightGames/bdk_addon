@@ -385,7 +385,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.prop(scatter_layer_object, 'random_rotation_max')
 
-            if terrain_doodad.object_type == 'CURVE':
+            if terrain_doodad.object.type == 'CURVE':
                 flow.separator()
 
                 col = flow.column(align=True)
@@ -419,29 +419,30 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         flow.prop(scatter_layer, 'global_seed')
         flow.prop(scatter_layer, 'snap_to_terrain')
         flow.prop(scatter_layer, 'align_to_terrain')
-        flow.prop(scatter_layer, 'is_curve_reversed')
 
-        flow.prop(scatter_layer, 'curve_normal_offset')
+        if terrain_doodad.object.type == 'CURVE':
+            # Curve settings
+            flow.prop(scatter_layer, 'is_curve_reversed')
+            flow.prop(scatter_layer, 'curve_normal_offset')
+            flow.prop(scatter_layer, 'curve_trim_mode')
 
-        flow.prop(scatter_layer, 'curve_trim_mode')
+            if scatter_layer.curve_trim_mode == 'FACTOR':
+                col = flow.column(align=True)
+                col.prop(scatter_layer, 'curve_trim_factor_start', text='Trim Start')
+                col.prop(scatter_layer, 'curve_trim_factor_end', text='End')
+            elif scatter_layer.curve_trim_mode == 'LENGTH':
+                col = flow.column(align=True)
+                col.prop(scatter_layer, 'curve_trim_length_start', text='Trim Start')
+                col.prop(scatter_layer, 'curve_trim_length_end', text='End')
 
-        if scatter_layer.curve_trim_mode == 'FACTOR':
-            col = flow.column(align=True)
-            col.prop(scatter_layer, 'curve_trim_factor_start', text='Trim Start')
-            col.prop(scatter_layer, 'curve_trim_factor_end', text='End')
-        elif scatter_layer.curve_trim_mode == 'LENGTH':
-            col = flow.column(align=True)
-            col.prop(scatter_layer, 'curve_trim_length_start', text='Trim Start')
-            col.prop(scatter_layer, 'curve_trim_length_end', text='End')
+            flow.separator()
 
-        flow.separator()
+            flow.prop(scatter_layer, 'curve_spacing_method')
 
-        flow.prop(scatter_layer, 'curve_spacing_method')
-
-        if scatter_layer.curve_spacing_method == 'RELATIVE':
-            flow.prop(scatter_layer, 'curve_spacing_relative', text='Spacing Factor')
-        elif scatter_layer.curve_spacing_method == 'ABSOLUTE':
-            flow.prop(scatter_layer, 'curve_spacing_absolute', text='Spacing Distance')
+            if scatter_layer.curve_spacing_method == 'RELATIVE':
+                flow.prop(scatter_layer, 'curve_spacing_relative', text='Spacing Factor')
+            elif scatter_layer.curve_spacing_method == 'ABSOLUTE':
+                flow.prop(scatter_layer, 'curve_spacing_absolute', text='Spacing Distance')
 
 
 class BDK_PT_terrain_doodad_paint_layer_debug(Panel):

@@ -323,7 +323,6 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
 
 
 def ensure_paint_layers(terrain_info_object: Object):
-    print('ENSURE PAINT LAYERS')
     terrain_info = get_terrain_info(terrain_info_object)
 
     # REALIZATION: we can't have paint layers with paint layer nodes due to circular dependencies.

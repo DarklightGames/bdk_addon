@@ -190,8 +190,14 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     objects_index: IntProperty()
 
     snap_to_terrain: BoolProperty(name='Snap to Terrain', default=False)
-    align_to_terrain: BoolProperty(name='Align to Terrain', default=False)
+    align_to_terrain: BoolProperty(name='Align to Terrain', default=False, description='Align the Z axis to the terrain normal')
 
+    seed_object: PointerProperty(type=Object, name='Seed Object', options={'HIDDEN'})
+    sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
+    global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
+    rotation_seed: IntProperty(name='Rotation Seed', default=0, min=0)
+
+    # Curve Settings
     curve_spacing_method: EnumProperty(name='Spacing Method', items=(
         ('RELATIVE', 'Relative', ''),
         ('ABSOLUTE', 'Absolute', ''),
@@ -210,16 +216,19 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     curve_trim_length_end: FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
 
     curve_normal_offset: FloatProperty(name='Normal Offset', default=0.0, subtype='DISTANCE')
+    curve_align_to_tangent: BoolProperty(name='Align to Tangent', default=False, description='Align the X axis of the object to the tangent of the curve')
 
-    seed_object: PointerProperty(type=Object, name='Seed Object', options={'HIDDEN'})
-    sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
-
-    global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
+    # Mesh Settings
+    mesh_spacing_method: EnumProperty(name='Spacing Method', items=(
+        ('RANDOM', 'Random', ''),
+        ('POISSON_DISK', 'Poisson Disk', ''),
+    ), default='RANDOM')
+    mesh_density: FloatProperty(name='Density', default=1.0, min=0.0)
+    mesh_distribution_seed: IntProperty(name='Distribution Seed', default=0, min=0)
 
 
 class BDK_PG_terrain_doodad(PropertyGroup):
     id: StringProperty(options={'HIDDEN'}, name='ID')
-    object_type: EnumProperty(name='Object Type', items=terrain_doodad_type_items, default='CURVE')
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'}, name='Terrain Info Object')
     node_tree: PointerProperty(type=NodeTree, options={'HIDDEN'}, name='Node Tree')
     object: PointerProperty(type=Object, name='Object')

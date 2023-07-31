@@ -54,9 +54,9 @@ class MaterialCache:
             package_path = self._package_paths[reference.package_name]
             return Path(os.path.join(self._root_directory, os.path.splitext(package_path)[0], reference.type_name,
                                      f'{reference.object_name}.props.txt')).resolve()
-        except KeyError as e:
-            print(f"Couldn't find package for reference: {reference}")
-            raise e
+        except KeyError:
+            # The package could not be found in the material cache.
+            pass
         except RuntimeError:
             pass
         return None
@@ -89,8 +89,8 @@ class MaterialSocketInputs:
 
 
 class MaterialBuilder:
-    def __init__(self, material_cache: MaterialCache, node_tree: bpy.types.NodeTree):
-        self._material_cache = material_cache
+    def __init__(self, material_caches: List[MaterialCache], node_tree: bpy.types.NodeTree):
+        self._material_caches = material_caches
         self._node_tree = node_tree
         self._material_type_importers: Dict[
             type, Callable[[Any, MaterialSocketInputs], Optional[MaterialSocketOutputs]]] = {}
@@ -114,21 +114,32 @@ class MaterialBuilder:
             UShader: self._import_shader,
             UVariableTexPanner: self._import_variable_tex_panner,
             UVertexColor: self._import_vertex_color,
+            UFadeColor: self._import_fade_color,
         }
 
     def _load_image(self, reference: UReference):
-        image_path = self._material_cache.resolve_path_for_reference(reference)
-        image_path = str(image_path)
-        extensions = ['.tga']  # A little dicey :think:
-        for extension in extensions:
-            file_path = image_path.replace('.props.txt', extension)
-            if os.path.isfile(file_path):
-                return bpy.data.images.load(str(file_path), check_existing=True)
+        for material_cache in self._material_caches:
+            image_path = material_cache.resolve_path_for_reference(reference)
+            image_path = str(image_path)
+            extensions = ['.tga']  # A little dicey 🤔
+            for extension in extensions:
+                file_path = image_path.replace('.props.txt', extension)
+                if os.path.isfile(file_path):
+                    return bpy.data.images.load(str(file_path), check_existing=True)
         raise RuntimeError(f'Could not find file for reference {reference}')
+
+    def load_material(self, reference: Optional[UReference]):
+        if reference is None:
+            return None
+        for material_cache in self._material_caches:
+            material = material_cache.load_material(reference)
+            if material is not None:
+                return material
+        return None
 
     def _import_color_modifier(self, color_modifier: UColorModifier,
                                socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-        material = self._material_cache.load_material(color_modifier.Material)
+        material = self.load_material(color_modifier.Material)
         material_outputs = self._import_material(material, socket_inputs)
 
         if material_outputs and material_outputs.color_socket is not None:
@@ -157,9 +168,9 @@ class MaterialBuilder:
 
         outputs = MaterialSocketOutputs()
 
-        material1 = self._material_cache.load_material(combiner.Material1)
-        material2 = self._material_cache.load_material(combiner.Material2)
-        mask_material = self._material_cache.load_material(combiner.Mask)
+        material1 = self.load_material(combiner.Material1)
+        material2 = self.load_material(combiner.Material2)
+        mask_material = self.load_material(combiner.Mask)
 
         material1_outputs = self._import_material(material1, copy.copy(inputs))
         material2_outputs = self._import_material(material2, copy.copy(inputs))
@@ -272,6 +283,100 @@ class MaterialBuilder:
 
         return outputs
 
+    def _import_fade_color(self, fade_color: UFadeColor, _: MaterialSocketInputs) -> MaterialSocketOutputs:
+        node_tree = self._node_tree
+
+        outputs = MaterialSocketOutputs()
+
+        color_1_rgb_node = node_tree.nodes.new('ShaderNodeRGB')
+        color_1_rgb_node.outputs[0].default_value = (
+            float(fade_color.Color1.R) / 255.0,
+            float(fade_color.Color1.G) / 255.0,
+            float(fade_color.Color1.B) / 255.0,
+            1.0
+        )
+
+        color_2_rgb_node = node_tree.nodes.new('ShaderNodeRGB')
+        color_2_rgb_node.outputs[0].default_value = (
+            float(fade_color.Color2.R) / 255.0,
+            float(fade_color.Color2.G) / 255.0,
+            float(fade_color.Color2.B) / 255.0,
+            1.0
+        )
+
+        mix_rgb_node = node_tree.nodes.new('ShaderNodeMix')
+        mix_rgb_node.data_type = 'RGBA'
+
+        node_tree.links.new(mix_rgb_node.inputs[6], color_1_rgb_node.outputs['Color'])
+        node_tree.links.new(mix_rgb_node.inputs[7], color_2_rgb_node.outputs['Color'])
+
+        time_value_node = node_tree.nodes.new('ShaderNodeValue')
+        time_value_node.label = 'Time'
+        time_value_node.outputs[0].driver_add('default_value').driver.expression = 'frame/bpy.context.scene.render.fps'
+
+        fade_offset_value_node = node_tree.nodes.new('ShaderNodeValue')
+        fade_offset_value_node.label = 'FadeOffset'
+        fade_offset_value_node.outputs[0].default_value = fade_color.FadeOffset
+
+        fade_period_value_node = node_tree.nodes.new('ShaderNodeValue')
+        fade_period_value_node.label = 'FadePeriod'
+        fade_period_value_node.outputs[0].default_value = fade_color.FadePeriod
+
+        factor_socket = None
+
+        if fade_color.ColorFadeType == EColorFadeType.FC_Linear:
+            time_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+            time_multiply_node.operation = 'MULTIPLY'
+            time_multiply_node.inputs[1].default_value = 2.0
+            node_tree.links.new(time_value_node.outputs[0], time_multiply_node.inputs[0])
+
+            frequency_divide_node = node_tree.nodes.new('ShaderNodeMath')
+            frequency_divide_node.operation = 'DIVIDE'
+            frequency_divide_node.label = 'Frequency'
+            frequency_divide_node.inputs[0].default_value = 1.0
+            node_tree.links.new(fade_period_value_node.outputs['Value'], frequency_divide_node.inputs[1])
+
+            frequency_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+            frequency_multiply_node.operation = 'MULTIPLY'
+            node_tree.links.new(time_multiply_node.outputs[0], frequency_multiply_node.inputs[0])
+            node_tree.links.new(frequency_divide_node.outputs[0], frequency_multiply_node.inputs[1])
+
+            phase_add_node = node_tree.nodes.new('ShaderNodeMath')
+            phase_add_node.operation = 'ADD'
+            node_tree.links.new(frequency_multiply_node.outputs[0], phase_add_node.inputs[0])
+            node_tree.links.new(fade_offset_value_node.outputs['Value'], phase_add_node.inputs[1])
+
+            ping_pong_node = node_tree.nodes.new('ShaderNodeMath')
+            ping_pong_node.operation = 'PINGPONG'
+            ping_pong_node.inputs[1].default_value = 1.0
+            node_tree.links.new(phase_add_node.outputs[0], ping_pong_node.inputs[0])
+
+            factor_socket = ping_pong_node.outputs[0]
+        elif fade_color.ColorFadeType == EColorFadeType.FC_Sinusoidal:
+            def get_sinusoidal_driver_expression(phase: float, period: float) -> str:
+                return f'(cos({phase}+(1/{period})*2*pi*(frame/bpy.context.scene.render.fps))+1)/2'
+
+            sinusoidal_factor_value_node = node_tree.nodes.new('ShaderNodeValue')
+            sinusoidal_factor_value_node.outputs[0].driver_add('default_value').driver.expression = get_sinusoidal_driver_expression(fade_color.FadeOffset, fade_color.FadePeriod)
+
+            # TODO: For consistency, we should not be using a driver for the whole expression. Make this a series of nodes instead.
+
+            factor_socket = sinusoidal_factor_value_node.outputs[0]
+
+        mix_alpha_node = node_tree.nodes.new('ShaderNodeMix')
+        mix_alpha_node.data_type = 'FLOAT'
+        mix_alpha_node.inputs['A'].default_value = fade_color.Color1.A / 255.0
+        mix_alpha_node.inputs['B'].default_value = fade_color.Color2.A / 255.0
+
+        if factor_socket is not None:
+            node_tree.links.new(factor_socket, mix_rgb_node.inputs['Factor'])
+            node_tree.links.new(factor_socket, mix_alpha_node.inputs['Factor'])
+
+        outputs.color_socket = mix_rgb_node.outputs[2]
+        outputs.alpha_socket = mix_alpha_node.outputs['Result']
+
+        return outputs
+
     def _import_cubemap(self, cubemap: UCubemap, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
         outputs = MaterialSocketOutputs()
         tex_environment_node = self._node_tree.nodes.new('ShaderNodeTexEnvironment')
@@ -311,7 +416,7 @@ class MaterialBuilder:
 
     def _import_final_blend(self, final_blend: UFinalBlend,
                             socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
-        material = self._material_cache.load_material(final_blend.Material)
+        material = self.load_material(final_blend.Material)
         material_outputs = self._import_material(material, socket_inputs)
 
         outputs = MaterialSocketOutputs()
@@ -330,16 +435,16 @@ class MaterialBuilder:
 
         # Opacity
         if shader.Opacity is not None:
-            opacity_material = self._material_cache.load_material(shader.Opacity)
+            opacity_material = self.load_material(shader.Opacity)
             opacity_material_outputs = self._import_material(opacity_material, copy.copy(socket_inputs))
             outputs.alpha_socket = opacity_material_outputs.alpha_socket
             outputs.blend_method = opacity_material_outputs.blend_method
 
         # Diffuse
-        diffuse_material = self._material_cache.load_material(shader.Diffuse)
+        diffuse_material = self.load_material(shader.Diffuse)
         if diffuse_material is not None:
             diffuse_material_outputs = self._import_material(diffuse_material, copy.copy(socket_inputs))
-            detail_material = self._material_cache.load_material(shader.Detail) if shader.Detail is not None else None
+            detail_material = self.load_material(shader.Detail) if shader.Detail is not None else None
             if detail_material is not None:
                 self._import_detail_material(detail_material, shader.DetailScale, diffuse_material_outputs.color_socket,
                                              uv_source_socket=socket_inputs.uv_source_socket)
@@ -347,7 +452,7 @@ class MaterialBuilder:
             outputs.use_backface_culling = diffuse_material_outputs.use_backface_culling
 
         # Specular
-        specular_material = self._material_cache.load_material(shader.Specular)
+        specular_material = self.load_material(shader.Specular)
         if specular_material:
             # Final Add Node
             add_node = self._node_tree.nodes.new('ShaderNodeMix')
@@ -365,7 +470,7 @@ class MaterialBuilder:
             self._node_tree.links.new(multiply_node.inputs[6], specular_material_outputs.color_socket)
 
             # Specular Mask
-            specular_mask_material = self._material_cache.load_material(shader.SpecularityMask)
+            specular_mask_material = self.load_material(shader.SpecularityMask)
             if specular_mask_material is not None:
                 specular_mask_material_outputs = self._import_material(specular_mask_material, copy.copy(socket_inputs))
                 self._node_tree.links.new(multiply_node.inputs[7], specular_mask_material_outputs.color_socket)
@@ -390,7 +495,7 @@ class MaterialBuilder:
 
         socket_inputs.uv_socket = uv_map_node.outputs['UV']
 
-        material = self._material_cache.load_material(tex_coord_source.Material)
+        material = self.load_material(tex_coord_source.Material)
         material_outputs = self._import_material(material, copy.copy(socket_inputs))
 
         return material_outputs
@@ -439,7 +544,7 @@ class MaterialBuilder:
         elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_ProjectorCoords:
             pass
 
-        material = self._material_cache.load_material(tex_env_map.Material)
+        material = self.load_material(tex_env_map.Material)
 
         return self._import_material(material, inputs)
 
@@ -461,7 +566,7 @@ class MaterialBuilder:
 
         socket_inputs.uv_socket = vector_add_node.outputs['Vector']
 
-        material = self._material_cache.load_material(tex_oscillator.Material)
+        material = self.load_material(tex_oscillator.Material)
         material_outputs = self._import_material(material, socket_inputs)
 
         if material_outputs is not None:
@@ -529,7 +634,7 @@ class MaterialBuilder:
 
         socket_inputs.uv_socket = vector_add_node.outputs['Vector']
 
-        material = self._material_cache.load_material(tex_panner.Material)
+        material = self.load_material(tex_panner.Material)
         material_outputs = self._import_material(material, socket_inputs)
 
         return material_outputs
@@ -541,8 +646,11 @@ class MaterialBuilder:
 
         socket_inputs.uv_socket = vector_rotate_node.outputs['Vector']
 
-        material = self._material_cache.load_material(tex_rotator.Material)
+        material = self.load_material(tex_rotator.Material)
         material_outputs = self._import_material(material, socket_inputs)
+
+        if material_outputs is None:
+            return None
 
         u = tex_rotator.UOffset / material_outputs.size[0]
         v = tex_rotator.VOffset / material_outputs.size[1]
@@ -594,7 +702,7 @@ class MaterialBuilder:
 
         socket_inputs.uv_socket = vector_add_node.outputs['Vector']
 
-        material = self._material_cache.load_material(tex_scaler.Material)
+        material = self.load_material(tex_scaler.Material)
         material_outputs = self._import_material(material, socket_inputs)
 
         offset_node.inputs['X'].default_value = tex_scaler.UOffset / material_outputs.size[0]
@@ -623,7 +731,7 @@ class MaterialBuilder:
             image_node.extension = 'REPEAT'
 
         # Detail texture
-        detail_material = None if texture.Detail is None else self._material_cache.load_material(texture.Detail)
+        detail_material = None if texture.Detail is None else self.load_material(texture.Detail)
         if detail_material is not None:
             outputs.color_socket = self._import_detail_material(detail_material, texture.DetailScale,
                                                                 image_node.outputs['Color'],
@@ -685,7 +793,7 @@ class MaterialBuilder:
             socket_inputs.uv_socket = add_node.outputs['Vector']
 
         if variable_tex_panner.Material is not None:
-            material = self._material_cache.load_material(variable_tex_panner.Material)
+            material = self.load_material(variable_tex_panner.Material)
             material_outputs = self._import_material(material, copy.copy(socket_inputs))
             return material_outputs
 
@@ -729,16 +837,22 @@ class BDK_OT_material_import(Operator, ImportHelper):
         default='')
 
     def execute(self, context: bpy.types.Context):
-        bdk_build_path = getattr(context.preferences.addons['bdk_addon'].preferences, 'build_path')
+        bdk_build_paths = getattr(context.preferences.addons['bdk_addon'].preferences, 'build_paths')
+        bdk_build_paths = [x.path for x in bdk_build_paths if not x.mute]
 
-        if bdk_build_path == '':
+        if not bdk_build_paths:
             self.report({'ERROR_INVALID_CONTEXT'}, 'The BDK build path has not been set in the addon preferences.')
             return {'CANCELLED'}
 
-        if not os.path.isdir(bdk_build_path):
-            self.report({'ERROR_INVALID_CONTEXT'}, f'The BDK build path ({bdk_build_path}) is not a directory that '
-                                                   f'could be found.')
-            return {'CANCELLED'}
+        for bdk_build_path in bdk_build_paths:
+            if not os.path.isdir(bdk_build_path):
+                self.report({'ERROR_INVALID_CONTEXT'}, f'The BDK build path ({bdk_build_path}) is not a directory that '
+                                                       f'could be found.')
+                return {'CANCELLED'}
+
+        material_caches = [MaterialCache(bdk_build_path) for bdk_build_path in bdk_build_paths]
+
+        print(f'{len(material_caches)} material caches loaded.')
 
         # Get an Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))
@@ -754,12 +868,14 @@ class BDK_OT_material_import(Operator, ImportHelper):
         node_tree = material_data.node_tree
         node_tree.nodes.clear()
 
-        material_cache = MaterialCache(bdk_build_path)
         reference = UReference.from_path(Path(self.filepath))
-        unreal_material = material_cache.load_material(reference)
+
+        unreal_material = None
+        for material_cache in material_caches:
+            unreal_material = material_cache.load_material(reference)
 
         tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
-        outputs = MaterialBuilder(material_cache, node_tree).build(unreal_material,
+        outputs = MaterialBuilder(material_caches, node_tree).build(unreal_material,
                                                                    uv_source_socket=tex_coord_node.outputs['UV'])
 
         output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')

@@ -574,7 +574,6 @@ def create_terrain_doodad(context: Context, terrain_info_object: Object, object_
 
     bpy_object.bdk.type = 'TERRAIN_DOODAD'
     bpy_object.bdk.terrain_doodad.id = terrain_doodad_id
-    bpy_object.bdk.terrain_doodad.object_type = object_type
     bpy_object.bdk.terrain_doodad.terrain_info_object = terrain_info_object
     bpy_object.bdk.terrain_doodad.object = bpy_object
     bpy_object.bdk.terrain_doodad.node_tree = bpy.data.node_groups.new(name=terrain_doodad_id, type='GeometryNodeTree')
@@ -732,7 +731,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
 
     distance_socket = None
 
-    if terrain_doodad.object_type == 'CURVE':
+    if terrain_doodad.object.type == 'CURVE':
         # Create a new distance to curve node group.
         distance_to_curve_node_group = ensure_distance_to_curve_node_group()
 
@@ -745,7 +744,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         add_doodad_driver(distance_to_curve_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
 
         distance_socket = distance_to_curve_node.outputs['Distance']
-    elif terrain_doodad.object_type == 'MESH':
+    elif terrain_doodad.object.type == 'MESH':
         distance_to_mesh_node_group = ensure_distance_to_mesh_node_group()
 
         # Add a new node group node.
@@ -756,7 +755,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_mesh_node.inputs['Geometry'])
 
         distance_socket = distance_to_mesh_node.outputs['Distance']
-    elif terrain_doodad.object_type == 'EMPTY':
+    elif terrain_doodad.object.type == 'EMPTY':
         distance_to_empty_node_group = ensure_distance_to_empty_node_group()
 
         distance_to_empty_node = node_tree.nodes.new(type='GeometryNodeGroup')

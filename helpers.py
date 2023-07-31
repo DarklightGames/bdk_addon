@@ -1,7 +1,7 @@
 import os
 import re
 import bpy
-from typing import Iterable, Optional, Dict
+from typing import Iterable, Optional, Dict, List
 from bpy.types import Material, Object, Context, Mesh
 from pathlib import Path
 from .data import UReference
@@ -56,31 +56,24 @@ def is_active_object_terrain_doodad(context: Context):
     return get_terrain_doodad(context.active_object) is not None
 
 
-def get_bdk_asset_library_path() -> Optional[Path]:
+def get_bdk_asset_library_paths() -> List[Path]:
+    asset_library_paths = []
     asset_libraries = bpy.context.preferences.filepaths.asset_libraries
+    # TODO: this is very janky; come up with a better way to handle the BDK asset libraries.
     asset_library_name = 'BDK Library'
-
-    try:
-        asset_library = next(filter(lambda x: x.name == asset_library_name, asset_libraries))
-    except StopIteration:
-        print(f'BDK asset library could not be found (expected to find library with name "{asset_library_name}")')
-        return None
-
-    return Path(asset_library.path)
+    for asset_library in asset_libraries:
+        if asset_library.name.startswith(asset_library_name):
+            asset_library_paths.append(Path(asset_library.path))
+    return asset_library_paths
 
 
 def get_blend_file_for_package(package_name: str) -> Optional[str]:
-    asset_library_path = get_bdk_asset_library_path()
-
-    if asset_library_path is None:
-        return None
-
-    blend_files = [fp for fp in asset_library_path.glob(f'**/{package_name}.blend') if fp.is_file()]
-
-    if len(blend_files) == 0:
-        return None
-
-    return str(blend_files[0])
+    asset_library_paths = get_bdk_asset_library_paths()
+    for asset_library_path in asset_library_paths:
+        blend_files = [fp for fp in asset_library_path.glob(f'**/{package_name}.blend') if fp.is_file()]
+        if len(blend_files) > 0:
+            return str(blend_files[0])
+    return None
 
 
 def guess_package_reference_from_names(names: Iterable[str]) -> Dict[str, Optional[UReference]]:

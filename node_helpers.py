@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, AbstractSet, Tuple
+from typing import Optional, Iterable, AbstractSet, Tuple, List
 
 import bpy
 from bpy.types import NodeTree, NodeSocket, Node
@@ -270,6 +270,19 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
     node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
 
     return node_tree
+
+
+def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
+    if not value_sockets:
+        return None
+    output_socket = value_sockets[0]
+    for value_socket in value_sockets[1:]:
+        operation_node = node_tree.nodes.new(type='ShaderNodeMath')
+        operation_node.operation = operation
+        node_tree.links.new(output_socket, operation_node.inputs[0])
+        node_tree.links.new(value_socket, operation_node.inputs[1])
+        output_socket = operation_node.outputs[0]
+    return output_socket
 
 
 # def ensure_curve_extend_node_tree() -> NodeTree:
