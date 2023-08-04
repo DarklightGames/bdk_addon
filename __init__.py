@@ -25,6 +25,7 @@ if 'bpy' in locals():
     importlib.reload(material_reader)
     importlib.reload(material_importer)
     importlib.reload(material_operators)
+    importlib.reload(material_ui)
 
     importlib.reload(projector_builder)
     importlib.reload(projector_operators)
@@ -72,6 +73,7 @@ else:
     from .material import operators as material_operators
     from .material import data as material_data
     from .material import reader as material_reader
+    from .material import ui as material_ui
 
     # Projector
     from .projector import builder as projector_builder
@@ -116,6 +118,7 @@ import bpy
 
 classes = material_importer.classes + \
           material_operators.classes + \
+          material_ui.classes + \
           projector_operators.classes + \
           fluid_surface_operators.classes + \
           terrain_properties.classes + \

@@ -95,7 +95,6 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup): # TODO: rename this to s
         name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
     index: IntProperty(options={'HIDDEN'})
     terrain_doodad_object: PointerProperty(type=Object, options={'HIDDEN'})
-    index: IntProperty(options={'HIDDEN'})
     radius: FloatProperty(name='Radius', subtype='DISTANCE', default=meters_to_unreal(1.0))
     falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=0.0)
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)

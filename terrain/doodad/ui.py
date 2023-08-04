@@ -10,7 +10,7 @@ from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_do
     BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
     BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_duplicate
+    BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_bake_debug
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -167,12 +167,17 @@ class BDK_PT_terrain_doodad_debug(Panel):
         return should_show_bdk_developer_extras(context)
 
     def draw(self, context: 'Context'):
+        layout = self.layout
         terrain_doodad: 'BDK_PG_terrain_doodad' = context.active_object.bdk.terrain_doodad
-        self.layout.prop(terrain_doodad, 'id')
-        self.layout.prop(terrain_doodad, 'object_type')
-        self.layout.prop(terrain_doodad, 'object')
-        self.layout.prop(terrain_doodad, 'node_tree')
-        self.layout.prop(terrain_doodad, 'terrain_info_object')
+        layout.prop(terrain_doodad, 'id')
+        layout.prop(terrain_doodad, 'object_type')
+        layout.prop(terrain_doodad, 'object')
+        layout.prop(terrain_doodad, 'node_tree')
+        layout.prop(terrain_doodad, 'terrain_info_object')
+
+        layout.separator()
+
+        layout.operator(BDK_OT_terrain_doodad_bake_debug.bl_idname, icon='RENDER_STILL', text='Bake Debug')
 
 
 class BDK_PT_terrain_doodad_advanced(Panel):

@@ -6,7 +6,7 @@ from typing import Dict, cast, Tuple, Callable, Any
 
 import bpy.types
 from bpy.props import StringProperty
-from bpy.types import ShaderNodeTexImage
+from bpy.types import ShaderNodeTexImage, NodeTree, NodeSocket
 from bpy_extras.io_utils import ImportHelper
 from bpy_types import Operator
 from pathlib import Path
@@ -56,6 +56,7 @@ class MaterialCache:
                                      f'{reference.object_name}.props.txt')).resolve()
         except KeyError:
             # The package could not be found in the material cache.
+            print(f'Could not find package {reference.package_name} in material cache.')
             pass
         except RuntimeError:
             pass
@@ -115,6 +116,7 @@ class MaterialBuilder:
             UVariableTexPanner: self._import_variable_tex_panner,
             UVertexColor: self._import_vertex_color,
             UFadeColor: self._import_fade_color,
+            UMaterialSwitch: self._import_material_switch,
         }
 
     def _load_image(self, reference: UReference):
@@ -359,7 +361,9 @@ class MaterialBuilder:
             sinusoidal_factor_value_node = node_tree.nodes.new('ShaderNodeValue')
             sinusoidal_factor_value_node.outputs[0].driver_add('default_value').driver.expression = get_sinusoidal_driver_expression(fade_color.FadeOffset, fade_color.FadePeriod)
 
-            # TODO: For consistency, we should not be using a driver for the whole expression. Make this a series of nodes instead.
+            # TODO: For consistency, we should not be using a driver for the whole expression.
+            #  Make this a series of nodes instead. (sure would be nice to have code that could take a math expression
+            #  and turn it into a node tree)
 
             factor_socket = sinusoidal_factor_value_node.outputs[0]
 
@@ -755,6 +759,71 @@ class MaterialBuilder:
 
         return outputs
 
+    def _import_material_switch(self, material_switch: UMaterialSwitch, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
+        node_tree = self._node_tree
+        current_value_node = node_tree.nodes.new('ShaderNodeValue')
+        current_value_node.outputs['Value'].default_value = material_switch.Current  # TODO: in future this could be driven by a driver?
+
+        # Truncate and Modulo the current value node.
+        truncate_node = node_tree.nodes.new('ShaderNodeMath')
+        truncate_node.operation = 'FLOOR'
+        node_tree.links.new(truncate_node.inputs[0], current_value_node.outputs['Value'])
+
+        modulo_node = node_tree.nodes.new('ShaderNodeMath')
+        modulo_node.operation = 'MODULO'
+        modulo_node.inputs[1].default_value = len(material_switch.Materials)
+        node_tree.links.new(modulo_node.inputs[0], truncate_node.outputs['Value'])
+
+        current_socket = modulo_node.outputs['Value']
+        last_color_socket: Optional[NodeSocket] = None
+        last_alpha_socket: Optional[NodeSocket] = None
+
+        materials = []
+        material_outputs = []
+
+        for switch_index, switch_material in reversed(list(enumerate(material_switch.Materials))):
+            # Add a new compare node and compare the current value to the switch index.
+            compare_node = node_tree.nodes.new('ShaderNodeMath')
+            compare_node.operation = 'COMPARE'
+            compare_node.inputs[1].default_value = switch_index
+            node_tree.links.new(compare_node.inputs[0], current_socket)
+
+            material = self.load_material(switch_material)
+            outputs = self._import_material(material, socket_inputs)
+
+            # Add a mix color node.
+            mix_rgb_node = node_tree.nodes.new('ShaderNodeMixRGB')
+            mix_rgb_node.data_type = 'RGBA'
+            node_tree.links.new(mix_rgb_node.inputs['Fac'], compare_node.outputs['Value'])
+            node_tree.links.new(mix_rgb_node.inputs['Color2'], outputs.color_socket)
+            if last_color_socket is not None:
+                # Hook up the color socket of the material output to the Color1 input of the mix color node.
+                node_tree.links.new(mix_rgb_node.inputs['Color1'], last_color_socket)
+
+            # Add a mix alpha node.
+            mix_alpha_node = node_tree.nodes.new('ShaderNodeMixRGB')
+            mix_alpha_node.data_type = 'FLOAT'
+            node_tree.links.new(mix_alpha_node.inputs[0], compare_node.outputs['Value'])
+            node_tree.links.new(mix_alpha_node.inputs[3], outputs.alpha_socket)  # B
+            if last_alpha_socket is not None:
+                node_tree.links.new(mix_alpha_node.inputs[1], last_alpha_socket)
+
+            last_color_socket = mix_rgb_node.outputs[0]
+            last_alpha_socket = mix_alpha_node.outputs[0] # TODO: one of these is wrong...
+
+            materials.append(material)
+            material_outputs.append(outputs)
+
+        outputs = MaterialSocketOutputs()
+        outputs.color_socket = last_color_socket
+        outputs.alpha_socket = last_alpha_socket
+        outputs.size = material_outputs[material_switch.Current].size   # TODO: make this the max size of all materials
+        outputs.use_backface_culling = material_outputs[material_switch.Current].use_backface_culling  # TODO: make this...i dunno lol
+        outputs.blend_method = material_outputs[material_switch.Current].blend_method
+
+        return outputs
+
+
     def _import_variable_tex_panner(self, variable_tex_panner: UVariableTexPanner,
                                     socket_inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
@@ -824,6 +893,23 @@ class MaterialBuilder:
         return self._import_material(material, inputs=inputs)
 
 
+def _add_shader_from_outputs(node_tree: NodeTree, outputs: MaterialSocketOutputs) -> Optional[NodeSocket]:
+    diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')
+    if outputs.color_socket:
+        node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
+
+    if outputs.blend_method in ['CLIP', 'BLEND']:
+        transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
+        mix_node = node_tree.nodes.new('ShaderNodeMixShader')
+        if outputs.alpha_socket:
+            node_tree.links.new(mix_node.inputs['Fac'], outputs.alpha_socket)
+        node_tree.links.new(mix_node.inputs[1], transparent_node.outputs['BSDF'])
+        node_tree.links.new(mix_node.inputs[2], diffuse_node.outputs['BSDF'])
+        return mix_node.outputs['Shader']
+    else:
+        return diffuse_node.outputs['BSDF']
+
+
 class BDK_OT_material_import(Operator, ImportHelper):
     bl_idname = 'bdk.import_material'
     bl_label = 'Import Unreal Material'
@@ -852,8 +938,6 @@ class BDK_OT_material_import(Operator, ImportHelper):
 
         material_caches = [MaterialCache(bdk_build_path) for bdk_build_path in bdk_build_paths]
 
-        print(f'{len(material_caches)} material caches loaded.')
-
         # Get an Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))
 
@@ -868,19 +952,23 @@ class BDK_OT_material_import(Operator, ImportHelper):
         node_tree = material_data.node_tree
         node_tree.nodes.clear()
 
+        # Get the Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))
 
+        # Try to load the material from the cache.
         unreal_material = None
         for material_cache in material_caches:
             unreal_material = material_cache.load_material(reference)
+            if unreal_material is not None:
+                break
 
         tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
-        outputs = MaterialBuilder(material_caches, node_tree).build(unreal_material,
-                                                                   uv_source_socket=tex_coord_node.outputs['UV'])
 
-        output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
-        diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')
+        # Build the material.
+        material_builder = MaterialBuilder(material_caches, node_tree)
+        outputs = material_builder.build(unreal_material, uv_source_socket=tex_coord_node.outputs['UV'])
 
+        # Make a new function to do the conversion from Color & Alpha socket to Shader.
         if outputs:
             material_data['UClamp'] = outputs.size[0]
             material_data['VClamp'] = outputs.size[1]
@@ -888,19 +976,11 @@ class BDK_OT_material_import(Operator, ImportHelper):
             material_data.show_transparent_back = not outputs.use_backface_culling
             material_data.blend_method = outputs.blend_method
 
-            if outputs.color_socket:
-                node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
+            # For material switch this may be a bit harder!
+            shader_socket = _add_shader_from_outputs(node_tree, outputs)
 
-            if outputs.blend_method in ['CLIP', 'BLEND']:
-                transparent_node = node_tree.nodes.new('ShaderNodeBsdfTransparent')
-                mix_node = node_tree.nodes.new('ShaderNodeMixShader')
-                if outputs.alpha_socket:
-                    node_tree.links.new(mix_node.inputs['Fac'], outputs.alpha_socket)
-                node_tree.links.new(mix_node.inputs[1], transparent_node.outputs['BSDF'])
-                node_tree.links.new(mix_node.inputs[2], diffuse_node.outputs['BSDF'])
-                node_tree.links.new(output_node.inputs['Surface'], mix_node.outputs['Shader'])
-            else:
-                node_tree.links.new(output_node.inputs['Surface'], diffuse_node.outputs['BSDF'])
+            output_node = node_tree.nodes.new('ShaderNodeOutputMaterial')
+            node_tree.links.new(output_node.inputs['Surface'], shader_socket)
 
         return {'FINISHED'}
 

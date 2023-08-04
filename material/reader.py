@@ -38,7 +38,11 @@ def transform_value(property_type: type, value: Any) -> typing.Optional[Any]:
 
 def read_material(path: str) -> UMaterial:
     # We are assuming that the file structure is laid out as it is by default in umodel exports.
-    material_type = MaterialTypeRegistry.get_type_from_string(Path(path).parts[-2])
+    type_string = Path(path).parts[-2]
+    material_type = MaterialTypeRegistry.get_type_from_string(type_string)
+
+    if material_type is None:
+        raise ValueError(f'Unhandled material type: {type_string}')
 
     if not issubclass(material_type, UMaterial):
         raise TypeError(f'{material_type} is not a subclass of UMaterial')

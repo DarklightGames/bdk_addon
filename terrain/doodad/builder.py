@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Iterable, Optional
+from typing import List, Iterable, Optional, Dict, Set
 
 import bmesh
 import bpy
@@ -604,8 +604,6 @@ def get_terrain_doodads_for_terrain_info_object(context: Context, terrain_info_o
 
 
 def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
-    print('ensure_terrain_info_modifiers')
-
     terrain_info_object = terrain_info.terrain_info_object
 
     # Ensure that the modifier IDs have been generated.
@@ -659,8 +657,6 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
     modifier_ids.append(terrain_info.doodad_paint_modifier_name)
     modifier_ids.extend(map(lambda deco_layer: deco_layer.id, terrain_info.deco_layers))
     modifier_ids.append(terrain_info.doodad_deco_modifier_name)
-
-    # print([(i, modifier_id) for (i, modifier_id) in enumerate(modifier_ids)])
 
     # Make note of what the current mode is so that we can restore it later.
     current_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
@@ -928,11 +924,11 @@ def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_doodads: 
     return node_tree
 
 
-def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad') -> NodeTree:
+def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: Set[str]) -> (NodeTree, Dict[str, str]):
     """
     Creates a node tree for baking a terrain doodad.
     :param terrain_doodad: The terrain doodad to make a baking node tree for.
-    :return: The terrain doodad baking node tree.
+    :return: The terrain doodad baking node tree and a mapping of the paint layer IDs to the baked attribute names.
     """
     inputs = {('NodeSocketGeometry', 'Geometry')}
     outputs = {('NodeSocketGeometry', 'Geometry')}
@@ -941,13 +937,18 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
 
     geometry_socket = input_node.outputs['Geometry']
 
-    # Add sculpt layers for the doodad.
-    geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
+    if 'SCULPT' in layers:
+        # Add sculpt layers for the doodad.
+        geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
 
     # Add the paint layers for the doodad.
-    for paint_layer in terrain_doodad.paint_layers:
-        geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
+    attribute_map: Dict[str, str] = {}
+    if 'PAINT' in layers:
+        for doodad_paint_layer in terrain_doodad.paint_layers:
+            attribute_name = uuid4().hex
+            geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, doodad_paint_layer, attribute_name)
+            attribute_map[doodad_paint_layer.id] = attribute_name
 
     node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
 
-    return node_tree
+    return node_tree, attribute_map

@@ -288,6 +288,11 @@ class UVariableTexPanner(UTexModifier):
     PanRate: float = 0.0
 
 
+class UMaterialSwitch(UMaterial):
+    Current: int = 0
+    Materials: List[UReference] = []
+
+
 class EEMaterialSequenceAction(Enum):
     MSA_ShowMaterial = 0,
     MSA_FadeToMaterial = 1,
@@ -335,6 +340,7 @@ class MaterialTypeRegistry:
         'VariableTexPanner': UVariableTexPanner,
         'VertexColor': UVertexColor,
         'FadeColor': UFadeColor,
+        'MaterialSwitch': UMaterialSwitch,
     }
 
     @classmethod

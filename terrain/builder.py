@@ -83,7 +83,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
     last_shader_socket = None
 
     bdk_build_paths = getattr(bpy.context.preferences.addons['bdk_addon'].preferences, 'build_paths')
-    material_caches = [MaterialCache(bdk_build_path) for bdk_build_path in bdk_build_paths]
+    material_caches = [MaterialCache(bdk_build_path.path) for bdk_build_path in bdk_build_paths]
     material_builder = MaterialBuilder(material_caches, node_tree)
 
     for paint_layer_index, paint_layer in enumerate(paint_layers):
@@ -108,6 +108,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
         material = paint_layer.material
         material_outputs = None
+
         if material and material.bdk.package_reference:
             reference = UReference.from_string(material.bdk.package_reference)
             unreal_material = material_builder.load_material(reference)

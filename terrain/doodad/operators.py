@@ -7,8 +7,9 @@ from bpy.props import EnumProperty
 from .properties import ensure_terrain_info_modifiers
 from .scatter.builder import ensure_scatter_layer_modifiers, add_scatter_layer_object, add_scatter_layer, \
     ensure_scatter_layer
+from ..properties import BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad, \
-    is_active_object_terrain_doodad
+    is_active_object_terrain_doodad, should_show_bdk_developer_extras
 from .builder import create_terrain_doodad, create_terrain_doodad_bake_node_tree
 
 
@@ -223,6 +224,24 @@ class BDK_OT_terrain_doodad_bake(Operator):
     bl_options = {'REGISTER', 'UNDO'}
     bl_description = 'Bake the terrain doodad to the terrain'
 
+    should_delete_terrain_doodad: bpy.props.BoolProperty(
+        name='Delete Terrain Doodad',
+        description='Delete the terrain doodad after baking',
+        default=True
+    )
+    # Create an enum flag property for the bake options.
+    layers: bpy.props.EnumProperty(
+        name='Bake Options',
+        description='Bake options',
+        items=(
+            ('SCULPT', 'Sculpt', ''),
+            ('PAINT', 'Paint', ''),
+            ('SCATTER', 'Scatter', '')
+        ),
+        default={'SCULPT', 'PAINT', 'SCATTER'},
+        options={'ENUM_FLAG'}
+    )
+
     def invoke(self, context: Context, event: Event):
         return context.window_manager.invoke_props_dialog(self)
 
@@ -232,6 +251,11 @@ class BDK_OT_terrain_doodad_bake(Operator):
             cls.poll_message_set('Active object must be a terrain doodad')
             return False
         return True
+
+    def draw(self, context: 'Context'):
+        layout = self.layout
+        layout.prop(self, 'layers')
+        layout.prop(self, 'should_delete_terrain_doodad')
 
     def execute(self, context: Context):
         """
@@ -268,20 +292,48 @@ class BDK_OT_terrain_doodad_bake(Operator):
         context.view_layer.objects.active = terrain_info_object
         terrain_info_object.select_set(True)
 
+        # TODO: we bake paint & deco layers to attributes, then add nodes to the associated layers with the ID of the attributes.
+        # QUESTION: where are the attribute IDs generated?
         # Create a new modifier for the terrain doodad bake.
-        bake_node_tree = create_terrain_doodad_bake_node_tree(terrain_doodad)
+        bake_node_tree, paint_layer_attribute_map = create_terrain_doodad_bake_node_tree(terrain_doodad, self.layers)
+
         modifier = terrain_info_object.modifiers.new(terrain_doodad.id, 'NODES')
         modifier.node_group = bake_node_tree
 
         # Move the modifier to the top of the stack and apply it.
+        # TODO: use the data API instead of the operator API
         bpy.ops.object.modifier_move_to_index(modifier=terrain_doodad.id, index=0)
         bpy.ops.object.modifier_apply(modifier=terrain_doodad.id)
+
+        # Create new terrain paint nodes for each paint layer.
+        for doodad_paint_layer in terrain_doodad.paint_layers:
+            # Get the terrain layer from the paint layer ID.
+            terrain_info_paint_layer = get_terrain_info_paint_layer_by_id(terrain_info_object.bdk.terrain_info, doodad_paint_layer.paint_layer_id)
+            if terrain_info_paint_layer is None:
+                # The paint layer doesn't exist, probably not set or is invalid.
+                continue
+            node: BDK_PG_terrain_layer_node = terrain_info_paint_layer.nodes.add()  # TODO: this should be added to the top of the list
+            node.terrain_info_object = terrain_info_object
+            # The node ID is synonymous with the attribute ID.
+            # Set this new node's name to the attribute ID of the baked paint layer.
+            node.id = paint_layer_attribute_map[doodad_paint_layer.id]
+            node.type = 'PAINT'
+            node.operation = doodad_paint_layer.operation
+            node.name = terrain_doodad_object.name
+            node.paint_layer_name = doodad_paint_layer.paint_layer_name
+
+            # Move the new node to the top of the list.
+            terrain_info_paint_layer.nodes.move(len(terrain_info_paint_layer.nodes) - 1, 0)
 
         # Delete the bake node tree.
         bpy.data.node_groups.remove(bake_node_tree)
 
-        # Delete the terrain doodad object.
-        bpy.data.objects.remove(terrain_doodad_object)
+        if self.should_delete_terrain_doodad:
+            # Delete the terrain doodad object.
+            delete_terrain_doodad(context, terrain_doodad_object)
+        else:
+            # Make the terrain doodad the active object again.
+            context.view_layer.objects.active = terrain_doodad_object
 
         # Deselect the terrain info object.
         terrain_info_object.select_set(False)
@@ -614,11 +666,36 @@ class BDK_OT_terrain_doodad_scatter_layer_duplicate(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_doodad_bake_debug(Operator):
+    bl_label = 'Bake Debug'
+    bl_idname = 'bdk.terrain_doodad_bake_debug'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_doodad(context) and should_show_bdk_developer_extras(context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        if terrain_doodad is None:
+            return {'CANCELLED'}
+
+        node_tree, attribute_map = create_terrain_doodad_bake_node_tree(terrain_doodad)
+
+        # Add a muted modifier to the active object.
+        modifier = terrain_doodad.terrain_info_object.modifiers.new(name='Bake', type='NODES')
+        modifier.node_group = node_tree
+        modifier.show_viewport = True
+
+        return {'FINISHED'}
+
+
 # TODO: split the sculpt, paint and scatter layers into their own files.
 classes = (
     BDK_OT_convert_to_terrain_doodad,
     BDK_OT_terrain_doodad_add,
     BDK_OT_terrain_doodad_bake,
+    BDK_OT_terrain_doodad_bake_debug,
     BDK_OT_terrain_doodad_delete,
     BDK_OT_terrain_doodad_duplicate,
 

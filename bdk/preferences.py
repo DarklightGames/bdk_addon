@@ -93,8 +93,6 @@ class BdkAddonPreferences(AddonPreferences):
         col.operator('bdk.build_path_move', icon='TRIA_UP', text='').direction = 'UP'
         col.operator('bdk.build_path_move', icon='TRIA_DOWN', text='').direction = 'DOWN'
 
-        self.layout.prop(self, 'build_path')
-
         # TODO: parse the requirements.txt
         required_packages = ['t3dpy']
 

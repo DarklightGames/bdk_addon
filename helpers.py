@@ -83,19 +83,20 @@ def guess_package_reference_from_names(names: Iterable[str]) -> Dict[str, Option
     :return:
     """
     # Iterate through all the libraries in the asset library and try to find a match.
-    asset_library_path = get_bdk_asset_library_path()
+    asset_library_paths = get_bdk_asset_library_paths()
     name_references = dict()
 
-    if asset_library_path is None:
+    if not asset_library_paths:
         return name_references
 
-    for blend_file in asset_library_path.glob('**/*.blend'):
-        if not blend_file.is_file():
-            continue
-        package = os.path.splitext(os.path.basename(blend_file))[0]
-        with bpy.data.libraries.load(str(blend_file), link=True, relative=False, assets_only=True) as (data_in, data_out):
-            for name in set(data_in.materials).intersection(names):
-                name_references[name] = UReference.from_string(f'Texture\'{package}.{name}\'')
+    for asset_library_path in asset_library_paths:
+        for blend_file in asset_library_path.glob('**/*.blend'):
+            if not blend_file.is_file():
+                continue
+            package = os.path.splitext(os.path.basename(blend_file))[0]
+            with bpy.data.libraries.load(str(blend_file), link=True, relative=False, assets_only=True) as (data_in, data_out):
+                for name in set(data_in.materials).intersection(names):
+                    name_references[name] = UReference.from_string(f'Texture\'{package}.{name}\'')
 
     return name_references
 

@@ -1,5 +1,7 @@
 from bpy.types import Panel,  UIList, UILayout, AnyType, Menu
 from typing import Optional, Any
+
+from .doodad.operators import BDK_OT_terrain_doodad_bake_debug
 from .properties import terrain_layer_node_type_icons, BDK_PG_terrain_layer_node, has_terrain_paint_layer_selected, \
     get_selected_terrain_paint_layer, get_selected_deco_layer, has_deco_layer_selected
 from .operators import *
@@ -42,6 +44,7 @@ class BDK_PT_terrain_info_debug(Panel):
         flow.use_property_split = True
 
         col = flow.column(align=True)
+
         col.prop(terrain_info, 'x_size')
         col.prop(terrain_info, 'y_size')
         flow.prop(terrain_info, 'terrain_scale')
@@ -130,6 +133,15 @@ class BDK_MT_terrain_paint_layers_context_menu(Menu):
         operator.mode = 'ALL'
         operator = layout.operator(BDK_OT_terrain_paint_layers_hide.bl_idname, text='Hide Unselected')
         operator.mode = 'UNSELECTED'
+
+
+class BDK_MT_terrain_layer_nodes_context_menu(Menu):
+    bl_idname = 'BDK_MT_terrain_layer_nodes_context_menu'
+    bl_label = "Nodes Specials"
+
+    def draw(self, context: Context):
+        layout: UILayout = self.layout
+        layout.operator(BDK_OT_terrain_layer_nodes_merge_down.bl_idname, text='Merge Down', icon='TRIA_DOWN_BAR')
 
 
 class BDK_PT_terrain_paint_layer_debug(Panel):
@@ -228,6 +240,8 @@ def draw_terrain_layer_node_list(layout: 'UILayout', dataptr: Any, add_operator:
     col.separator()
     col.operator(move_operator, icon='TRIA_UP', text='').direction = 'UP'
     col.operator(move_operator, icon='TRIA_DOWN', text='').direction = 'DOWN'
+    col.separator()
+    col.menu(BDK_MT_terrain_layer_nodes_context_menu.bl_idname, icon='DOWNARROW_HLT', text='')
 
 
 class BDK_PT_terrain_paint_layer_nodes(Panel):
@@ -494,4 +508,5 @@ classes = (
     BDK_MT_terrain_deco_layers_context_menu,
     BDK_MT_terrain_paint_layers_context_menu,
     BDK_PT_terrain_paint_layer_nodes,
+    BDK_MT_terrain_layer_nodes_context_menu,
 )

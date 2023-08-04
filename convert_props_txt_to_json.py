@@ -1,3 +1,8 @@
+# This parses the stupid proprietary properties format that umodel exports.
+# This was grabbed from https://github.com/gildor2/UEViewer/pull/288 and modified somewhat.
+# It's not very robust, but it works just well enough to get the job done (sort of).
+# In an ideal scenario, these property files would just be in JSON format to begin with.
+
 import json
 import re
 
@@ -39,7 +44,7 @@ def get_text_until_closing_bracket(lines, lines_starting_index):
     raise ValueError("Bracket not closed")
 
 
-def strip_brackets_from_string_once_if_needed(string):
+def strip_brackets_from_string_once_if_needed (string):
     """
     Convert string '  { add: {badad: 1313}   }  ' to 'add: {badad: 1313}',
     raise error if string is '  { add: {badad: 1313}  ' (missing opening or closing bracket)
@@ -147,6 +152,7 @@ def parse_props_txt_file_content(content):
         if not key:
             continue
         value_raw = "=".join(line.split("=")[1:]).strip()
+
         if not value_raw:
             # Is nested structure, start from next line
             content, t_lines_to_skip = get_text_until_closing_bracket(lines[i + 1:], i + 1)
@@ -158,8 +164,7 @@ def parse_props_txt_file_content(content):
         else:
             if "{" in value_raw:
                 # Still nested structure, but 1-line
-                content = value_raw
-                content = strip_brackets_from_string_once_if_needed(content)
+                content = strip_brackets_from_string_once_if_needed(value_raw)
                 value = parse_inline_value(content)
             else:
                 value = auto_convert(value_raw)

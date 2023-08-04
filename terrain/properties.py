@@ -392,6 +392,19 @@ def get_selected_terrain_paint_layer_node(context: Context) -> Optional[BDK_PG_t
     return nodes[nodes_index] if 0 <= nodes_index < len(nodes) else None
 
 
+def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> Optional[BDK_PG_terrain_paint_layer]:
+    """
+    Gets the paint layer with the given id, or None if no such layer exists.
+    :param terrain_info:
+    :param layer_id:
+    :return:
+    """
+    for paint_layer in terrain_info.paint_layers:
+        if paint_layer.id == layer_id:
+            return paint_layer
+    return None
+
+
 def has_selected_terrain_paint_layer_node(context) -> bool:
     return get_selected_terrain_paint_layer_node(context) is not None
 

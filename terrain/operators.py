@@ -6,7 +6,7 @@ from typing import cast
 
 import numpy
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
-from bpy.types import Operator, Context, Mesh, Object
+from bpy.types import Operator, Context, Mesh, Object, ByteColorAttribute
 from bpy_extras.io_utils import ExportHelper
 
 from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers
@@ -18,8 +18,30 @@ from ..helpers import get_terrain_info, is_active_object_terrain_info
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
 from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node, \
-    terrain_layer_node_type_item_names
+    terrain_layer_node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer
 
+
+def accumulate_byte_color_attribute_data(attribute: ByteColorAttribute, other_attribute: ByteColorAttribute):
+    """
+    Accumulates the color data of two paint nodes and stores the result in the first paint node.
+    :param attribute:
+    :param other_attribute:
+    """
+    vertex_count = len(attribute.data)
+    other_vertex_count = len(other_attribute.data)
+    if vertex_count != other_vertex_count:
+        raise RuntimeError(
+            f'Vertex count mismatch between paint nodes ({attribute.name} has {vertex_count} vertices, {other_attribute.name} has {other_vertex_count} vertices)')
+    color_data = [0.0] * vertex_count * 4
+    attribute.data.foreach_get('color', color_data)
+    color_data = numpy.array(color_data)
+    color_data.resize((vertex_count, 4))
+    other_color_data = [0.0] * vertex_count * 4
+    other_attribute.data.foreach_get('color', other_color_data)
+    other_color_data = numpy.array(other_color_data)
+    other_color_data.resize((vertex_count, 4))
+    color_data[:, 0:3] = numpy.clip(color_data[:, 0:3] + other_color_data[:, 0:3], 0.0, 1.0)
+    attribute.data.foreach_set('color', color_data.flatten())
 
 class BDK_OT_terrain_paint_layer_remove(Operator):
     bl_idname = 'bdk.terrain_paint_layer_remove'
@@ -701,6 +723,74 @@ class BDK_OT_terrain_paint_layer_node_invert(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_layer_nodes_merge_down(Operator):
+    bl_idname = 'bdk.terrain_layer_nodes_merge_down'
+    bl_label = 'Merge Terrain Layer Nodes'
+    bl_description = 'Merge the selected paint layer node and the one below it into a single node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        terrain_info: BDK_PG_terrain_info = get_terrain_info(context.active_object)
+        paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+        nodes = paint_layer.nodes
+        node = nodes[paint_layer.nodes_index] if len(nodes) > paint_layer.nodes_index else None
+        other_node = nodes[paint_layer.nodes_index + 1] if len(nodes) > paint_layer.nodes_index + 1 else None
+        if node is None:
+            cls.poll_message_set('No node selected')
+            return False
+        if node.type != 'PAINT':
+            cls.poll_message_set('Selected node is not a paint node')
+            return False
+        if other_node is None:
+            cls.poll_message_set('No node below selected node')
+            return False
+        if other_node.type != 'PAINT':
+            cls.poll_message_set('Node below selected node is not a paint node')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        terrain_info_object = context.active_object
+        terrain_info: BDK_PG_terrain_info = get_terrain_info(terrain_info_object)
+        paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+        nodes = paint_layer.nodes
+        node = nodes[paint_layer.nodes_index]
+        other_node = nodes[paint_layer.nodes_index + 1]
+
+        if node.id not in node.terrain_info_object.data.attributes:
+            self.report({'ERROR'}, f'Layer node attribute {node.id} does not exist')
+            return {'CANCELLED'}
+        if other_node.id not in other_node.terrain_info_object.data.attributes:
+            self.report({'ERROR'}, f'Layer node attribute {other_node.id} does not exist')
+            return {'CANCELLED'}
+
+        # Add the attribute data of the other node to the node (with clamping).
+        attribute = node.terrain_info_object.data.attributes[node.id]
+        other_attribute = other_node.terrain_info_object.data.attributes[other_node.id]
+
+        # Accumulate the data into the first node.
+        try:
+            accumulate_byte_color_attribute_data(attribute, other_attribute)
+        except RuntimeError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+
+        # Remove the other node.
+        remove_terrain_layer_node(terrain_info_object, paint_layer.nodes, paint_layer.nodes_index + 1)
+
+        # Rebuild the modifier stack.
+        ensure_terrain_info_modifiers(context, terrain_info)
+
+        # Tag the object to be updated and redraw all regions.
+        context.active_object.update_tag()
+        for window in context.window_manager.windows:
+            for area in window.screen.areas:
+                area.tag_redraw()
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
@@ -711,8 +801,11 @@ classes = (
     BDK_OT_terrain_paint_layer_move,
     BDK_OT_terrain_paint_layers_show,
     BDK_OT_terrain_paint_layers_hide,
+
     BDK_OT_terrain_paint_layer_nodes_add,
     BDK_OT_terrain_paint_layer_nodes_remove,
+    BDK_OT_terrain_layer_nodes_merge_down,
+    # TODO: these node operators below should be renamed (they are not specific to "paint" layers)
     BDK_OT_terrain_paint_layer_nodes_move,
     BDK_OT_terrain_paint_layer_node_fill,
     BDK_OT_terrain_paint_layer_node_invert,
