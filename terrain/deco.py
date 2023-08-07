@@ -86,7 +86,26 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
     node_tree = ensure_geometry_node_tree(name, inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
+    named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+    named_attribute_node.data_type = 'FLOAT_COLOR'
+    named_attribute_node.inputs['Name'].default_value = dataptr_id
+
+    add_node = node_tree.nodes.new('ShaderNodeMath')
+    add_node.inputs[0].default_value = 0.0
+    add_node.inputs[1].default_value = 0.0
+    add_node.operation = 'ADD'
+
     density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, nodes)
+
+    if density_socket:
+        node_tree.links.new(density_socket, add_node.inputs[1])
+
+    node_tree.links.new(named_attribute_node.outputs[2], add_node.inputs[0])
+
+    store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
+    store_named_attribute_node.data_type = 'BYTE_COLOR'
+    store_named_attribute_node.domain = 'POINT'
+    store_named_attribute_node.inputs['Name'].default_value = dataptr_id
 
     # Add a clamp node to clamp the density values between 0 and 1.
     clamp_node = node_tree.nodes.new('ShaderNodeClamp')
@@ -94,14 +113,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
     clamp_node.inputs['Min'].default_value = 0.0
     clamp_node.inputs['Max'].default_value = 1.0
 
-    if density_socket:
-        node_tree.links.new(density_socket, clamp_node.inputs['Value'])
-
-    store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
-    store_named_attribute_node.data_type = 'BYTE_COLOR'
-    store_named_attribute_node.domain = 'POINT'
-    store_named_attribute_node.inputs['Name'].default_value = dataptr_id
-
+    node_tree.links.new(add_node.outputs['Value'], clamp_node.inputs['Value'])
     node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs[5])
 
     node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])

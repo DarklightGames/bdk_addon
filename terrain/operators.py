@@ -657,6 +657,9 @@ class BDK_OT_terrain_info_repair(Operator):
             self.report({'INFO'}, 'No repairs needed')
             return {'CANCELLED'}
         self.report({'INFO'}, f'Repaired {vertex_repair_count} vertices')
+
+        ensure_terrain_info_modifiers(context, terrain_info)
+
         return {'FINISHED'}
 
 
@@ -751,6 +754,7 @@ class BDK_OT_terrain_layer_nodes_merge_down(Operator):
         return True
 
     def execute(self, context: Context):
+        # TODO: this only works for paint layers currently (make a switch to use this for deco layers too)
         terrain_info_object = context.active_object
         terrain_info: BDK_PG_terrain_info = get_terrain_info(terrain_info_object)
         paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]

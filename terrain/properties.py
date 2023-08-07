@@ -133,6 +133,22 @@ def terrain_paint_layer_texel_density_get(self: 'BDK_PG_terrain_paint_layer') ->
     return abs(pixels_per_quad / quad_area)
 
 
+def terrain_paint_layer_texel_density_set(self, texel_density: float):
+    """
+    Calculate the U & V scale based on the target texel density.
+    :param self:
+    :param texel_density:
+    :return:
+    """
+    terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
+    x = self.material.get('UClamp', 0) if self.material else 0
+    y = self.material.get('VClamp', 0) if self.material else 0
+    quad_area = pow(terrain_info.terrain_scale, 2)
+    scale = math.sqrt((x * y) / (texel_density * quad_area))
+    self.u_scale = scale
+    self.v_scale = scale
+
+
 def terrain_paint_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_paint_layer', context: Context):
     node = self.nodes[self.nodes_index]
     if node.type == 'PAINT':
@@ -154,6 +170,7 @@ class BDK_PG_terrain_paint_layer(PropertyGroup):
     nodes: CollectionProperty(name='Nodes', type=BDK_PG_terrain_layer_node, options={'HIDDEN'})
     nodes_index: IntProperty(name='Nodes Index', options={'HIDDEN'}, update=terrain_paint_layer_nodes_index_update_cb)
     texel_density: FloatProperty(name='Texel Density', get=terrain_paint_layer_texel_density_get,
+                                 set=terrain_paint_layer_texel_density_set,
                                  description='The texel density of the layer measured in pixels per unit squared  ('
                                              'px/u²)',
                                  options={'HIDDEN', 'SKIP_SAVE'})

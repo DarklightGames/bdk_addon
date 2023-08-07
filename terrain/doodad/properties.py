@@ -4,12 +4,17 @@ from bpy.props import IntProperty, PointerProperty, CollectionProperty, FloatPro
     EnumProperty, FloatVectorProperty
 from bpy.types import PropertyGroup, Object, NodeTree, Context
 
-from .scatter.builder import ensure_scatter_layer_modifiers
+from ...data import map_range_interpolation_type_items
 from ...helpers import get_terrain_info, get_terrain_doodad
 from ...units import meters_to_unreal
 from .builder import ensure_terrain_info_modifiers
-from .data import terrain_doodad_noise_type_items, terrain_doodad_operation_items, map_range_interpolation_type_items, \
-    terrain_doodad_type_items
+from .data import terrain_doodad_noise_type_items, terrain_doodad_operation_items
+from .scatter.builder import ensure_scatter_layer_modifiers
+
+
+# This value was determined experimentally. Any lower than this and doodad paint layers
+# will start to have artifacts.
+RADIUS_EPSILON = 0.001
 
 
 def terrain_doodad_sort_order_update_cb(self: 'BDK_PG_terrain_doodad', context: Context):
@@ -28,8 +33,8 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     name: StringProperty(name='Name', default='Sculpt Layer')
     terrain_doodad_object: PointerProperty(type=Object, options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
-    radius: FloatProperty(name='Radius', default=meters_to_unreal(1.0), subtype='DISTANCE')
-    falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=0.0)
+    radius: FloatProperty(name='Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)
+    falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)
     depth: FloatProperty(name='Depth', default=meters_to_unreal(0.5), subtype='DISTANCE')
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     use_noise: BoolProperty(name='Use Noise', default=False)
@@ -86,7 +91,6 @@ def terrain_doodad_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_d
 
     ensure_terrain_info_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info)
 
-
 class BDK_PG_terrain_doodad_paint_layer(PropertyGroup): # TODO: rename this to something less confusing and ambiguous.
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer')
@@ -95,8 +99,8 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup): # TODO: rename this to s
         name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
     index: IntProperty(options={'HIDDEN'})
     terrain_doodad_object: PointerProperty(type=Object, options={'HIDDEN'})
-    radius: FloatProperty(name='Radius', subtype='DISTANCE', default=meters_to_unreal(1.0))
-    falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=0.0)
+    radius: FloatProperty(name='Radius', subtype='DISTANCE', default=meters_to_unreal(1.0), min=RADIUS_EPSILON)
+    falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     layer_type: EnumProperty(name='Layer Type', items=(
         ('PAINT', 'Paint', 'Paint layer.'),

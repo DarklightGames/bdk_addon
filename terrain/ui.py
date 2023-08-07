@@ -111,7 +111,7 @@ class BDK_PT_terrain_paint_layer_settings(Panel):
         col = flow.row().column(align=True)
         col.prop(paint_layer, 'u_scale', text='U Scale')
         col.prop(paint_layer, 'v_scale', text='V')
-        col.prop(paint_layer, 'texel_density', emboss=False)
+        col.prop(paint_layer, 'texel_density')
 
         col = flow.row().column(align=True)
         col.prop(paint_layer, 'texture_rotation', text='Rotation')

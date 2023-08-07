@@ -3,6 +3,8 @@ from typing import Optional, Iterable, AbstractSet, Tuple, List
 import bpy
 from bpy.types import NodeTree, NodeSocket, Node
 
+from .data import map_range_interpolation_type_items
+
 
 def add_operation_switch_nodes(
         node_tree: NodeTree,
@@ -47,21 +49,26 @@ def add_operation_switch_nodes(
     return last_output_node_socket
 
 
-def add_interpolation_type_switch_nodes(
-        node_tree: NodeTree,
-        interpolation_type_socket: NodeSocket,
-        value_socket: NodeSocket,
-        interpolation_types: Iterable[str]
-) -> NodeSocket:
+def ensure_interpolation_node_tree() -> NodeTree:
+
+    inputs = {
+        ('NodeSocketInt', 'Interpolation Type'),
+        ('NodeSocketFloat', 'Value'),
+    }
+    outputs = {
+        ('NodeSocketFloat', 'Value'),
+    }
+    node_tree = ensure_geometry_node_tree('Interpolation', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     last_output_node_socket: Optional[NodeSocket] = None
 
-    for index, interpolation_type in enumerate(interpolation_types):
+    for index, interpolation_type in enumerate(map_range_interpolation_type_items):
         compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
         compare_node.data_type = 'INT'
         compare_node.operation = 'EQUAL'
         compare_node.inputs[3].default_value = index
-        node_tree.links.new(interpolation_type_socket, compare_node.inputs[2])
+        node_tree.links.new(input_node.outputs['Interpolation Type'], compare_node.inputs[2])
 
         switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         switch_node.input_type = 'FLOAT'
@@ -70,11 +77,11 @@ def add_interpolation_type_switch_nodes(
 
         map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
         map_range_node.data_type = 'FLOAT'
-        map_range_node.interpolation_type = interpolation_type
+        map_range_node.interpolation_type = interpolation_type[0]
         map_range_node.inputs[3].default_value = 1.0  # To Min
         map_range_node.inputs[4].default_value = 0.0  # To Max
 
-        node_tree.links.new(value_socket, map_range_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs[0])
         node_tree.links.new(map_range_node.outputs[0], switch_node.inputs['True'])
 
         if last_output_node_socket:
@@ -82,7 +89,10 @@ def add_interpolation_type_switch_nodes(
 
         last_output_node_socket = switch_node.outputs[0]  # Output
 
-    return last_output_node_socket
+    if last_output_node_socket:
+        node_tree.links.new(last_output_node_socket, output_node.inputs['Value'])
+
+    return node_tree
 
 
 def add_noise_type_switch_nodes(

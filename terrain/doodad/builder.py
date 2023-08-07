@@ -7,9 +7,9 @@ from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, bpy_struct
 
 from ..deco import ensure_paint_layers, ensure_deco_layers
-from ...node_helpers import add_interpolation_type_switch_nodes, add_operation_switch_nodes,\
+from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes,\
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes
-from .data import map_range_interpolation_type_items, terrain_doodad_operation_items
+from .data import terrain_doodad_operation_items
 from ...units import meters_to_unreal
 
 
@@ -189,20 +189,17 @@ def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
     node_tree.links.new(input_node.outputs['Falloff Radius'], divide_node.inputs[1])
 
     # --------------------
-
-    value_node = add_interpolation_type_switch_nodes(
-        node_tree,
-        input_node.outputs['Interpolation Type'],
-        divide_node.outputs['Value'],
-        [x[0] for x in map_range_interpolation_type_items]
-    )
+    interpolation_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    interpolation_group_node.node_tree = ensure_interpolation_node_tree()
+    node_tree.links.new(input_node.outputs['Interpolation Type'], interpolation_group_node.inputs['Interpolation Type'])
+    node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
 
     # Add a new multiply node.
     multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
     multiply_node.operation = 'MULTIPLY'
 
     # Link the map range node to the first input of the multiply node.
-    node_tree.links.new(value_node, multiply_node.inputs[0])
+    node_tree.links.new(interpolation_group_node.outputs['Value'], multiply_node.inputs[0])
     node_tree.links.new(input_node.outputs['Depth'], multiply_node.inputs[1])
 
     # Add a combine XYZ node.
@@ -266,6 +263,68 @@ def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
     return node_tree
 
 
+def ensure_distance_noise_node_group() -> NodeTree:
+    inputs = {
+        ('NodeSocketFloat', 'Distance'),
+        ('NodeSocketInt', 'Type'),
+        ('NodeSocketFloat', 'Factor'),
+        ('NodeSocketFloat', 'Distortion'),
+        ('NodeSocketFloat', 'Offset'),
+        ('NodeSocketBool', 'Use Noise'),  # Put this outside the group.
+    }
+    outputs = {
+        ('NodeSocketFloat', 'Distance')
+    }
+    node_tree = ensure_geometry_node_tree('Distance Noise', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    # Add a position input node.
+    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+    noise_value_socket = add_noise_type_switch_nodes(
+        node_tree,
+        position_node.outputs['Position'],
+        input_node.outputs['Type'],
+        input_node.outputs['Distortion'],
+        None
+    )
+
+    # Add an add noise node.
+    add_distance_noise_node = node_tree.nodes.new(type='ShaderNodeMath')
+    add_distance_noise_node.operation = 'ADD'
+    add_distance_noise_node.label = 'Add Noise'
+
+    node_tree.links.new(input_node.outputs['Distance'], add_distance_noise_node.inputs[0])
+
+    use_noise_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    use_noise_switch_node.input_type = 'FLOAT'
+    use_noise_switch_node.label = 'Use Noise'
+
+    node_tree.links.new(input_node.outputs['Use Noise'], use_noise_switch_node.inputs[0])
+
+    node_tree.links.new(input_node.outputs['Distance'], use_noise_switch_node.inputs[2])
+    node_tree.links.new(add_distance_noise_node.outputs['Value'], use_noise_switch_node.inputs[3])
+
+    distance_noise_factor_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+    distance_noise_factor_multiply_node.operation = 'MULTIPLY'
+    distance_noise_factor_multiply_node.label = 'Factor'
+
+    node_tree.links.new(input_node.outputs['Factor'], distance_noise_factor_multiply_node.inputs[1])
+    node_tree.links.new(distance_noise_factor_multiply_node.outputs['Value'], add_distance_noise_node.inputs[1])
+
+    distance_noise_offset_subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+    distance_noise_offset_subtract_node.operation = 'SUBTRACT'
+    distance_noise_offset_subtract_node.label = 'Offset'
+
+    node_tree.links.new(noise_value_socket, distance_noise_offset_subtract_node.inputs[0])
+    node_tree.links.new(input_node.outputs['Offset'], distance_noise_offset_subtract_node.inputs[1])
+    node_tree.links.new(distance_noise_offset_subtract_node.outputs['Value'], distance_noise_factor_multiply_node.inputs[0])
+
+    node_tree.links.new(use_noise_switch_node.outputs[0], output_node.inputs['Distance'])
+
+    return node_tree
+
+
 def ensure_paint_node_group() -> NodeTree:
     inputs = {
         ('NodeSocketGeometry', 'Geometry'),
@@ -319,13 +378,11 @@ def ensure_paint_node_group() -> NodeTree:
     node_tree.links.new(subtract_node.outputs['Value'], divide_node.inputs[0])
     node_tree.links.new(input_node.outputs['Falloff Radius'], divide_node.inputs[1])
 
-    # Add a map range node. (maybe just make a node group for this specifically)
-    value_socket = add_interpolation_type_switch_nodes(
-        node_tree,
-        input_node.outputs['Interpolation Type'],
-        divide_node.outputs['Value'],
-        [x[0] for x in map_range_interpolation_type_items],
-    )
+    # Add an interpolation group node.
+    interpolation_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    interpolation_group_node.node_tree = ensure_interpolation_node_tree()
+    node_tree.links.new(input_node.outputs['Interpolation Type'], interpolation_group_node.inputs['Interpolation Type'])
+    node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
 
     # Link the geometry output of the input node to the geometry input of the store named attribute node.
     node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
@@ -341,7 +398,7 @@ def ensure_paint_node_group() -> NodeTree:
     strength_multiply_node.label = 'Strength Multiply'
 
     # Link the value output of the add node to the value input of the store named attribute node.
-    node_tree.links.new(value_socket, strength_multiply_node.inputs[0])
+    node_tree.links.new(interpolation_group_node.outputs['Value'], strength_multiply_node.inputs[0])
     node_tree.links.new(input_node.outputs['Strength'], strength_multiply_node.inputs[1])
 
     value_socket = add_operation_switch_nodes(
@@ -355,49 +412,19 @@ def ensure_paint_node_group() -> NodeTree:
     # Link the output of the add node to the value input of the store named attribute node.
     node_tree.links.new(value_socket, store_named_attribute_node.inputs[5])
 
-    # Add a position input node.
-    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+    # Add the distance noise node group.
+    distance_noise_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    distance_noise_group_node.node_tree = ensure_distance_noise_node_group()
 
-    noise_value_socket = add_noise_type_switch_nodes(
-        node_tree,
-        position_node.outputs['Position'],
-        input_node.outputs['Noise Type'],
-        input_node.outputs['Distance Noise Distortion'],
-        None
-    )
+    # Link the inputs to the distance noise group node.
+    node_tree.links.new(input_node.outputs['Distance'], distance_noise_group_node.inputs['Distance'])
+    node_tree.links.new(input_node.outputs['Noise Type'], distance_noise_group_node.inputs['Type'])
+    node_tree.links.new(input_node.outputs['Distance Noise Factor'], distance_noise_group_node.inputs['Factor'])
+    node_tree.links.new(input_node.outputs['Distance Noise Distortion'], distance_noise_group_node.inputs['Distortion'])
+    node_tree.links.new(input_node.outputs['Distance Noise Offset'], distance_noise_group_node.inputs['Offset'])
+    node_tree.links.new(input_node.outputs['Use Distance Noise'], distance_noise_group_node.inputs['Use Noise'])
 
-    # Add an add noise node.
-    add_distance_noise_node = node_tree.nodes.new(type='ShaderNodeMath')
-    add_distance_noise_node.operation = 'ADD'
-    add_distance_noise_node.label = 'Add Distance Noise'
-
-    node_tree.links.new(input_node.outputs['Distance'], add_distance_noise_node.inputs[0])
-
-    use_noise_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    use_noise_switch_node.input_type = 'FLOAT'
-    use_noise_switch_node.label = 'Use Distance Noise'
-
-    node_tree.links.new(input_node.outputs['Use Distance Noise'], use_noise_switch_node.inputs[0])
-
-    node_tree.links.new(input_node.outputs['Distance'], use_noise_switch_node.inputs[2])
-    node_tree.links.new(add_distance_noise_node.outputs['Value'], use_noise_switch_node.inputs[3])
-
-    node_tree.links.new(use_noise_switch_node.outputs[0], subtract_node.inputs[0])
-
-    distance_noise_factor_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
-    distance_noise_factor_multiply_node.operation = 'MULTIPLY'
-    distance_noise_factor_multiply_node.label = 'Distance Noise Factor'
-
-    node_tree.links.new(input_node.outputs['Distance Noise Factor'], distance_noise_factor_multiply_node.inputs[1])
-    node_tree.links.new(distance_noise_factor_multiply_node.outputs['Value'], add_distance_noise_node.inputs[1])
-
-    distance_noise_offset_subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
-    distance_noise_offset_subtract_node.operation = 'SUBTRACT'
-    distance_noise_offset_subtract_node.label = 'Distance Noise Offset'
-
-    node_tree.links.new(noise_value_socket, distance_noise_offset_subtract_node.inputs[0])
-    node_tree.links.new(input_node.outputs['Distance Noise Offset'], distance_noise_offset_subtract_node.inputs[1])
-    node_tree.links.new(distance_noise_offset_subtract_node.outputs['Value'], distance_noise_factor_multiply_node.inputs[0])
+    node_tree.links.new(distance_noise_group_node.outputs['Distance'], subtract_node.inputs[0])
 
     return node_tree
 
@@ -604,7 +631,7 @@ def get_terrain_doodads_for_terrain_info_object(context: Context, terrain_info_o
 
 
 def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
-    terrain_info_object = terrain_info.terrain_info_object
+    terrain_info_object: Object = terrain_info.terrain_info_object
 
     # Ensure that the modifier IDs have been generated.
     if terrain_info.doodad_sculpt_modifier_name == '':
@@ -655,7 +682,7 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
     modifier_ids.append(terrain_info.doodad_sculpt_modifier_name)
     modifier_ids.extend(map(lambda paint_layer: paint_layer.id, terrain_info.paint_layers))
     modifier_ids.append(terrain_info.doodad_paint_modifier_name)
-    modifier_ids.extend(map(lambda deco_layer: deco_layer.id, terrain_info.deco_layers))
+    modifier_ids.extend(map(lambda deco_layer: deco_layer.modifier_name, terrain_info.deco_layers))  # TODO: something weird going down here, we shouldn't be using the deco layer ID
     modifier_ids.append(terrain_info.doodad_deco_modifier_name)
 
     # Make note of what the current mode is so that we can restore it later.
@@ -671,11 +698,26 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
     # It's theoretically possible that the modifiers don't exist (e.g., having been deleted by the user, debugging etc.)
     # Get a list of missing modifiers.
     missing_modifier_ids = set(modifier_ids).difference(set(terrain_info_object.modifiers.keys()))
-    if len(missing_modifier_ids) > 0:
-        print(f'Missing modifiers: {missing_modifier_ids}')
+    # Add any missing modifiers.
+    for modifier_id in missing_modifier_ids:
+        if modifier_id not in bpy.data.node_groups:
+            print('Missing node group: ' + modifier_id)
+            continue
+        modifier = terrain_info_object.modifiers.new(name=modifier_id, type='NODES')
+        modifier.node_group = bpy.data.node_groups[modifier_id]
+        modifier.show_on_cage = True
 
     # Remove any modifier IDs that do not have a corresponding modifier in the terrain info object.
+    superfluous_modifier_ids = set(terrain_info_object.modifiers.keys()).difference(set(modifier_ids))
+
+    # Remove any superfluous modifiers.
+    for modifier_id in superfluous_modifier_ids:
+        terrain_info_object.modifiers.remove(terrain_info_object.modifiers[modifier_id])
+
     modifier_ids = [x for x in modifier_ids if x in terrain_info_object.modifiers]
+
+    from pprint import pprint
+    pprint(modifier_ids)
 
     # TODO: it would be nice if we could move the modifiers without needing to use the ops API, or at
     #  least suspend evaluation of the node tree while we do it.
