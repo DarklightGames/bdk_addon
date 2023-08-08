@@ -1,8 +1,10 @@
 import os
 import re
 import bpy
-from typing import Iterable, Optional, Dict, List
-from bpy.types import Material, Object, Context, Mesh
+from typing import Iterable, Optional, Dict, List, Tuple
+
+import numpy
+from bpy.types import Material, Object, Context, Mesh, Attribute, ByteColorAttribute
 from pathlib import Path
 from .data import UReference
 
@@ -197,3 +199,45 @@ def copy_simple_property_group(source, target, ignore: Iterable[str] = set()):
 
 def should_show_bdk_developer_extras(context: Context):
     return getattr(context.preferences.addons['bdk_addon'].preferences, 'developer_extras', False)
+
+
+# TODO: maybe put all these attribute functions in their own file?
+
+def fill_byte_color_attribute_data(attribute: ByteColorAttribute, color: Tuple[float, float, float, float]):
+    vertex_count = len(attribute.data)
+    color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
+    color_data[:] = color
+    attribute.data.foreach_set('color', color_data.flatten())
+
+
+def invert_byte_color_attribute_data(attribute: ByteColorAttribute):
+    vertex_count = len(attribute.data)
+    color_data = [0.0] * vertex_count * 4
+    attribute.data.foreach_get('color', color_data)
+    color_data = numpy.array(color_data)
+    color_data.resize((vertex_count, 4))
+    color_data[:, 0:3] = 1.0 - color_data[:, 0:3]
+    attribute.data.foreach_set('color', color_data.flatten())
+
+
+def accumulate_byte_color_attribute_data(attribute: ByteColorAttribute, other_attribute: ByteColorAttribute):
+    """
+    Accumulates the color data of two paint nodes and stores the result in the first paint node.
+    :param attribute:
+    :param other_attribute:
+    """
+    vertex_count = len(attribute.data)
+    other_vertex_count = len(other_attribute.data)
+    if vertex_count != other_vertex_count:
+        raise RuntimeError(
+            f'Vertex count mismatch between paint nodes ({attribute.name} has {vertex_count} vertices, {other_attribute.name} has {other_vertex_count} vertices)')
+    color_data = [0.0] * vertex_count * 4
+    attribute.data.foreach_get('color', color_data)
+    color_data = numpy.array(color_data)
+    color_data.resize((vertex_count, 4))
+    other_color_data = [0.0] * vertex_count * 4
+    other_attribute.data.foreach_get('color', other_color_data)
+    other_color_data = numpy.array(other_color_data)
+    other_color_data.resize((vertex_count, 4))
+    color_data[:, 0:3] = numpy.clip(color_data[:, 0:3] + other_color_data[:, 0:3], 0.0, 1.0)
+    attribute.data.foreach_set('color', color_data.flatten())

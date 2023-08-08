@@ -1,47 +1,28 @@
 import os
 import uuid
 
-import bpy.types
-from typing import cast
+from typing import cast, Iterable, List
 
+import bpy
 import numpy
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
-from bpy.types import Operator, Context, Mesh, Object, ByteColorAttribute
+from bpy.types import Operator, Context, Mesh, Object, Event
 from bpy_extras.io_utils import ExportHelper
 
-from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers
+from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
+    create_terrain_paint_layer_node_convert_to_paint_layer_node_tree
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
 from .doodad.builder import ensure_terrain_info_modifiers
 
-from ..helpers import get_terrain_info, is_active_object_terrain_info
+from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte_color_attribute_data, \
+    invert_byte_color_attribute_data, accumulate_byte_color_attribute_data
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
 from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node, \
-    terrain_layer_node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer
+    terrain_layer_node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, \
+    BDK_PG_terrain_deco_layer
 
-
-def accumulate_byte_color_attribute_data(attribute: ByteColorAttribute, other_attribute: ByteColorAttribute):
-    """
-    Accumulates the color data of two paint nodes and stores the result in the first paint node.
-    :param attribute:
-    :param other_attribute:
-    """
-    vertex_count = len(attribute.data)
-    other_vertex_count = len(other_attribute.data)
-    if vertex_count != other_vertex_count:
-        raise RuntimeError(
-            f'Vertex count mismatch between paint nodes ({attribute.name} has {vertex_count} vertices, {other_attribute.name} has {other_vertex_count} vertices)')
-    color_data = [0.0] * vertex_count * 4
-    attribute.data.foreach_get('color', color_data)
-    color_data = numpy.array(color_data)
-    color_data.resize((vertex_count, 4))
-    other_color_data = [0.0] * vertex_count * 4
-    other_attribute.data.foreach_get('color', other_color_data)
-    other_color_data = numpy.array(other_color_data)
-    other_color_data.resize((vertex_count, 4))
-    color_data[:, 0:3] = numpy.clip(color_data[:, 0:3] + other_color_data[:, 0:3], 0.0, 1.0)
-    attribute.data.foreach_set('color', color_data.flatten())
 
 class BDK_OT_terrain_paint_layer_remove(Operator):
     bl_idname = 'bdk.terrain_paint_layer_remove'
@@ -428,6 +409,22 @@ class BDK_OT_terrain_paint_layers_hide(Operator):
         return {'FINISHED'}
 
 
+def nodes_dfs_iterator(nodes: Iterable[BDK_PG_terrain_layer_node]):
+    """
+    Returns a generator that yields the nodes in the given list in depth-first order.
+    :param nodes:
+    :return:
+    """
+    stack: List[BDK_PG_terrain_layer_node] = []
+    stack.extend(nodes)
+    while stack:
+        node = stack.pop(0)
+        yield node
+        if len(node.children) > 0:
+            # Prepend the children to the stack so that they are evaluated first.
+            stack[:0] = node.children
+
+
 def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node = nodes.add()
     node.id = uuid.uuid4().hex
@@ -493,6 +490,7 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
     bl_idname = 'bdk.terrain_deco_layer_nodes_add'
     bl_label = 'Add Deco Layer Node'
     bl_description = 'Add a node to the selected deco layer'
+    bl_options = {'REGISTER', 'UNDO'}
 
     type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
 
@@ -508,6 +506,8 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
 
         add_terrain_layer_node(context.active_object, deco_layer.nodes, self.type)
 
+        rebuild_terrain_layer_nodes_dfs(deco_layer)
+
         # TODO: for some reason, the factor driver is invalid when added [is this still true?]
         ensure_deco_layers(context.active_object)
 
@@ -518,16 +518,17 @@ class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
     bl_idname = 'bdk.terrain_deco_layer_nodes_remove'
     bl_label = 'Remove Deco Layer Node'
     bl_description = 'Remove the selected layer node from the selected deco layer'
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context: Context):
         return poll_is_active_object_terrain_doodad(cls, context)
 
     def execute(self, context: Context):
-        terrain_info = get_terrain_info(context.active_object)
+        terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(context.active_object)
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index
-        deco_layer = deco_layers[deco_layers_index]
+        deco_layer: 'BDK_PG_terrain_deco_layer' = deco_layers[deco_layers_index]
 
         remove_terrain_layer_node(context.active_object, deco_layer.nodes, deco_layer.nodes_index)
 
@@ -540,6 +541,7 @@ class BDK_OT_terrain_deco_layer_nodes_move(Operator):
     bl_idname = 'bdk.terrain_deco_layer_nodes_move'
     bl_label = 'Move Deco Layer Node'
     bl_description = 'Move the selected layer node'
+    bl_options = {'REGISTER', 'UNDO'}
 
     direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
 
@@ -564,6 +566,7 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
     bl_idname = 'bdk.terrain_paint_layer_nodes_add'
     bl_label = 'Add Paint Layer Node'
     bl_description = 'Add a node to the selected paint layer'
+    bl_options = {'REGISTER', 'UNDO'}
 
     type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
 
@@ -587,6 +590,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
     bl_idname = 'bdk.terrain_paint_layer_nodes_remove'
     bl_label = 'Remove Paint Layer Node'
     bl_description = 'Remove the selected layer node from the selected paint layer'
+    bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context: Context):
@@ -609,6 +613,7 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
     bl_idname = 'bdk.terrain_paint_layer_nodes_move'
     bl_label = 'Move Deco Layer Node'
     bl_description = 'Move the selected layer node'
+    bl_options = {'REGISTER', 'UNDO'}
 
     direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
 
@@ -674,18 +679,16 @@ class BDK_OT_terrain_paint_layer_node_fill(Operator):
     @classmethod
     def poll(cls, context: Context):
         node = get_selected_terrain_paint_layer_node(context)
+        if node.id not in node.terrain_info_object.data.attributes:
+            cls.poll_message_set(f'Layer node attribute {node.id} does not exist')
+            return {'CANCELLED'}
         return node and node.type == 'PAINT'
 
     def execute(self, context: Context):
         node = get_selected_terrain_paint_layer_node(context)
-        if node.id not in node.terrain_info_object.data.attributes:
-            self.report({'ERROR'}, f'Layer node attribute {node.id} does not exist')
-            return {'CANCELLED'}
         attribute = node.terrain_info_object.data.attributes[node.id]
-        vertex_count = len(attribute.data)
-        color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
-        color_data[:] = (self.value, self.value, self.value, 0.0)
-        attribute.data.foreach_set('color', color_data.flatten())
+        fill_color = (self.value, self.value, self.value, 0.0)
+        fill_byte_color_attribute_data(attribute, fill_color)
         # Tag the object to be updated and redraw all regions.
         context.active_object.update_tag()
         for window in context.window_manager.windows:
@@ -703,21 +706,15 @@ class BDK_OT_terrain_paint_layer_node_invert(Operator):
     @classmethod
     def poll(cls, context: Context):
         node = get_selected_terrain_paint_layer_node(context)
+        if node.id not in node.terrain_info_object.data.attributes:
+            cls.poll_message_set(f'Layer node attribute {node.id} does not exist')
+            return False
         return node and node.type == 'PAINT'
 
     def execute(self, context: Context):
         node = get_selected_terrain_paint_layer_node(context)
-        if node.id not in node.terrain_info_object.data.attributes:
-            self.report({'ERROR'}, f'Layer node attribute {node.id} does not exist')
-            return {'CANCELLED'}
         attribute = node.terrain_info_object.data.attributes[node.id]
-        vertex_count = len(attribute.data)
-        color_data = [0.0] * vertex_count * 4
-        attribute.data.foreach_get('color', color_data)
-        color_data = numpy.array(color_data)
-        color_data.resize((vertex_count, 4))
-        color_data[:, 0:3] = 1.0 - color_data[:, 0:3]
-        attribute.data.foreach_set('color', color_data.flatten())
+        invert_byte_color_attribute_data(attribute)
         # Tag the object to be updated and redraw all regions.
         context.active_object.update_tag()
         for window in context.window_manager.windows:
@@ -726,14 +723,17 @@ class BDK_OT_terrain_paint_layer_node_invert(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_layer_nodes_merge_down(Operator):
-    bl_idname = 'bdk.terrain_layer_nodes_merge_down'
+class BDK_OT_terrain_layer_node_merge_down(Operator):
+    bl_idname = 'bdk.terrain_layer_node_merge_down'
     bl_label = 'Merge Terrain Layer Nodes'
     bl_description = 'Merge the selected paint layer node and the one below it into a single node'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context: Context):
+        if not is_active_object_terrain_info(context):
+            cls.poll_message_set('Active object is not a terrain info object')
+            return False
         terrain_info: BDK_PG_terrain_info = get_terrain_info(context.active_object)
         paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
         nodes = paint_layer.nodes
@@ -795,6 +795,104 @@ class BDK_OT_terrain_layer_nodes_merge_down(Operator):
         return {'FINISHED'}
 
 
+# TODO: this only works for paint layers atm
+class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
+    bl_idname = 'bdk.terrain_layer_node_convert_to_paint_node'
+    bl_label = 'Convert Terrain Layer Node to Paint Node'
+    bl_description = 'Convert the selected terrain layer node to a paint node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        if not is_active_object_terrain_info(context):
+            cls.poll_message_set('Active object is not a terrain info object')
+            return False
+        terrain_info: BDK_PG_terrain_info = get_terrain_info(context.active_object)
+        paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+        nodes = paint_layer.nodes
+        node = nodes[paint_layer.nodes_index] if len(nodes) > paint_layer.nodes_index else None
+        if node is None:
+            cls.poll_message_set('No node selected')
+            return False
+        if node.type == 'PAINT':
+            cls.poll_message_set('Selected node is already a paint node')
+            return False
+        convertible_types = {'CONSTANT', 'NOISE', 'NORMAL'}
+        if node.type not in convertible_types:
+            cls.poll_message_set(f'Cannot convert node of type {node.type} to a paint node')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        # Create a bake modifier for the selected node.
+        # Depending on the context (paint vs. deco), we need to insert the bake modifier after the last
+        # paint or deco node modifier (before doodads are applied). This will ensure that we are baking
+        # the correct data. We will have a similar scheme to the other baking where we bake to a new
+        # attribute and create a new paint node with that attribute.
+        terrain_info_object = context.active_object
+        terrain_info = get_terrain_info(terrain_info_object)
+        paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+        nodes = paint_layer.nodes
+        node: 'BDK_PG_terrain_layer_node' = nodes[paint_layer.nodes_index] if len(nodes) > paint_layer.nodes_index else None
+
+        modifier = terrain_info_object.modifiers.new(node.id, 'NODES')
+        bake_node_tree = create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, terrain_info.paint_layers_index, paint_layer.nodes_index)
+        modifier.node_group = bake_node_tree
+
+        # TODO: get the index of the sculpt modifier and add one? (wouldn't that just be the first one?)
+        bake_modifier_index = 1
+
+        # Insert the modifier at the appropriate place.
+        bpy.ops.object.modifier_move_to_index(modifier=modifier.name, index=bake_modifier_index)
+
+        # Apply the modifier.
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+
+        # Delete the bake node tree.
+        bpy.data.node_groups.remove(bake_node_tree)
+
+        # Change the type of the node to a paint node.
+        node.type = 'PAINT'
+
+        # Rebuild the modifier stack.
+        ensure_terrain_info_modifiers(context, terrain_info)
+
+        return {'FINISHED'}
+
+
+def group_items(self, context):
+    terrain_info_object = context.active_object
+    terrain_info: BDK_PG_terrain_info = get_terrain_info(terrain_info_object)
+    # Get selected paint layer.
+    paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+    # Get a list of all the group nodes.
+    return [(node.id, node.name, '') for node in paint_layer.nodes if node.type == 'GROUP']
+
+
+class BDK_OT_terrain_layer_paint_node_move_to_group(Operator):
+    bl_idname = 'bdk.terrain_layer_paint_node_move_to_group'
+    bl_label = 'Move Node to Group'
+    bl_description = 'Move the selected paint layer node to a group'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    group_id: EnumProperty(name='Group', items=group_items)
+
+    @classmethod
+    def poll(cls, context: Context):
+        # TODO: make a function that checks if we have a selected paint layer node
+        return True
+
+    def invoke(self, context: Context, event: Event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context: Context):
+        layout = self.layout
+        layout.prop(self, 'group_id')
+
+    def execute(self, context: Context):
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
@@ -808,7 +906,11 @@ classes = (
 
     BDK_OT_terrain_paint_layer_nodes_add,
     BDK_OT_terrain_paint_layer_nodes_remove,
-    BDK_OT_terrain_layer_nodes_merge_down,
+
+    BDK_OT_terrain_layer_node_merge_down,
+    BDK_OT_terrain_layer_node_convert_to_paint_node,
+    BDK_OT_terrain_layer_paint_node_move_to_group,
+
     # TODO: these node operators below should be renamed (they are not specific to "paint" layers)
     BDK_OT_terrain_paint_layer_nodes_move,
     BDK_OT_terrain_paint_layer_node_fill,

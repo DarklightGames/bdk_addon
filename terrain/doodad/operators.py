@@ -7,7 +7,8 @@ from bpy.props import EnumProperty
 from .properties import ensure_terrain_info_modifiers
 from .scatter.builder import ensure_scatter_layer_modifiers, add_scatter_layer_object, add_scatter_layer, \
     ensure_scatter_layer
-from ..properties import BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id
+from ..properties import BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id, \
+    get_terrain_info_deco_layer_by_id
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad, \
     is_active_object_terrain_doodad, should_show_bdk_developer_extras
 from .builder import create_terrain_doodad, create_terrain_doodad_bake_node_tree
@@ -218,6 +219,19 @@ class BDK_OT_terrain_doodad_duplicate(Operator):
         return {'FINISHED'}
 
 
+def get_terrain_doodad_paint_layer_nodes(doodad_paint_layer: 'BDK_PG_terrain_doodad_paint_layer'):
+    terrain_info = doodad_paint_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
+    if doodad_paint_layer.layer_type == 'PAINT':
+        # Get the terrain layer from the paint layer ID.
+        terrain_info_paint_layer = get_terrain_info_paint_layer_by_id(terrain_info, doodad_paint_layer.paint_layer_id)
+        return terrain_info_paint_layer.nodes if terrain_info_paint_layer is not None else None
+    elif doodad_paint_layer.layer_type == 'DECO':
+        # Get the terrain layer from the deco layer ID.
+        terrain_info_deco_layer = get_terrain_info_deco_layer_by_id(terrain_info, doodad_paint_layer.deco_layer_id)
+        return terrain_info_deco_layer.nodes if terrain_info_deco_layer is not None else None
+    return None
+
+
 class BDK_OT_terrain_doodad_bake(Operator):
     bl_label = 'Bake Terrain Doodad'
     bl_idname = 'bdk.terrain_doodad_bake'
@@ -241,6 +255,11 @@ class BDK_OT_terrain_doodad_bake(Operator):
         default={'SCULPT', 'PAINT', 'SCATTER'},
         options={'ENUM_FLAG'}
     )
+    should_merge_down_nodes: bpy.props.BoolProperty(
+        name='Merge Down Nodes',
+        description='Merge down the nodes after baking',
+        default=True
+    )
 
     def invoke(self, context: Context, event: Event):
         return context.window_manager.invoke_props_dialog(self)
@@ -256,15 +275,12 @@ class BDK_OT_terrain_doodad_bake(Operator):
         layout = self.layout
         layout.prop(self, 'layers')
         layout.prop(self, 'should_delete_terrain_doodad')
+        layout.prop(self, 'should_merge_down_nodes')
 
     def execute(self, context: Context):
         """
-        This whole thing will need to be reworked.
-
         We need to bake the sculpting layer directly to the terrain geometry.
         The paint and deco layers need to be written out as additive nodes for the affected layers.
-        If the paint layers simply just *were* nodes, that may make things considerably easier conceptually, but
-        would complicate the UI.
 
         The order of operations for sculpt layers is irrelevant, but the order of operations for paint and
         deco layers is important, but it's probably not something that we should concern ourselves with.
@@ -278,8 +294,8 @@ class BDK_OT_terrain_doodad_bake(Operator):
 
         When the user does the bake, they should be given the option to bake to a new paint node or to an exiting one.
 
-        Alternatively, we could make sure there is always an implicit paint node for each layer, and then just update
-        the values of the paint node.
+        ~~Alternatively, we could make sure there is always an implicit paint node for each layer, and then just
+        update the values of the paint node.~~
 
         The user will want a way to combine or "flatten" the layers, so we'll need to add a new operator to do that.
         """
@@ -307,12 +323,10 @@ class BDK_OT_terrain_doodad_bake(Operator):
 
         # Create new terrain paint nodes for each paint layer.
         for doodad_paint_layer in terrain_doodad.paint_layers:
-            # Get the terrain layer from the paint layer ID.
-            terrain_info_paint_layer = get_terrain_info_paint_layer_by_id(terrain_info_object.bdk.terrain_info, doodad_paint_layer.paint_layer_id)
-            if terrain_info_paint_layer is None:
-                # The paint layer doesn't exist, probably not set or is invalid.
+            nodes = get_terrain_doodad_paint_layer_nodes(doodad_paint_layer)
+            if nodes is None:
                 continue
-            node: BDK_PG_terrain_layer_node = terrain_info_paint_layer.nodes.add()  # TODO: this should be added to the top of the list
+            node: BDK_PG_terrain_layer_node = nodes.add()
             node.terrain_info_object = terrain_info_object
             # The node ID is synonymous with the attribute ID.
             # Set this new node's name to the attribute ID of the baked paint layer.
@@ -323,7 +337,11 @@ class BDK_OT_terrain_doodad_bake(Operator):
             node.paint_layer_name = doodad_paint_layer.paint_layer_name
 
             # Move the new node to the top of the list.
-            terrain_info_paint_layer.nodes.move(len(terrain_info_paint_layer.nodes) - 1, 0)
+            nodes.move(len(nodes) - 1, 0)
+
+            if self.should_merge_down_nodes:
+                # TODO: merge down the nodes if possible
+                pass
 
         # Delete the bake node tree.
         bpy.data.node_groups.remove(bake_node_tree)
@@ -382,7 +400,7 @@ class BDK_OT_terrain_doodad_paint_layer_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return context.active_object is not None and context.active_object.bdk.type == 'TERRAIN_DOODAD'
 
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object

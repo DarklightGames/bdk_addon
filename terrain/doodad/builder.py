@@ -188,7 +188,7 @@ def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
     # Link the radius value node to the second input of the divide node.
     node_tree.links.new(input_node.outputs['Falloff Radius'], divide_node.inputs[1])
 
-    # --------------------
+    # Add interpolation node group.
     interpolation_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     interpolation_group_node.node_tree = ensure_interpolation_node_tree()
     node_tree.links.new(input_node.outputs['Interpolation Type'], interpolation_group_node.inputs['Interpolation Type'])
@@ -876,7 +876,8 @@ def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_doodads
 
 def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket,
                                   paint_layer: 'BDK_PG_terrain_doodad_paint_layer',
-                                  attribute_name: Optional[str] = None) -> NodeSocket:
+                                  attribute_override: Optional[str] = None,
+                                  operation_override: Optional[str] = None) -> NodeSocket:
 
     def add_paint_layer_driver(struct: bpy_struct, paint_layer: 'BDK_PG_terrain_doodad_paint_layer', data_path: str,
                                path: str = 'default_value'):
@@ -898,8 +899,8 @@ def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSock
     paint_node.node_tree = ensure_paint_node_group()
     paint_node.label = 'Paint'
 
-    if attribute_name is not None:
-        paint_node.inputs['Attribute'].default_value = attribute_name
+    if attribute_override is not None:
+        paint_node.inputs['Attribute'].default_value = attribute_override
     else:
         if paint_layer.layer_type == 'PAINT':
             paint_node.inputs['Attribute'].default_value = paint_layer.paint_layer_id
@@ -918,7 +919,14 @@ def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSock
     add_paint_layer_driver(paint_node.inputs['Distance Noise Factor'], paint_layer, 'distance_noise_factor')
     add_paint_layer_driver(paint_node.inputs['Distance Noise Offset'], paint_layer, 'distance_noise_offset')
     add_paint_layer_driver(paint_node.inputs['Interpolation Type'], paint_layer, 'interpolation_type')
-    add_paint_layer_driver(paint_node.inputs['Operation'], paint_layer, 'operation')
+
+    if operation_override is not None:
+        # Handle operation override. This is used when baking.
+        operation_keys = [item[0] for item in terrain_doodad_operation_items]
+        paint_node.inputs['Operation'].default_value = operation_keys.index(operation_override)
+    else:
+        add_paint_layer_driver(paint_node.inputs['Operation'], paint_layer, 'operation')
+
     add_paint_layer_driver(paint_node.inputs['Noise Type'], paint_layer, 'noise_type')
 
     node_tree.links.new(geometry_socket, paint_node.inputs['Geometry'])
@@ -988,7 +996,16 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
     if 'PAINT' in layers:
         for doodad_paint_layer in terrain_doodad.paint_layers:
             attribute_name = uuid4().hex
-            geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, doodad_paint_layer, attribute_name)
+            # We override the operation here because we want the influence of each layer to be additive for the bake.
+            # Without this, if a "SUBTRACT" operation were used, the resulting bake for the attribute would be
+            # completely black (painted with 0). The actual operation will be transferred to the associated node in the
+            # layer node tree.
+            # TODO: Ideally, we would not need these overrides because it is a little hacky. It would be cleaner to
+            #  separate out the operation from the "Paint Layer" node group, although we would need a compelling reason
+            #  to do so.
+            geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, doodad_paint_layer,
+                                                            attribute_override=attribute_name,
+                                                            operation_override='ADD')
             attribute_map[doodad_paint_layer.id] = attribute_name
 
     node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])

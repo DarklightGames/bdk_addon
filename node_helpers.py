@@ -50,7 +50,6 @@ def add_operation_switch_nodes(
 
 
 def ensure_interpolation_node_tree() -> NodeTree:
-
     inputs = {
         ('NodeSocketInt', 'Interpolation Type'),
         ('NodeSocketFloat', 'Value'),

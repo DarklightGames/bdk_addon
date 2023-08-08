@@ -91,6 +91,7 @@ def terrain_doodad_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_d
 
     ensure_terrain_info_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info)
 
+
 class BDK_PG_terrain_doodad_paint_layer(PropertyGroup): # TODO: rename this to something less confusing and ambiguous.
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer')

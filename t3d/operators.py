@@ -161,7 +161,6 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
                 heightmap, terrain_scale_z = get_terrain_heightmap(obj, depsgraph)
                 copy_actors.append(create_terrain_info_actor(obj, terrain_scale_z))
             # TODO: add handlers for other object types (outside of this function)
-            # TODO: add handler for doodads
             elif obj.type == 'CAMERA':
                 # Create a SpectatorCam actor
                 actor = T3DActor('SpectatorCam', obj.name)

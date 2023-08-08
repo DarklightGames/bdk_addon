@@ -8,6 +8,9 @@ from ..helpers import get_terrain_info
 from ..node_helpers import add_operation_switch_nodes, ensure_input_and_output_nodes, ensure_geometry_node_tree
 
 
+# TODO: this file needs to be renamed.
+
+
 def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer'):
     """
     Adds a deco layer to the terrain.
@@ -97,7 +100,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
 
     density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, nodes)
 
-    if density_socket:
+    if density_socket is not None:
         node_tree.links.new(density_socket, add_node.inputs[1])
 
     node_tree.links.new(named_attribute_node.outputs[2], add_node.inputs[0])
@@ -122,69 +125,80 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
     return node_tree
 
 
-def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, nodes: Iterable) -> NodeSocket:
+def add_density_from_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', node_tree: NodeTree, dataptr_name: str, dataptr_index: int, node_index: int) -> Optional[NodeSocket]:
+    if node.type == 'PAINT':
+        paint_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+        paint_named_attribute_node.data_type = 'FLOAT'
+        paint_named_attribute_node.inputs['Name'].default_value = node.id
+        return paint_named_attribute_node.outputs[1]
+    elif node.type == 'PAINT_LAYER':
+        layer_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+        layer_named_attribute_node.data_type = 'FLOAT'
+        layer_named_attribute_node.inputs['Name'].default_value = node.paint_layer_id
+
+        blur_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+        blur_switch_node.input_type = 'FLOAT'
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object,
+                                      blur_switch_node.inputs['Switch'], 'default_value', 'blur')
+
+        # Add a modifier that turns any non-zero value into 1.0.
+        blur_attribute_node = node_tree.nodes.new('GeometryNodeBlurAttribute')
+        blur_attribute_node.data_type = 'FLOAT'
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object,
+                                      blur_attribute_node.inputs['Iterations'], 'default_value', 'blur_iterations')
+
+        node_tree.links.new(layer_named_attribute_node.outputs[1], blur_attribute_node.inputs[0])
+
+        node_tree.links.new(layer_named_attribute_node.outputs[1], blur_switch_node.inputs[2])
+        node_tree.links.new(blur_attribute_node.outputs[0], blur_switch_node.inputs[3])
+
+        return blur_switch_node.outputs[0]
+    elif node.type == 'CONSTANT':
+        value_node = node_tree.nodes.new('ShaderNodeValue')
+        value_node.outputs[0].default_value = 1.0
+        return value_node.outputs[0]
+    elif node.type == 'GROUP':
+        if len(node.children) == 0:
+            # Group is empty, skip it.
+            return None
+        return add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, node.children)
+    elif node.type == 'NOISE':
+        white_noise_node = node_tree.nodes.new('ShaderNodeTexWhiteNoise')
+        white_noise_node.noise_dimensions = '2D'
+        return white_noise_node.outputs['Value']
+    elif node.type == 'NORMAL':
+        normal_node = node_tree.nodes.new('GeometryNodeInputNormal')
+
+        dot_product_node = node_tree.nodes.new('ShaderNodeVectorMath')
+        dot_product_node.operation = 'DOT_PRODUCT'
+        dot_product_node.inputs[1].default_value = (0.0, 0.0, 1.0)
+
+        arccosine_node = node_tree.nodes.new('ShaderNodeMath')
+        arccosine_node.operation = 'ARCCOSINE'
+
+        map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object,
+                                      map_range_node.inputs['From Min'], 'default_value', 'normal_angle_min')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object,
+                                      map_range_node.inputs['From Max'], 'default_value', 'normal_angle_max')
+
+        node_tree.links.new(normal_node.outputs['Normal'], dot_product_node.inputs[0])
+        node_tree.links.new(dot_product_node.outputs['Value'], arccosine_node.inputs[0])
+        node_tree.links.new(arccosine_node.outputs['Value'], map_range_node.inputs['Value'])
+
+        return map_range_node.outputs['Result']
+    else:
+        raise RuntimeError(f'Unknown node type: {node.type}')
+
+
+def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, nodes: Iterable) -> Optional[NodeSocket]:
     last_density_socket = None
 
     for node_index, node in reversed(list(enumerate(nodes))):
-        if node.type == 'PAINT':
-            paint_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-            paint_named_attribute_node.data_type = 'FLOAT'
-            paint_named_attribute_node.inputs['Name'].default_value = node.id
-            density_socket = paint_named_attribute_node.outputs[1]
-        elif node.type == 'PAINT_LAYER':
-            layer_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-            layer_named_attribute_node.data_type = 'FLOAT'
-            layer_named_attribute_node.inputs['Name'].default_value = node.paint_layer_id
+        density_socket = add_density_from_terrain_layer_node(node, node_tree, dataptr_name, dataptr_index, node_index)
 
-            blur_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
-            blur_switch_node.input_type = 'FLOAT'
-            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, blur_switch_node.inputs['Switch'], 'default_value', 'blur')
-
-            # Add a modifier that turns any non-zero value into 1.0.
-            blur_attribute_node = node_tree.nodes.new('GeometryNodeBlurAttribute')
-            blur_attribute_node.data_type = 'FLOAT'
-            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, blur_attribute_node.inputs['Iterations'], 'default_value', 'blur_iterations')
-
-            node_tree.links.new(layer_named_attribute_node.outputs[1], blur_attribute_node.inputs[0])
-
-            node_tree.links.new(layer_named_attribute_node.outputs[1], blur_switch_node.inputs[2])
-            node_tree.links.new(blur_attribute_node.outputs[0], blur_switch_node.inputs[3])
-
-            density_socket = blur_switch_node.outputs[0]
-        elif node.type == 'CONSTANT':
-            value_node = node_tree.nodes.new('ShaderNodeValue')
-            value_node.outputs[0].default_value = 1.0
-            density_socket = value_node.outputs[0]
-        elif node.type == 'GROUP':
-            if len(node.children) == 0:
-                # Group is empty, skip it.
-                continue
-            density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, node.children)
-        elif node.type == 'NOISE':
-            white_noise_node = node_tree.nodes.new('ShaderNodeTexWhiteNoise')
-            white_noise_node.noise_dimensions = '2D'
-            density_socket = white_noise_node.outputs['Value']
-        elif node.type == 'NORMAL':
-            normal_node = node_tree.nodes.new('GeometryNodeInputNormal')
-
-            dot_product_node = node_tree.nodes.new('ShaderNodeVectorMath')
-            dot_product_node.operation = 'DOT_PRODUCT'
-            dot_product_node.inputs[1].default_value = (0.0, 0.0, 1.0)
-
-            arccosine_node = node_tree.nodes.new('ShaderNodeMath')
-            arccosine_node.operation = 'ARCCOSINE'
-
-            map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
-            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Min'], 'default_value', 'normal_angle_min')
-            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Max'], 'default_value', 'normal_angle_max')
-
-            node_tree.links.new(normal_node.outputs['Normal'], dot_product_node.inputs[0])
-            node_tree.links.new(dot_product_node.outputs['Value'], arccosine_node.inputs[0])
-            node_tree.links.new(arccosine_node.outputs['Value'], map_range_node.inputs['Value'])
-
-            density_socket = map_range_node.outputs['Result']
-        else:
-            raise RuntimeError(f'Unknown node type: {node.type}')
+        if density_socket is None:
+            continue
 
         # Map Range Node
         map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
@@ -401,3 +415,34 @@ def create_deco_layer_object(deco_layer) -> Object:
     deco_layer_object = bpy.data.objects.new(deco_layer.id, mesh_data)
     deco_layer_object.hide_select = True
     return deco_layer_object
+
+
+# TODO: the naming is ugly and unwieldy here
+def create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, paint_layer_index: int, node_index: int) -> NodeTree:
+    return _create_terrain_layer_convert_node_to_paint_node_node_tree(node, 'paint_layers', paint_layer_index, node_index)
+
+
+def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, deco_layer_index: int, node_index: int) -> NodeTree:
+    return _create_terrain_layer_convert_node_to_paint_node_node_tree(node, 'deco_layers', deco_layer_index, node_index)
+
+
+def _create_terrain_layer_convert_node_to_paint_node_node_tree(node, dataptr_name: str, dataptr_index: int, node_index: int) -> NodeTree:
+    inputs = {('NodeSocketGeometry', 'Geometry')}
+    outputs = {('NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(node.id, inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
+    store_named_attribute_node.data_type = 'BYTE_COLOR'
+    store_named_attribute_node.domain = 'POINT'
+    store_named_attribute_node.inputs['Name'].default_value = node.id
+
+    node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
+    density_socket = add_density_from_terrain_layer_node(node, node_tree, dataptr_name, dataptr_index, node_index)
+
+    if density_socket is not None:
+        node_tree.links.new(density_socket, store_named_attribute_node.inputs[5])
+
+    node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return node_tree

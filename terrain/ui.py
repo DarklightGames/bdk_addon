@@ -1,4 +1,4 @@
-from bpy.types import Panel,  UIList, UILayout, AnyType, Menu
+from bpy.types import Panel, UIList, UILayout, AnyType, Menu, Modifier
 from typing import Optional, Any
 
 from .doodad.operators import BDK_OT_terrain_doodad_bake_debug
@@ -18,6 +18,20 @@ class BDK_PT_terrain_info(Panel):
     @classmethod
     def poll(cls, context: Context):
         return context.active_object and context.active_object.bdk.type == 'TERRAIN_INFO'
+
+    def draw(self, context: Context):
+        pass
+
+
+class BDK_PT_terrain_info_operators(Panel):
+    bl_idname = 'BDK_PT_terrain_info_operators'
+    bl_label = 'Operators'
+    bl_parent_id = 'BDK_PT_terrain_info'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'BDK'
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_order = 3
 
     def draw(self, context: Context):
         self.layout.operator(BDK_OT_terrain_info_repair.bl_idname, icon='FILE_REFRESH', text='Repair')
@@ -45,13 +59,31 @@ class BDK_PT_terrain_info_debug(Panel):
 
         col = flow.column(align=True)
 
-        col.prop(terrain_info, 'x_size')
-        col.prop(terrain_info, 'y_size')
+        col.prop(terrain_info, 'x_size', text='Size X')
+        col.prop(terrain_info, 'y_size', text='Y')
         flow.prop(terrain_info, 'terrain_scale')
-
         flow.prop(terrain_info, 'doodad_sculpt_modifier_name')
         flow.prop(terrain_info, 'doodad_paint_modifier_name')
         flow.prop(terrain_info, 'doodad_deco_modifier_name')
+
+        # Modifier Performance
+        depsgraph = context.evaluated_depsgraph_get()
+        object_eval = context.active_object.evaluated_get(depsgraph)
+
+        # Sculpt
+        modifier = object_eval.modifiers.get(terrain_info.doodad_sculpt_modifier_name)
+        if modifier:
+            flow.prop(modifier, 'execution_time', text='Doodad Sculpt Execution Time', emboss=False)
+
+        # Paint
+        modifier = object_eval.modifiers.get(terrain_info.doodad_paint_modifier_name)
+        if modifier:
+            flow.prop(modifier, 'execution_time', text='Doodad Paint Execution Time', emboss=False)
+
+        # Deco
+        modifier = object_eval.modifiers.get(terrain_info.doodad_deco_modifier_name)
+        if modifier:
+            flow.prop(modifier, 'execution_time', text='Doodad Deco Execution Time', emboss=False)
 
 
 class BDK_PT_terrain_paint_layers(Panel):
@@ -141,7 +173,9 @@ class BDK_MT_terrain_layer_nodes_context_menu(Menu):
 
     def draw(self, context: Context):
         layout: UILayout = self.layout
-        layout.operator(BDK_OT_terrain_layer_nodes_merge_down.bl_idname, text='Merge Down', icon='TRIA_DOWN_BAR')
+        layout.operator(BDK_OT_terrain_layer_node_merge_down.bl_idname, text='Merge Down', icon='TRIA_DOWN_BAR')
+        layout.operator(BDK_OT_terrain_layer_node_convert_to_paint_node.bl_idname, text='Convert to Paint Node', icon='BRUSH_DATA')
+        layout.operator(BDK_OT_terrain_layer_paint_node_move_to_group.bl_idname, text='Move to Group', icon='FOLDER_REDIRECT')
 
 
 class BDK_PT_terrain_paint_layer_debug(Panel):
@@ -160,7 +194,18 @@ class BDK_PT_terrain_paint_layer_debug(Panel):
 
     def draw(self, context: Context):
         paint_layer = get_selected_terrain_paint_layer(context)
-        self.layout.prop(paint_layer, 'id')
+        layout = self.layout
+        flow = layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        flow.prop(paint_layer, 'id')
+
+        depsgraph = context.evaluated_depsgraph_get()
+        object_eval = context.active_object.evaluated_get(depsgraph)
+        modifier = object_eval.modifiers.get(paint_layer.id)
+        if modifier:
+            flow.prop(modifier, 'execution_time', emboss=False)
 
 
 class BDK_MT_terrain_deco_layers_context_menu(Menu):
@@ -204,9 +249,12 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
 
     flow = layout.grid_flow(align=True, columns=1)
     flow.use_property_split = True
+    flow.use_property_decorate = False
 
     flow.prop(node, 'id')
     flow.separator()
+
+    flow.prop(node, 'factor')
 
     if node.type == 'PAINT_LAYER':
         flow.column().prop(node, 'paint_layer_name')
@@ -232,7 +280,7 @@ def draw_terrain_layer_node_list(layout: 'UILayout', dataptr: Any, add_operator:
         'BDK_UL_terrain_layer_nodes', '',
         dataptr, 'nodes',
         dataptr, 'nodes_index',
-        sort_lock=True, rows=3)
+        sort_lock=True, rows=5)
 
     col = row.column(align=True)
     col.operator_menu_enum(add_operator, 'type', icon='ADD', text='')
@@ -308,7 +356,26 @@ class BDK_PT_terrain_deco_layer_debug(Panel):
 
     def draw(self, context: 'Context'):
         deco_layer = get_selected_deco_layer(context)
-        self.layout.prop(deco_layer, 'id')
+
+        layout = self.layout
+        flow = layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+        flow.prop(deco_layer, 'id', emboss=False)
+
+        # Get the modifier on the deco layer object and get the execution time.
+        # This is a bit hacky, but it works.
+
+        if deco_layer.object is None:
+            layout.label(text='No object found', icon='ERROR')
+        else:
+            depsgraph = context.evaluated_depsgraph_get()
+            evaluated_object = deco_layer.object.evaluated_get(depsgraph)
+            modifier: Modifier = evaluated_object.modifiers.get(deco_layer.id)
+            if modifier:
+                flow.prop(modifier, 'execution_time', text='Execution Time', emboss=False)
+            else:
+                layout.label(text='No modifier found', icon='ERROR')
 
 
 class BDK_PT_terrain_deco_layers_mesh(Panel):
@@ -467,15 +534,15 @@ class BDK_UL_terrain_deco_layers(UIList):
 class BDK_UL_terrain_layer_nodes(UIList):
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
-        row = layout.row()
-        col = row.column(align=True)
-
         mesh = cast(Mesh, context.active_object.data)
         color_attribute_index = mesh.color_attributes.find(item.id)
+        is_active_color_attribute = color_attribute_index == mesh.color_attributes.active_color_index
 
+        row = layout.row()
         # Display an icon if this is the active color attribute.
-        if color_attribute_index == mesh.color_attributes.active_color_index:
-            row.label(text='', icon='VPAINT_HLT')
+        row.label(text='', icon='VPAINT_HLT' if is_active_color_attribute else 'BLANK1')
+
+        col = row.column(align=True)
 
         if item.type == 'PAINT_LAYER':
             if item.paint_layer_name:
@@ -487,12 +554,12 @@ class BDK_UL_terrain_layer_nodes(UIList):
 
         row = row.row(align=True)
         row.prop(item, 'operation', text='', emboss=False)
-        row.prop(item, 'factor', text='', emboss=False)
         row.prop(item, 'mute', text='', emboss=False, icon='HIDE_OFF' if not item.mute else 'HIDE_ON')
 
 
 classes = (
     BDK_PT_terrain_info,
+    BDK_PT_terrain_info_operators,
     BDK_PT_terrain_info_debug,
     BDK_PT_terrain_paint_layers,  # TODO: rename "terrain layers" to "terrain paint layers"
     BDK_PT_terrain_deco_layers,
