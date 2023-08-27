@@ -11,7 +11,7 @@ This project is currently in active development towards a first beta release. If
 # Features
 * Powerful procedural terrain sculpting and painting functionality.
 * Unreal Materials recreated with Blender's material node system.
-* All game/mod assets exported to easy-to-use asset libraries, allowing for drag & drop placement of statics meshes.
+* All game/mod assets exported to easy-to-use asset libraries, allowing for drag & drop placement of static meshes.
 * Copy & paste Unreal objects (static meshes, terrain etc.) between the Blender (BDK) and the Unreal 2 SDK.
 * Even more to come!
 
