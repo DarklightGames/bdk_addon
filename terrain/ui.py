@@ -176,6 +176,9 @@ class BDK_MT_terrain_layer_nodes_context_menu(Menu):
         layout.operator(BDK_OT_terrain_layer_node_merge_down.bl_idname, text='Merge Down', icon='TRIA_DOWN_BAR')
         layout.operator(BDK_OT_terrain_layer_node_convert_to_paint_node.bl_idname, text='Convert to Paint Node', icon='BRUSH_DATA')
         layout.operator(BDK_OT_terrain_layer_paint_node_move_to_group.bl_idname, text='Move to Group', icon='FOLDER_REDIRECT')
+        layout.separator()
+        layout.operator(BDK_OT_terrain_paint_layer_node_fill.bl_idname, text='Fill', icon='BRUSH_DATA')
+        layout.operator(BDK_OT_terrain_paint_layer_node_invert.bl_idname, text='Invert', icon='BRUSH_DATA')
 
 
 class BDK_PT_terrain_paint_layer_debug(Panel):
@@ -268,10 +271,6 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
         if node.use_map_range:
             flow.prop(node, 'map_range_from_min')
             flow.prop(node, 'map_range_from_max', text='Max')
-
-    if node.type == 'PAINT':
-        layout.operator(BDK_OT_terrain_paint_layer_node_fill.bl_idname, text='Fill')
-        layout.operator(BDK_OT_terrain_paint_layer_node_invert.bl_idname, text='Invert')
 
 
 def draw_terrain_layer_node_list(layout: 'UILayout', dataptr: Any, add_operator: str, remove_operator: str, move_operator: str):

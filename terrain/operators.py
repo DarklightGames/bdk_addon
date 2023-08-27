@@ -409,22 +409,6 @@ class BDK_OT_terrain_paint_layers_hide(Operator):
         return {'FINISHED'}
 
 
-def nodes_dfs_iterator(nodes: Iterable[BDK_PG_terrain_layer_node]):
-    """
-    Returns a generator that yields the nodes in the given list in depth-first order.
-    :param nodes:
-    :return:
-    """
-    stack: List[BDK_PG_terrain_layer_node] = []
-    stack.extend(nodes)
-    while stack:
-        node = stack.pop(0)
-        yield node
-        if len(node.children) > 0:
-            # Prepend the children to the stack so that they are evaluated first.
-            stack[:0] = node.children
-
-
 def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node = nodes.add()
     node.id = uuid.uuid4().hex
@@ -505,8 +489,6 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
         deco_layer = deco_layers[deco_layers_index]
 
         add_terrain_layer_node(context.active_object, deco_layer.nodes, self.type)
-
-        rebuild_terrain_layer_nodes_dfs(deco_layer)
 
         # TODO: for some reason, the factor driver is invalid when added [is this still true?]
         ensure_deco_layers(context.active_object)

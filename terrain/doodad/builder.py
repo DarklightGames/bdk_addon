@@ -7,8 +7,9 @@ from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, bpy_struct
 
 from ..deco import ensure_paint_layers, ensure_deco_layers
-from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes,\
-    add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes
+from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
+    add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_trim_curve_node_tree, \
+    ensure_curve_normal_offset_node_tree
 from .data import terrain_doodad_operation_items
 from ...units import meters_to_unreal
 
@@ -733,6 +734,121 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
         bpy.ops.object.mode_set(mode=current_mode)
 
 
+def _add_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terrain_doodad', data_path: str,
+                              path: str = 'default_value'):
+    driver = struct.driver_add(path).driver
+    driver.type = 'AVERAGE'
+    var = driver.variables.new()
+    var.name = data_path
+    var.type = 'SINGLE_PROP'
+    var.targets[0].id = terrain_doodad.object
+    var.targets[0].data_path = f"bdk.terrain_doodad.{data_path}"
+
+
+def add_curve_modifier_nodes(node_tree: NodeTree, curve_socket: NodeSocket, layer, layer_type: str) -> NodeSocket:
+    # Add BDK Curve Trim node.
+    trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
+    node_tree.links.new(curve_socket, trim_curve_group_node.outputs['Curve'])
+
+    add_doodad_layer_driver(trim_curve_group_node.inputs['Mode'], layer, layer_type, 'curve_trim_mode')
+    add_doodad_layer_driver(trim_curve_group_node.inputs['Factor Start'], layer, layer_type, 'curve_trim_factor_start')
+    add_doodad_layer_driver(trim_curve_group_node.inputs['Factor End'], layer, layer_type, 'curve_trim_factor_end')
+    add_doodad_layer_driver(trim_curve_group_node.inputs['Length Start'], layer, layer_type, 'curve_trim_length_start')
+    add_doodad_layer_driver(trim_curve_group_node.inputs['Length End'], layer, layer_type, 'curve_trim_length_end')
+
+    # Add BDK Curve Normal Offset node.
+    curve_normal_offset_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
+
+    add_doodad_layer_driver(curve_normal_offset_group_node.inputs['Normal Offset'], layer, layer_type,
+                            'curve_normal_offset')
+
+    node_tree.links.new(curve_socket, trim_curve_group_node.inputs['Curve'])
+    node_tree.links.new(trim_curve_group_node.outputs['Curve'],
+                        curve_normal_offset_group_node.inputs['Curve'])
+
+    return curve_normal_offset_group_node.outputs['Curve']
+
+
+def add_distance_to_doodad_layer_nodes(node_tree: NodeTree, layer, layer_type: str, doodad_object_info_node: bpy.types.Node) -> NodeSocket:
+    terrain_doodad = layer.terrain_doodad_object.bdk.terrain_doodad
+
+    if terrain_doodad.object.type == 'CURVE':
+        # Add curve modifier nodes.
+        curve_socket = add_curve_modifier_nodes(node_tree, doodad_object_info_node.outputs['Geometry'], layer, layer_type)
+
+        # Add a distance to curve node group.
+        distance_to_curve_node_group = ensure_distance_to_curve_node_group()
+        distance_to_curve_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        distance_to_curve_node.node_tree = distance_to_curve_node_group
+
+        node_tree.links.new(curve_socket, distance_to_curve_node.inputs['Curve'])
+        _add_doodad_driver(distance_to_curve_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
+
+        return distance_to_curve_node.outputs['Distance']
+    elif terrain_doodad.object.type == 'MESH':
+        distance_to_mesh_node_group = ensure_distance_to_mesh_node_group()
+
+        # Add a new node group node.
+        distance_to_mesh_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        distance_to_mesh_node.node_tree = distance_to_mesh_node_group
+        distance_to_mesh_node.label = 'Distance to Mesh'
+
+        node_tree.links.new(doodad_object_info_node.outputs['Geometry'], distance_to_mesh_node.inputs['Geometry'])
+
+        return distance_to_mesh_node.outputs['Distance']
+    elif terrain_doodad.object.type == 'EMPTY':
+        distance_to_empty_node_group = ensure_distance_to_empty_node_group()
+
+        distance_to_empty_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        distance_to_empty_node.node_tree = distance_to_empty_node_group
+        distance_to_empty_node.label = 'Distance to Empty'
+
+        node_tree.links.new(doodad_object_info_node.outputs['Location'], distance_to_empty_node.inputs['Location'])
+        _add_doodad_driver(distance_to_empty_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
+
+        return distance_to_empty_node.outputs['Distance']
+    else:
+        raise Exception(f"Unsupported terrain doodad type: {terrain_doodad.object.type}")
+
+
+def add_doodad_layer_driver(
+        struct: bpy_struct,
+        layer,
+        layer_type: str,
+        data_path: str,
+        path: str = 'default_value'
+):
+    driver = struct.driver_add(path).driver
+    driver.type = 'AVERAGE'
+    var = driver.variables.new()
+    var.name = data_path
+    var.type = 'SINGLE_PROP'
+    var.targets[0].id = layer.terrain_doodad_object
+    if layer_type == 'SCULPT':
+        data_path = f"bdk.terrain_doodad.sculpt_layers[{layer.index}].{data_path}"
+    elif layer_type == 'PAINT':
+        data_path = f"bdk.terrain_doodad.paint_layers[{layer.index}].{data_path}"
+    elif layer_type == 'DECO':
+        data_path = f"bdk.terrain_doodad.deco_layers[{layer.index}].{data_path}"
+    else:
+        raise Exception(f"Unknown layer type: {layer_type}")
+    var.targets[0].data_path = data_path
+
+
+def add_doodad_sculpt_layer_driver(struct: bpy_struct, layer, data_path: str, path: str = 'default_value'):
+    add_doodad_layer_driver(struct, layer, 'SCULPT', data_path, path)
+
+
+def add_doodad_paint_layer_driver(struct: bpy_struct, layer, data_path: str, path: str = 'default_value'):
+    add_doodad_layer_driver(struct, layer, 'PAINT', data_path, path)
+
+
+def add_doodad_deco_layer_driver(struct: bpy_struct, layer, data_path: str, path: str = 'default_value'):
+    add_doodad_layer_driver(struct, layer, 'DECO', data_path, path)
+
+
 def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket, terrain_doodad) -> NodeSocket:
     """
     Adds the nodes for a terrain doodad's sculpt layers.
@@ -742,92 +858,39 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
     :return: The geometry output socket (either the one passed in or the one from the last node added).
     """
 
-    def add_doodad_sculpt_layer_driver(struct: bpy_struct, sculpt_layer: 'BDK_PG_terrain_doodad_sculpt_layer', data_path: str,
-                                path: str = 'default_value'):
-        driver = struct.driver_add(path).driver
-        driver.type = 'AVERAGE'
-        var = driver.variables.new()
-        var.name = data_path
-        var.type = 'SINGLE_PROP'
-        var.targets[0].id = sculpt_layer.terrain_doodad_object
-        var.targets[0].data_path = f"bdk.terrain_doodad.sculpt_layers[{sculpt_layer.index}].{data_path}"
-
-    def add_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terrain_doodad', data_path: str,
-                                  path: str = 'default_value'):
-        driver = struct.driver_add(path).driver
-        driver.type = 'AVERAGE'
-        var = driver.variables.new()
-        var.name = data_path
-        var.type = 'SINGLE_PROP'
-        var.targets[0].id = terrain_doodad.object
-        var.targets[0].data_path = f"bdk.terrain_doodad.{data_path}"
-
     # Add an object info node and set the object to the terrain doodad.
     object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
     object_info_node.inputs[0].default_value = terrain_doodad.object
     object_info_node.transform_space = 'RELATIVE'
 
-    distance_socket = None
-
-    if terrain_doodad.object.type == 'CURVE':
-        # Create a new distance to curve node group.
-        distance_to_curve_node_group = ensure_distance_to_curve_node_group()
-
-        # Add a new node group node.
-        distance_to_curve_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        distance_to_curve_node.node_tree = distance_to_curve_node_group
-        distance_to_curve_node.label = 'Distance to Curve'
-
-        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_curve_node.inputs['Curve'])
-        add_doodad_driver(distance_to_curve_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
-
-        distance_socket = distance_to_curve_node.outputs['Distance']
-    elif terrain_doodad.object.type == 'MESH':
-        distance_to_mesh_node_group = ensure_distance_to_mesh_node_group()
-
-        # Add a new node group node.
-        distance_to_mesh_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        distance_to_mesh_node.node_tree = distance_to_mesh_node_group
-        distance_to_mesh_node.label = 'Distance to Mesh'
-
-        node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_mesh_node.inputs['Geometry'])
-
-        distance_socket = distance_to_mesh_node.outputs['Distance']
-    elif terrain_doodad.object.type == 'EMPTY':
-        distance_to_empty_node_group = ensure_distance_to_empty_node_group()
-
-        distance_to_empty_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        distance_to_empty_node.node_tree = distance_to_empty_node_group
-        distance_to_empty_node.label = 'Distance to Empty'
-
-        node_tree.links.new(object_info_node.outputs['Location'], distance_to_empty_node.inputs['Location'])
-        add_doodad_driver(distance_to_empty_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
-
-        distance_socket = distance_to_empty_node.outputs['Distance']
-
-    # Store the calculated distance to a named attribute.
-    # This is faster than recalculating the distance when evaluating each layer. (~20% faster)
-    store_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-    store_distance_attribute_node.inputs['Name'].default_value = terrain_doodad.id
-    store_distance_attribute_node.data_type = 'FLOAT'
-    store_distance_attribute_node.domain = 'POINT'
-
-    # Link the geometry from the input node to the input of the store distance attribute node.
-    node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
-
-    # Link the distance socket to the input of the store distance attribute node.
-    node_tree.links.new(distance_socket, store_distance_attribute_node.inputs[4])
-
-    # Create a named attribute node for the distance.
-    distance_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-    distance_attribute_node.inputs['Name'].default_value = terrain_doodad.id
-    distance_attribute_node.data_type = 'FLOAT'
-
-    distance_socket = distance_attribute_node.outputs[1]
-    geometry_socket = store_distance_attribute_node.outputs['Geometry']
-
     # Now chain the node components together.
     for sculpt_layer in terrain_doodad.sculpt_layers:
+        # Add the distance to doodad layer nodes.
+        distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT', doodad_object_info_node=object_info_node)
+
+        # Store the calculated distance to a named attribute.
+        # This is faster than recalculating the distance when evaluating each layer. (~20% faster)
+        store_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+        store_distance_attribute_node.inputs['Name'].default_value = sculpt_layer.id
+        store_distance_attribute_node.data_type = 'FLOAT'
+        store_distance_attribute_node.domain = 'POINT'
+
+        # Link the geometry from the input node to the input of the store distance attribute node.
+        node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
+
+        # Link the distance socket to the input of the store distance attribute node.
+        node_tree.links.new(distance_socket, store_distance_attribute_node.inputs[4])
+
+        # Create a named attribute node for the distance.
+        distance_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        distance_attribute_node.inputs['Name'].default_value = sculpt_layer.id
+        distance_attribute_node.data_type = 'FLOAT'
+
+        distance_socket = distance_attribute_node.outputs[1]
+        geometry_socket = store_distance_attribute_node.outputs['Geometry']
+
+        # =============================================================
+
         sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
         sculpt_node.node_tree = ensure_sculpt_node_group(sculpt_layer.id)
         sculpt_node.label = 'Sculpt'
@@ -889,11 +952,20 @@ def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSock
         var.targets[0].id = paint_layer.terrain_doodad_object
         var.targets[0].data_path = f"bdk.terrain_doodad.paint_layers[{paint_layer.index}].{data_path}"
 
-    # Create a named attribute node for the distance.
-    distance_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-    distance_attribute_node.inputs['Name'].default_value = paint_layer.terrain_doodad_object.bdk.terrain_doodad.id
-    distance_attribute_node.data_type = 'FLOAT'
-    distance_socket = distance_attribute_node.outputs[1]
+    doodad_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+    doodad_object_info_node.inputs[0].default_value = paint_layer.terrain_doodad_object
+    doodad_object_info_node.transform_space = 'RELATIVE'
+
+    distance_socket = add_distance_to_doodad_layer_nodes(node_tree, paint_layer, 'PAINT', doodad_object_info_node)
+
+    store_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+    store_distance_attribute_node.inputs['Name'].default_value = paint_layer.id
+    store_distance_attribute_node.data_type = 'FLOAT'
+    store_distance_attribute_node.domain = 'POINT'
+
+    node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
+
+    geometry_socket = store_distance_attribute_node.outputs['Geometry']
 
     paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
     paint_node.node_tree = ensure_paint_node_group()
@@ -902,6 +974,7 @@ def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSock
     if attribute_override is not None:
         paint_node.inputs['Attribute'].default_value = attribute_override
     else:
+        # These attributes are not pre-calculated anymore, so we need to do it here.
         if paint_layer.layer_type == 'PAINT':
             paint_node.inputs['Attribute'].default_value = paint_layer.paint_layer_id
         elif paint_layer.layer_type == 'DECO':
@@ -934,8 +1007,7 @@ def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSock
     node_tree.links.new(paint_node.outputs['Geometry'], switch_node.inputs[14])  # False (not muted)
     node_tree.links.new(geometry_socket, switch_node.inputs[15])  # True (muted)
 
-    geometry_socket = switch_node.outputs[6]  # Output
-    return geometry_socket
+    return switch_node.outputs[6]  # Output
 
 
 def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:

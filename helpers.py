@@ -188,6 +188,7 @@ def are_bdk_dependencies_installed() -> bool:
 def copy_simple_property_group(source, target, ignore: Iterable[str] = set()):
     if not hasattr(source, "__annotations__"):
         return
+    # TODO: this doesn't work for inherited annotations
     for prop_name in source.__annotations__.keys():
         if prop_name in ignore:
             continue

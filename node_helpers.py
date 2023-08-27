@@ -281,6 +281,61 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
     return node_tree
 
 
+def ensure_trim_curve_node_tree() -> NodeTree:
+    inputs = {
+        ('NodeSocketGeometry', 'Curve'),
+        ('NodeSocketInt', 'Mode'),
+        ('NodeSocketFloat', 'Factor Start'),
+        ('NodeSocketFloat', 'Factor End'),
+        ('NodeSocketFloat', 'Length Start'),
+        ('NodeSocketFloat', 'Length End'),
+    }
+    outputs = {('NodeSocketGeometry', 'Curve')}
+    node_tree = ensure_geometry_node_tree('BDK Curve Trim', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
+    trim_curve_factor_node.mode = 'FACTOR'
+
+    trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
+    trim_curve_length_node.mode = 'LENGTH'
+
+    node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
+    node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
+
+    compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+    compare_node.data_type = 'INT'
+    compare_node.operation = 'EQUAL'
+
+    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_node.input_type = 'GEOMETRY'
+
+    node_tree.links.new(input_node.outputs['Mode'], compare_node.inputs[2])
+
+    node_tree.links.new(compare_node.outputs[0], switch_node.inputs[1])  # Result -> Switch
+    node_tree.links.new(trim_curve_factor_node.outputs['Curve'], switch_node.inputs[15])  # True
+    node_tree.links.new(trim_curve_length_node.outputs['Curve'], switch_node.inputs[14])  # False
+
+    # Add curve length subtract node.
+    curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
+    node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
+    subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+    subtract_node.operation = 'SUBTRACT'
+    node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
+    node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
+
+    node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
+
+    node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
+    node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
+
+    node_tree.links.new(input_node.outputs['Length Start'], subtract_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs['Start'])
+    node_tree.links.new(input_node.outputs['Length End'], trim_curve_length_node.inputs['End'])
+
+    return node_tree
+
+
 def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
     if not value_sockets:
         return None

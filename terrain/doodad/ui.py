@@ -1,7 +1,7 @@
 from typing import cast
 
 import bpy
-from bpy.types import Panel, Context, UIList
+from bpy.types import Panel, Context, UIList, UILayout
 
 from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad, is_active_object_terrain_doodad
 from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
@@ -91,6 +91,10 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
         col.prop(paint_layer, 'falloff_radius')
         col.prop(paint_layer, 'strength')
 
+        if terrain_doodad.object.type == 'CURVE':
+            draw_curve_modifier_settings(flow, paint_layer)
+            flow.separator()
+
         flow.prop(paint_layer, 'use_distance_noise')
 
         if paint_layer.use_distance_noise:
@@ -170,7 +174,6 @@ class BDK_PT_terrain_doodad_debug(Panel):
         layout = self.layout
         terrain_doodad: 'BDK_PG_terrain_doodad' = context.active_object.bdk.terrain_doodad
         layout.prop(terrain_doodad, 'id')
-        layout.prop(terrain_doodad, 'object_type')
         layout.prop(terrain_doodad, 'object')
         layout.prop(terrain_doodad, 'node_tree')
         layout.prop(terrain_doodad, 'terrain_info_object')
@@ -227,6 +230,10 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
         col.prop(sculpt_layer, 'interpolation_type')
 
         flow.separator()
+
+        if terrain_doodad.object.type == 'CURVE':
+            draw_curve_modifier_settings(flow, sculpt_layer)
+            flow.separator()
 
         flow.prop(sculpt_layer, 'use_noise')
 
@@ -399,6 +406,21 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
                 col.prop(scatter_layer_object, 'curve_normal_offset_seed', text='Seed')
 
 
+def draw_curve_modifier_settings(layout: UILayout, data):
+    layout.prop(data, 'is_curve_reversed')
+    layout.prop(data, 'curve_normal_offset')
+    layout.prop(data, 'curve_trim_mode')
+
+    if data.curve_trim_mode == 'FACTOR':
+        col = layout.column(align=True)
+        col.prop(data, 'curve_trim_factor_start', text='Trim Start')
+        col.prop(data, 'curve_trim_factor_end', text='End')
+    elif data.curve_trim_mode == 'LENGTH':
+        col = layout.column(align=True)
+        col.prop(data, 'curve_trim_length_start', text='Trim Start')
+        col.prop(data, 'curve_trim_length_end', text='End')
+
+
 class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
     bl_label = 'Settings'
     bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_settings'
@@ -427,18 +449,7 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
 
         if terrain_doodad.object.type == 'CURVE':
             # Curve settings
-            flow.prop(scatter_layer, 'is_curve_reversed')
-            flow.prop(scatter_layer, 'curve_normal_offset')
-            flow.prop(scatter_layer, 'curve_trim_mode')
-
-            if scatter_layer.curve_trim_mode == 'FACTOR':
-                col = flow.column(align=True)
-                col.prop(scatter_layer, 'curve_trim_factor_start', text='Trim Start')
-                col.prop(scatter_layer, 'curve_trim_factor_end', text='End')
-            elif scatter_layer.curve_trim_mode == 'LENGTH':
-                col = flow.column(align=True)
-                col.prop(scatter_layer, 'curve_trim_length_start', text='Trim Start')
-                col.prop(scatter_layer, 'curve_trim_length_end', text='End')
+            draw_curve_modifier_settings(flow, scatter_layer)
 
             flow.separator()
 

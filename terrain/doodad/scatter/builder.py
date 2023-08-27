@@ -6,7 +6,7 @@ from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, Nod
 
 from ....units import meters_to_unreal
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, \
-    ensure_curve_normal_offset_node_tree, add_chained_math_nodes
+    ensure_curve_normal_offset_node_tree, add_chained_math_nodes, ensure_trim_curve_node_tree
 
 
 def add_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad') -> 'BDK_PG_terrain_doodad_scatter_layer':
@@ -68,61 +68,6 @@ class TrimCurveSockets:
         self.factor_end_socket = factor_end_socket
         self.length_start_socket = length_start_socket
         self.length_end_socket = length_end_socket
-
-
-def ensure_trim_curve_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketGeometry', 'Curve'),
-        ('NodeSocketInt', 'Mode'),
-        ('NodeSocketFloat', 'Factor Start'),
-        ('NodeSocketFloat', 'Factor End'),
-        ('NodeSocketFloat', 'Length Start'),
-        ('NodeSocketFloat', 'Length End'),
-    }
-    outputs = {('NodeSocketGeometry', 'Curve')}
-    node_tree = ensure_geometry_node_tree('BDK Trim Curve', inputs, outputs)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
-
-    trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
-    trim_curve_factor_node.mode = 'FACTOR'
-
-    trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
-    trim_curve_length_node.mode = 'LENGTH'
-
-    node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
-    node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
-
-    compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-    compare_node.data_type = 'INT'
-    compare_node.operation = 'EQUAL'
-
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'GEOMETRY'
-
-    node_tree.links.new(input_node.outputs['Mode'], compare_node.inputs[2])
-
-    node_tree.links.new(compare_node.outputs[0], switch_node.inputs[1])  # Result -> Switch
-    node_tree.links.new(trim_curve_factor_node.outputs['Curve'], switch_node.inputs[15])  # True
-    node_tree.links.new(trim_curve_length_node.outputs['Curve'], switch_node.inputs[14])  # False
-
-    # Add curve length subtract node.
-    curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
-    node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
-    subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
-    subtract_node.operation = 'SUBTRACT'
-    node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
-    node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
-
-    node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
-
-    node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
-    node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
-
-    node_tree.links.new(input_node.outputs['Length Start'], subtract_node.inputs[1])
-    node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs['Start'])
-    node_tree.links.new(input_node.outputs['Length End'], trim_curve_length_node.inputs['End'])
-
-    return node_tree
 
 
 def add_object_extents(node_tree: NodeTree, bpy_object: Object) -> NodeSocket:
@@ -428,7 +373,6 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
     join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
 
     if scatter_layer.terrain_doodad_object.type == 'CURVE':
-
         # Get the maximum length of all the objects in the scatter layer.
         length_sockets = []
         for scatter_layer_object in scatter_layer.objects:

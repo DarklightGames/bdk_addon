@@ -28,6 +28,18 @@ def terrain_doodad_update_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context:
     ensure_terrain_info_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info)
 
 
+def add_curve_modifier_properties(cls):
+    # Add the curve modifier properties to the type annotation of the given class.
+    cls.__annotations__["is_curve_reversed"] = BoolProperty(name='Reverse Curve', default=False)  # TODO: Rename to curve_is_reversed
+    cls.__annotations__["curve_trim_mode"] = EnumProperty(name='Trim Mode', items=(('FACTOR', 'Factor', '', 0),('LENGTH', 'Distance', '', 1),), default='FACTOR')
+    cls.__annotations__["curve_trim_factor_start"] = FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+    cls.__annotations__["curve_trim_factor_end"] = FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+    cls.__annotations__["curve_trim_length_start"] = FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
+    cls.__annotations__["curve_trim_length_end"] = FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
+    cls.__annotations__["curve_normal_offset"] = FloatProperty(name='Normal Offset', default=0.0, subtype='DISTANCE')
+    cls.__annotations__["curve_align_to_tangent"] = BoolProperty(name='Align to Tangent', default=False, description='Align the X axis of the object to the tangent of the curve')
+
+
 class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     id: StringProperty(name='ID', default='')
     name: StringProperty(name='Name', default='Sculpt Layer')
@@ -39,12 +51,15 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     use_noise: BoolProperty(name='Use Noise', default=False)
     noise_type: EnumProperty(name='Noise Type', items=terrain_doodad_noise_type_items, default='WHITE')
-    noise_radius_factor: FloatProperty(name='Noise Radius Factor', default=1.0, subtype='FACTOR', min=0.0, soft_max=8.0)
+    noise_radius_factor: FloatProperty(name='Noise Radius Factor', default=1.0, subtype='FACTOR', min=RADIUS_EPSILON, soft_max=8.0)
     noise_strength: FloatProperty(name='Noise Strength', default=meters_to_unreal(0.25), subtype='DISTANCE', min=0.0, soft_max=meters_to_unreal(2.0))
     noise_distortion: FloatProperty(name='Noise Distortion', default=1.0, min=0.0)
     noise_roughness: FloatProperty(name='Noise Roughness', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
     mute: BoolProperty(name='Mute', default=False)
     interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
+
+
+add_curve_modifier_properties(BDK_PG_terrain_doodad_sculpt_layer)
 
 
 def terrain_doodad_paint_layer_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context: Context, edit_text: str) -> List[str]:
@@ -92,7 +107,7 @@ def terrain_doodad_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_d
     ensure_terrain_info_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info)
 
 
-class BDK_PG_terrain_doodad_paint_layer(PropertyGroup): # TODO: rename this to something less confusing and ambiguous.
+class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer')
     operation: EnumProperty(name='Operation', items=terrain_doodad_operation_items, default='ADD')
@@ -132,6 +147,8 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup): # TODO: rename this to s
     distance_noise_distortion: FloatProperty(name='Distance Noise Distortion', default=1.0, min=0.0)
     distance_noise_offset: FloatProperty(name='Distance Noise Offset', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
 
+
+add_curve_modifier_properties(BDK_PG_terrain_doodad_paint_layer)
 
 axis_enum_items = [
     ('X', 'X', ''),
@@ -208,19 +225,6 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     ), default='RELATIVE')
     curve_spacing_relative: FloatProperty(name='Spacing Min', default=1.0, min=0.1, soft_max=10.0, subtype='FACTOR')
     curve_spacing_absolute: FloatProperty(name='Spacing', default=1.0, min=0.0, subtype='DISTANCE')
-    is_curve_reversed: BoolProperty(name='Reverse Curve', default=False)
-
-    curve_trim_mode: EnumProperty(name='Trim Mode', items=(
-        ('FACTOR', 'Factor', '', 0),
-        ('LENGTH', 'Distance', '', 1),
-    ), default='FACTOR')
-    curve_trim_factor_start: FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
-    curve_trim_factor_end: FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
-    curve_trim_length_start: FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
-    curve_trim_length_end: FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
-
-    curve_normal_offset: FloatProperty(name='Normal Offset', default=0.0, subtype='DISTANCE')
-    curve_align_to_tangent: BoolProperty(name='Align to Tangent', default=False, description='Align the X axis of the object to the tangent of the curve')
 
     # Mesh Settings
     mesh_spacing_method: EnumProperty(name='Spacing Method', items=(
@@ -229,6 +233,9 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     ), default='RANDOM')
     mesh_density: FloatProperty(name='Density', default=1.0, min=0.0)
     mesh_distribution_seed: IntProperty(name='Distribution Seed', default=0, min=0)
+
+
+add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 
 
 class BDK_PG_terrain_doodad(PropertyGroup):
