@@ -281,6 +281,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
               ('NodeSocketFloat', 'Trim Length End'),
               ('NodeSocketFloat', 'Normal Offset'),
               ('NodeSocketFloat', 'Spacing Length'),
+              ('NodeSocketBool', 'Is Curve Reversed'),
               }
     outputs = {('NodeSocketGeometry', 'Points'),
                ('NodeSocketVector', 'Normal'),
@@ -291,10 +292,21 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
 
     set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
+    reverse_curve_node = node_tree.nodes.new(type='GeometryNodeReverseCurve')
+
+    reverse_curve_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    reverse_curve_switch_node.input_type = 'GEOMETRY'
+    reverse_curve_switch_node.label = 'Reverse Curve?'
+
+    node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs[14])  # False
+    node_tree.links.new(input_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
+    node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
+
     # Add "Curve Trim" node.
     trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
-    node_tree.links.new(input_node.outputs['Curve'], trim_curve_group_node.outputs['Curve'])
+    node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.outputs['Curve'])
     node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
     node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
     node_tree.links.new(input_node.outputs['Trim Factor End'], trim_curve_group_node.inputs['Factor End'])
@@ -306,7 +318,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
     curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
     node_tree.links.new(input_node.outputs['Normal Offset'], curve_normal_offset_group_node.inputs['Normal Offset'])
 
-    node_tree.links.new(input_node.outputs['Curve'], trim_curve_group_node.inputs['Curve'])
+    node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.inputs['Curve'])
     node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
 
     # Add "Curve to Points" node.
@@ -403,12 +415,16 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         curve_to_points_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         curve_to_points_group_node.node_tree = ensure_scatter_layer_curve_to_points_node_tree()
         node_tree.links.new(curve_object_info_node.outputs['Geometry'], curve_to_points_group_node.inputs['Curve'])
+        add_scatter_layer_driver(curve_to_points_group_node.inputs['Is Curve Reversed'], 'is_curve_reversed')
         add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Mode'], 'curve_trim_mode')
         add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Factor Start'], 'curve_trim_factor_start')
         add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Factor End'], 'curve_trim_factor_end')
         add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Length Start'], 'curve_trim_length_start')
         add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Length End'], 'curve_trim_length_end')
         add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset'], 'curve_normal_offset')
+
+        # TODO: Add a Reverse Curve node here.
+
 
         if spacing_length is not None:
             node_tree.links.new(spacing_length, curve_to_points_group_node.inputs['Spacing Length'])

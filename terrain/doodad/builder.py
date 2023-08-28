@@ -276,7 +276,7 @@ def ensure_distance_noise_node_group() -> NodeTree:
     outputs = {
         ('NodeSocketFloat', 'Distance')
     }
-    node_tree = ensure_geometry_node_tree('Distance Noise', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Distance Noise', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     # Add a position input node.
@@ -746,6 +746,19 @@ def _add_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terrain_dooda
 
 
 def add_curve_modifier_nodes(node_tree: NodeTree, curve_socket: NodeSocket, layer, layer_type: str) -> NodeSocket:
+
+    reverse_curve_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    reverse_curve_switch_node.input_type = 'GEOMETRY'
+    reverse_curve_switch_node.label = 'Reverse Curve?'
+
+    reverse_curve_node = node_tree.nodes.new(type='GeometryNodeReverseCurve')
+
+    add_doodad_layer_driver(reverse_curve_switch_node.inputs[1], layer, layer_type, 'is_curve_reversed')
+
+    node_tree.links.new(curve_socket, reverse_curve_node.inputs['Curve'])
+    node_tree.links.new(curve_socket, reverse_curve_switch_node.inputs[14])  # False
+    node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
+
     # Add BDK Curve Trim node.
     trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
@@ -764,9 +777,8 @@ def add_curve_modifier_nodes(node_tree: NodeTree, curve_socket: NodeSocket, laye
     add_doodad_layer_driver(curve_normal_offset_group_node.inputs['Normal Offset'], layer, layer_type,
                             'curve_normal_offset')
 
-    node_tree.links.new(curve_socket, trim_curve_group_node.inputs['Curve'])
-    node_tree.links.new(trim_curve_group_node.outputs['Curve'],
-                        curve_normal_offset_group_node.inputs['Curve'])
+    node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.inputs['Curve'])
+    node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
 
     return curve_normal_offset_group_node.outputs['Curve']
 
