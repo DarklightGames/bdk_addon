@@ -518,7 +518,7 @@ def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_ter
         # Sprout
         sprout_object = scatter_layer.sprout_object
         if scatter_layer.id not in sprout_object.modifiers.keys():
-            modifier = sprout_object.modifiers.new(name=sprout_object.name, type='NODES')
+            modifier = sprout_object.modifiers.new(name=scatter_layer.id, type='NODES')
         else:
             modifier = sprout_object.modifiers[scatter_layer.id]
         modifier.node_group = ensure_scatter_layer_sprout_node_tree(scatter_layer)
