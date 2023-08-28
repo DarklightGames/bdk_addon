@@ -404,7 +404,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         spacing_relative_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
         spacing_relative_factor_node.operation = 'MULTIPLY'
         node_tree.links.new(spacing_length, spacing_relative_factor_node.inputs[0])
-        add_scatter_layer_driver(spacing_relative_factor_node.inputs[1], 'curve_spacing_relative')
+        add_scatter_layer_driver(spacing_relative_factor_node.inputs[1], 'curve_spacing_relative_factor')
 
         node_tree.links.new(spacing_relative_factor_node.outputs['Value'], spacing_mode_switch_node.inputs[2])
 
@@ -492,7 +492,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         # node_tree.links.new(curve_to_points_node.outputs['Rotation'], store_rotation_attribute_node.inputs[3])  # Value
         node_tree.links.new(snap_and_align_to_terrain_switch_node.outputs[6], store_rotation_attribute_node.inputs['Geometry'])
         node_tree.links.new(store_rotation_attribute_node.outputs['Geometry'], store_scale_attribute_node.inputs['Geometry'])
-        node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True
+        node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False
 
         # Link the geometry from the join geometry node to the output node.
         node_tree.links.new(mute_switch_node.outputs[6], join_geometry_node.inputs['Geometry'])
