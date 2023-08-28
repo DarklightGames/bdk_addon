@@ -329,9 +329,9 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
     node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
 
-    node_tree.links.new(input_node.outputs['Length Start'], subtract_node.inputs[1])
-    node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs['Start'])
-    node_tree.links.new(input_node.outputs['Length End'], trim_curve_length_node.inputs['End'])
+    node_tree.links.new(input_node.outputs['Length End'], subtract_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs[4])
+    node_tree.links.new(subtract_node.outputs['Value'], trim_curve_length_node.inputs[5])
 
     return node_tree
 
