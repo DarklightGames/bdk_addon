@@ -581,10 +581,18 @@ class BDK_OT_terrain_doodad_scatter_layer_remove(Operator):
         scatter_layer = terrain_doodad.scatter_layers[scatter_layers_index]
 
         if scatter_layer.seed_object is not None:
-            bpy.data.objects.remove(scatter_layer.seed_object)
+            # Delete the node trees for all modifiers.
+            for modifier in scatter_layer.seed_object.modifiers:
+                if modifier.type == 'NODES':
+                    bpy.data.node_groups.remove(modifier.node_group)
+            bpy.data.meshes.remove(scatter_layer.seed_object.data)
 
         if scatter_layer.sprout_object is not None:
-            bpy.data.objects.remove(scatter_layer.sprout_object)
+            # Delete the node trees for all modifiers.
+            for modifier in scatter_layer.sprout_object.modifiers:
+                if modifier.type == 'NODES':
+                    bpy.data.node_groups.remove(modifier.node_group)
+            bpy.data.meshes.remove(scatter_layer.sprout_object.data)
 
         scatter_layer_id = scatter_layer.id
 
