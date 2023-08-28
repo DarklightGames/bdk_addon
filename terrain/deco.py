@@ -125,6 +125,49 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
     return node_tree
 
 
+def ensure_noise_node_group() -> NodeTree:
+    inputs = {
+        ('NodeSocketInt', 'Noise Type'),
+        ('NodeSocketFloat', 'Perlin Noise Scale'),
+        ('NodeSocketFloat', 'Perlin Noise Detail'),
+        ('NodeSocketFloat', 'Perlin Noise Roughness'),
+        ('NodeSocketFloat', 'Perlin Noise Lacunarity'),
+        ('NodeSocketFloat', 'Perlin Noise Distortion'),
+    }
+    outputs = {('NodeSocketFloat', 'Value')}
+    node_tree = ensure_geometry_node_tree('BDK Noise', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    noise_type_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+    noise_type_switch_node.input_type = 'FLOAT'
+
+    white_noise_node = node_tree.nodes.new('ShaderNodeTexWhiteNoise')
+    white_noise_node.noise_dimensions = '2D'
+
+    perlin_noise_node = node_tree.nodes.new('ShaderNodeTexNoise')
+    perlin_noise_node.noise_dimensions = '2D'
+    perlin_noise_node.normalize = True
+
+    compare_node = node_tree.nodes.new('FunctionNodeCompare')
+    compare_node.data_type = 'INT'
+    compare_node.operation = 'EQUAL'
+    compare_node.inputs[3].default_value = 0
+
+    node_tree.links.new(input_node.outputs['Noise Type'], compare_node.inputs[2])
+    node_tree.links.new(input_node.outputs['Perlin Noise Scale'], perlin_noise_node.inputs['Scale'])
+    node_tree.links.new(input_node.outputs['Perlin Noise Detail'], perlin_noise_node.inputs['Detail'])
+    node_tree.links.new(input_node.outputs['Perlin Noise Roughness'], perlin_noise_node.inputs['Roughness'])
+    node_tree.links.new(input_node.outputs['Perlin Noise Lacunarity'], perlin_noise_node.inputs['Lacunarity'])
+    node_tree.links.new(input_node.outputs['Perlin Noise Distortion'], perlin_noise_node.inputs['Distortion'])
+
+    node_tree.links.new(compare_node.outputs['Result'], noise_type_switch_node.inputs['Switch'])
+    node_tree.links.new(white_noise_node.outputs['Value'], noise_type_switch_node.inputs[3])  # True
+    node_tree.links.new(perlin_noise_node.outputs['Fac'], noise_type_switch_node.inputs[2])   # False
+
+    node_tree.links.new(noise_type_switch_node.outputs['Output'], output_node.inputs['Value'])
+
+    return node_tree
+
 def add_density_from_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', node_tree: NodeTree, dataptr_name: str, dataptr_index: int, node_index: int) -> Optional[NodeSocket]:
     if node.type == 'PAINT':
         paint_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
@@ -163,9 +206,17 @@ def add_density_from_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', node_
             return None
         return add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, node.children)
     elif node.type == 'NOISE':
-        white_noise_node = node_tree.nodes.new('ShaderNodeTexWhiteNoise')
-        white_noise_node.noise_dimensions = '2D'
-        return white_noise_node.outputs['Value']
+        noise_node_group_node = node_tree.nodes.new('GeometryNodeGroup')
+        noise_node_group_node.node_tree = ensure_noise_node_group()
+
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, noise_node_group_node.inputs['Noise Type'], 'default_value', 'noise_type')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, noise_node_group_node.inputs['Perlin Noise Scale'], 'default_value', 'noise_perlin_scale')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, noise_node_group_node.inputs['Perlin Noise Detail'], 'default_value', 'noise_perlin_detail')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, noise_node_group_node.inputs['Perlin Noise Roughness'], 'default_value', 'noise_perlin_roughness')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, noise_node_group_node.inputs['Perlin Noise Lacunarity'], 'default_value', 'noise_perlin_lacunarity')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, noise_node_group_node.inputs['Perlin Noise Distortion'], 'default_value', 'noise_perlin_distortion')
+
+        return noise_node_group_node.outputs['Value']
     elif node.type == 'NORMAL':
         normal_node = node_tree.nodes.new('GeometryNodeInputNormal')
 

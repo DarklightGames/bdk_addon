@@ -115,6 +115,17 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR', options=set())
     map_range_from_max: FloatProperty(name='From Max', default=1.0, min=0, max=1.0, subtype='FACTOR', options=set())
 
+    # Noise
+    noise_type: EnumProperty(name='Noise Type', items=(
+        ('WHITE', 'White', 'White Noise'),
+        ('PERLIN', 'Perlin', 'Perlin Noise')
+    ))
+    noise_perlin_scale: FloatProperty(name='Perlin Noise Scale', default=5.0, options=set())
+    noise_perlin_detail: FloatProperty(name='Perlin Noise Detail', default=2.0, options=set())
+    noise_perlin_roughness: FloatProperty(name='Perlin Noise Roughness', default=0.5, min=0.0, max=1.0, options=set())
+    noise_perlin_lacunarity: FloatProperty(name='Perlin Noise Lacunarity', default=2.0, options=set())
+    noise_perlin_distortion: FloatProperty(name='Perlin Noise Distortion', default=0.0, options=set())
+
 
 # Add the children property to the node property group (this must be done after the class is defined).
 BDK_PG_terrain_layer_node.__annotations__["parent"] = PointerProperty(name='Parent', type=BDK_PG_terrain_layer_node,
