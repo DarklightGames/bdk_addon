@@ -205,7 +205,7 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
 
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
-    index: IntProperty(name='Index', options={'HIDDEN'})
+    index: IntProperty(options={'HIDDEN'})
     name: StringProperty(name='Name', default='Scatter Layer')
     mute: BoolProperty(name='Mute', default=False)
     terrain_doodad_object: PointerProperty(type=Object, name='Terrain Doodad Object', options={'HIDDEN'})

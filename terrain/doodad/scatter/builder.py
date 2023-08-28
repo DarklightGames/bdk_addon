@@ -134,36 +134,25 @@ def ensure_terrain_snap_and_align_node_tree() -> NodeTree:
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
-
-    is_hit_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    is_hit_switch_node.input_type = 'VECTOR'
-
-    raycast_node = node_tree.nodes.new(type='GeometryNodeRaycast')
-    raycast_node.inputs['Ray Length'].default_value = meters_to_unreal(200)
-
-    input_position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-
-    vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-    vector_math_node.operation = 'ADD'
-    vector_math_node.inputs[1].default_value = (0, 0, meters_to_unreal(100))
-
-    node_tree.links.new(input_position_node.outputs['Position'], vector_math_node.inputs[0])
+    terrain_sample_node = node_tree.nodes.new(type='GeometryNodeBDKTerrainSample')
 
     object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
     object_info_node.transform_space = 'RELATIVE'
 
     node_tree.links.new(input_node.outputs['Terrain Info Object'], object_info_node.inputs['Object'])
-
-    node_tree.links.new(object_info_node.outputs['Geometry'], raycast_node.inputs['Target Geometry'])
-    node_tree.links.new(raycast_node.outputs['Is Hit'], is_hit_switch_node.inputs[0])
-    node_tree.links.new(input_position_node.outputs['Position'], is_hit_switch_node.inputs[8])  # False
-    node_tree.links.new(raycast_node.outputs['Hit Position'], is_hit_switch_node.inputs[9])  # True
-    node_tree.links.new(vector_math_node.outputs['Vector'], raycast_node.inputs['Source Position'])
-
+    node_tree.links.new(object_info_node.outputs['Geometry'], terrain_sample_node.inputs['Terrain'])
     node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
-    node_tree.links.new(is_hit_switch_node.outputs[3], set_position_node.inputs['Position'])
+    node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
 
-    node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Geometry'])
+    store_terrain_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+    store_terrain_normal_attribute_node.inputs['Name'].default_value = 'terrain_normal'
+    store_terrain_normal_attribute_node.data_type = 'FLOAT_VECTOR'
+    store_terrain_normal_attribute_node.domain = 'POINT'
+
+    node_tree.links.new(set_position_node.outputs['Geometry'], store_terrain_normal_attribute_node.inputs['Geometry'])
+    node_tree.links.new(terrain_sample_node.outputs['Normal'], store_terrain_normal_attribute_node.inputs[3])  # Value
+
+    node_tree.links.new(store_terrain_normal_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
     return node_tree
 
