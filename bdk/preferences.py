@@ -12,7 +12,7 @@ class BDK_UL_build_paths(UIList):
         layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
 
-class BdkBuildPathPropertyGroup(PropertyGroup):
+class BDK_PG_build_path(PropertyGroup):
     path: StringProperty(name='Path', default='', subtype='DIR_PATH')
     mute: BoolProperty(name='Mute', default=False)
 
@@ -75,7 +75,7 @@ class BDK_OT_build_path_move(Operator):
 class BdkAddonPreferences(AddonPreferences):
     bl_idname = 'bdk_addon'
 
-    build_paths: CollectionProperty(type=BdkBuildPathPropertyGroup)
+    build_paths: CollectionProperty(type=BDK_PG_build_path)
     build_paths_index: IntProperty(name='Build Paths Index', default=0)
     developer_extras: BoolProperty(name='Developer Extras', default=False,
                                    description='Enable developer extras such as debug panels and operators')
@@ -117,7 +117,7 @@ class BdkAddonPreferences(AddonPreferences):
 
 
 classes = (
-    BdkBuildPathPropertyGroup,
+    BDK_PG_build_path,
     BDK_UL_build_paths,
     BDK_OT_build_path_add,
     BDK_OT_build_path_move,

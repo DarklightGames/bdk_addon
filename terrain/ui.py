@@ -386,7 +386,7 @@ class BDK_PT_terrain_deco_layer_debug(Panel):
                 layout.label(text='No modifier found', icon='ERROR')
 
 
-class BDK_PT_terrain_deco_layers_mesh(Panel):
+class BDK_PT_terrain_deco_layer_mesh(Panel):
     bl_parent_id = 'BDK_PT_terrain_deco_layers'
     bl_label = 'Mesh'
     bl_space_type = 'VIEW_3D'
@@ -569,14 +569,14 @@ classes = (
     BDK_PT_terrain_info,
     BDK_PT_terrain_info_operators,
     BDK_PT_terrain_info_debug,
-    BDK_PT_terrain_paint_layers,  # TODO: rename "terrain layers" to "terrain paint layers"
+    BDK_PT_terrain_paint_layers,
     BDK_PT_terrain_deco_layers,
     BDK_UL_terrain_paint_layers,
     BDK_PT_terrain_paint_layer_settings,
     BDK_PT_terrain_paint_layer_debug,
     BDK_UL_terrain_deco_layers,
     BDK_UL_terrain_layer_nodes,
-    BDK_PT_terrain_deco_layers_mesh,
+    BDK_PT_terrain_deco_layer_mesh,
     BDK_PT_terrain_deco_layer_settings,
     BDK_PT_terrain_deco_layer_nodes,
     BDK_PT_terrain_deco_layer_debug,
