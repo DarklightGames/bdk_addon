@@ -456,9 +456,10 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
             flow.prop(scatter_layer, 'curve_spacing_method')
 
             if scatter_layer.curve_spacing_method == 'RELATIVE':
-                flow.prop(scatter_layer, 'curve_spacing_relative', text='Spacing Factor')
+                flow.prop(scatter_layer, 'curve_spacing_relative_axis', text='Axis')
+                flow.prop(scatter_layer, 'curve_spacing_relative_factor', text='Factor')
             elif scatter_layer.curve_spacing_method == 'ABSOLUTE':
-                flow.prop(scatter_layer, 'curve_spacing_absolute', text='Spacing Distance')
+                flow.prop(scatter_layer, 'curve_spacing_absolute', text='Distance')
 
 
 class BDK_PT_terrain_doodad_paint_layer_debug(Panel):

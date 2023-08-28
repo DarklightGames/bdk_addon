@@ -151,9 +151,15 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
 add_curve_modifier_properties(BDK_PG_terrain_doodad_paint_layer)
 
 axis_enum_items = [
-    ('X', 'X', ''),
-    ('Y', 'Y', ''),
-    ('Z', 'Z', ''),
+    ('X', 'X', '', 0),
+    ('Y', 'Y', '', 1),
+    ('Z', 'Z', '', 2),
+]
+
+axis_signed_enum_items = [
+    ('X', 'X', '', 0),
+    ('Y', 'Y', '', 1),
+    ('Z', 'Z', '', 2),
     ('-X', '-X', ''),
     ('-Y', '-Y', ''),
     ('-Z', '-Z', ''),
@@ -183,7 +189,7 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     random_weight: FloatProperty(name='Random Weight', default=1.0, min=0.0, max=1.0)
 
     is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
-    align_axis: EnumProperty(name='Align Axis', items=axis_enum_items, default='Z')
+    align_axis: EnumProperty(name='Align Axis', items=axis_signed_enum_items, default='Z')
 
     curve_normal_offset_min: FloatProperty(name='Normal Offset Min', default=0.0, subtype='DISTANCE')
     curve_normal_offset_max: FloatProperty(name='Normal Offset Max', default=0.0, subtype='DISTANCE')
@@ -223,8 +229,9 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
         ('RELATIVE', 'Relative', ''),
         ('ABSOLUTE', 'Absolute', ''),
     ), default='RELATIVE')
-    curve_spacing_relative: FloatProperty(name='Spacing Min', default=1.0, min=0.1, soft_max=10.0, subtype='FACTOR')
-    curve_spacing_absolute: FloatProperty(name='Spacing', default=1.0, min=0.0, subtype='DISTANCE')
+    curve_spacing_relative_factor: FloatProperty(name='Spacing Relative Factor', default=1.0, min=0.1, soft_max=10.0, subtype='FACTOR')
+    curve_spacing_absolute: FloatProperty(name='Spacing', default=meters_to_unreal(1.0), min=1, subtype='DISTANCE')
+    curve_spacing_relative_axis: EnumProperty(name='Spacing Relative Axis', items=axis_enum_items, default='X')
 
     # Mesh Settings
     mesh_spacing_method: EnumProperty(name='Spacing Method', items=(

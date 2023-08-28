@@ -392,6 +392,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             vector_component_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
             vector_component_group_node.node_tree = ensure_vector_component_node_tree()
             node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
+            add_scatter_layer_driver(vector_component_group_node.inputs['Index'], 'curve_spacing_relative_axis')
             length_sockets.append(vector_component_group_node.outputs['Value'])
         spacing_length = add_chained_math_nodes(node_tree, 'MAX', length_sockets)
 
