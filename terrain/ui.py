@@ -173,6 +173,8 @@ class BDK_MT_terrain_layer_nodes_context_menu(Menu):
 
     def draw(self, context: Context):
         layout: UILayout = self.layout
+        layout.operator(BDK_OT_terrain_paint_layer_node_duplicate.bl_idname, text='Duplicate', icon='DUPLICATE')
+        layout.separator()
         layout.operator(BDK_OT_terrain_layer_node_merge_down.bl_idname, text='Merge Down', icon='TRIA_DOWN_BAR')
         layout.operator(BDK_OT_terrain_layer_node_convert_to_paint_node.bl_idname, text='Convert to Paint Node', icon='BRUSH_DATA')
         layout.operator(BDK_OT_terrain_layer_paint_node_move_to_group.bl_idname, text='Move to Group', icon='FOLDER_REDIRECT')

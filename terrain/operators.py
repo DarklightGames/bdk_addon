@@ -16,7 +16,8 @@ from .layers import add_terrain_paint_layer
 from .doodad.builder import ensure_terrain_info_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte_color_attribute_data, \
-    invert_byte_color_attribute_data, accumulate_byte_color_attribute_data
+    invert_byte_color_attribute_data, accumulate_byte_color_attribute_data, copy_simple_property_group, \
+    ensure_name_unique
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
 from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node, \
@@ -777,6 +778,62 @@ class BDK_OT_terrain_layer_node_merge_down(Operator):
         return {'FINISHED'}
 
 
+def poll_has_selected_terrain_layer_node(cls, context):
+    if not is_active_object_terrain_info(context):
+        cls.poll_message_set('Active object is not a terrain info object')
+        return False
+    terrain_info: BDK_PG_terrain_info = get_terrain_info(context.active_object)
+    paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+    nodes = paint_layer.nodes
+    node = nodes[paint_layer.nodes_index] if len(nodes) > paint_layer.nodes_index else None
+    if node is None:
+        cls.poll_message_set('No node selected')
+        return False
+    return True
+
+
+class BDK_OT_terrain_paint_layer_node_duplicate(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_node_duplicate'
+    bl_label = 'Duplicate Terrain Paint Layer Node'
+    bl_description = 'Duplicate the selected paint layer node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_selected_terrain_layer_node(cls, context)
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+        paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+        nodes = paint_layer.nodes
+        node = nodes[paint_layer.nodes_index]
+
+        # Duplicate the node.
+        duplicate_node = nodes.add()
+        duplicate_node.id = uuid.uuid4().hex
+        duplicate_node.name = ensure_name_unique(node.name, [n.name for n in nodes])
+
+        # Copy all the settings.
+        copy_simple_property_group(node, duplicate_node, {'id', 'name'})
+
+        if node.type == 'PAINT':
+            # Duplicate the attribute.
+            mesh_data = node.terrain_info_object.data
+            attribute = mesh_data.attributes[node.id]
+            duplicate_attribute = mesh_data.attributes.new(duplicate_node.id, 'BYTE_COLOR', domain='POINT')
+            duplicate_attribute.data.foreach_set('color', attribute.data.foreach_get('color'))
+
+        # Move the node to below the selected node.
+        nodes.move(len(nodes) - 1, paint_layer.nodes_index + 1)
+
+        # TODO: check the ordering as well? or does the modifier stack fn take care of that?
+
+        # Rebuild the modifier stack.
+        ensure_terrain_info_modifiers(context, terrain_info)
+
+        return {'FINISHED'}
+
+
 # TODO: this only works for paint layers atm
 class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
     bl_idname = 'bdk.terrain_layer_node_convert_to_paint_node'
@@ -888,6 +945,7 @@ classes = (
 
     BDK_OT_terrain_paint_layer_nodes_add,
     BDK_OT_terrain_paint_layer_nodes_remove,
+    BDK_OT_terrain_paint_layer_node_duplicate,
 
     BDK_OT_terrain_layer_node_merge_down,
     BDK_OT_terrain_layer_node_convert_to_paint_node,
