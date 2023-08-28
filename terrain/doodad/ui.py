@@ -173,14 +173,14 @@ class BDK_PT_terrain_doodad_debug(Panel):
     def draw(self, context: 'Context'):
         layout = self.layout
         terrain_doodad: 'BDK_PG_terrain_doodad' = context.active_object.bdk.terrain_doodad
-        layout.prop(terrain_doodad, 'id')
-        layout.prop(terrain_doodad, 'object')
-        layout.prop(terrain_doodad, 'node_tree')
-        layout.prop(terrain_doodad, 'terrain_info_object')
+        flow = layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
 
-        layout.separator()
-
-        layout.operator(BDK_OT_terrain_doodad_bake_debug.bl_idname, icon='RENDER_STILL', text='Bake Debug')
+        flow.prop(terrain_doodad, 'id', emboss=False)
+        flow.prop(terrain_doodad, 'object', emboss=False)
+        flow.prop(terrain_doodad, 'node_tree', emboss=False)
+        flow.prop(terrain_doodad, 'terrain_info_object', emboss=False)
 
 
 class BDK_PT_terrain_doodad_advanced(Panel):
@@ -306,6 +306,40 @@ class BDK_PT_terrain_doodad(Panel):
 
     def draw(self, context: 'Context'):
         pass
+
+
+class BDK_PT_terrain_doodad_scatter_layer_debug(Panel):
+    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_debug'
+    bl_label = 'Debug'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
+    bl_order = 100
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        return len(terrain_doodad.scatter_layers) > 0
+
+    def draw(self, context: 'Context'):
+        layout = self.layout
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+        flow = layout.grid_flow(align=True, columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+        flow.prop(scatter_layer, 'id', emboss=False)
+
+        depsgraph = context.evaluated_depsgraph_get()
+        if scatter_layer.seed_object:
+            seed_object_evaluated = scatter_layer.seed_object.evaluated_get(depsgraph)
+            for modifier in seed_object_evaluated.modifiers:
+                flow.prop(modifier, 'execution_time', emboss=False)
+        if scatter_layer.sprout_object:
+            sprout_object_evaluated = scatter_layer.sprout_object.evaluated_get(depsgraph)
+            for modifier in sprout_object_evaluated.modifiers:
+                flow.prop(modifier, 'execution_time', emboss=False)
 
 
 class BDK_PT_terrain_doodad_scatter_layers(Panel):
@@ -523,6 +557,7 @@ classes = (
     BDK_UL_terrain_doodad_scatter_layer_objects,
     BDK_PT_terrain_doodad_scatter_layer_objects,
     BDK_PT_terrain_doodad_scatter_layer_settings,
+    BDK_PT_terrain_doodad_scatter_layer_debug,
     BDK_PT_terrain_doodad_advanced,
     BDK_PT_terrain_doodad_operators,
     BDK_PT_terrain_doodad_debug,
