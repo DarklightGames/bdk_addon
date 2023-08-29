@@ -113,11 +113,17 @@ def terrain_doodad_to_actors(context: Context, terrain_doodad_object: Object) ->
         attribute.data.foreach_get('vector', scale_data)
         scales = numpy.array(scale_data).reshape((vertex_count, 3))
 
-        for position, rotation, scale in zip(positions, rotations, scales):
+        # Object Index
+        attribute = mesh_data.attributes['object_index']
+        object_index_data = [0] * vertex_count
+        attribute.data.foreach_get('value', object_index_data)
+        object_indices = numpy.array(object_index_data)
+
+        for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
             # TODO: The order of operations here is probably wrong.
             matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
 
-            static_mesh_object = scatter_layer.objects[0].object
+            static_mesh_object = scatter_layer.objects[object_index].object
             actor = T3DActor(class_='StaticMeshActor', name=static_mesh_object.name)
             actor['StaticMesh'] = static_mesh_object.bdk.package_reference
             location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)

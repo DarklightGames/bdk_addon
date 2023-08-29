@@ -202,6 +202,12 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     scale_max: FloatVectorProperty(name='Scale Max', min=0.0, default=(1.0, 1.0, 1.0))
     scale_seed: IntProperty(name='Random Scale Seed', default=0, min=0)
 
+    terrain_normal_offset: FloatProperty(name='Terrain Normal Offset', default=0.0, subtype='DISTANCE')
+
+    # Snap & Align to Terrain
+    snap_to_terrain: BoolProperty(name='Snap to Terrain', default=True)
+    align_to_terrain: BoolProperty(name='Align to Terrain', default=False, description='Align the Z axis to the terrain normal')
+
 
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
@@ -213,11 +219,18 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
         ('ORDER', 'Order', 'The objects will be scattered in the order that they appear in the object list.'),
         ('RANDOM', 'Random', 'The objects will be scattered randomly based on the probability weight.'),
     ))
+
+    # Objects
     objects: CollectionProperty(name='Scatter Objects', type=BDK_PG_terrain_doodad_scatter_layer_object)
     objects_index: IntProperty()
 
-    snap_to_terrain: BoolProperty(name='Snap to Terrain', default=False)
-    align_to_terrain: BoolProperty(name='Align to Terrain', default=False, description='Align the Z axis to the terrain normal')
+    # Object Selection
+    object_select_mode: EnumProperty(name='Object Select Mode', items=(
+        ('RANDOM', 'Random', 'Select a random object from the list'),
+        ('CYCLIC', 'Cyclic', 'Select from the list in the order that they appear'),
+    ), default='RANDOM')
+    object_select_random_seed: IntProperty(name='Object Select Random Seed', default=0, min=0)
+    object_select_cyclic_offset: IntProperty(name='Object Select Cyclic Offset', default=0, min=0)
 
     seed_object: PointerProperty(type=Object, name='Seed Object', options={'HIDDEN'})
     sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})

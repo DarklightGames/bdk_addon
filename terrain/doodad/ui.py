@@ -423,6 +423,11 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.separator()
 
+            flow.prop(scatter_layer_object, 'snap_to_terrain')
+            flow.prop(scatter_layer_object, 'align_to_terrain')
+
+            flow.separator()
+
             flow.prop(scatter_layer_object, 'scale_min')
             flow.prop(scatter_layer_object, 'scale_max', text='Max')
             flow.prop(scatter_layer_object, 'scale_seed', text='Seed')
@@ -438,6 +443,10 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
                 col.prop(scatter_layer_object, 'curve_normal_offset_min')
                 col.prop(scatter_layer_object, 'curve_normal_offset_max', text='Max')
                 col.prop(scatter_layer_object, 'curve_normal_offset_seed', text='Seed')
+
+            flow.separator()
+
+            flow.prop(scatter_layer_object, 'terrain_normal_offset', text='Terrain Offset')
 
 
 def draw_curve_modifier_settings(layout: UILayout, data):
@@ -478,8 +487,13 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         flow.use_property_split = True
         flow.use_property_decorate = False
         flow.prop(scatter_layer, 'global_seed')
-        flow.prop(scatter_layer, 'snap_to_terrain')
-        flow.prop(scatter_layer, 'align_to_terrain')
+
+        flow.prop(scatter_layer, 'object_select_mode', text='Object Mode')
+
+        if scatter_layer.object_select_mode == 'RANDOM':
+            flow.prop(scatter_layer, 'object_select_random_seed', text='Seed')
+        elif scatter_layer.object_select_mode == 'CYCLIC':
+            flow.prop(scatter_layer, 'object_select_cyclic_offset', text='Offset')
 
         if terrain_doodad.object.type == 'CURVE':
             # Curve settings
