@@ -206,8 +206,7 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
 
     # Snap & Align to Terrain
     snap_to_terrain: BoolProperty(name='Snap to Terrain', default=True)
-    align_to_terrain: BoolProperty(name='Align to Terrain', default=False, description='Align the Z axis to the terrain normal')
-
+    align_to_terrain_factor: FloatProperty(name='Align to Terrain Factor', min=0.0, max=1.0, default=1.0, description='Align the Z axis to the terrain normal', subtype='FACTOR')
 
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})

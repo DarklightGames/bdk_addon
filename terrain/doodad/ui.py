@@ -424,7 +424,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
             flow.separator()
 
             flow.prop(scatter_layer_object, 'snap_to_terrain')
-            flow.prop(scatter_layer_object, 'align_to_terrain')
+            flow.prop(scatter_layer_object, 'align_to_terrain_factor')
 
             flow.separator()
 

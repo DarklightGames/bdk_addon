@@ -1,7 +1,7 @@
 import os
 import uuid
 
-from typing import cast, Iterable, List
+from typing import cast
 
 import bpy
 import numpy

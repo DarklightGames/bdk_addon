@@ -122,33 +122,111 @@ def _add_scatter_layer_object_driver_ex(
     var.targets[0].data_path = data_path
 
 
-def ensure_terrain_snap_and_align_node_tree() -> NodeTree:
+def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
     inputs = {
         ('NodeSocketGeometry', 'Geometry'),
-        ('NodeSocketGeometry', 'Terrain Geometry'),
+        ('NodeSocketFloat', 'Factor'),
     }
     outputs = {
         ('NodeSocketGeometry', 'Geometry'),
     }
-    node_tree = ensure_geometry_node_tree('BDK Snap and Align to Terrain', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Terrain Doodad Curve Align To Terrain', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    store_rotation_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+    store_rotation_attribute_node.label = 'Store Rotation Attribute'
+    store_rotation_attribute_node.data_type = 'FLOAT_VECTOR'
+    store_rotation_attribute_node.inputs["Selection"].default_value = True
+    store_rotation_attribute_node.inputs["Name"].default_value = 'rotation'
+
+    up_vector_node = node_tree.nodes.new(type='FunctionNodeInputVector')
+    up_vector_node.label = 'Up Vector'
+    up_vector_node.vector = (0, 0, 1)
+
+    terrain_normal_mix_node = node_tree.nodes.new(type='ShaderNodeMix')
+    terrain_normal_mix_node.label = 'Terrain Normal Mix'
+    terrain_normal_mix_node.data_type = 'VECTOR'
+    terrain_normal_mix_node.clamp_factor = True
+
+    terrain_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    terrain_normal_attribute_node.label = 'Terrain Normal Attribute'
+    terrain_normal_attribute_node.data_type = 'FLOAT_VECTOR'
+    terrain_normal_attribute_node.inputs["Name"].default_value = 'terrain_normal'
+
+    curve_tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    curve_tangent_attribute_node.label = 'Curve Tangent Attribute'
+    curve_tangent_attribute_node.data_type = 'FLOAT_VECTOR'
+    curve_tangent_attribute_node.inputs["Name"].default_value = 'curve_tangent'
+
+    align_x_node = node_tree.nodes.new(type='FunctionNodeAlignEulerToVector')
+    align_x_node.label = 'Align X'
+
+    vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+    vector_math_node.operation = 'NORMALIZE'
+
+    align_z_node = node_tree.nodes.new(type='FunctionNodeAlignEulerToVector')
+    align_z_node.label = 'Align Z'
+    align_z_node.axis = 'Z'
+    align_z_node.inputs["Factor"].default_value = 1.0
+
+    # Internal
+    node_tree.links.new(terrain_normal_mix_node.outputs[1], vector_math_node.inputs[0])  # Result -> Vector
+    node_tree.links.new(terrain_normal_attribute_node.outputs[0], terrain_normal_mix_node.inputs[5])  # Attribute -> B
+    node_tree.links.new(curve_tangent_attribute_node.outputs[0], align_x_node.inputs[2])  # Attribute -> Vector
+    node_tree.links.new(align_z_node.outputs[0], store_rotation_attribute_node.inputs[3])  # Rotation -> Value
+    node_tree.links.new(align_x_node.outputs[0], align_z_node.inputs[0])  # Rotation -> Rotation
+    node_tree.links.new(vector_math_node.outputs[0], align_z_node.inputs[2])  # Vector -> Vector
+    node_tree.links.new(up_vector_node.outputs[0], terrain_normal_mix_node.inputs[4])  # Vector -> A
+
+    # Input
+    node_tree.links.new(input_node.outputs['Factor'], terrain_normal_mix_node.inputs[0])
+    node_tree.links.new(input_node.outputs['Geometry'], store_rotation_attribute_node.inputs['Geometry'])
+
+    # Output
+    node_tree.links.new(store_rotation_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return node_tree
+
+
+def ensure_terrain_snap_and_align_node_tree() -> NodeTree:
+    inputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+        ('NodeSocketGeometry', 'Terrain Geometry'),
+        ('NodeSocketBool', 'Mute'),
+    }
+    outputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+    }
+    node_tree = ensure_geometry_node_tree('BDK Snap to Terrain', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
-    terrain_sample_node = node_tree.nodes.new(type='GeometryNodeBDKTerrainSample')
 
-    node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
-    node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
-    node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
+    terrain_sample_node = node_tree.nodes.new(type='GeometryNodeBDKTerrainSample')
 
     store_terrain_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
     store_terrain_normal_attribute_node.inputs['Name'].default_value = 'terrain_normal'
     store_terrain_normal_attribute_node.data_type = 'FLOAT_VECTOR'
     store_terrain_normal_attribute_node.domain = 'POINT'
 
-    node_tree.links.new(set_position_node.outputs['Geometry'], store_terrain_normal_attribute_node.inputs['Geometry'])
-    node_tree.links.new(terrain_sample_node.outputs['Normal'], store_terrain_normal_attribute_node.inputs[3])  # Value
+    mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    mute_switch_node.input_type = 'GEOMETRY'
+    mute_switch_node.label = 'Mute'
 
-    node_tree.links.new(store_terrain_normal_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+    # Input
+    node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
+    node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
+
+    # Internal
+    node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
+    node_tree.links.new(mute_switch_node.outputs[6], store_terrain_normal_attribute_node.inputs['Geometry'])  # Output -> Geometry
+    node_tree.links.new(terrain_sample_node.outputs['Normal'], store_terrain_normal_attribute_node.inputs[3])  # Value
+    node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[14])  # Geometry -> False
+    node_tree.links.new(set_position_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True
+
+    # Output
+    node_tree.links.new(store_terrain_normal_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])  # Geometry -> Geometry
 
     return node_tree
 
@@ -289,39 +367,50 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
     reverse_curve_switch_node.input_type = 'GEOMETRY'
     reverse_curve_switch_node.label = 'Reverse Curve?'
 
-    node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs[1])
-    node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs[14])  # False
-    node_tree.links.new(input_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
-    node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
-
-    # Add "Curve Trim" node.
     trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
-    node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.outputs['Curve'])
-    node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
-    node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
-    node_tree.links.new(input_node.outputs['Trim Factor End'], trim_curve_group_node.inputs['Factor End'])
-    node_tree.links.new(input_node.outputs['Trim Length Start'], trim_curve_group_node.inputs['Length Start'])
-    node_tree.links.new(input_node.outputs['Trim Length End'], trim_curve_group_node.inputs['Length End'])
 
-    # Add BDK Normal Offset node.
     curve_normal_offset_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
     node_tree.links.new(input_node.outputs['Normal Offset'], curve_normal_offset_group_node.inputs['Normal Offset'])
 
-    node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.inputs['Curve'])
-    node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
-
-    # Add "Curve to Points" node.
     curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
     curve_to_points_node.mode = 'LENGTH'
 
-    node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
-    node_tree.links.new(curve_normal_offset_group_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
+    store_curve_tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+    store_curve_tangent_attribute_node.data_type = 'FLOAT_VECTOR'
+    store_curve_tangent_attribute_node.domain = 'POINT'
+    store_curve_tangent_attribute_node.inputs['Name'].default_value = 'curve_tangent'
 
-    node_tree.links.new(curve_to_points_node.outputs['Normal'], output_node.inputs['Normal'])
-    node_tree.links.new(curve_to_points_node.outputs['Tangent'], output_node.inputs['Tangent'])
-    node_tree.links.new(curve_to_points_node.outputs['Points'], output_node.inputs['Points'])
+    store_curve_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+    store_curve_normal_attribute_node.data_type = 'FLOAT_VECTOR'
+    store_curve_normal_attribute_node.domain = 'POINT'
+    store_curve_normal_attribute_node.inputs['Name'].default_value = 'curve_normal'
+
+    # Input
+    node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
+    node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs[14])  # False
+    node_tree.links.new(input_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
+    node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
+    node_tree.links.new(input_node.outputs['Trim Factor End'], trim_curve_group_node.inputs['Factor End'])
+    node_tree.links.new(input_node.outputs['Trim Length Start'], trim_curve_group_node.inputs['Length Start'])
+    node_tree.links.new(input_node.outputs['Trim Length End'], trim_curve_group_node.inputs['Length End'])
+    node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
+
+    # Internal
+    node_tree.links.new(curve_normal_offset_group_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
+    node_tree.links.new(curve_to_points_node.outputs['Normal'], store_curve_normal_attribute_node.inputs[3])  # Normal -> Value
+    node_tree.links.new(curve_to_points_node.outputs['Tangent'], store_curve_tangent_attribute_node.inputs[3])  # Tangent -> Value
+    node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
+    node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.outputs['Curve'])
+    node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.inputs['Curve'])
+    node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
+    node_tree.links.new(curve_to_points_node.outputs['Points'], store_curve_tangent_attribute_node.inputs['Geometry'])
+    node_tree.links.new(store_curve_tangent_attribute_node.outputs['Geometry'], store_curve_normal_attribute_node.inputs['Geometry'])
+
+    # Output
+    node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], output_node.inputs['Points'])
 
     return node_tree
 
@@ -392,6 +481,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('NodeSocketBool', 'Snap to Terrain'),
         ('NodeSocketBool', 'Mute'),
         ('NodeSocketInt', 'Global Seed'),
+        ('NodeSocketFloat', 'Align to Terrain Factor')
     }
     outputs = {
         ('NodeSocketGeometry', 'Points')
@@ -439,16 +529,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
     node_tree.links.new(input_node.outputs['Terrain Geometry'],
                         snap_and_align_to_terrain_group_node.inputs['Terrain Geometry'])
 
-    snap_and_align_to_terrain_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    snap_and_align_to_terrain_switch_node.input_type = 'GEOMETRY'
-    snap_and_align_to_terrain_switch_node.label = 'Snap and Align to Terrain?'
-
-    node_tree.links.new(input_node.outputs['Snap to Terrain'], snap_and_align_to_terrain_switch_node.inputs[1])
-
+    node_tree.links.new(input_node.outputs['Snap to Terrain'], snap_and_align_to_terrain_group_node.inputs['Mute'])
     node_tree.links.new(points_socket, snap_and_align_to_terrain_group_node.inputs['Geometry'])
-    node_tree.links.new(points_socket, snap_and_align_to_terrain_switch_node.inputs[14])  # False
-    node_tree.links.new(snap_and_align_to_terrain_group_node.outputs['Geometry'],
-                        snap_and_align_to_terrain_switch_node.inputs[15])  # True
 
     # Mute Switch
     mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
@@ -457,12 +539,11 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
 
     node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs[1])
 
-    # Store Rotation Attribute
-    store_rotation_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-    store_rotation_attribute_node.inputs['Name'].default_value = 'rotation'
-    store_rotation_attribute_node.domain = 'POINT'
-    store_rotation_attribute_node.data_type = 'FLOAT_VECTOR'
-    store_rotation_attribute_node.label = 'Store Rotation Attribute'
+    # Align to Terrain
+    align_to_terrain_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    align_to_terrain_node_group_node.node_tree = ensure_terrain_doodad_curve_align_to_terrain_node_tree()
+
+    node_tree.links.new(input_node.outputs['Align to Terrain Factor'], align_to_terrain_node_group_node.inputs['Factor'])
 
     # Store Scale Attribute
     store_scale_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
@@ -472,11 +553,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
     store_scale_attribute_node.label = 'Store Scale Attribute'
 
     node_tree.links.new(scale_mix_node.outputs[1], store_scale_attribute_node.inputs[3])  # Result -> Value
-    # node_tree.links.new(curve_to_points_node.outputs['Rotation'], store_rotation_attribute_node.inputs[3])  # Value
-    node_tree.links.new(snap_and_align_to_terrain_switch_node.outputs[6],
-                        store_rotation_attribute_node.inputs['Geometry'])
-    node_tree.links.new(store_rotation_attribute_node.outputs['Geometry'],
-                        store_scale_attribute_node.inputs['Geometry'])
+    node_tree.links.new(snap_and_align_to_terrain_group_node.outputs['Geometry'], align_to_terrain_node_group_node.inputs['Geometry'])
+    node_tree.links.new(align_to_terrain_node_group_node.outputs['Geometry'], store_scale_attribute_node.inputs['Geometry'])
     node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False
 
     # Link the geometry from the join geometry node to the output node.
@@ -608,6 +686,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Snap to Terrain'], 'snap_to_terrain')
         add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Mute'], 'mute')
         add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Global Seed'], 'global_seed')
+        add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Align to Terrain Factor'], 'align_to_terrain_factor')
 
         node_tree.links.new(points_socket, scatter_layer_object_node_group_node.inputs['Points'])
         node_tree.links.new(terrain_info_object_node.outputs['Geometry'], scatter_layer_object_node_group_node.inputs['Terrain Geometry'])
