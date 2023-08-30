@@ -616,7 +616,16 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
     # We need to convert the point cloud to a mesh so that we can inspect the attributes for T3D export.
     points_to_vertices_node = node_tree.nodes.new(type='GeometryNodePointsToVertices')
     node_tree.links.new(join_geometry_node.outputs['Geometry'], points_to_vertices_node.inputs['Points'])
-    node_tree.links.new(points_to_vertices_node.outputs['Mesh'], output_node.inputs['Geometry'])
+
+    # Add a mute switch.
+    mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    mute_switch_node.input_type = 'GEOMETRY'
+    mute_switch_node.label = 'Mute'
+
+    node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mute_switch_node.inputs[14])  # False
+    add_scatter_layer_driver(mute_switch_node.inputs[1], 'mute')
+
+    node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
 
     return node_tree
 
