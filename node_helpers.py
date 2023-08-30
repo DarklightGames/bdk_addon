@@ -6,6 +6,29 @@ from bpy.types import NodeTree, NodeSocket, Node
 from .data import map_range_interpolation_type_items
 
 
+def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:
+    inputs = {
+        ('NodeSocketInt', 'Operation'),
+        ('NodeSocketFloat', 'Value 1'),
+        ('NodeSocketFloat', 'Value 2'),
+    }
+    outputs = {('NodeSocketFloat', 'Value')}
+    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Operation', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    output_socket = add_operation_switch_nodes(
+        node_tree,
+        input_node.outputs['Operation'],
+        input_node.outputs['Value 1'],
+        input_node.outputs['Value 2'],
+        ['ADD', 'SUBTRACT', 'MULTIPLY', 'MAXIMUM', 'MINIMUM'],
+    )
+
+    node_tree.links.new(output_socket, output_node.inputs['Value'])
+
+    return node_tree
+
+
 def add_operation_switch_nodes(
         node_tree: NodeTree,
         operation_socket: NodeSocket,

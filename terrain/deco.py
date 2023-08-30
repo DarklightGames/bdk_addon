@@ -5,7 +5,8 @@ from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct, ID
 from typing import Optional, Iterable
 
 from ..helpers import get_terrain_info
-from ..node_helpers import add_operation_switch_nodes, ensure_input_and_output_nodes, ensure_geometry_node_tree
+from ..node_helpers import add_operation_switch_nodes, ensure_input_and_output_nodes, ensure_geometry_node_tree, \
+    ensure_terrain_layer_node_operation_node_tree
 
 
 # TODO: this file needs to be renamed.
@@ -242,6 +243,45 @@ def add_density_from_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', node_
         raise RuntimeError(f'Unknown node type: {node.type}')
 
 
+def ensure_terrain_layer_node_density_node_group() -> NodeTree:
+    inputs = {
+        ('NodeSocketFloat', 'Value'),
+        ('NodeSocketFloat', 'Factor'),
+        ('NodeSocketBool', 'Use Map Range'),
+        ('NodeSocketFloat', 'Map Range From Min'),
+        ('NodeSocketFloat', 'Map Range From Max'),
+    }
+    outputs = {
+        ('NodeSocketFloat', 'Value')
+    }
+    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Density', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
+
+    map_range_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+    map_range_switch_node.input_type = 'FLOAT'
+    map_range_switch_node.label = 'Use Map Range?'
+
+    factor_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+    factor_multiply_node.operation = 'MULTIPLY'
+
+    node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs['Value'])
+    node_tree.links.new(input_node.outputs['Value'], map_range_switch_node.inputs[2])  # False
+    node_tree.links.new(map_range_node.outputs['Result'], map_range_switch_node.inputs[3])  # True
+
+    node_tree.links.new(input_node.outputs['Map Range From Min'], map_range_node.inputs['From Min'])
+    node_tree.links.new(input_node.outputs['Map Range From Max'], map_range_node.inputs['From Max'])
+
+    node_tree.links.new(input_node.outputs['Use Map Range'], map_range_switch_node.inputs[0])
+
+    node_tree.links.new(input_node.outputs['Factor'], factor_multiply_node.inputs[0])
+    node_tree.links.new(map_range_switch_node.outputs['Output'], factor_multiply_node.inputs[1])
+    node_tree.links.new(output_node.inputs['Value'], factor_multiply_node.outputs['Value'])
+
+    return node_tree
+
+
 def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, nodes: Iterable) -> Optional[NodeSocket]:
     last_density_socket = None
 
@@ -251,40 +291,34 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str,
         if density_socket is None:
             continue
 
-        # Map Range Node
-        map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
-        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Min'], 'default_value', 'map_range_from_min')
-        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_node.inputs['From Max'], 'default_value', 'map_range_from_max')
-        node_tree.links.new(density_socket, map_range_node.inputs['Value'])
+        # Density Node
+        terrain_layer_node_density_node_group_node = node_tree.nodes.new('GeometryNodeGroup')
+        terrain_layer_node_density_node_group_node.node_tree = ensure_terrain_layer_node_density_node_group()
 
-        # Map Range Switch Node
-        map_range_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
-        map_range_switch_node.input_type = 'FLOAT'
-        map_range_switch_node.label = 'Map Range Switch'
-        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, map_range_switch_node.inputs['Switch'], 'default_value', 'use_map_range')
-        node_tree.links.new(density_socket, map_range_switch_node.inputs[2])  # False socket
-        node_tree.links.new(map_range_node.outputs['Result'], map_range_switch_node.inputs[3])  # True socket
+        node_tree.links.new(density_socket, terrain_layer_node_density_node_group_node.inputs['Value'])
 
-        density_socket = map_range_switch_node.outputs['Output']
+        # TODO: extremely verbose, refactor this.
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, terrain_layer_node_density_node_group_node.inputs['Map Range From Min'], 'default_value', 'map_range_from_min')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, terrain_layer_node_density_node_group_node.inputs['Map Range From Max'], 'default_value', 'map_range_from_max')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, terrain_layer_node_density_node_group_node.inputs['Use Map Range'], 'default_value', 'use_map_range')
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, terrain_layer_node_density_node_group_node.inputs['Factor'], 'default_value', 'factor')
 
-        # Add a math node to multiply the density socket by the node's opacity.
-        factor_multiply_node = node_tree.nodes.new('ShaderNodeMath')
-        factor_multiply_node.operation = 'MULTIPLY'
-        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, factor_multiply_node.inputs[0], 'default_value', 'factor')
-        node_tree.links.new(density_socket, factor_multiply_node.inputs[1])
-        density_socket = factor_multiply_node.outputs['Value']
+        density_socket = terrain_layer_node_density_node_group_node.outputs['Value']
 
-        operation_node = node_tree.nodes.new('FunctionNodeInputInt')
-        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, operation_node, 'integer', 'operation')
-        operation_socket = operation_node.outputs['Integer']
+        # Operation Node
+        operation_node_group_node = node_tree.nodes.new('GeometryNodeGroup')
+        operation_node_group_node.node_tree = ensure_terrain_layer_node_operation_node_tree()
 
-        density_socket = add_operation_switch_nodes(
-            node_tree,
-            operation_socket,
-            last_density_socket,
-            density_socket,
-            ['ADD', 'SUBTRACT', 'MULTIPLY', 'MAXIMUM', 'MINIMUM'],
-        )
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object,
+                                      operation_node_group_node.inputs['Operation'],
+                                      'default_value', 'operation')
+
+        if last_density_socket:
+            node_tree.links.new(last_density_socket, operation_node_group_node.inputs['Value 1'])
+
+        node_tree.links.new(density_socket, operation_node_group_node.inputs['Value 2'])
+
+        density_socket = operation_node_group_node.outputs['Value']
 
         switch_node = node_tree.nodes.new('GeometryNodeSwitch')
         switch_node.input_type = 'FLOAT'
