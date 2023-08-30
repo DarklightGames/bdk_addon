@@ -1,5 +1,8 @@
+from collections import OrderedDict
+from typing import OrderedDict as OrderedDictType
 from typing import Dict
 
+import mathutils
 from bpy.types import Operator, Context, NodeTree, Node
 from bpy.props import BoolProperty
 
@@ -113,12 +116,19 @@ class BDK_OT_generate_node_code(Operator):
         return True
 
     def execute(self, context: Context):
-        # Get the selected nodes in the node editor.
+
         selected_nodes = context.selected_nodes
+
+        # Get the selected nodes in the node editor.
+        def get_socket_index(sockets, socket):
+            for i, s in enumerate(sockets):
+                if s == socket:
+                    return i
+            return None
 
         lines = []
 
-        nodes: Dict[str, Node] = dict()
+        nodes: OrderedDictType[str, Node] = OrderedDict()
 
         for node in selected_nodes:
             if node.label:
@@ -151,37 +161,87 @@ class BDK_OT_generate_node_code(Operator):
                         value = f'\'{value}\''
                     lines.append(f'{variable_name}.{property_name} = {value}')
 
+            # Check if the node has any input sockets whose default value doesn't match the default value of the socket type.
+            for socket in node.inputs:
+                if socket.is_linked or socket.is_unavailable:
+                    continue
+                if socket.default_value:  # TODO: this is imprecise but should work for now
+                    default_value = socket.default_value
+                    if type(socket.default_value) == str:
+                        default_value = f'\'{default_value}\''
+                    # TODO: other types are too much of a pain to handle right now
+                    lines.append(f'{variable_name}.inputs["{socket.name}"].default_value = {default_value}')
+
+            lines.append('')
+
+
         # Get all the links between the selected nodes.
         links = set()
         for variable_name, node in nodes.items():
             for input in node.inputs:
                 if input.is_linked:
                     for link in input.links:
-                        if link.from_node in selected_nodes:
-                            links.add(link)
+                        links.add(link)
             for output in node.outputs:
                 if output.is_linked:
                     for link in output.links:
-                        if link.to_node in selected_nodes:
-                            links.add(link)
+                        links.add(link)
+
+        internal_links = []
+        incoming_links = []
+        outgoing_links = []
 
         for link in links:
             from_node = link.from_node
             to_node = link.to_node
 
-            # Get variable names for the nodes.
             from_variable_name = None
-            for variable_name, node in nodes.items():
-                if node == from_node:
-                    from_variable_name = variable_name
-                    break
+            from_socket_index = None
             to_variable_name = None
-            for variable_name, node in nodes.items():
-                if node == to_node:
-                    to_variable_name = variable_name
-                    break
+            to_socket_index = None
 
-            lines.append(f'node_tree.links.new({from_variable_name}.outputs[\'{link.from_socket.identifier}\'], {to_variable_name}.inputs[\'{link.to_socket.identifier}\'])')
+            if from_node and from_node in selected_nodes:
+                # Get variable names for the nodes.
+                for variable_name, node in nodes.items():
+                    if node == from_node:
+                        from_variable_name = variable_name
+                        break
+                # Get the index of the "from" socket.
+                from_socket_index = get_socket_index(from_node.outputs, link.from_socket)
+
+            if to_node and to_node in selected_nodes:
+                for variable_name, node in nodes.items():
+                    if node == to_node:
+                        to_variable_name = variable_name
+                        break
+                # Get the index of the "to" socket.
+                to_socket_index = get_socket_index(to_node.inputs, link.to_socket)
+
+            if from_variable_name and from_socket_index is not None and to_variable_name and to_socket_index is not None:
+                internal_links.append((link, from_variable_name, from_socket_index, to_variable_name, to_socket_index))
+            elif from_variable_name and from_socket_index is not None and not to_variable_name and to_socket_index is None:
+                outgoing_links.append((link, from_variable_name, from_socket_index))
+            elif not from_variable_name and from_socket_index is None and to_variable_name and to_socket_index is not None:
+                incoming_links.append((link, to_variable_name, to_socket_index))
+
+        if internal_links:
+            lines.append('')
+            lines.append('# Internal Links')
+            for (link, from_variable_name, from_socket_index, to_variable_name, to_socket_index) in internal_links:
+                lines.append(f'node_tree.links.new({from_variable_name}.outputs[{from_socket_index}], {to_variable_name}.inputs[{to_socket_index}])  # {link.from_socket.name} -> {link.to_socket.name}')
+
+        if incoming_links:
+            lines.append('')
+            lines.append('# Incoming Links')
+            for (link, to_variable_name, to_socket_index) in incoming_links:
+                lines.append(f'# {to_variable_name}.inputs[{to_socket_index}]  # {link.to_socket.name}')
+
+        if outgoing_links:
+            lines.append('')
+            lines.append('# Outgoing Links')
+            for (link, from_variable_name, from_socket_index) in outgoing_links:
+                lines.append(f'# {from_variable_name}.outputs[{from_socket_index}]  # {link.from_socket.name}')
+
 
         # Copy the lines to the clipboard.
         context.window_manager.clipboard = '\n'.join(lines)
@@ -194,3 +254,59 @@ classes = (
     BDK_OT_fix_bsp_import_materials,
     BDK_OT_generate_node_code,
 )
+
+"""
+map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
+map_range_node.clamp = True
+map_range_node.inputs["From Max"].default_value = 1.0
+map_range_node.inputs["Steps"].default_value = 4.0
+map_range_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+map_range_node.inputs["From Min"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+map_range_node.inputs["From Max"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+map_range_node.inputs["To Min"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+map_range_node.inputs["To Max"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+map_range_node.inputs["Steps"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+terrain_normal_offset_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+terrain_normal_offset_scale_node.label = 'Terrain Normal Offset Scale'
+terrain_normal_offset_scale_node.operation = 'SCALE'
+terrain_normal_offset_scale_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+terrain_normal_offset_scale_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+random_value_node.inputs["Min"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+random_value_node.inputs["Max"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+random_value_node.inputs["Max"].default_value = 1.0
+random_value_node.inputs["Max"].default_value = 100
+random_value_node.inputs["Probability"].default_value = 0.5
+random_value_node.inputs["Seed"].default_value = 281
+vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+vector_math_node.operation = 'NORMALIZE'
+vector_math_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+vector_math_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+vector_math_node.inputs["Scale"].default_value = 1.0
+terrain_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+terrain_normal_attribute_node.label = 'Terrain Normal Attribute'
+terrain_normal_attribute_node.data_type = 'FLOAT_VECTOR'
+terrain_normal_attribute_node.inputs["Name"].default_value = terrain_normal
+mix_node = node_tree.nodes.new(type='ShaderNodeMix')
+mix_node.data_type = 'VECTOR'
+mix_node.clamp_factor = True
+mix_node.inputs["Factor"].default_value = 1.0
+mix_node.inputs["Factor"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+mix_node.inputs["A"].default_value = <bpy_float[3], NodeSocketVector.default_value>
+mix_node.inputs["A"].default_value = <bpy_float[4], NodeSocketColor.default_value>
+mix_node.inputs["B"].default_value = <bpy_float[4], NodeSocketColor.default_value>
+mix_node.inputs["A"].default_value = <Euler (x=0.0000, y=0.0000, z=0.0000), order='XYZ'>
+mix_node.inputs["B"].default_value = <Euler (x=0.0000, y=0.0000, z=0.0000), order='XYZ'>
+align_z_node = node_tree.nodes.new(type='FunctionNodeAlignEulerToVector')
+align_z_node.label = 'Align Z'
+align_z_node.axis = 'Z'
+align_z_node.inputs["Factor"].default_value = 1.0
+align_x_node = node_tree.nodes.new(type='FunctionNodeAlignEulerToVector')
+align_x_node.label = 'Align X'
+align_x_node.inputs["Rotation"].default_value = <Euler (x=0.0000, y=0.0000, z=0.0000), order='XYZ'>
+align_x_node.inputs["Factor"].default_value = 1.0
+curve_tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+curve_tangent_attribute_node.label = 'Curve Tangent Attribute'
+curve_tangent_attribute_node.data_type = 'FLOAT_VECTOR'
+curve_tangent_attribute_node.inputs["Name"].default_value = curve_tangent
+"""
