@@ -1,11 +1,11 @@
 import io
 from types import NoneType
-from typing import Any, OrderedDict, List
+from typing import Any, OrderedDict, List, Iterable
 
 from mathutils import Vector, Euler
 
 from ..units import radians_to_unreal
-from ..t3d.data import T3DMap, T3DActor
+from ..t3d.data import T3DObject
 
 
 class T3DWriter:
@@ -50,21 +50,57 @@ class T3DWriter:
         for index, value in enumerate(value_list):
             self._write_line(f'{key}({index})={self._value_to_string(value)}')
 
-    def write(self, t3d: T3DMap):
-        self._write_line('Begin Map')
-        for actor in t3d.actors:
-            self._write_actor(actor)
-        self._write_line('End Map')
+    def write(self, object: T3DObject):
+        self._write_object(object)
 
-    def _write_actor(self, actor: T3DActor):
-        self._write_line(f'Begin Actor Class={actor["Class"]} Name={actor["Name"]}')
+    def _write_object(self, object: T3DObject):
+        def format_vector(vector: Iterable[float]) -> str:
+            return ','.join(map(lambda element: '%+013.6f' % element, vector))
+
+        # Begin
+        first_line = f'Begin {object.type_name}'
+
+        type_inline_properties = {
+            'Polygon': ('Texture', 'Flags', 'Link')
+        }
+        universal_inline_properties = ('Class', 'Name')
+        inline_properties = list()
+
+        # Gather the inline properties for this object type.
+        if object.type_name in type_inline_properties:
+            inline_properties.extend(type_inline_properties[object.type_name])
+        inline_properties.extend(universal_inline_properties)
+
+        # Inline Properties
+        for key in inline_properties:
+            if key in object.properties:
+                first_line += f' {key}={object.properties[key]}'
+
+        self._write_line(first_line)
+
         self._indent()
 
-        for key, value in filter(lambda item: item[0] not in {'Class', 'Name'}, actor.items()):
+        # Polygon
+        if object.polygon:
+            self._write_line(f'{"Origin":8} {format_vector(object.polygon.origin)}')
+            self._write_line(f'{"Normal":8} {format_vector(object.polygon.normal)}')
+            self._write_line(f'{"TextureU":8} {format_vector(object.polygon.texture_u)}')
+            self._write_line(f'{"TextureV":8} {format_vector(object.polygon.texture_v)}')
+            self._write_line(f'{"Vertex":8} {format_vector(object.polygon.vertices[0])}')
+            self._write_line(f'{"Vertex":8} {format_vector(object.polygon.vertices[1])}')
+            self._write_line(f'{"Vertex":8} {format_vector(object.polygon.vertices[2])}')
+
+        # Children
+        for child in object.children:
+            self._write_object(child)
+
+        # Properties
+        for key, value in filter(lambda item: item[0] not in inline_properties, object.properties.items()):
             if type(value) == list:
                 self._write_list(key, value)
             else:
                 self._write_key_value(key, value)
 
+        # End
         self._dedent()
-        self._write_line('End Actor')
+        self._write_line(f'End {object.type_name}')

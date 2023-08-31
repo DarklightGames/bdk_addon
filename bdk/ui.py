@@ -1,5 +1,6 @@
 from bpy.types import Menu
 
+from ..bsp import operators as bsp_operators
 from ..fluid_surface import operators as fluid_surface_operators
 from ..projector import operators as projector_operators
 from ..terrain import operators as terrain_operators
@@ -17,6 +18,7 @@ class BDK_MT_object_add_menu(Menu):
         self.layout.operator(projector_operators.BDK_OT_projector_add.bl_idname, text='Projector', icon='CAMERA_DATA')
         self.layout.operator(fluid_surface_operators.BDK_OT_fluid_surface_add.bl_idname, text='Fluid Surface',
                              icon='MOD_FLUIDSIM')
+        self.layout.operator(bsp_operators.BDK_OT_bsp_brush_add.bl_idname, text='BSP Brush', icon='MOD_BUILD')
 
 
 classes = (

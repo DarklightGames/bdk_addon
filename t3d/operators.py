@@ -2,6 +2,7 @@ import math
 from io import StringIO
 from typing import List
 
+import bmesh
 import bpy
 import numpy
 from mathutils import Euler, Matrix
@@ -9,9 +10,11 @@ from bpy.types import Operator, Context, Object
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
+from ..bsp.properties import poly_flag_values
+from ..bsp.builder import create_bsp_brush_polygon
 from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, get_terrain_heightmap, \
     create_terrain_info_actor, convert_blender_matrix_to_unreal_movement_units
-from .data import T3DMap, T3DActor
+from .data import T3DObject
 from pathlib import Path
 from .importer import import_t3d
 from .writer import T3DWriter
@@ -83,7 +86,67 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
         return {'FINISHED'}
 
 
-def terrain_doodad_to_actors(context: Context, terrain_doodad_object: Object) -> List[T3DActor]:
+def sanitize_name(name: str) -> str:
+    return name.replace('.', '_')
+
+
+def get_poly_flags_int(poly_flags: set[str]) -> int:
+    poly_flags_int = 0
+    for flag in poly_flags:
+        poly_flags_int |= poly_flag_values[flag]
+    return poly_flags_int
+
+
+def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
+    depsgraph = context.evaluated_depsgraph_get()
+    # mesh_data = bsp_brush_object.evaluated_get(depsgraph).data
+
+    object_name = sanitize_name(bsp_brush_object.name)
+
+    bsp_brush = bsp_brush_object.bdk.bsp_brush
+
+    actor = T3DObject('Actor')
+    actor.properties['Class'] = 'Brush'
+    actor.properties['Name'] = object_name
+    actor.properties['CsgOper'] = bsp_brush.csg_operation  # Convert the IDs to the expected format
+    actor.properties['PolyFlags'] = get_poly_flags_int(bsp_brush.poly_flags)
+
+    add_movement_properties_to_actor(actor, bsp_brush_object)
+
+    # del actor.properties['DrawScale3D']
+
+    brush = T3DObject('Brush')
+    brush.properties['Name'] = object_name
+
+    poly_list = T3DObject('PolyList')
+
+    # Why are we making temporary objects here?
+    bm = bmesh.new()
+    bm.from_object(bsp_brush_object, depsgraph)
+    mesh_data = bpy.data.meshes.new('')
+    bm.to_mesh(mesh_data)
+    del bm
+    mesh_object = bpy.data.objects.new('', mesh_data)
+    mesh_object.matrix_world = mesh_object.matrix_world
+
+    mesh_data.calc_loop_triangles()
+
+    for index, loop_triangle in enumerate(mesh_data.loop_triangles):
+        poly = T3DObject('Polygon')
+        poly.properties['Texture'] = 'None'
+        poly.properties['Link'] = index
+        poly.polygon = create_bsp_brush_polygon(mesh_object, loop_triangle)
+        poly_list.children.append(poly)
+
+    brush.children.append(poly_list)
+    actor.children.append(brush)
+
+    actor.properties['Brush'] = f'Model\'myLevel.{object_name}\''
+
+    return actor
+
+
+def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Object) -> List[T3DObject]:
     # Look up the seed object for the terrain doodad.
     depsgraph = context.evaluated_depsgraph_get()
     terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
@@ -124,12 +187,14 @@ def terrain_doodad_to_actors(context: Context, terrain_doodad_object: Object) ->
             matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
 
             static_mesh_object = scatter_layer.objects[object_index].object
-            actor = T3DActor(class_='StaticMeshActor', name=static_mesh_object.name)
-            actor['StaticMesh'] = static_mesh_object.bdk.package_reference
+            actor = T3DObject(type_name='Actor')
+            actor.properties['Class'] = 'StaticMeshActor'
+            actor.properties['Name'] = static_mesh_object.name
+            actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
             location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
-            actor['Location'] = location
-            actor['Rotation'] = rotation
-            actor['DrawScale3D'] = scale
+            actor.properties['Location'] = location
+            actor.properties['Rotation'] = rotation
+            actor.properties['DrawScale3D'] = scale
             actors.append(actor)
 
     return actors
@@ -150,8 +215,8 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         return True
 
     def execute(self, context: Context):
-        copy_actors: list[T3DActor] = []
-        t3d = T3DMap()
+        copy_actors: list[T3DObject] = []
+        t3d = T3DObject('Map')
 
         def can_copy(bpy_object: Object) -> bool:
             # TODO: SpectatorCam, Projector, FluidSurface etc.
@@ -159,9 +224,11 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
         depsgraph = context.evaluated_depsgraph_get()
 
+        bsp_brush_objects = []
+
         for obj in context.selected_objects:
             if obj.bdk.type == 'TERRAIN_DOODAD':
-                copy_actors += terrain_doodad_to_actors(context, obj)
+                copy_actors += terrain_doodad_to_t3d_objects(context, obj)
             elif obj.bdk.type == 'TERRAIN_INFO':
                 # TODO: terrain scale might be an issue for people just editing existing maps
                 heightmap, terrain_scale_z = get_terrain_heightmap(obj, depsgraph)
@@ -169,7 +236,9 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
             # TODO: add handlers for other object types (outside of this function)
             elif obj.type == 'CAMERA':
                 # Create a SpectatorCam actor
-                actor = T3DActor('SpectatorCam', obj.name)
+                actor = T3DObject('Actor')
+                actor['Class'] = 'SpectatorCam'
+                actor['Name'] = obj.name
                 add_movement_properties_to_actor(actor, obj)
                 rotation_euler = actor['Rotation']
                 # TODO: make corrective matrix a constant
@@ -177,7 +246,10 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
                 rotation_euler.z += math.pi / 2
                 rotation_euler.x -= math.pi / 2
                 # Adjust the camera's rotation to match the Unreal coordinate system.
-                t3d.actors.append(actor)
+                t3d.children.append(actor)
+            elif obj.bdk.type == 'BSP_BRUSH':
+                # Add the brush to the list of brushes to copy, we have to sort them by sort order.
+                bsp_brush_objects.append(obj)
             else:
                 if obj.instance_collection:
                     copy_actors += [create_static_mesh_actor(o, obj)
@@ -186,8 +258,11 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
                 elif can_copy(obj):
                     copy_actors.append(create_static_mesh_actor(obj))
 
+        for bsp_brush_object in sorted(bsp_brush_objects, key=lambda obj: obj.bdk.bsp_brush.sort_order):
+            copy_actors.append(bsp_brush_to_actor(context, bsp_brush_object))
+
         for actor in copy_actors:
-            t3d.actors.append(actor)
+            t3d.children.append(actor)
 
         string_io = StringIO()
         T3DWriter(string_io).write(t3d)

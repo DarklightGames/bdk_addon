@@ -9,7 +9,7 @@ from typing import cast, Optional
 
 from mathutils import Vector, Matrix, Euler
 
-from ..t3d.data import T3DActor, T3DMap
+from ..t3d.data import T3DObject
 from ..t3d.writer import T3DWriter
 from ..helpers import get_terrain_info
 from .g16 import write_bmp_g16
@@ -39,22 +39,23 @@ def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, 
 
 
 # TODO: kind of ugly
-def add_movement_properties_to_actor(actor: T3DActor, bpy_object: Object, asset_instance: Optional[Object] = None) -> None:
+def add_movement_properties_to_actor(actor: T3DObject, bpy_object: Object, asset_instance: Optional[Object] = None) -> None:
     if asset_instance:
         matrix_world: Matrix = asset_instance.matrix_world @ get_instance_offset(asset_instance) @ bpy_object.matrix_local
     else:
         matrix_world = bpy_object.matrix_world
 
     location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix_world)
-    actor['Location'] = location
-    actor['Rotation'] = rotation
-    actor['DrawScale3D'] = scale
+    actor.properties['Location'] = location
+    actor.properties['Rotation'] = rotation
+    actor.properties['DrawScale3D'] = scale
 
 
-def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optional[Object] = None) -> T3DActor:
-    actor = T3DActor(class_='StaticMeshActor', name=static_mesh_object.name)
-
-    actor['StaticMesh'] = static_mesh_object.bdk.package_reference
+def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optional[Object] = None) -> T3DObject:
+    actor = T3DObject('Actor')
+    actor.properties['Class'] = 'StaticMeshActor'
+    actor.properties['Name'] = static_mesh_object.name
+    actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
     add_movement_properties_to_actor(actor, static_mesh_object, asset_instance)
 
     # Skin Overrides
@@ -67,10 +68,12 @@ def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optiona
     return actor
 
 
-def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: float) -> T3DActor:
+def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: float) -> T3DObject:
     terrain_info = get_terrain_info(terrain_info_object)
 
-    actor = T3DActor(class_='TerrainInfo', name='TerrainInfo0')
+    actor = T3DObject('Actor')
+    actor.properties['Class'] = 'TerrainInfo'
+    actor.properties['Name'] = 'TerrainInfo0'  # TODO: just use object name?
 
     # Paint Layers
     layers = []
@@ -162,19 +165,19 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
             bitmap_index += 1
         bitmap_index += 1
 
-    actor['TerrainMap'] = f'Texture\'myLevel.{terrain_info_object.name}\''
-    actor['Layers'] = layers
-    actor['DecoLayers'] = deco_layers
-    actor['EdgeTurnBitmap'] = edge_turn_bitmap.tolist()
-    actor['QuadVisibilityBitmap'] = quad_visibility_bitmap.tolist()
-    actor['bNoDelete'] = True
-    actor['bLockLocation'] = True
-    actor['TerrainSectorSize'] = min(16, terrain_info.y_size, terrain_info.x_size)
-    actor['TerrainScale'] = Vector((
+    actor.properties['TerrainMap'] = f'Texture\'myLevel.{terrain_info_object.name}\''
+    actor.properties['Layers'] = layers
+    actor.properties['DecoLayers'] = deco_layers
+    actor.properties['EdgeTurnBitmap'] = edge_turn_bitmap.tolist()
+    actor.properties['QuadVisibilityBitmap'] = quad_visibility_bitmap.tolist()
+    actor.properties['bNoDelete'] = True
+    actor.properties['bLockLocation'] = True
+    actor.properties['TerrainSectorSize'] = min(16, terrain_info.y_size, terrain_info.x_size)
+    actor.properties['TerrainScale'] = Vector((
         terrain_info.terrain_scale,
         terrain_info.terrain_scale,
         max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
-    actor['DecoLayerOffset'] = terrain_info_object.bdk.terrain_info.deco_layer_offset
+    actor.properties['DecoLayerOffset'] = terrain_info_object.bdk.terrain_info.deco_layer_offset
 
     add_movement_properties_to_actor(actor, terrain_info_object)
 
@@ -294,8 +297,8 @@ def export_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph, 
 
 def write_terrain_t3d(terrain_info_object: Object, depsgraph: Depsgraph, fp: io.TextIOBase):
     heightmap, terrain_scale_z = get_terrain_heightmap(terrain_info_object, depsgraph)
-    t3d = T3DMap()
-    t3d.actors.append(create_terrain_info_actor(terrain_info_object, terrain_scale_z))
+    t3d = T3DObject('Map')
+    t3d.children.append(create_terrain_info_actor(terrain_info_object, terrain_scale_z))
     T3DWriter(fp).write(t3d)
 
 

@@ -252,7 +252,6 @@ def deco_layer_linked_layer_name_update(self: 'BDK_PG_terrain_deco_layer', conte
             self.linked_layer_id = layer.id
             break
     # Trigger an update of the deco layers.
-    # TODO: Have the density map attribute ID in the geometry node be driven by a property.
     ensure_deco_layers(context.active_object)
 
     # Push an undo state.
