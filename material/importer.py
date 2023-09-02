@@ -970,8 +970,8 @@ class BDK_OT_material_import(Operator, ImportHelper):
 
         # Make a new function to do the conversion from Color & Alpha socket to Shader.
         if outputs:
-            material_data['UClamp'] = outputs.size[0]
-            material_data['VClamp'] = outputs.size[1]
+            material_data.bdk.size_x = outputs.size[0]
+            material_data.bdk.size_y = outputs.size[1]
             material_data.use_backface_culling = outputs.use_backface_culling
             material_data.show_transparent_back = not outputs.use_backface_culling
             material_data.blend_method = outputs.blend_method

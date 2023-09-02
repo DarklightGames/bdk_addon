@@ -11,10 +11,14 @@ class BDK_PT_material(Panel):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.material is not None and hasattr(context.material, 'bdk') and context.material.bdk.package_reference is not None
+        return context.material is not None and hasattr(context.material, 'bdk') and context.material.bdk.package_reference != ''
 
     def draw(self, context):
-        self.layout.label(text=context.material.bdk.package_reference)
+        self.layout.use_property_split = True
+        self.layout.use_property_decorate = False
+        self.layout.prop(context.material.bdk, 'package_reference')
+        self.layout.prop(context.material.bdk, 'size_x')
+        self.layout.prop(context.material.bdk, 'size_y')
 
 
 classes = (
