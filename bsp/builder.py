@@ -1,27 +1,26 @@
 # NOTE: This is taken more or less verbatim from the ase2t3d source, adopted for Python.
 # In the future, clean this up so that it's more clear what is going on.
+from typing import cast
+
 import bmesh
 import bpy
-from bpy.types import Object, MeshLoopTriangle
+from bpy.types import Object, MeshPolygon, Mesh
 
 from ..t3d.data import Polygon
 import numpy as np
 from math import isnan
 
 
+def create_bsp_brush_polygon(mesh_object: Object, polygon: MeshPolygon) -> Polygon:
+    mesh_data = cast(Mesh, mesh_object.data)
 
-# TODO: convert to use MeshPolygon, not MeshLoopTriangle (the triangles might be screwing things up)
-def create_bsp_brush_polygon(mesh_object: Object, loop_triangle: MeshLoopTriangle) -> Polygon:
-
-    mesh = mesh_object.data
-
-    # get the texture coordinates using this
-    # TODO: check active uv layer etc.
-    texture_coordinates = [(mesh.uv_layers[0].data[i].uv[0], mesh.uv_layers[0].data[i].uv[1]) for i in loop_triangle.loops]
-
-    # TODO: get the texture size from somewhere
-    texture_width = 256
-    texture_height = 256
+    uv_layer = mesh_data.uv_layers[0]
+    texture_coordinates = [
+        (uv_layer.data[i].uv[0], uv_layer.data[i].uv[1]) for i in polygon.loop_indices[0:3]
+    ]
+    material = mesh_object.material_slots[polygon.material_index].material if polygon.material_index < len(mesh_object.material_slots) else None
+    texture_width = material.bdk.size_x if material else 512
+    texture_height = material.bdk.size_y if material else 512
 
     u_tiling = 1
     v_tiling = 1
@@ -69,7 +68,9 @@ def create_bsp_brush_polygon(mesh_object: Object, loop_triangle: MeshLoopTriangl
     t2 -= v_translate
 
     # Coordinates
-    pt0, pt1, pt2 = [np.array(mesh_object.matrix_world @ mesh.vertices[i].co) for i in loop_triangle.vertices]
+    vertices = [np.array(mesh_object.matrix_world @ mesh_data.vertices[i].co) for i in polygon.vertices]
+
+    pt0, pt1, pt2 = vertices[0:3]
 
     pt0[1] = -pt0[1]
     pt1[1] = -pt1[1]
@@ -138,11 +139,15 @@ def create_bsp_brush_polygon(mesh_object: Object, loop_triangle: MeshLoopTriangl
     texture_u = normal if impossible else p_grad_u
     texture_v = normal if impossible else p_grad_v
 
+    # Repeated from above, so inefficient, but avoids modifying the original vertices.
+    # Figure out a way around this later.
+    vertices = [np.array(mesh_object.matrix_world @ mesh_data.vertices[i].co) for i in polygon.vertices]
+
     return Polygon(
         link=0,
         origin=origin,
         normal=normal,
         texture_u=texture_u,
         texture_v=texture_v,
-        vertices=[pt1, pt0, pt2]
+        vertices=vertices
     )

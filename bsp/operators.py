@@ -1,5 +1,8 @@
+from collections import OrderedDict
+from enum import Enum
+
 import bpy
-from bpy.types import Operator
+from bpy.types import Operator, Object, Context
 import bmesh
 
 from .properties import csg_operation_items
@@ -14,7 +17,7 @@ class BDK_OT_bsp_brush_add(Operator):
     csg_operation: bpy.props.EnumProperty(
         name='CSG Operation',
         items=csg_operation_items,
-        default='ADD',
+        default='Csg_Add',
     )
 
     # TODO: options for shape, size etc.
@@ -50,7 +53,7 @@ class BDK_OT_bsp_brush_add(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_set_sort_order(Operator):
+class BDK_OT_bsp_brush_set_sort_order(Operator):
     bl_idname = 'bdk.set_sort_order'
     bl_label = 'Set BSP Sort Order'
     bl_description = 'Set the sort order of selected BSP brushes'
@@ -93,7 +96,7 @@ class BDK_OT_convert_to_bsp_brush(Operator):
         if context.active_object.type != 'MESH':
             cls.poll_message_set('Object is not a mesh')
             return False
-        if context.active_object.bdk.type != '':
+        if context.active_object.bdk.type != 'NONE':
             cls.poll_message_set('Object is already a BDK object')
             return False
         return True
@@ -108,8 +111,10 @@ class BDK_OT_convert_to_bsp_brush(Operator):
 
 def poll_is_active_object_bsp_brush(cls, context: 'Context'):
     if context.object is None:
+        cls.poll_message_set('No object selected')
         return False
     if context.object.bdk.type != 'BSP_BRUSH':
+        cls.poll_message_set('Selected object is not a BSP brush')
         return False
     return True
 
@@ -147,22 +152,95 @@ class BDK_OT_bsp_brush_select_similar(Operator):
         return True
 
     def execute(self, context):
-        obj = context.object
+        active_object = context.object
+        bsp_brush = active_object.bdk.bsp_brush
+
         if self.property == 'CSG_OPERATION':
-            csg_operation = obj.bdk.bsp_brush.csg_operation
-            for obj in context.scene.objects:
-                if obj.bdk.type == 'BSP_BRUSH' and obj.bdk.bsp_brush.csg_operation == csg_operation:
-                    obj.select_set(True)
+            def filter_csg_operation(obj: Object):
+                return obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
+            filter_function = filter_csg_operation
         elif self.property == 'POLY_FLAGS':
-            poly_flags = obj.bdk.bsp_brush.poly_flags
-            for obj in context.scene.objects:
-                if obj.bdk.type == 'BSP_BRUSH' and obj.bdk.bsp_brush.poly_flags == poly_flags:
-                    obj.select_set(True)
+            def filter_poly_flags(obj: Object):
+                return obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
+            filter_function = filter_poly_flags
         elif self.property == 'SORT_ORDER':
-            sort_order = obj.bdk.bsp_brush.sort_order
-            for obj in context.scene.objects:
-                if obj.bdk.type == 'BSP_BRUSH' and obj.bdk.bsp_brush.sort_order == sort_order:
-                    obj.select_set(True)
+            def filter_sort_order(obj: Object):
+                return obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
+            filter_function = filter_sort_order
+        else:
+            self.report({'ERROR'}, f'Invalid property: {self.property}')
+            return {'CANCELLED'}
+
+        for obj in filter(filter_function, context.scene.objects):
+            obj.select_set(True)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_bsp_brush_check_for_errors(Operator):
+    bl_idname = 'bdk.bsp_brush_check_for_errors'
+    bl_label = 'Check BSP Brush for Errors'
+    bl_description = 'Check the selected BSP brush for errors'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    errors: bpy.props.EnumProperty(
+        name='Errors',
+        items=(
+            ('NOT_MANIFOLD', 'Not Manifold', 'The brush is not manifold'),
+            ('NOT_CONVEX', 'Not Convex', 'The brush is not convex')
+        ),
+        default={'NOT_MANIFOLD', 'NOT_CONVEX'},
+        options={'ENUM_FLAG'},
+    )
+    select: bpy.props.BoolProperty(
+        name='Select',
+        description='Select the object if it has errors',
+        default=True,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_selected_bsp_brushes(cls, context)
+
+    def draw(self, context: Context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(self, 'errors')
+        layout.prop(self, 'select')
+
+    def execute(self, context):
+        class BspBrushError(Enum):
+            NOT_MANIFOLD = 1
+            NOT_CONVEX = 2
+        object_errors = OrderedDict()
+        for obj in context.selected_objects:
+            if obj.bdk.type == 'BSP_BRUSH':
+                # Check that the object is manifold.
+                bm = bmesh.new()
+                bm.from_mesh(obj.data)
+                if 'NOT_MANIFOLD' in self.errors:
+                    for edge_index, edge in enumerate(bm.edges):
+                        if not edge.is_manifold:
+                            object_errors[obj] = BspBrushError.NOT_MANIFOLD
+                if 'NOT_CONVEX' in self.errors:
+                    for edge_index, edge in enumerate(bm.edges):
+                        if not edge.is_convex:
+                            object_errors[obj] = BspBrushError.NOT_CONVEX
+                bm.free()
+        if object_errors:
+            self.report({'ERROR'}, f'Found {len(object_errors)} errors')
+            for obj, error in object_errors.items():
+                if error == BspBrushError.NOT_MANIFOLD:
+                    self.report({'ERROR'}, f'{obj.name}: Not manifold')
+                elif error == BspBrushError.NOT_CONVEX:
+                    self.report({'ERROR'}, f'{obj.name}: Not convex')
+            if self.select:
+                # Go through all selected objects and deselect those that don't have errors.
+                for obj in context.selected_objects:
+                    if obj not in object_errors:
+                        obj.select_set(False)
+        self.report({'INFO'}, 'No errors found')
         return {'FINISHED'}
 
 
@@ -194,7 +272,8 @@ class BDK_OT_bsp_brush_snap_to_grid(Operator):
 classes = (
     BDK_OT_bsp_brush_add,
     BDK_OT_convert_to_bsp_brush,
-    BDK_OT_set_sort_order,
+    BDK_OT_bsp_brush_set_sort_order,
     BDK_OT_bsp_brush_select_similar,
-    BDK_OT_bsp_brush_snap_to_grid
+    BDK_OT_bsp_brush_snap_to_grid,
+    BDK_OT_bsp_brush_check_for_errors
 )

@@ -51,14 +51,13 @@ def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, fl
     elif csg_operation == 'CSG_Subtract':
         return BrushColors.Subtract.value
     else:
+        # This should never happen, but it was used for intersect and de-intersect brushes in the original editor.
         return BrushColors.Grey.value
 
 
 csg_operation_items = (
     ('CSG_Add', 'Add', 'Add to world', 1),
     ('CSG_Subtract', 'Subtract', 'Subtract from world', 2),
-    ('CSG_Intersect', 'Intersect', 'Form from intersection with world', 3),
-    ('CSG_Deintersect', 'De-intersect', 'Form from negative intersection with world', 4),
 )
 
 
