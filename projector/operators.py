@@ -63,8 +63,8 @@ class BDK_OT_projector_add(Operator):
         # TODO: lookup the keys for named inputs.
         modifier["Input_0"] = target
         modifier["Input_4"] = material
-        modifier["Input_5"] = material['UClamp'] if material else 256
-        modifier["Input_6"] = material['VClamp'] if material else 256
+        modifier["Input_5"] = material.bdk.size_x if material else 256
+        modifier["Input_6"] = material.bdk.size_y if material else 256
 
         # Deselect all doodad.
         for obj in context.selected_objects:
