@@ -7,11 +7,12 @@ from bpy.props import EnumProperty
 from .properties import ensure_terrain_info_modifiers
 from .scatter.builder import ensure_scatter_layer_modifiers, add_scatter_layer_object, add_scatter_layer, \
     ensure_scatter_layer
+from ..operators import merge_down_terrain_layer_node_data
 from ..properties import BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id, \
     get_terrain_info_deco_layer_by_id
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad, \
     is_active_object_terrain_doodad, should_show_bdk_developer_extras
-from .builder import create_terrain_doodad, create_terrain_doodad_bake_node_tree
+from .builder import create_terrain_doodad_object, create_terrain_doodad_bake_node_tree
 
 
 class BDK_OT_terrain_doodad_add(Operator):
@@ -38,7 +39,7 @@ class BDK_OT_terrain_doodad_add(Operator):
     def execute(self, context: Context):
         # TODO: have a way to select the terrain info object definition.
         terrain_info_object = context.active_object
-        terrain_doodad = create_terrain_doodad(context, terrain_info_object, self.object_type)
+        terrain_doodad = create_terrain_doodad_object(context, terrain_info_object, self.object_type)
 
         """
         BUG: If the terrain info object has been added as rigid body, the collection will be the
@@ -340,8 +341,9 @@ class BDK_OT_terrain_doodad_bake(Operator):
             nodes.move(len(nodes) - 1, 0)
 
             if self.should_merge_down_nodes:
-                # TODO: merge down the nodes if possible
-                pass
+                # If the node below us has the same operation, merge it down.
+                if len(nodes) > 1 and nodes[1].operation == node.operation:  # TODO: make this a "can merge down" function
+                    merge_down_terrain_layer_node_data(terrain_info_object, nodes, 0)
 
         # Delete the bake node tree.
         bpy.data.node_groups.remove(bake_node_tree)

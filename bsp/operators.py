@@ -38,10 +38,11 @@ class BDK_OT_bsp_brush_add(Operator):
         bm.to_mesh(mesh)
 
         obj = bpy.data.objects.new('Brush', mesh)
+        obj.display_type = 'WIRE'
         obj.bdk.type = 'BSP_BRUSH'
+        obj.bdk.bsp_brush.object = obj
         obj.bdk.bsp_brush.csg_operation = self.csg_operation
         obj.bdk.bsp_brush.object = obj
-        obj.display_type = 'WIRE'
 
         # Add the object to the active collection.
         context.collection.objects.link(obj)

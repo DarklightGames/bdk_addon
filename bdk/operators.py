@@ -165,7 +165,7 @@ class BDK_OT_generate_node_code(Operator):
             for socket in node.inputs:
                 if socket.is_linked or socket.is_unavailable:
                     continue
-                if socket.default_value:  # TODO: this is imprecise but should work for now
+                if hasattr(socket, 'default_value') and socket.default_value:  # TODO: this is imprecise but should work for now
                     default_value = socket.default_value
                     if type(socket.default_value) == str:
                         default_value = f'\'{default_value}\''

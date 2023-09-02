@@ -2,12 +2,14 @@ import math
 import uuid
 
 import bpy
+import bmesh
 import mathutils
 import numpy as np
 import t3dpy
 from bpy.types import Context, Object, Mesh, Image, Camera
 from typing import List, Optional, Dict, Any, cast, Type
 
+from ..bsp.properties import get_poly_flags_keys_from_value
 from ..terrain.operators import add_terrain_layer_node
 from ..projector.builder import build_projector_node_tree
 from ..terrain.builder import create_terrain_info_object
@@ -102,6 +104,64 @@ class DefaultActorImporter(ActorImporter):
         Called when the object has been linked to the scene.
         """
         pass
+
+
+class BrushImporter(ActorImporter):
+    @classmethod
+    def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
+        bm = bmesh.new()
+
+        pre_pivot = mathutils.Vector((0.0, 0.0, 0.0))
+
+        # The inverse of the PrePivot is a translation that is applied to the geometry after all other transformations.
+        # The equivalent of this in Blender is the delta transform. [???]
+        if 'PrePivot' in t3d_actor.properties:
+            value = t3d_actor.properties['PrePivot']
+            pre_pivot.x = value.get('X', 0.0)
+            pre_pivot.y = -value.get('Y', 0.0)
+            pre_pivot.z = value.get('Z', 0.0)
+
+        for child in t3d_actor.children:
+            if child.type_ == 'Brush':
+                if child.children[0].type_ != 'PolyList':
+                    continue
+                poly_list = child.children[0]
+                for polygon in filter(lambda x: x.type_ == 'Polygon', poly_list.children):
+                    verts = []
+                    vertex_indices = []
+                    for _, vertex in filter(lambda prop: prop[0] == 'Vertex', polygon.vector_properties):
+                        # Check if the vertex exists in the vertex map.
+                        vertex_index: int | None = None
+                        for i, vert in enumerate(bm.verts):
+                            if vert.co == vertex:
+                                vertex_index = i
+                        if vertex_index is None:
+                            vertex_index = len(bm.verts)
+                            co = mathutils.Vector(vertex)
+                            # co -= pre_pivot
+                            vert = bm.verts.new(co)
+                            bm.verts.ensure_lookup_table()
+                            verts.append(vert)
+                        vertex_indices.append(vertex_index)
+                    bm.faces.new(verts)
+                    # TODO: set up the UV mapping etc.
+
+        mesh_data = bpy.data.meshes.new(t3d_actor['Name'])
+        bm.to_mesh(mesh_data)
+
+        bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh_data)
+        bpy_object.display_type = 'WIRE'
+        bpy_object.bdk.type = 'BSP_BRUSH'
+        bpy_object.delta_location = -pre_pivot
+
+        bsp_brush = bpy_object.bdk.bsp_brush
+
+        bsp_brush.object = bpy_object
+        bsp_brush.csg_operation = t3d_actor.properties.get('CsgOper', 'Csg_Add')
+        poly_flags = t3d_actor.properties.get('PolyFlags', 0)
+        bsp_brush.poly_flags = get_poly_flags_keys_from_value(poly_flags)
+
+        return bpy_object
 
 
 class FluidSurfaceInfoImporter(ActorImporter):
@@ -431,6 +491,7 @@ __actor_type_importers__ = {
     'TerrainInfo': TerrainInfoImporter,
     'SpectatorCam': SpectatorCamImporter,
     'Projector': ProjectorImporter,
+    'Brush': BrushImporter
 }
 
 
@@ -472,16 +533,17 @@ def density_map_data_from_image(image: Image) -> np.array:
 
 def import_t3d(contents: str, context: Context):
     def set_custom_properties(t3d_actor: t3dpy.T3dObject, bpy_object: Object):
+        location = mathutils.Vector((0.0, 0.0, 0.0))
+        rotation_euler = mathutils.Euler((0.0, 0.0, 0.0))
         scale = mathutils.Vector((1.0, 1.0, 1.0))
         for key, value in t3d_actor.properties.items():
             if key == 'Location':
-                bpy_object.location = value.get('X', 0.0), -value.get('Y', 0.0), value.get('Z', 0.0)
+                location = value.get('X', 0.0), -value.get('Y', 0.0), value.get('Z', 0.0)
             elif key == 'Rotation':
                 yaw = -value.get('Yaw', 0)
                 pitch = -value.get('Pitch', 0)
                 roll = value.get('Roll', 0)
                 rotation_euler = URotator(pitch, yaw, roll).get_radians()
-                bpy_object.rotation_euler = rotation_euler
             elif key == 'DrawScale':
                 scale *= value
             elif key == 'DrawScale3D':
@@ -493,6 +555,9 @@ def import_t3d(contents: str, context: Context):
             elif type(value) == list:
                 continue
             bpy_object[key] = value
+
+        bpy_object.location = location
+        bpy_object.rotation_euler = rotation_euler
         bpy_object.scale = scale
 
     def import_t3d_object(t3d_object: t3dpy.T3dObject, context: Context):

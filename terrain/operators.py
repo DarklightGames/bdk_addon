@@ -706,6 +706,34 @@ class BDK_OT_terrain_paint_layer_node_invert(Operator):
         return {'FINISHED'}
 
 
+def merge_down_terrain_layer_node_data(terrain_info_object: Object, nodes, nodes_index: int):
+    """
+    Merges the data from the node at the specified index and node below it then removes the node below it.
+    :param terrain_info_object:
+    :param nodes:
+    :param nodes_index:
+    :return:
+    """
+    mesh_data = cast(Mesh, terrain_info_object.data)
+
+    node = nodes[nodes_index]
+    other_node = nodes[nodes_index + 1]
+
+    if node.id not in node.terrain_info_object.data.attributes:
+        raise RuntimeError(f'Layer node attribute {node.id} does not exist')
+    if other_node.id not in other_node.terrain_info_object.data.attributes:
+        raise RuntimeError(f'Layer node attribute {other_node.id} does not exist')
+
+    attribute = mesh_data.attributes[node.id]
+    other_attribute = mesh_data.attributes[other_node.id]
+
+    # Accumulate the data into the first node.
+    accumulate_byte_color_attribute_data(attribute, other_attribute)
+
+    # Remove the other node.
+    remove_terrain_layer_node(terrain_info_object, nodes, nodes_index + 1)
+
+
 class BDK_OT_terrain_layer_node_merge_down(Operator):
     bl_idname = 'bdk.terrain_layer_node_merge_down'
     bl_label = 'Merge Terrain Layer Nodes'
@@ -741,30 +769,13 @@ class BDK_OT_terrain_layer_node_merge_down(Operator):
         terrain_info_object = context.active_object
         terrain_info: BDK_PG_terrain_info = get_terrain_info(terrain_info_object)
         paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
-        nodes = paint_layer.nodes
-        node = nodes[paint_layer.nodes_index]
-        other_node = nodes[paint_layer.nodes_index + 1]
-
-        if node.id not in node.terrain_info_object.data.attributes:
-            self.report({'ERROR'}, f'Layer node attribute {node.id} does not exist')
-            return {'CANCELLED'}
-        if other_node.id not in other_node.terrain_info_object.data.attributes:
-            self.report({'ERROR'}, f'Layer node attribute {other_node.id} does not exist')
-            return {'CANCELLED'}
 
         # Add the attribute data of the other node to the node (with clamping).
-        attribute = node.terrain_info_object.data.attributes[node.id]
-        other_attribute = other_node.terrain_info_object.data.attributes[other_node.id]
-
-        # Accumulate the data into the first node.
         try:
-            accumulate_byte_color_attribute_data(attribute, other_attribute)
+            merge_down_terrain_layer_node_data(terrain_info_object, paint_layer.nodes, paint_layer.nodes_index)
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
-
-        # Remove the other node.
-        remove_terrain_layer_node(terrain_info_object, paint_layer.nodes, paint_layer.nodes_index + 1)
 
         # Rebuild the modifier stack.
         ensure_terrain_info_modifiers(context, terrain_info)

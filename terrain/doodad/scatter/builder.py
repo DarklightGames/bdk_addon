@@ -188,7 +188,7 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
     return node_tree
 
 
-def ensure_terrain_snap_and_align_node_tree() -> NodeTree:
+def ensure_snap_to_terrain_node_tree() -> NodeTree:
     inputs = {
         ('NodeSocketGeometry', 'Geometry'),
         ('NodeSocketGeometry', 'Terrain Geometry'),
@@ -354,10 +354,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
               ('NodeSocketFloat', 'Spacing Length'),
               ('NodeSocketBool', 'Is Curve Reversed'),
               }
-    outputs = {('NodeSocketGeometry', 'Points'),
-               ('NodeSocketVector', 'Normal'),
-               ('NodeSocketVector', 'Tangent'),
-               }
+    outputs = {('NodeSocketGeometry', 'Points')}
     node_tree = ensure_geometry_node_tree('BDK Scatter Layer Curve To Points', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
@@ -470,6 +467,50 @@ def ensure_select_object_index_node_tree() -> NodeTree:
     return node_tree
 
 
+def ensure_terrain_normal_offset_node_tree() -> NodeTree:
+    inputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+        ('NodeSocketFloat', 'Terrain Normal Offset Min'),
+        ('NodeSocketFloat', 'Terrain Normal Offset Max'),
+        ('NodeSocketInt', 'Seed'),
+        ('NodeSocketInt', 'Global Seed'),
+    }
+    outputs = {
+        ('NodeSocketGeometry', 'Geometry'),
+    }
+    node_tree = ensure_geometry_node_tree('BDK Terrain Normal Offset', inputs, outputs)
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+    seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
+
+    vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+    vector_math_node.operation = 'SCALE'
+
+    random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+
+    named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    named_attribute_node.data_type = 'FLOAT_VECTOR'
+    named_attribute_node.inputs["Name"].default_value = 'terrain_normal'
+
+    set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+
+    # Input
+    node_tree.links.new(input_node.outputs['Terrain Normal Offset Min'], random_value_node.inputs[2])  # Min
+    node_tree.links.new(input_node.outputs['Terrain Normal Offset Max'], random_value_node.inputs[3])  # Max
+    node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
+
+    # Internal Links
+    node_tree.links.new(random_value_node.outputs[1], vector_math_node.inputs[3])  # Value -> Scale
+    node_tree.links.new(vector_math_node.outputs[0], set_position_node.inputs[3])  # Vector -> Offset
+    node_tree.links.new(named_attribute_node.outputs[0], vector_math_node.inputs[0])  # Attribute -> Vector
+    node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
+
+    # Outputs
+    node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return node_tree
+
+
 def ensure_scatter_layer_object_node_tree() -> NodeTree:
     inputs = {
         ('NodeSocketGeometry', 'Points'),
@@ -481,7 +522,10 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('NodeSocketBool', 'Snap to Terrain'),
         ('NodeSocketBool', 'Mute'),
         ('NodeSocketInt', 'Global Seed'),
-        ('NodeSocketFloat', 'Align to Terrain Factor')
+        ('NodeSocketFloat', 'Align to Terrain Factor'),
+        ('NodeSocketFloat', 'Terrain Normal Offset Min'),
+        ('NodeSocketFloat', 'Terrain Normal Offset Max'),
+        ('NodeSocketInt', 'Terrain Normal Offset Seed'),
     }
     outputs = {
         ('NodeSocketGeometry', 'Points')
@@ -489,61 +533,41 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
     node_tree = ensure_geometry_node_tree('BDK Scatter Layer Object', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    points_socket = input_node.outputs['Points']
-
     # Separate points that match the object index.
     compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
     compare_node.data_type = 'INT'
     compare_node.operation = 'EQUAL'
-    named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-    named_attribute_node.data_type = 'INT'
-    named_attribute_node.inputs['Name'].default_value = 'object_index'
-    separate_geometry_node = node_tree.nodes.new(type='GeometryNodeSeparateGeometry')
-    node_tree.links.new(named_attribute_node.outputs[4], compare_node.inputs[2])
-    node_tree.links.new(input_node.outputs['Object Index'], compare_node.inputs[3])
-    node_tree.links.new(compare_node.outputs['Result'], separate_geometry_node.inputs['Selection'])
-    node_tree.links.new(points_socket, separate_geometry_node.inputs['Geometry'])
 
-    points_socket = separate_geometry_node.outputs['Selection']
+    object_index_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    object_index_attribute_node.data_type = 'INT'
+    object_index_attribute_node.inputs['Name'].default_value = 'object_index'
+
+    separate_geometry_node = node_tree.nodes.new(type='GeometryNodeSeparateGeometry')
 
     # Scale Mix
     scale_mix_node = node_tree.nodes.new(type='ShaderNodeMix')
     scale_mix_node.data_type = 'VECTOR'
 
-    node_tree.links.new(input_node.outputs['Scale Min'], scale_mix_node.inputs[4])
-    node_tree.links.new(input_node.outputs['Scale Max'], scale_mix_node.inputs[5])
-
     scale_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
     scale_random_value_node.label = 'Scale Random'
     scale_random_value_node.data_type = 'FLOAT'
 
-    scale_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Scale Seed'], input_node.outputs['Global Seed']])
-
-    node_tree.links.new(scale_seed_socket, scale_random_value_node.inputs['Seed'])
-    node_tree.links.new(scale_random_value_node.outputs[1], scale_mix_node.inputs['Factor'])
-
     # Snap and Align to Terrain
-    snap_and_align_to_terrain_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-    snap_and_align_to_terrain_group_node.node_tree = ensure_terrain_snap_and_align_node_tree()
-
-    node_tree.links.new(input_node.outputs['Terrain Geometry'],
-                        snap_and_align_to_terrain_group_node.inputs['Terrain Geometry'])
-
-    node_tree.links.new(input_node.outputs['Snap to Terrain'], snap_and_align_to_terrain_group_node.inputs['Mute'])
-    node_tree.links.new(points_socket, snap_and_align_to_terrain_group_node.inputs['Geometry'])
+    snap_to_terrain_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    snap_to_terrain_group_node.node_tree = ensure_snap_to_terrain_node_tree()
 
     # Mute Switch
     mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
     mute_switch_node.input_type = 'GEOMETRY'
     mute_switch_node.label = 'Mute'
 
-    node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs[1])
-
     # Align to Terrain
     align_to_terrain_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     align_to_terrain_node_group_node.node_tree = ensure_terrain_doodad_curve_align_to_terrain_node_tree()
 
-    node_tree.links.new(input_node.outputs['Align to Terrain Factor'], align_to_terrain_node_group_node.inputs['Factor'])
+    # Terrain Normal Offset
+    terrain_normal_offset_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    terrain_normal_offset_node_group_node.node_tree = ensure_terrain_normal_offset_node_tree()
 
     # Store Scale Attribute
     store_scale_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
@@ -552,12 +576,37 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
     store_scale_attribute_node.data_type = 'FLOAT_VECTOR'
     store_scale_attribute_node.label = 'Store Scale Attribute'
 
-    node_tree.links.new(scale_mix_node.outputs[1], store_scale_attribute_node.inputs[3])  # Result -> Value
-    node_tree.links.new(snap_and_align_to_terrain_group_node.outputs['Geometry'], align_to_terrain_node_group_node.inputs['Geometry'])
-    node_tree.links.new(align_to_terrain_node_group_node.outputs['Geometry'], store_scale_attribute_node.inputs['Geometry'])
-    node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False
+    scale_seed_socket = add_chained_math_nodes(node_tree, 'ADD',
+                                               [input_node.outputs['Scale Seed'], input_node.outputs['Global Seed']])
 
-    # Link the geometry from the join geometry node to the output node.
+    # Input
+    node_tree.links.new(input_node.outputs['Scale Min'], scale_mix_node.inputs[4])
+    node_tree.links.new(input_node.outputs['Scale Max'], scale_mix_node.inputs[5])
+    node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Align to Terrain Factor'], align_to_terrain_node_group_node.inputs['Factor'])
+    node_tree.links.new(input_node.outputs['Terrain Geometry'], snap_to_terrain_group_node.inputs['Terrain Geometry'])
+    node_tree.links.new(input_node.outputs['Snap to Terrain'], snap_to_terrain_group_node.inputs['Mute'])
+    node_tree.links.new(input_node.outputs['Object Index'], compare_node.inputs[3])
+    node_tree.links.new(input_node.outputs['Points'], separate_geometry_node.inputs['Geometry'])
+    node_tree.links.new(input_node.outputs['Terrain Normal Offset Min'], terrain_normal_offset_node_group_node.inputs['Terrain Normal Offset Min'])
+    node_tree.links.new(input_node.outputs['Terrain Normal Offset Max'], terrain_normal_offset_node_group_node.inputs['Terrain Normal Offset Max'])
+    node_tree.links.new(input_node.outputs['Terrain Normal Offset Seed'], terrain_normal_offset_node_group_node.inputs['Seed'])
+    node_tree.links.new(input_node.outputs['Global Seed'], terrain_normal_offset_node_group_node.inputs['Global Seed'])
+
+    node_tree.links.new(scale_seed_socket, scale_random_value_node.inputs['Seed'])
+
+    # Internal
+    node_tree.links.new(object_index_attribute_node.outputs[4], compare_node.inputs[2])
+    node_tree.links.new(compare_node.outputs['Result'], separate_geometry_node.inputs['Selection'])
+    node_tree.links.new(scale_mix_node.outputs[1], store_scale_attribute_node.inputs[3])  # Result -> Value
+    node_tree.links.new(snap_to_terrain_group_node.outputs['Geometry'], align_to_terrain_node_group_node.inputs['Geometry'])
+    node_tree.links.new(align_to_terrain_node_group_node.outputs['Geometry'], terrain_normal_offset_node_group_node.inputs['Geometry'])
+    node_tree.links.new(terrain_normal_offset_node_group_node.outputs['Geometry'], store_scale_attribute_node.inputs['Geometry'])
+    node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False
+    node_tree.links.new(scale_random_value_node.outputs[1], scale_mix_node.inputs['Factor'])
+    node_tree.links.new(separate_geometry_node.outputs['Selection'], snap_to_terrain_group_node.inputs['Geometry'])
+
+    # Output
     node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Points'])
 
     return node_tree
@@ -687,6 +736,9 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Mute'], 'mute')
         add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Global Seed'], 'global_seed')
         add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Align to Terrain Factor'], 'align_to_terrain_factor')
+        add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Terrain Normal Offset Min'], 'terrain_normal_offset_min')
+        add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Terrain Normal Offset Max'], 'terrain_normal_offset_max')
+        add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Terrain Normal Offset Seed'], 'terrain_normal_offset_seed')
 
         node_tree.links.new(points_socket, scatter_layer_object_node_group_node.inputs['Points'])
         node_tree.links.new(terrain_info_object_node.outputs['Geometry'], scatter_layer_object_node_group_node.inputs['Terrain Geometry'])

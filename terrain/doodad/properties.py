@@ -202,11 +202,12 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     scale_max: FloatVectorProperty(name='Scale Max', min=0.0, default=(1.0, 1.0, 1.0))
     scale_seed: IntProperty(name='Random Scale Seed', default=0, min=0)
 
-    terrain_normal_offset: FloatProperty(name='Terrain Normal Offset', default=0.0, subtype='DISTANCE')
-
     # Snap & Align to Terrain
     snap_to_terrain: BoolProperty(name='Snap to Terrain', default=True)
     align_to_terrain_factor: FloatProperty(name='Align to Terrain Factor', min=0.0, max=1.0, default=1.0, description='Align the Z axis to the terrain normal', subtype='FACTOR')
+    terrain_normal_offset_min: FloatProperty(name='Terrain Normal Offset Min', default=0.0, subtype='DISTANCE')
+    terrain_normal_offset_max: FloatProperty(name='Terrain Normal Offset Max', default=0.0, subtype='DISTANCE')
+    terrain_normal_offset_seed: IntProperty(name='Terrain Normal Offset Seed', default=0, min=0)
 
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})

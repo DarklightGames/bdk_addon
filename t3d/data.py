@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import List, Optional, OrderedDict as OrderedDictType, Any
+from typing import List, Optional, OrderedDict as OrderedDictType, Any, Tuple
 
 
 class T3DObject:
@@ -16,7 +16,8 @@ class Polygon:
                  normal: (float, float, float),
                  texture_u: (float, float, float),
                  texture_v: (float, float, float),
-                 vertices: ((float, float, float), (float, float, float), (float, float, float))):
+                 vertices: List[Tuple[float, float, float]]
+                 ):
         self.link = link
         self.origin = origin
         self.normal = normal

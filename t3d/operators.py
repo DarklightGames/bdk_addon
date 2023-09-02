@@ -1,16 +1,16 @@
 import math
 from io import StringIO
-from typing import List
+from typing import List, cast
 
 import bmesh
 import bpy
 import numpy
 from mathutils import Euler, Matrix
-from bpy.types import Operator, Context, Object
+from bpy.types import Operator, Context, Object, Mesh
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
-from ..bsp.properties import poly_flag_values
+from ..bsp.properties import __poly_flag_keys_to_values__
 from ..bsp.builder import create_bsp_brush_polygon
 from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, get_terrain_heightmap, \
     create_terrain_info_actor, convert_blender_matrix_to_unreal_movement_units
@@ -93,14 +93,11 @@ def sanitize_name(name: str) -> str:
 def get_poly_flags_int(poly_flags: set[str]) -> int:
     poly_flags_int = 0
     for flag in poly_flags:
-        poly_flags_int |= poly_flag_values[flag]
+        poly_flags_int |= __poly_flag_keys_to_values__[flag]
     return poly_flags_int
 
 
 def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
-    depsgraph = context.evaluated_depsgraph_get()
-    # mesh_data = bsp_brush_object.evaluated_get(depsgraph).data
-
     object_name = sanitize_name(bsp_brush_object.name)
 
     bsp_brush = bsp_brush_object.bdk.bsp_brush
@@ -113,29 +110,19 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
 
     add_movement_properties_to_actor(actor, bsp_brush_object)
 
-    # del actor.properties['DrawScale3D']
-
     brush = T3DObject('Brush')
     brush.properties['Name'] = object_name
 
     poly_list = T3DObject('PolyList')
 
-    # Why are we making temporary objects here?
-    bm = bmesh.new()
-    bm.from_object(bsp_brush_object, depsgraph)
-    mesh_data = bpy.data.meshes.new('')
-    bm.to_mesh(mesh_data)
-    del bm
-    mesh_object = bpy.data.objects.new('', mesh_data)
-    mesh_object.matrix_world = mesh_object.matrix_world
+    mesh_object = bsp_brush_object
+    mesh_data = cast(Mesh, bsp_brush_object.data)
 
-    mesh_data.calc_loop_triangles()
-
-    for index, loop_triangle in enumerate(mesh_data.loop_triangles):
+    for polygon_index, polygon in enumerate(mesh_data.polygons):
         poly = T3DObject('Polygon')
         poly.properties['Texture'] = 'None'
-        poly.properties['Link'] = index
-        poly.polygon = create_bsp_brush_polygon(mesh_object, loop_triangle)
+        poly.properties['Link'] = polygon_index
+        poly.polygon = create_bsp_brush_polygon(mesh_object, polygon)
         poly_list.children.append(poly)
 
     brush.children.append(poly_list)

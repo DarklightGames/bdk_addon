@@ -86,9 +86,8 @@ class T3DWriter:
             self._write_line(f'{"Normal":8} {format_vector(object.polygon.normal)}')
             self._write_line(f'{"TextureU":8} {format_vector(object.polygon.texture_u)}')
             self._write_line(f'{"TextureV":8} {format_vector(object.polygon.texture_v)}')
-            self._write_line(f'{"Vertex":8} {format_vector(object.polygon.vertices[0])}')
-            self._write_line(f'{"Vertex":8} {format_vector(object.polygon.vertices[1])}')
-            self._write_line(f'{"Vertex":8} {format_vector(object.polygon.vertices[2])}')
+            for vertex in object.polygon.vertices:
+                self._write_line(f'{"Vertex":8} {format_vector(vertex)}')
 
         # Children
         for child in object.children:

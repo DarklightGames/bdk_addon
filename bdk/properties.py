@@ -1,5 +1,5 @@
 from bpy.types import PropertyGroup
-from bpy.props import PointerProperty, EnumProperty, StringProperty
+from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.doodad.properties import BDK_PG_terrain_doodad
 from ..bsp.properties import BDK_PG_bsp_brush
@@ -25,6 +25,8 @@ class BDK_PG_object(PropertyGroup):
 
 class BDK_PG_material(PropertyGroup):
     package_reference: StringProperty(name='Package Reference', options={'HIDDEN'})
+    size_x: IntProperty(name='Size X', default=512, min=1)
+    size_y: IntProperty(name='Size Y', default=512, min=1)
 
 
 classes = (
