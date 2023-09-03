@@ -1,5 +1,6 @@
 import math
 import uuid
+from collections import OrderedDict
 
 import bpy
 import bmesh
@@ -111,40 +112,40 @@ class BrushImporter(ActorImporter):
     def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
         bm = bmesh.new()
 
-        pre_pivot = mathutils.Vector((0.0, 0.0, 0.0))
-
-        # The inverse of the PrePivot is a translation that is applied to the geometry after all other transformations.
-        # The equivalent of this in Blender is the delta transform. [???]
-        if 'PrePivot' in t3d_actor.properties:
-            value = t3d_actor.properties['PrePivot']
-            pre_pivot.x = value.get('X', 0.0)
-            pre_pivot.y = -value.get('Y', 0.0)
-            pre_pivot.z = value.get('Z', 0.0)
+        materials = OrderedDict()
 
         for child in t3d_actor.children:
-            if child.type_ == 'Brush':
-                if child.children[0].type_ != 'PolyList':
-                    continue
-                poly_list = child.children[0]
-                for polygon in filter(lambda x: x.type_ == 'Polygon', poly_list.children):
-                    verts = []
-                    vertex_indices = []
-                    for _, vertex in filter(lambda prop: prop[0] == 'Vertex', polygon.vector_properties):
-                        # Check if the vertex exists in the vertex map.
-                        vertex_index: int | None = None
-                        for i, vert in enumerate(bm.verts):
-                            if vert.co == vertex:
-                                vertex_index = i
-                        if vertex_index is None:
-                            vertex_index = len(bm.verts)
-                            co = mathutils.Vector(vertex)
-                            # co -= pre_pivot
-                            vert = bm.verts.new(co)
-                            bm.verts.ensure_lookup_table()
-                            verts.append(vert)
-                        vertex_indices.append(vertex_index)
-                    bm.faces.new(verts)
-                    # TODO: set up the UV mapping etc.
+            if child.type_ != 'Brush':
+                continue
+            if len(child.children) < 0 and child.children[0].type_ != 'PolyList':
+                continue
+
+            poly_list = child.children[0]
+
+            for polygon in filter(lambda x: x.type_ == 'Polygon', poly_list.children):
+                material_reference = polygon.properties.get('Texture', None)
+
+                if material_reference is not None:
+                    if material_reference not in materials:
+                        materials[material_reference] = load_bdk_material(material_reference)
+                else:
+                    print(f'Warning: Missing or invalid material reference for polygon in brush {t3d_actor["Name"]}')
+
+                vertex_indices = []
+                for _, vertex in filter(lambda prop: prop[0] == 'Vertex', polygon.vector_properties):
+                    co = mathutils.Vector((vertex[0], -vertex[1], vertex[2]))
+                    # Check if the vertex exists in the vertex map.
+                    vertex_index: int | None = None
+                    for i, vert in enumerate(bm.verts):
+                        if vert.co == co:
+                            vertex_index = i
+                    if vertex_index is None:
+                        vertex_index = len(bm.verts)
+                        bm.verts.new(co)
+                        bm.verts.ensure_lookup_table()
+                    vertex_indices.append(vertex_index)
+
+                bm.faces.new(map(lambda i: bm.verts[i], reversed(vertex_indices)))
 
         mesh_data = bpy.data.meshes.new(t3d_actor['Name'])
         bm.to_mesh(mesh_data)
@@ -152,17 +153,40 @@ class BrushImporter(ActorImporter):
         bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh_data)
         bpy_object.display_type = 'WIRE'
         bpy_object.bdk.type = 'BSP_BRUSH'
-        bpy_object.delta_location = -pre_pivot
 
         bsp_brush = bpy_object.bdk.bsp_brush
-
         bsp_brush.object = bpy_object
         bsp_brush.csg_operation = t3d_actor.properties.get('CsgOper', 'Csg_Add')
-        poly_flags = t3d_actor.properties.get('PolyFlags', 0)
-        bsp_brush.poly_flags = get_poly_flags_keys_from_value(poly_flags)
+        bsp_brush.poly_flags = get_poly_flags_keys_from_value(t3d_actor.properties.get('PolyFlags', 0))
+
+        for key, material in materials.items():
+            mesh_data.materials.append(material)
 
         return bpy_object
 
+    @classmethod
+    def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
+        # Handle the pre-pivot here, since the transforms have been applied to the object by this point.
+        pre_pivot = mathutils.Vector((0.0, 0.0, 0.0))
+
+        # The inverse of the PrePivot is a translation that is applied to the geometry in world space after applying all other transformations.
+        # We can get the
+        if 'PrePivot' in t3d_actor.properties:
+            value = t3d_actor.properties['PrePivot']
+            pre_pivot.x = value.get('X', 0.0)
+            pre_pivot.y = -value.get('Y', 0.0)
+            pre_pivot.z = value.get('Z', 0.0)
+
+        from mathutils import Matrix, Quaternion
+
+        translation, rotation, scale = Matrix(bpy_object.matrix_world).inverted().decompose()
+
+        pivot_matrix = rotation.to_matrix().to_4x4()
+
+        # Transform all the vertices in the mesh by the pre-pivot.
+        mesh_data = cast(Mesh, bpy_object.data)
+        for vertex in mesh_data.vertices:
+            vertex.co = pivot_matrix @ (vertex.co - pre_pivot)
 
 class FluidSurfaceInfoImporter(ActorImporter):
     @classmethod
@@ -416,7 +440,7 @@ class TerrainInfoImporter(ActorImporter):
                 density_map_image_name = f'{density_map_reference.object_name}.tga'
                 density_map_image = bpy.data.images[density_map_image_name]
                 if density_map_image:
-                    print(f'density map image found for deco layer {density_map_image}')
+                    print(f'Density map image found for deco layer {density_map_image}')
                     # Create the paint node for the deco layer.
                     paint_node = add_terrain_layer_node(mesh_object, deco_layer.nodes, type='PAINT')
                     if terrain_map_image.size != density_map_image.size:

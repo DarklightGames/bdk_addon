@@ -13,7 +13,7 @@ class UColor:
 
 
 class UReference:
-    def __init__(self, type_name: str, package_name: str, object_name: str, group_name: Optional[str] = None):
+    def __init__(self, package_name: str, object_name: str, type_name: Optional[str], group_name: Optional[str] = None):
         self.type_name = type_name
         self.package_name = package_name
         self.object_name = object_name
@@ -23,15 +23,24 @@ class UReference:
     def from_string(string: str) -> Optional['UReference']:
         if string == 'None':
             return None
+        # Test for a type-qualified reference (e.g. StaticMesh'MyPackage.MyGroup.MyName').
         pattern = r'(\w+)\'([\w\.\d\-\_]+)\''
         match = re.match(pattern, string)
-        type_name = match.group(1)
-        object_name = match.group(2)
-        pattern = r'([\w\d\-\_]+)'
-        values = re.findall(pattern, object_name)
+        type_name = None
+        group_name = None
+        if match is not None:
+            # Type-qualified reference match succeeded.
+            type_name = match.group(1)
+            object_path = match.group(2)
+        else:
+            # Type-qualified reference match failed, try to parse the incoming string as an object path.
+            object_path = string
+
+        reference_pattern = r'([\w\d\-\_]+)'
+        values = re.findall(reference_pattern, object_path)
         package_name = values[0]
         object_name = values[-1]
-        return UReference(type_name, package_name, object_name, group_name=None)
+        return UReference(package_name, object_name, type_name=type_name, group_name=group_name)
 
     @staticmethod
     def from_path(path: Path):
