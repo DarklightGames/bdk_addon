@@ -23,6 +23,7 @@ class UReference:
     def from_string(string: str) -> Optional['UReference']:
         if string == 'None':
             return None
+        print(f'Parsing reference: {string}')
         # Test for a type-qualified reference (e.g. StaticMesh'MyPackage.MyGroup.MyName').
         pattern = r'(\w+)\'([\w\.\d\-\_]+)\''
         match = re.match(pattern, string)
@@ -32,14 +33,17 @@ class UReference:
             # Type-qualified reference match succeeded.
             type_name = match.group(1)
             object_path = match.group(2)
+            print(f'Type-qualified reference match succeeded: {type_name} {object_path}')
         else:
             # Type-qualified reference match failed, try to parse the incoming string as an object path.
             object_path = string
+            print(f'Type-qualified reference match failed, trying to parse as object path: {object_path}')
 
         reference_pattern = r'([\w\d\-\_]+)'
         values = re.findall(reference_pattern, object_path)
         package_name = values[0]
         object_name = values[-1]
+        print(f'Parsed reference: {package_name} {object_name}')
         return UReference(package_name, object_name, type_name=type_name, group_name=group_name)
 
     @staticmethod
@@ -48,7 +52,7 @@ class UReference:
         package_name = parts[0]
         type_name = parts[1]
         object_name = parts[2][0:parts[2].index('.')]
-        return UReference(type_name, package_name, object_name)
+        return UReference(package_name, object_name, type_name)
 
     def __str__(self):
         string = f"{self.type_name}'{self.package_name}"
