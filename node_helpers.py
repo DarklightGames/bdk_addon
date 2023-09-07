@@ -7,13 +7,13 @@ from .data import map_range_interpolation_type_items
 
 
 def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketInt', 'Operation'),
-        ('NodeSocketFloat', 'Value 1'),
-        ('NodeSocketFloat', 'Value 2'),
+    items = {
+        ('INPUT', 'NodeSocketInt', 'Operation'),
+        ('INPUT', 'NodeSocketFloat', 'Value 1'),
+        ('INPUT', 'NodeSocketFloat', 'Value 2'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value')
     }
-    outputs = {('NodeSocketFloat', 'Value')}
-    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Operation', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Operation', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     output_socket = add_operation_switch_nodes(
@@ -73,14 +73,11 @@ def add_operation_switch_nodes(
 
 
 def ensure_interpolation_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketInt', 'Interpolation Type'),
-        ('NodeSocketFloat', 'Value'),
+    items = {
+        ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
+        ('BOTH', 'NodeSocketFloat', 'Value'),
     }
-    outputs = {
-        ('NodeSocketFloat', 'Value'),
-    }
-    node_tree = ensure_geometry_node_tree('Interpolation', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('Interpolation', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     last_output_node_socket: Optional[NodeSocket] = None
@@ -183,26 +180,24 @@ def add_noise_type_switch_nodes(
     return last_output_node_socket
 
 
-def ensure_geometry_node_tree(name: str, inputs: AbstractSet[Tuple[str, str]],
-                              outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+def ensure_geometry_node_tree(name: str, items: AbstractSet[Tuple[str, str, str]]) -> NodeTree:
     """
     Ensures that a geometry node tree with the given name, inputs and outputs exists.
     """
-    return ensure_node_tree(name, 'GeometryNodeTree', inputs, outputs)
+    return ensure_node_tree(name, 'GeometryNodeTree', items)
 
 
 def ensure_shader_node_tree(
-    name: str, inputs: AbstractSet[Tuple[str, str]], outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+    name: str, items: AbstractSet[Tuple[str, str, str]]) -> NodeTree:
     """
     Ensures that a shader node tree with the given name, inputs and outputs exists.
     """
-    return ensure_node_tree(name, 'ShaderNodeTree', inputs, outputs)
+    return ensure_node_tree(name, 'ShaderNodeTree', items)
 
 
 def ensure_node_tree(name: str,
                      node_group_type: str,
-                     inputs: AbstractSet[Tuple[str, str]],
-                     outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
+                     items: AbstractSet[Tuple[str, str, str]]) -> NodeTree:
     """
     Gets or creates a node tree with the given name, type, inputs and outputs.
     """
@@ -211,40 +206,25 @@ def ensure_node_tree(name: str,
     else:
         node_tree = bpy.data.node_groups.new(name=name, type=node_group_type)
 
-    def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str):
+    def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str, socket_type: str):
         for index, item in enumerate(node_tree.interface.ui_items):
-            if item.item_type == 'SOCKET' and item.in_out ==  in_out and item.name == name:
+            if item.item_type == 'SOCKET' and item.in_out ==  in_out and item.name == name and item.socket_type == socket_type:
                 return item
         return None
 
-    node_tree_inputs = filter(lambda x: x.in_out == 'INPUT', node_tree.interface.ui_items)
-    node_tree_outputs = filter(lambda x: x.in_out == 'OUTPUT', node_tree.interface.ui_items)
-
     # Compare the inputs and outputs of the node tree with the given inputs and outputs.
     # If they are different, clear the inputs and outputs and add the new ones.
-    node_tree_inputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree_inputs))
-    node_tree_outputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree_outputs))
+    node_tree_items = set(map(lambda x: (x.in_out, x.bl_socket_idname, x.name), node_tree.interface.ui_items))
 
-    # For inputs that do not exist in the node tree, add them.
-    inputs_to_add = (inputs - node_tree_inputs)
-    for input_type, input_name in inputs_to_add:
-        node_tree.interface.new_socket(input_name, in_out={'INPUT'}, socket_type=input_type)
+    # For items that do not exist in the node tree, add them.
+    items_to_add = (items - node_tree_items)
+    for in_out, socket_type, name in items_to_add:
+        node_tree.interface.new_socket(name, in_out={in_out}, socket_type=socket_type)
 
-    # For inputs that exist in the node tree but not in the given inputs, remove them.
-    inputs_to_remove = (node_tree_inputs - inputs)
-    for input_type, input_name in inputs_to_remove:
-        item = get_node_tree_socket_interface_item(node_tree, 'INPUT', input_name)
-        node_tree.interface.remove(item)
-
-    # For outputs that do not exist in the node tree, add them.
-    outputs_to_add = (outputs - node_tree_outputs)
-    for output_type, output_name in outputs_to_add:
-        node_tree.interface.new_socket(output_name, in_out={'OUTPUT'}, socket_type=output_type)
-
-    # For outputs that exist in the node tree but not in the given outputs, remove them.
-    outputs_to_remove = (node_tree_outputs - outputs)
-    for output_type, output_name in outputs_to_remove:
-        item = get_node_tree_socket_interface_item(node_tree, 'OUTPUT', output_name)
+    # For items that exist in the node tree but not in the given items, remove them.
+    inputs_to_remove = (node_tree_items - items)
+    for in_out, socket_type, name in inputs_to_remove:
+        item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
         node_tree.interface.remove(item)
 
     node_tree.nodes.clear()
@@ -276,9 +256,11 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
 
 
 def ensure_curve_normal_offset_node_tree() -> NodeTree:
-    inputs = {('NodeSocketGeometry', 'Curve'), ('NodeSocketFloat', 'Normal Offset')}
-    outputs = {('NodeSocketGeometry', 'Curve')}
-    node_tree = ensure_geometry_node_tree('BDK Offset Curve Normal', inputs, outputs)
+    node_tree_items = {
+        ('BOTH', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketFloat', 'Normal Offset')
+    }
+    node_tree = ensure_geometry_node_tree('BDK Offset Curve Normal', node_tree_items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     # Add Set Position Node
@@ -322,16 +304,15 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
 
 
 def ensure_trim_curve_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketGeometry', 'Curve'),
-        ('NodeSocketInt', 'Mode'),
-        ('NodeSocketFloat', 'Factor Start'),
-        ('NodeSocketFloat', 'Factor End'),
-        ('NodeSocketFloat', 'Length Start'),
-        ('NodeSocketFloat', 'Length End'),
+    items = {
+        ('BOTH', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketInt', 'Mode'),
+        ('INPUT', 'NodeSocketFloat', 'Factor Start'),
+        ('INPUT', 'NodeSocketFloat', 'Factor End'),
+        ('INPUT', 'NodeSocketFloat', 'Length Start'),
+        ('INPUT', 'NodeSocketFloat', 'Length End'),
     }
-    outputs = {('NodeSocketGeometry', 'Curve')}
-    node_tree = ensure_geometry_node_tree('BDK Curve Trim', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Curve Trim', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')

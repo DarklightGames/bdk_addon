@@ -85,9 +85,8 @@ def add_terrain_layer_node_driver(
 
 
 def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index: int, dataptr_id: str, nodes: Iterable) -> NodeTree:
-    inputs = {('NodeSocketGeometry', 'Geometry')}
-    outputs = {('NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(name, inputs, outputs)
+    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(name, items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
@@ -127,16 +126,16 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
 
 
 def ensure_noise_node_group() -> NodeTree:
-    inputs = {
-        ('NodeSocketInt', 'Noise Type'),
-        ('NodeSocketFloat', 'Perlin Noise Scale'),
-        ('NodeSocketFloat', 'Perlin Noise Detail'),
-        ('NodeSocketFloat', 'Perlin Noise Roughness'),
-        ('NodeSocketFloat', 'Perlin Noise Lacunarity'),
-        ('NodeSocketFloat', 'Perlin Noise Distortion'),
+    items = {
+        ('INPUT', 'NodeSocketInt', 'Noise Type'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Scale'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Detail'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Roughness'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Lacunarity'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Distortion'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value'),
     }
-    outputs = {('NodeSocketFloat', 'Value')}
-    node_tree = ensure_geometry_node_tree('BDK Noise', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Noise', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     noise_type_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
@@ -244,17 +243,14 @@ def add_density_from_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', node_
 
 
 def ensure_terrain_layer_node_density_node_group() -> NodeTree:
-    inputs = {
-        ('NodeSocketFloat', 'Value'),
-        ('NodeSocketFloat', 'Factor'),
-        ('NodeSocketBool', 'Use Map Range'),
-        ('NodeSocketFloat', 'Map Range From Min'),
-        ('NodeSocketFloat', 'Map Range From Max'),
+    items = {
+        ('BOTH', 'NodeSocketFloat', 'Value'),
+        ('INPUT', 'NodeSocketFloat', 'Factor'),
+        ('INPUT', 'NodeSocketBool', 'Use Map Range'),
+        ('INPUT', 'NodeSocketFloat', 'Map Range From Min'),
+        ('INPUT', 'NodeSocketFloat', 'Map Range From Max'),
     }
-    outputs = {
-        ('NodeSocketFloat', 'Value')
-    }
-    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Density', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Density', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
@@ -351,7 +347,8 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     terrain_info = get_terrain_info(terrain_info_object)
     deco_layer_index = list(terrain_info.deco_layers).index(deco_layer)
 
-    node_tree = ensure_geometry_node_tree(deco_layer.id, set(), {('NodeSocketGeometry', 'Geometry')})
+    items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(deco_layer.id, items)
 
     terrain_doodad_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
     terrain_doodad_info_node.inputs[0].default_value = terrain_info_object
@@ -512,9 +509,8 @@ def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, deco_l
 
 
 def _create_terrain_layer_convert_node_to_paint_node_node_tree(node, dataptr_name: str, dataptr_index: int, node_index: int) -> NodeTree:
-    inputs = {('NodeSocketGeometry', 'Geometry')}
-    outputs = {('NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(node.id, inputs, outputs)
+    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(node.id, items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')

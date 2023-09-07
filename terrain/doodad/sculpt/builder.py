@@ -5,15 +5,15 @@ from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_
 
 def ensure_sculpt_noise_node_group():
     # Create a new geometry node group.
-    inputs = {
-        ('NodeSocketFloat', 'Distance'),
-        ('NodeSocketFloat', 'Radius'),
-        ('NodeSocketFloat', 'Noise Strength'),
-        ('NodeSocketFloat', 'Noise Roughness'),
-        ('NodeSocketFloat', 'Noise Distortion'),
+    items = {
+        ('INPUT', 'NodeSocketFloat', 'Distance'),
+        ('INPUT', 'NodeSocketFloat', 'Radius'),
+        ('INPUT', 'NodeSocketFloat', 'Noise Strength'),
+        ('INPUT', 'NodeSocketFloat', 'Noise Roughness'),
+        ('INPUT', 'NodeSocketFloat', 'Noise Distortion'),
+        ('OUTPUT', 'NodeSocketFloat', 'Offset')
     }
-    outputs = {('NodeSocketFloat', 'Offset')}
-    node_tree = ensure_geometry_node_tree('BDK Noise 2 (deprecated)', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Noise 2 (deprecated)', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     # Nodes
@@ -64,23 +64,20 @@ def ensure_sculpt_noise_node_group():
 
 
 def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
-    inputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-        ('NodeSocketFloat', 'Distance'),
-        ('NodeSocketInt', 'Interpolation Type'),
-        ('NodeSocketFloat', 'Radius'),
-        ('NodeSocketFloat', 'Falloff Radius'),
-        ('NodeSocketFloat', 'Depth'),
-        ('NodeSocketFloat', 'Noise Strength'),
-        ('NodeSocketFloat', 'Noise Roughness'),
-        ('NodeSocketFloat', 'Noise Distortion'),
-        ('NodeSocketBool', 'Use Noise'),
-        ('NodeSocketFloat', 'Noise Radius Factor'),
+    items = {
+        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT','NodeSocketFloat', 'Distance'),
+        ('INPUT','NodeSocketInt', 'Interpolation Type'),
+        ('INPUT','NodeSocketFloat', 'Radius'),
+        ('INPUT','NodeSocketFloat', 'Falloff Radius'),
+        ('INPUT','NodeSocketFloat', 'Depth'),
+        ('INPUT','NodeSocketFloat', 'Noise Strength'),
+        ('INPUT','NodeSocketFloat', 'Noise Roughness'),
+        ('INPUT','NodeSocketFloat', 'Noise Distortion'),
+        ('INPUT','NodeSocketBool', 'Use Noise'),
+        ('INPUT','NodeSocketFloat', 'Noise Radius Factor'),
     }
-    outputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-    }
-    node_tree = ensure_geometry_node_tree(sculpt_layer_id, inputs, outputs)
+    node_tree = ensure_geometry_node_tree(sculpt_layer_id, items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     subtract_node_2 = node_tree.nodes.new(type='ShaderNodeMath')

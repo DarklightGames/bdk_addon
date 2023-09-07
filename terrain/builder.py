@@ -12,16 +12,14 @@ from ..material.importer import MaterialBuilder, MaterialCache
 
 
 def _ensure_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
-    inputs = {
-        ('NodeSocketFloat', 'UScale'),
-        ('NodeSocketFloat', 'VScale'),
-        ('NodeSocketFloat', 'TextureRotation'),
-        ('NodeSocketFloat', 'TerrainScale'),
+    items = {
+        ('INPUT', 'NodeSocketFloat', 'UScale'),
+        ('INPUT', 'NodeSocketFloat', 'VScale'),
+        ('INPUT', 'NodeSocketFloat', 'TextureRotation'),
+        ('INPUT', 'NodeSocketFloat', 'TerrainScale'),
+        ('OUTPUT', 'NodeSocketVector', 'UV'),
     }
-    outputs = {
-        ('NodeSocketVector', 'UV'),
-    }
-    node_tree = ensure_shader_node_tree('BDK TerrainLayerUV', inputs, outputs)
+    node_tree = ensure_shader_node_tree('BDK TerrainLayerUV', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     # UScale Multiply

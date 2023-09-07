@@ -123,14 +123,11 @@ def _add_scatter_layer_object_driver_ex(
 
 
 def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-        ('NodeSocketFloat', 'Factor'),
+    items = {
+        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT','NodeSocketFloat', 'Factor'),
     }
-    outputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-    }
-    node_tree = ensure_geometry_node_tree('BDK Terrain Doodad Curve Align To Terrain', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Terrain Doodad Curve Align To Terrain', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     store_rotation_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
@@ -189,15 +186,12 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
 
 
 def ensure_snap_to_terrain_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-        ('NodeSocketGeometry', 'Terrain Geometry'),
-        ('NodeSocketBool', 'Mute'),
+    items = {
+        ('BOTH',  'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
+        ('INPUT', 'NodeSocketBool', 'Mute'),
     }
-    outputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-    }
-    node_tree = ensure_geometry_node_tree('BDK Snap to Terrain', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Snap to Terrain', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
@@ -232,9 +226,8 @@ def ensure_snap_to_terrain_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
-    inputs = set()
-    outputs = {('NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(scatter_layer.sprout_object.name, inputs, outputs)
+    items = {('OUTPUT','NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(scatter_layer.sprout_object.name, items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     seed_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
@@ -285,9 +278,8 @@ def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_
 
 
 def ensure_geometry_size_node_tree() -> NodeTree:
-    inputs = {('NodeSocketGeometry', 'Geometry')}
-    outputs = {('NodeSocketVector', 'Size')}
-    node_tree = ensure_geometry_node_tree('BDK Bounding Box Size', inputs, outputs)
+    items = {('INPUT','NodeSocketGeometry', 'Geometry'), ('OUTPUT','NodeSocketVector', 'Size')}
+    node_tree = ensure_geometry_node_tree('BDK Bounding Box Size', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     bounding_box_node = node_tree.nodes.new(type='GeometryNodeBoundBox')
@@ -309,9 +301,12 @@ def ensure_geometry_size_node_tree() -> NodeTree:
 
 
 def ensure_vector_component_node_tree() -> NodeTree:
-    inputs = {('NodeSocketVector', 'Vector'), ('NodeSocketInt', 'Index')}
-    outputs = {('NodeSocketFloat', 'Value')}
-    node_tree = ensure_geometry_node_tree('BDK Vector Component', inputs, outputs)
+    items = {
+        ('INPUT', 'NodeSocketVector', 'Vector'),
+        ('INPUT','NodeSocketInt', 'Index'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value')
+    }
+    node_tree = ensure_geometry_node_tree('BDK Vector Component', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
@@ -355,18 +350,19 @@ def ensure_vector_component_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
-    inputs = {('NodeSocketGeometry', 'Curve'),
-              ('NodeSocketInt', 'Trim Mode'),
-              ('NodeSocketFloat', 'Trim Factor Start'),
-              ('NodeSocketFloat', 'Trim Factor End'),
-              ('NodeSocketFloat', 'Trim Length Start'),
-              ('NodeSocketFloat', 'Trim Length End'),
-              ('NodeSocketFloat', 'Normal Offset'),
-              ('NodeSocketFloat', 'Spacing Length'),
-              ('NodeSocketBool', 'Is Curve Reversed'),
-              }
-    outputs = {('NodeSocketGeometry', 'Points')}
-    node_tree = ensure_geometry_node_tree('BDK Scatter Layer Curve To Points', inputs, outputs)
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketInt', 'Trim Mode'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Factor Start'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Factor End'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Length Start'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Length End'),
+        ('INPUT', 'NodeSocketFloat', 'Normal Offset'),
+        ('INPUT', 'NodeSocketFloat', 'Spacing Length'),
+        ('INPUT', 'NodeSocketBool', 'Is Curve Reversed'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Points')
+    }
+    node_tree = ensure_geometry_node_tree('BDK Scatter Layer Curve To Points', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     reverse_curve_node = node_tree.nodes.new(type='GeometryNodeReverseCurve')
@@ -424,15 +420,15 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
 
 
 def ensure_select_object_index_node_tree() -> NodeTree:
-    inputs = {('NodeSocketGeometry', 'Geometry'),
-              ('NodeSocketInt', 'Object Count'),
-              ('NodeSocketInt', 'Object Select Mode'),
-              ('NodeSocketInt', 'Object Index Offset'),
-              ('NodeSocketInt', 'Global Seed'),
-              ('NodeSocketInt', 'Object Select Seed'),
-              }
-    outputs = {('NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree('BDK Select Object Index', inputs, outputs)
+    items = {
+        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketInt', 'Object Count'),
+        ('INPUT', 'NodeSocketInt', 'Object Select Mode'),
+        ('INPUT', 'NodeSocketInt', 'Object Index Offset'),
+        ('INPUT', 'NodeSocketInt', 'Global Seed'),
+        ('INPUT', 'NodeSocketInt', 'Object Select Seed')
+    }
+    node_tree = ensure_geometry_node_tree('BDK Select Object Index', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
@@ -487,17 +483,14 @@ def ensure_select_object_index_node_tree() -> NodeTree:
 
 
 def ensure_terrain_normal_offset_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-        ('NodeSocketFloat', 'Terrain Normal Offset Min'),
-        ('NodeSocketFloat', 'Terrain Normal Offset Max'),
-        ('NodeSocketInt', 'Seed'),
-        ('NodeSocketInt', 'Global Seed'),
+    items = {
+        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Min'),
+        ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Max'),
+        ('INPUT', 'NodeSocketInt', 'Seed'),
+        ('INPUT', 'NodeSocketInt', 'Global Seed'),
     }
-    outputs = {
-        ('NodeSocketGeometry', 'Geometry'),
-    }
-    node_tree = ensure_geometry_node_tree('BDK Terrain Normal Offset', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Terrain Normal Offset', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
@@ -531,25 +524,22 @@ def ensure_terrain_normal_offset_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_object_node_tree() -> NodeTree:
-    inputs = {
-        ('NodeSocketGeometry', 'Points'),
-        ('NodeSocketGeometry', 'Terrain Geometry'),
-        ('NodeSocketInt', 'Object Index'),
-        ('NodeSocketVector', 'Scale Min'),
-        ('NodeSocketVector', 'Scale Max'),
-        ('NodeSocketInt', 'Scale Seed'),
-        ('NodeSocketBool', 'Snap to Terrain'),
-        ('NodeSocketBool', 'Mute'),
-        ('NodeSocketInt', 'Global Seed'),
-        ('NodeSocketFloat', 'Align to Terrain Factor'),
-        ('NodeSocketFloat', 'Terrain Normal Offset Min'),
-        ('NodeSocketFloat', 'Terrain Normal Offset Max'),
-        ('NodeSocketInt', 'Terrain Normal Offset Seed'),
+    items = {
+        ('BOTH', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
+        ('INPUT', 'NodeSocketInt', 'Object Index'),
+        ('INPUT', 'NodeSocketVector', 'Scale Min'),
+        ('INPUT', 'NodeSocketVector', 'Scale Max'),
+        ('INPUT', 'NodeSocketInt', 'Scale Seed'),
+        ('INPUT', 'NodeSocketBool', 'Snap to Terrain'),
+        ('INPUT', 'NodeSocketBool', 'Mute'),
+        ('INPUT', 'NodeSocketInt', 'Global Seed'),
+        ('INPUT', 'NodeSocketFloat', 'Align to Terrain Factor'),
+        ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Min'),
+        ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Max'),
+        ('INPUT', 'NodeSocketInt', 'Terrain Normal Offset Seed'),
     }
-    outputs = {
-        ('NodeSocketGeometry', 'Points')
-    }
-    node_tree = ensure_geometry_node_tree('BDK Scatter Layer Object', inputs, outputs)
+    node_tree = ensure_geometry_node_tree('BDK Scatter Layer Object', items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
@@ -656,9 +646,8 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         add_scatter_layer_driver(seed_add_node.inputs[1], 'global_seed')
         return seed_add_node.outputs['Value']
 
-    inputs = set()
-    outputs = {('NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(scatter_layer.seed_object.name, inputs, outputs)
+    items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
+    node_tree = ensure_geometry_node_tree(scatter_layer.seed_object.name, items)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
     # ==================
