@@ -8,6 +8,7 @@ import mathutils
 import numpy as np
 import t3dpy
 from bpy.types import Context, Object, Mesh, Image, Camera
+from mathutils import Matrix
 from typing import List, Optional, Dict, Any, cast, Type
 
 from ..bsp.properties import get_poly_flags_keys_from_value
@@ -107,6 +108,14 @@ class DefaultActorImporter(ActorImporter):
         pass
 
 
+def set_brush_display_properties(bpy_object: Object):
+    # TODO: have a more general "convert to bsp brush" function that does this along with setting the property group data.
+    bpy_object.display_type = 'WIRE'
+    bpy_object.show_all_edges = True
+    bpy_object.show_wire = True
+    bpy_object.show_in_front = True
+
+
 class BrushImporter(ActorImporter):
     @classmethod
     def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
@@ -142,21 +151,21 @@ class BrushImporter(ActorImporter):
                     if vertex_index is None:
                         vertex_index = len(bm.verts)
                         bm.verts.new(co)
-                        bm.verts.ensure_lookup_table()
                     vertex_indices.append(vertex_index)
 
+                bm.verts.ensure_lookup_table()
                 bm.faces.new(map(lambda i: bm.verts[i], reversed(vertex_indices)))
 
         mesh_data = bpy.data.meshes.new(t3d_actor['Name'])
         bm.to_mesh(mesh_data)
 
         bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh_data)
-        bpy_object.display_type = 'WIRE'
         bpy_object.bdk.type = 'BSP_BRUSH'
+        set_brush_display_properties(bpy_object)
 
         bsp_brush = bpy_object.bdk.bsp_brush
         bsp_brush.object = bpy_object
-        bsp_brush.csg_operation = t3d_actor.properties.get('CsgOper', 'Csg_Add')
+        bsp_brush.csg_operation = t3d_actor.properties.get('CsgOper', 'CSG_Add')
         bsp_brush.poly_flags = get_poly_flags_keys_from_value(t3d_actor.properties.get('PolyFlags', 0))
 
         for key, material in materials.items():
@@ -176,8 +185,6 @@ class BrushImporter(ActorImporter):
             pre_pivot.x = value.get('X', 0.0)
             pre_pivot.y = -value.get('Y', 0.0)
             pre_pivot.z = value.get('Z', 0.0)
-
-        from mathutils import Matrix, Quaternion
 
         translation, rotation, scale = Matrix(bpy_object.matrix_world).inverted().decompose()
 
@@ -515,7 +522,8 @@ __actor_type_importers__ = {
     'TerrainInfo': TerrainInfoImporter,
     'SpectatorCam': SpectatorCamImporter,
     'Projector': ProjectorImporter,
-    'Brush': BrushImporter
+    'Brush': BrushImporter,
+    # Volume and volume derived classes (going to need some way to handle these more generally, DrawType?)
 }
 
 
@@ -524,6 +532,12 @@ def get_actor_type_importer(actor_type: str) -> Type[ActorImporter]:
 
 
 def height_map_data_from_image(image: Image) -> np.array:
+    """
+    Converts a 16-bit image to a normalized height map.
+    Our incoming height maps are from umodel are RGB with the 16-bit height stored in the red and green channels.
+    :param image:
+    :return:
+    """
     r = [int(x * 255) for x in list(image.pixels)[0::4]]
     g = [int(x * 255) for x in list(image.pixels)[1::4]]
     h = []

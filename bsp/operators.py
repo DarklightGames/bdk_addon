@@ -17,7 +17,7 @@ class BDK_OT_bsp_brush_add(Operator):
     csg_operation: bpy.props.EnumProperty(
         name='CSG Operation',
         items=csg_operation_items,
-        default='Csg_Add',
+        default='CSG_Add',
     )
 
     # TODO: options for shape, size etc.

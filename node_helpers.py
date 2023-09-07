@@ -199,36 +199,53 @@ def ensure_shader_node_tree(
     return ensure_node_tree(name, 'ShaderNodeTree', inputs, outputs)
 
 
-def ensure_node_tree(name: str, node_group_type: str, inputs: AbstractSet[Tuple[str, str]],
+def ensure_node_tree(name: str,
+                     node_group_type: str,
+                     inputs: AbstractSet[Tuple[str, str]],
                      outputs: AbstractSet[Tuple[str, str]]) -> NodeTree:
     """
-    Ensures that a node tree with the given name, type, inputs and outputs exists.
+    Gets or creates a node tree with the given name, type, inputs and outputs.
     """
     if name in bpy.data.node_groups:
         node_tree = bpy.data.node_groups[name]
     else:
         node_tree = bpy.data.node_groups.new(name=name, type=node_group_type)
 
+    def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str):
+        for index, item in enumerate(node_tree.interface.ui_items):
+            if item.item_type == 'SOCKET' and item.in_out ==  in_out and item.name == name:
+                return item
+        return None
+
+    node_tree_inputs = filter(lambda x: x.in_out == 'INPUT', node_tree.interface.ui_items)
+    node_tree_outputs = filter(lambda x: x.in_out == 'OUTPUT', node_tree.interface.ui_items)
+
     # Compare the inputs and outputs of the node tree with the given inputs and outputs.
     # If they are different, clear the inputs and outputs and add the new ones.
-    node_tree_inputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree.inputs))
-    node_tree_outputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree.outputs))
+    node_tree_inputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree_inputs))
+    node_tree_outputs = set(map(lambda x: (x.bl_socket_idname, x.name), node_tree_outputs))
 
     # For inputs that do not exist in the node tree, add them.
-    for input_type, input_name in inputs - node_tree_inputs:
-        node_tree.inputs.new(input_type, input_name)
+    inputs_to_add = (inputs - node_tree_inputs)
+    for input_type, input_name in inputs_to_add:
+        node_tree.interface.new_socket(input_name, in_out={'INPUT'}, socket_type=input_type)
 
     # For inputs that exist in the node tree but not in the given inputs, remove them.
-    for input_type, input_name in node_tree_inputs - inputs:
-        node_tree.inputs.remove(node_tree.inputs[input_name])
+    inputs_to_remove = (node_tree_inputs - inputs)
+    for input_type, input_name in inputs_to_remove:
+        item = get_node_tree_socket_interface_item(node_tree, 'INPUT', input_name)
+        node_tree.interface.remove(item)
 
     # For outputs that do not exist in the node tree, add them.
-    for output_type, output_name in outputs - node_tree_outputs:
-        node_tree.outputs.new(output_type, output_name)
+    outputs_to_add = (outputs - node_tree_outputs)
+    for output_type, output_name in outputs_to_add:
+        node_tree.interface.new_socket(output_name, in_out={'OUTPUT'}, socket_type=output_type)
 
     # For outputs that exist in the node tree but not in the given outputs, remove them.
-    for output_type, output_name in node_tree_outputs - outputs:
-        node_tree.outputs.remove(node_tree.outputs[output_name])
+    outputs_to_remove = (node_tree_outputs - outputs)
+    for output_type, output_name in outputs_to_remove:
+        item = get_node_tree_socket_interface_item(node_tree, 'OUTPUT', output_name)
+        node_tree.interface.remove(item)
 
     node_tree.nodes.clear()
 

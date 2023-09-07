@@ -242,14 +242,14 @@ def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_
     seed_object_info_node.inputs['Object'].default_value = scatter_layer.seed_object
 
     join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
-    # For each scatter layer, add an object info node and pipe them all into a join geometry node.
-    # Then pipe that into the "Instance on Points" node.
-    # For some reason, the objects need to linked to the geometry node in reverse order.
-    for obj in reversed(scatter_layer.objects):
+
+    # Gather all the object instance geometry sockets.
+    object_geometry_output_sockets = []
+    for obj in scatter_layer.objects:
         object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
         object_info_node.inputs['Object'].default_value = obj.object
         object_info_node.inputs['As Instance'].default_value = True
-        node_tree.links.new(object_info_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
+        object_geometry_output_sockets.append(object_info_node.outputs['Geometry'])
 
     instance_on_points_node = node_tree.nodes.new(type='GeometryNodeInstanceOnPoints')
     instance_on_points_node.inputs['Pick Instance'].default_value = True
@@ -266,13 +266,19 @@ def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_
     object_index_attribute_node.data_type = 'INT'
     object_index_attribute_node.inputs['Name'].default_value = 'object_index'
 
+    # Internal
     node_tree.links.new(object_index_attribute_node.outputs[4], instance_on_points_node.inputs[4])
-
     node_tree.links.new(rotation_attribute_node.outputs[0], instance_on_points_node.inputs['Rotation'])
     node_tree.links.new(scale_attribute_node.outputs[0], instance_on_points_node.inputs['Scale'])
-
     node_tree.links.new(join_geometry_node.outputs['Geometry'], instance_on_points_node.inputs['Instance'])
     node_tree.links.new(seed_object_info_node.outputs['Geometry'], instance_on_points_node.inputs['Points'])
+
+    # Link the object geometry output sockets to the join geometry node.
+    # This needs to be done in reverse order.
+    for object_geometry_output_socket in reversed(object_geometry_output_sockets):
+        node_tree.links.new(object_geometry_output_socket, join_geometry_node.inputs['Geometry'])
+
+    # Output
     node_tree.links.new(instance_on_points_node.outputs['Instances'], output_node.inputs['Geometry'])
 
     return node_tree
@@ -284,16 +290,19 @@ def ensure_geometry_size_node_tree() -> NodeTree:
     node_tree = ensure_geometry_node_tree('BDK Bounding Box Size', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Add Bounding Box node
     bounding_box_node = node_tree.nodes.new(type='GeometryNodeBoundBox')
 
-    # Subtract Vector node
     subtract_vector_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
     subtract_vector_node.operation = 'SUBTRACT'
 
+    # Input
     node_tree.links.new(input_node.outputs['Geometry'], bounding_box_node.inputs['Geometry'])
+
+    # Internal
     node_tree.links.new(bounding_box_node.outputs['Max'], subtract_vector_node.inputs[0])
     node_tree.links.new(bounding_box_node.outputs['Min'], subtract_vector_node.inputs[1])
+
+    # Output
     node_tree.links.new(subtract_vector_node.outputs['Vector'], output_node.inputs['Size'])
 
     return node_tree
@@ -305,22 +314,15 @@ def ensure_vector_component_node_tree() -> NodeTree:
     node_tree = ensure_geometry_node_tree('BDK Vector Component', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Separate XYZ node
     separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-    node_tree.links.new(input_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
 
     compare_index_x_node = node_tree.nodes.new(type='FunctionNodeCompare')
     compare_index_x_node.data_type = 'INT'
     compare_index_x_node.operation = 'EQUAL'
 
-    node_tree.links.new(input_node.outputs['Index'], compare_index_x_node.inputs[2])  # A
-
     switch_x_yz_node = node_tree.nodes.new(type='GeometryNodeSwitch')
     switch_x_yz_node.input_type = 'FLOAT'
     switch_x_yz_node.label = 'Switch X/YZ'
-
-    node_tree.links.new(compare_index_x_node.outputs['Result'], switch_x_yz_node.inputs[0])  # Result -> Switch
-    node_tree.links.new(separate_xyz_node.outputs['X'], switch_x_yz_node.inputs[3])  # True
 
     compare_index_y_node = node_tree.nodes.new(type='FunctionNodeCompare')
     compare_index_y_node.data_type = 'INT'
@@ -331,13 +333,22 @@ def ensure_vector_component_node_tree() -> NodeTree:
     switch_yz_node.input_type = 'FLOAT'
     switch_yz_node.label = 'Switch Y/Z'
 
+    # Input
+    node_tree.links.new(input_node.outputs['Index'], compare_index_y_node.inputs[2])  # A
+    node_tree.links.new(input_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
+    node_tree.links.new(input_node.outputs['Index'], compare_index_x_node.inputs[2])  # A
+
+    # Internal
+    node_tree.links.new(compare_index_x_node.outputs['Result'], switch_x_yz_node.inputs[0])  # Result -> Switch
+    node_tree.links.new(separate_xyz_node.outputs['X'], switch_x_yz_node.inputs[3])  # True
     node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[2])  # False
     node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[2])  # False
-    node_tree.links.new(input_node.outputs['Index'], compare_index_y_node.inputs[2])  # A
     node_tree.links.new(compare_index_y_node.outputs['Result'], switch_yz_node.inputs[0])  # Result -> Switch
     node_tree.links.new(separate_xyz_node.outputs['Y'], switch_yz_node.inputs[3])  # True
     node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[4])  # False
     node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[4])  # False
+
+    # Output
     node_tree.links.new(switch_x_yz_node.outputs[0], output_node.inputs['Value'])
 
     return node_tree
@@ -433,11 +444,14 @@ def ensure_select_object_index_node_tree() -> NodeTree:
 
     math_node = node_tree.nodes.new(type='ShaderNodeMath')
     math_node.operation = 'FLOORED_MODULO'
+
     switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
     switch_node.input_type = 'INT'
+
     index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
     random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
     random_value_node.data_type = 'INT'
+
     object_index_offset_node = node_tree.nodes.new(type='ShaderNodeMath')
     object_index_offset_node.label = 'Object Index Offset'
 
@@ -448,20 +462,25 @@ def ensure_select_object_index_node_tree() -> NodeTree:
     subtract_node.operation = 'SUBTRACT'
     subtract_node.inputs[1].default_value = 1
 
-    node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
+    # Input
+    node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
     node_tree.links.new(input_node.outputs['Object Count'], subtract_node.inputs[0])
+    node_tree.links.new(input_node.outputs['Object Index Offset'], object_index_offset_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Object Count'], math_node.inputs[1])
+    node_tree.links.new(input_node.outputs['Object Select Mode'], compare_node.inputs[2])
+
+    # Internal
+    node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
     node_tree.links.new(subtract_node.outputs['Value'], random_value_node.inputs[5])
     node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
     node_tree.links.new(random_value_node.outputs[2], switch_node.inputs[4])
     node_tree.links.new(switch_node.outputs['Output'], store_named_attribute_node.inputs[7])
     node_tree.links.new(math_node.outputs['Value'], switch_node.inputs[5])
     node_tree.links.new(index_node.outputs['Index'], object_index_offset_node.inputs[0])
-    node_tree.links.new(input_node.outputs['Object Index Offset'], object_index_offset_node.inputs[1])
-    node_tree.links.new(input_node.outputs['Object Count'], math_node.inputs[1])
     node_tree.links.new(object_index_offset_node.outputs['Value'], math_node.inputs[0])
-    node_tree.links.new(input_node.outputs['Object Select Mode'], compare_node.inputs[2])
     node_tree.links.new(switch_node.outputs[1], store_named_attribute_node.inputs[7])
-    node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
+
+    # Output
     node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
     return node_tree
@@ -533,7 +552,6 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
     node_tree = ensure_geometry_node_tree('BDK Scatter Layer Object', inputs, outputs)
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Separate points that match the object index.
     compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
     compare_node.data_type = 'INT'
     compare_node.operation = 'EQUAL'
@@ -544,7 +562,6 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
 
     separate_geometry_node = node_tree.nodes.new(type='GeometryNodeSeparateGeometry')
 
-    # Scale Mix
     scale_mix_node = node_tree.nodes.new(type='ShaderNodeMix')
     scale_mix_node.data_type = 'VECTOR'
 
@@ -552,24 +569,19 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
     scale_random_value_node.label = 'Scale Random'
     scale_random_value_node.data_type = 'FLOAT'
 
-    # Snap and Align to Terrain
     snap_to_terrain_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     snap_to_terrain_group_node.node_tree = ensure_snap_to_terrain_node_tree()
 
-    # Mute Switch
     mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
     mute_switch_node.input_type = 'GEOMETRY'
     mute_switch_node.label = 'Mute'
 
-    # Align to Terrain
     align_to_terrain_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     align_to_terrain_node_group_node.node_tree = ensure_terrain_doodad_curve_align_to_terrain_node_tree()
 
-    # Terrain Normal Offset
     terrain_normal_offset_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
     terrain_normal_offset_node_group_node.node_tree = ensure_terrain_normal_offset_node_tree()
 
-    # Store Scale Attribute
     store_scale_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
     store_scale_attribute_node.inputs['Name'].default_value = 'scale'
     store_scale_attribute_node.domain = 'POINT'
@@ -717,7 +729,6 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
 
     join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
 
-    # TODO: we need to refactor this so that the objects are just here to be selected at random (aside from perhaps the scale)
     for scatter_layer_object_index, scatter_layer_object in enumerate(scatter_layer.objects):
         scatter_layer_object_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         scatter_layer_object_node_group_node.node_tree = ensure_scatter_layer_object_node_tree()
