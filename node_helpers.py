@@ -296,6 +296,56 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
     return input_node, output_node
 
 
+def ensure_curve_modifier_node_tree() -> NodeTree:
+    items = {
+        ('BOTH', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketInt', 'Trim Mode'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Factor Start'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Factor End'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Length Start'),
+        ('INPUT', 'NodeSocketFloat', 'Trim Length End'),
+        ('INPUT', 'NodeSocketFloat', 'Normal Offset'),
+        ('INPUT', 'NodeSocketBool', 'Is Curve Reversed'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        reverse_curve_node = node_tree.nodes.new(type='GeometryNodeReverseCurve')
+
+        reverse_curve_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        reverse_curve_switch_node.input_type = 'GEOMETRY'
+        reverse_curve_switch_node.label = 'Reverse Curve?'
+
+        trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
+
+        curve_normal_offset_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
+
+        # Input
+        node_tree.links.new(input_node.outputs['Normal Offset'], curve_normal_offset_group_node.inputs['Normal Offset'])
+        node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
+        node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs[14])  # False
+        node_tree.links.new(input_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
+        node_tree.links.new(input_node.outputs['Trim Factor End'], trim_curve_group_node.inputs['Factor End'])
+        node_tree.links.new(input_node.outputs['Trim Length Start'], trim_curve_group_node.inputs['Length Start'])
+        node_tree.links.new(input_node.outputs['Trim Length End'], trim_curve_group_node.inputs['Length End'])
+
+        # Internal
+        node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
+        node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.outputs['Curve'])
+        node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.inputs['Curve'])
+        node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
+
+        # Output
+        node_tree.links.new(curve_normal_offset_group_node.outputs['Curve'], output_node.inputs['Curve'])
+
+    return ensure_geometry_node_tree('BDK Curve Modifier', items, build_function)
+
+
 def ensure_curve_normal_offset_node_tree() -> NodeTree:
     node_tree_items = {
         ('BOTH', 'NodeSocketGeometry', 'Curve'),

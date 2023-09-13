@@ -242,9 +242,11 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     curve_spacing_absolute: FloatProperty(name='Spacing', default=meters_to_unreal(1.0), min=1, subtype='DISTANCE')
     curve_spacing_relative_axis: EnumProperty(name='Spacing Relative Axis', items=axis_enum_items, default='X')
 
-    curve_normal_offset_min: FloatProperty(name='Normal Offset Min', default=0.0, subtype='DISTANCE')
     curve_normal_offset_max: FloatProperty(name='Normal Offset Max', default=0.0, subtype='DISTANCE')
     curve_normal_offset_seed: IntProperty(name='Normal Offset Seed', default=0, min=0)
+
+    curve_tangent_offset_max: FloatProperty(name='Tangent Offset Max', default=0.0, subtype='DISTANCE')
+    curve_tangent_offset_seed: IntProperty(name='Tangent Offset Seed', default=0, min=0)
 
     # Mesh Settings
     mesh_spacing_method: EnumProperty(name='Spacing Method', items=(

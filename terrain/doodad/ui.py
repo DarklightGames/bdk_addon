@@ -420,9 +420,14 @@ class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
 
         flow.separator()
 
-        flow.prop(scatter_layer, 'curve_normal_offset_min', text='Normal Offset Min')
-        flow.prop(scatter_layer, 'curve_normal_offset_max', text='Max')
+        flow.prop(scatter_layer, 'curve_normal_offset_max', text='Normal Offset Max')
         flow.prop(scatter_layer, 'curve_normal_offset_seed', text='Seed')
+
+        flow.separator()
+
+        flow.prop(scatter_layer, 'curve_tangent_offset_max', text='Tangent Offset Max')
+        flow.prop(scatter_layer, 'curve_tangent_offset_seed', text='Seed')
+
 
 class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
     bl_label = 'Objects'

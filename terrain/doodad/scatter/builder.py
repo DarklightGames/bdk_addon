@@ -6,7 +6,8 @@ from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, Nod
 
 from ....units import meters_to_unreal
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, \
-    ensure_curve_normal_offset_node_tree, add_chained_math_nodes, ensure_trim_curve_node_tree
+    ensure_curve_normal_offset_node_tree, add_chained_math_nodes, ensure_trim_curve_node_tree, \
+    ensure_curve_modifier_node_tree
 
 
 def add_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad') -> 'BDK_PG_terrain_doodad_scatter_layer':
@@ -357,36 +358,22 @@ def ensure_vector_component_node_tree() -> NodeTree:
 def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
-        ('INPUT', 'NodeSocketInt', 'Trim Mode'),
-        ('INPUT', 'NodeSocketFloat', 'Trim Factor Start'),
-        ('INPUT', 'NodeSocketFloat', 'Trim Factor End'),
-        ('INPUT', 'NodeSocketFloat', 'Trim Length Start'),
-        ('INPUT', 'NodeSocketFloat', 'Trim Length End'),
-        ('INPUT', 'NodeSocketFloat', 'Normal Offset'),
         ('INPUT', 'NodeSocketFloat', 'Spacing Length'),
-        ('INPUT', 'NodeSocketBool', 'Is Curve Reversed'),
+        ('INPUT', 'NodeSocketFloat', 'Normal Offset Max'),
+        ('INPUT', 'NodeSocketInt', 'Normal Offset Seed'),
+        ('INPUT', 'NodeSocketFloat', 'Tangent Offset Max'),
+        ('INPUT', 'NodeSocketInt', 'Tangent Offset Seed'),
+        ('INPUT', 'NodeSocketInt', 'Global Seed'),
         ('OUTPUT', 'NodeSocketGeometry', 'Points')
     }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        reverse_curve_node = node_tree.nodes.new(type='GeometryNodeReverseCurve')
-
-        reverse_curve_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        reverse_curve_switch_node.input_type = 'GEOMETRY'
-        reverse_curve_switch_node.label = 'Reverse Curve?'
-
-        trim_curve_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        trim_curve_group_node.node_tree = ensure_trim_curve_node_tree()
-
-        curve_normal_offset_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        curve_normal_offset_group_node.node_tree = ensure_curve_normal_offset_node_tree()
-        node_tree.links.new(input_node.outputs['Normal Offset'], curve_normal_offset_group_node.inputs['Normal Offset'])
-
         curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
         curve_to_points_node.mode = 'LENGTH'
 
+        # Nodes
         store_curve_tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
         store_curve_tangent_attribute_node.data_type = 'FLOAT_VECTOR'
         store_curve_tangent_attribute_node.domain = 'POINT'
@@ -397,31 +384,62 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         store_curve_normal_attribute_node.domain = 'POINT'
         store_curve_normal_attribute_node.inputs['Name'].default_value = 'curve_normal'
 
+        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+
+        normal_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        normal_scale_node.operation = 'SCALE'
+
+        tangent_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        tangent_scale_node.operation = 'SCALE'
+
+        normal_offset_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        tangent_offset_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+
+        normal_offset_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Normal Offset Seed'], input_node.outputs['Global Seed']])
+        tangent_offset_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Tangent Offset Seed'], input_node.outputs['Global Seed']])
+
+        node_tree.links.new(tangent_offset_seed_socket, tangent_offset_random_value_node.inputs['Seed'])
+
+        add_offsets_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        add_offsets_node.operation = 'ADD'
+
         # Input
-        node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
-        node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs[1])
-        node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs[14])  # False
-        node_tree.links.new(input_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
-        node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
-        node_tree.links.new(input_node.outputs['Trim Factor End'], trim_curve_group_node.inputs['Factor End'])
-        node_tree.links.new(input_node.outputs['Trim Length Start'], trim_curve_group_node.inputs['Length Start'])
-        node_tree.links.new(input_node.outputs['Trim Length End'], trim_curve_group_node.inputs['Length End'])
+        node_tree.links.new(input_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
         node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
 
+        normal_offset_negate_node = node_tree.nodes.new(type='ShaderNodeMath')
+        normal_offset_negate_node.operation = 'MULTIPLY'
+        normal_offset_negate_node.inputs[1].default_value = -1.0
+
+        tangent_offset_negate_node = node_tree.nodes.new(type='ShaderNodeMath')
+        tangent_offset_negate_node.operation = 'MULTIPLY'
+        tangent_offset_negate_node.inputs[1].default_value = -1.0
+
+        node_tree.links.new(input_node.outputs['Normal Offset Max'], normal_offset_negate_node.inputs[0])
+        node_tree.links.new(normal_offset_negate_node.outputs[0], normal_offset_random_value_node.inputs[2]) # Min
+        node_tree.links.new(input_node.outputs['Normal Offset Max'], normal_offset_random_value_node.inputs[3]) # Max
+        node_tree.links.new(normal_offset_random_value_node.outputs[0], normal_scale_node.inputs['Scale'])
+
+        node_tree.links.new(curve_to_points_node.outputs['Tangent'], tangent_scale_node.inputs[0]) # Tangent -> Vector
+        node_tree.links.new(input_node.outputs['Tangent Offset Max'], tangent_offset_negate_node.inputs[0])
+
+        node_tree.links.new(tangent_offset_negate_node.outputs[0], tangent_offset_random_value_node.inputs[2]) # Min
+        node_tree.links.new(input_node.outputs['Tangent Offset Max'], tangent_offset_random_value_node.inputs[3]) # Max
+        node_tree.links.new(tangent_offset_random_value_node.outputs[1], tangent_scale_node.inputs['Scale'])
+
         # Internal
-        node_tree.links.new(curve_normal_offset_group_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
-        node_tree.links.new(curve_to_points_node.outputs['Normal'],
-                            store_curve_normal_attribute_node.inputs[3])  # Normal -> Value
-        node_tree.links.new(curve_to_points_node.outputs['Tangent'],
-                            store_curve_tangent_attribute_node.inputs[3])  # Tangent -> Value
-        node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
-        node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.outputs['Curve'])
-        node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.inputs['Curve'])
-        node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
-        node_tree.links.new(curve_to_points_node.outputs['Points'],
-                            store_curve_tangent_attribute_node.inputs['Geometry'])
-        node_tree.links.new(store_curve_tangent_attribute_node.outputs['Geometry'],
-                            store_curve_normal_attribute_node.inputs['Geometry'])
+        node_tree.links.new(normal_scale_node.outputs['Vector'], add_offsets_node.inputs[0])  # Result -> Vector
+        node_tree.links.new(tangent_scale_node.outputs['Vector'], add_offsets_node.inputs[1])  # Result -> Vector
+        node_tree.links.new(add_offsets_node.outputs['Vector'], set_position_node.inputs['Offset'])  # Vector -> Offset
+        node_tree.links.new(normal_offset_random_value_node.outputs[1], normal_scale_node.inputs[3])  # Result -> Scale
+        node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], output_node.inputs['Points'])
+        node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
+        node_tree.links.new(set_position_node.outputs['Geometry'], store_curve_tangent_attribute_node.inputs['Geometry'])
+        node_tree.links.new(curve_to_points_node.outputs['Normal'], store_curve_normal_attribute_node.inputs[3])  # Normal -> Value
+        node_tree.links.new(curve_to_points_node.outputs['Tangent'], store_curve_tangent_attribute_node.inputs[3])  # Tangent -> Value
+        node_tree.links.new(store_curve_tangent_attribute_node.outputs['Geometry'], store_curve_normal_attribute_node.inputs['Geometry'])
+        node_tree.links.new(normal_offset_seed_socket, normal_offset_random_value_node.inputs['Seed'])
+        node_tree.links.new(curve_to_points_node.outputs['Normal'], normal_scale_node.inputs[0]) # Normal -> Vector
 
         # Output
         node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], output_node.inputs['Points'])
@@ -696,16 +714,28 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             curve_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
             curve_object_info_node.inputs['Object'].default_value = terrain_doodad_object
 
+            curve_modifier_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+            curve_modifier_group_node.node_tree = ensure_curve_modifier_node_tree()
+
+            add_scatter_layer_driver(curve_modifier_group_node.inputs['Is Curve Reversed'], 'is_curve_reversed')
+            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Mode'], 'curve_trim_mode')
+            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Factor Start'], 'curve_trim_factor_start')
+            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Factor End'], 'curve_trim_factor_end')
+            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Length Start'], 'curve_trim_length_start')
+            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Length End'], 'curve_trim_length_end')
+            add_scatter_layer_driver(curve_modifier_group_node.inputs['Normal Offset'], 'curve_normal_offset')
+
             curve_to_points_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
             curve_to_points_group_node.node_tree = ensure_scatter_layer_curve_to_points_node_tree()
-            node_tree.links.new(curve_object_info_node.outputs['Geometry'], curve_to_points_group_node.inputs['Curve'])
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Is Curve Reversed'], 'is_curve_reversed')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Mode'], 'curve_trim_mode')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Factor Start'], 'curve_trim_factor_start')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Factor End'], 'curve_trim_factor_end')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Length Start'], 'curve_trim_length_start')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Trim Length End'], 'curve_trim_length_end')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset'], 'curve_normal_offset')
+
+            add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset Max'], 'curve_normal_offset_max')
+            add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset Seed'], 'curve_normal_offset_seed')
+            add_scatter_layer_driver(curve_to_points_group_node.inputs['Tangent Offset Max'], 'curve_tangent_offset_max')
+            add_scatter_layer_driver(curve_to_points_group_node.inputs['Tangent Offset Seed'], 'curve_tangent_offset_seed')
+            add_scatter_layer_driver(curve_to_points_group_node.inputs['Global Seed'], 'global_seed')
+
+            node_tree.links.new(curve_object_info_node.outputs['Geometry'], curve_modifier_group_node.inputs['Curve'])
+            node_tree.links.new(curve_modifier_group_node.outputs['Curve'], curve_to_points_group_node.inputs['Curve'])
 
             if spacing_length is not None:
                 node_tree.links.new(spacing_length, curve_to_points_group_node.inputs['Spacing Length'])
