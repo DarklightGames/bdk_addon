@@ -1,7 +1,7 @@
 from typing import cast
 
 import bpy
-from bpy.types import Panel, Context, UIList, UILayout
+from bpy.types import Panel, Context, UIList, UILayout, Curve
 
 from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad, is_active_object_terrain_doodad
 from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
@@ -406,7 +406,7 @@ class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
         flow.use_property_decorate = False
 
         # Curve settings
-        draw_curve_modifier_settings(flow, scatter_layer)
+        draw_curve_modifier_settings(flow, scatter_layer, curve_data=terrain_doodad.object.data)
 
         flow.separator()
 
@@ -502,7 +502,8 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.separator()
 
-            flow.prop(scatter_layer_object, 'random_rotation')
+            flow.prop(scatter_layer_object, 'random_rotation_max')
+            flow.prop(scatter_layer_object, 'random_rotation_max_seed', text='Seed')
 
             if terrain_doodad.object.type == 'CURVE':
                 flow.separator()
@@ -513,7 +514,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
                 col.prop(scatter_layer_object, 'curve_normal_offset_seed', text='Seed')
 
 
-def draw_curve_modifier_settings(layout: UILayout, data):
+def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = None):
     layout.prop(data, 'is_curve_reversed')
     layout.prop(data, 'curve_normal_offset')
     layout.prop(data, 'curve_trim_mode')
@@ -526,6 +527,9 @@ def draw_curve_modifier_settings(layout: UILayout, data):
         col = layout.column(align=True)
         col.prop(data, 'curve_trim_length_start', text='Trim Start')
         col.prop(data, 'curve_trim_length_end', text='End')
+
+        if curve_data is not None and len(curve_data.splines) > 1:
+            layout.label(text='Distance trim not supported for multiple splines', icon='ERROR')
 
 
 class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):

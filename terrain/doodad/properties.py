@@ -191,8 +191,8 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
     align_axis: EnumProperty(name='Align Axis', items=axis_signed_enum_items, default='Z')
 
-    random_rotation: FloatVectorProperty(name='Random Rotation', subtype='EULER')
-    random_rotation_seed: IntProperty(name='Random Rotation Seed', default=0, min=0)
+    random_rotation_max: FloatVectorProperty(name='Random Rotation', subtype='EULER')
+    random_rotation_max_seed: IntProperty(name='Random Rotation Seed', default=0, min=0)
 
     scale_min: FloatVectorProperty(name='Scale Min', min=0.0, default=(1.0, 1.0, 1.0))
     scale_max: FloatVectorProperty(name='Scale Max', min=0.0, default=(1.0, 1.0, 1.0))

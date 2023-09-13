@@ -127,6 +127,9 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
     items = {
         ('BOTH', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT','NodeSocketFloat', 'Factor'),
+        ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
+        ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
+        ('INPUT', 'NodeSocketInt', 'Global Seed'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -168,18 +171,40 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         align_z_node.axis = 'Z'
         align_z_node.inputs["Factor"].default_value = 1.0
 
-        # Internal
-        node_tree.links.new(terrain_normal_mix_node.outputs[1], vector_math_node.inputs[0])  # Result -> Vector
-        node_tree.links.new(terrain_normal_attribute_node.outputs[0], terrain_normal_mix_node.inputs[5])  # Attribute -> B
-        node_tree.links.new(curve_tangent_attribute_node.outputs[0], align_x_node.inputs[2])  # Attribute -> Vector
-        node_tree.links.new(align_z_node.outputs[0], store_rotation_attribute_node.inputs[3])  # Rotation -> Value
-        node_tree.links.new(align_x_node.outputs[0], align_z_node.inputs[0])  # Rotation -> Rotation
-        node_tree.links.new(vector_math_node.outputs[0], align_z_node.inputs[2])  # Vector -> Vector
-        node_tree.links.new(up_vector_node.outputs[0], terrain_normal_mix_node.inputs[4])  # Vector -> A
+        seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Random Rotation Seed'],
+                                                                input_node.outputs['Global Seed']])
+
+        negate_random_rotation_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        negate_random_rotation_node.label = 'Negate Random Rotation'
+        negate_random_rotation_node.operation = 'MULTIPLY'
+        negate_random_rotation_node.inputs[1].default_value = (-1, -1, -1)
+
+        random_rotation_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        random_rotation_node.label = 'Random Rotation'
+        random_rotation_node.data_type = 'FLOAT_VECTOR'
+
+        rotate_euler_node = node_tree.nodes.new(type='FunctionNodeRotateEuler')
+        rotate_euler_node.space = 'LOCAL'
 
         # Input
         node_tree.links.new(input_node.outputs['Factor'], terrain_normal_mix_node.inputs[0])
         node_tree.links.new(input_node.outputs['Geometry'], store_rotation_attribute_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Random Rotation Max'], negate_random_rotation_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Random Rotation Max'], random_rotation_node.inputs[1])
+
+        # Internal
+        node_tree.links.new(terrain_normal_mix_node.outputs[1], vector_math_node.inputs[0])  # Result -> Vector
+        node_tree.links.new(terrain_normal_attribute_node.outputs[0], terrain_normal_mix_node.inputs[5])  # Attribute -> B
+        node_tree.links.new(curve_tangent_attribute_node.outputs[0], align_x_node.inputs[2])  # Attribute -> Vector
+        node_tree.links.new(align_z_node.outputs[0], rotate_euler_node.inputs[0])  # Rotation -> Rotation
+        node_tree.links.new(rotate_euler_node.outputs['Rotation'], store_rotation_attribute_node.inputs[3])  # Rotation -> Value
+        node_tree.links.new(align_x_node.outputs[0], align_z_node.inputs[0])  # Rotation -> Rotation
+        node_tree.links.new(vector_math_node.outputs[0], align_z_node.inputs[2])  # Vector -> Vector
+        node_tree.links.new(up_vector_node.outputs[0], terrain_normal_mix_node.inputs[4])  # Vector -> A
+        node_tree.links.new(random_rotation_node.outputs[0], rotate_euler_node.inputs[1])  # Value -> Rotate By
+        node_tree.links.new(negate_random_rotation_node.outputs[0], random_rotation_node.inputs[0])  # Vector -> Min
+        node_tree.links.new(seed_socket, random_rotation_node.inputs[8])
+        node_tree.links.new(align_z_node.outputs['Rotation'], rotate_euler_node.inputs[0])
 
         # Output
         node_tree.links.new(store_rotation_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
@@ -403,10 +428,6 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         add_offsets_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         add_offsets_node.operation = 'ADD'
 
-        # Input
-        node_tree.links.new(input_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
-        node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
-
         normal_offset_negate_node = node_tree.nodes.new(type='ShaderNodeMath')
         normal_offset_negate_node.operation = 'MULTIPLY'
         normal_offset_negate_node.inputs[1].default_value = -1.0
@@ -415,24 +436,19 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         tangent_offset_negate_node.operation = 'MULTIPLY'
         tangent_offset_negate_node.inputs[1].default_value = -1.0
 
+        # Input
         node_tree.links.new(input_node.outputs['Normal Offset Max'], normal_offset_negate_node.inputs[0])
-        node_tree.links.new(normal_offset_negate_node.outputs[0], normal_offset_random_value_node.inputs[2]) # Min
+        node_tree.links.new(input_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
         node_tree.links.new(input_node.outputs['Normal Offset Max'], normal_offset_random_value_node.inputs[3]) # Max
-        node_tree.links.new(normal_offset_random_value_node.outputs[0], normal_scale_node.inputs['Scale'])
-
-        node_tree.links.new(curve_to_points_node.outputs['Tangent'], tangent_scale_node.inputs[0]) # Tangent -> Vector
         node_tree.links.new(input_node.outputs['Tangent Offset Max'], tangent_offset_negate_node.inputs[0])
-
-        node_tree.links.new(tangent_offset_negate_node.outputs[0], tangent_offset_random_value_node.inputs[2]) # Min
         node_tree.links.new(input_node.outputs['Tangent Offset Max'], tangent_offset_random_value_node.inputs[3]) # Max
-        node_tree.links.new(tangent_offset_random_value_node.outputs[1], tangent_scale_node.inputs['Scale'])
 
         # Internal
         node_tree.links.new(normal_scale_node.outputs['Vector'], add_offsets_node.inputs[0])  # Result -> Vector
         node_tree.links.new(tangent_scale_node.outputs['Vector'], add_offsets_node.inputs[1])  # Result -> Vector
         node_tree.links.new(add_offsets_node.outputs['Vector'], set_position_node.inputs['Offset'])  # Vector -> Offset
         node_tree.links.new(normal_offset_random_value_node.outputs[1], normal_scale_node.inputs[3])  # Result -> Scale
-        node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], output_node.inputs['Points'])
         node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
         node_tree.links.new(set_position_node.outputs['Geometry'], store_curve_tangent_attribute_node.inputs['Geometry'])
         node_tree.links.new(curve_to_points_node.outputs['Normal'], store_curve_normal_attribute_node.inputs[3])  # Normal -> Value
@@ -440,6 +456,11 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         node_tree.links.new(store_curve_tangent_attribute_node.outputs['Geometry'], store_curve_normal_attribute_node.inputs['Geometry'])
         node_tree.links.new(normal_offset_seed_socket, normal_offset_random_value_node.inputs['Seed'])
         node_tree.links.new(curve_to_points_node.outputs['Normal'], normal_scale_node.inputs[0]) # Normal -> Vector
+        node_tree.links.new(normal_offset_negate_node.outputs[0], normal_offset_random_value_node.inputs[2]) # Min
+        node_tree.links.new(normal_offset_random_value_node.outputs[1], normal_scale_node.inputs['Scale'])
+        node_tree.links.new(curve_to_points_node.outputs['Tangent'], tangent_scale_node.inputs[0]) # Tangent -> Vector
+        node_tree.links.new(tangent_offset_negate_node.outputs[0], tangent_offset_random_value_node.inputs[2]) # Min
+        node_tree.links.new(tangent_offset_random_value_node.outputs[1], tangent_scale_node.inputs['Scale'])
 
         # Output
         node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], output_node.inputs['Points'])
@@ -569,7 +590,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Min'),
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Max'),
         ('INPUT', 'NodeSocketInt', 'Terrain Normal Offset Seed'),
-        ('INPUT', 'NodeSocketVector', 'Random Rotation'),
+        ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
+        ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -627,6 +649,10 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Terrain Normal Offset Max'], terrain_normal_offset_node_group_node.inputs['Terrain Normal Offset Max'])
         node_tree.links.new(input_node.outputs['Terrain Normal Offset Seed'], terrain_normal_offset_node_group_node.inputs['Seed'])
         node_tree.links.new(input_node.outputs['Global Seed'], terrain_normal_offset_node_group_node.inputs['Global Seed'])
+        node_tree.links.new(input_node.outputs['Random Rotation Max'], align_to_terrain_node_group_node.inputs['Random Rotation Max'])
+        node_tree.links.new(input_node.outputs['Random Rotation Seed'], align_to_terrain_node_group_node.inputs['Random Rotation Seed'])
+        node_tree.links.new(input_node.outputs['Global Seed'], align_to_terrain_node_group_node.inputs['Global Seed'])
+
 
         # Internal
         node_tree.links.new(scale_seed_socket, scale_random_value_node.inputs['Seed'])
@@ -695,7 +721,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
                 node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
                 add_scatter_layer_driver(vector_component_group_node.inputs['Index'], 'curve_spacing_relative_axis')
                 length_sockets.append(vector_component_group_node.outputs['Value'])
-            spacing_length = add_chained_math_nodes(node_tree, 'MAXIMUM', length_sockets)
+            spacing_length_socket = add_chained_math_nodes(node_tree, 'MAXIMUM', length_sockets)
 
             spacing_mode_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
             spacing_mode_switch_node.input_type = 'FLOAT'
@@ -704,12 +730,15 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
 
             spacing_relative_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
             spacing_relative_factor_node.operation = 'MULTIPLY'
-            node_tree.links.new(spacing_length, spacing_relative_factor_node.inputs[0])
+
+            if spacing_length_socket:
+                node_tree.links.new(spacing_length_socket, spacing_relative_factor_node.inputs[0])
+
             add_scatter_layer_driver(spacing_relative_factor_node.inputs[1], 'curve_spacing_relative_factor')
 
             node_tree.links.new(spacing_relative_factor_node.outputs['Value'], spacing_mode_switch_node.inputs[2])
 
-            spacing_length = spacing_mode_switch_node.outputs[0]
+            spacing_length_socket = spacing_mode_switch_node.outputs[0]
 
             curve_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
             curve_object_info_node.inputs['Object'].default_value = terrain_doodad_object
@@ -737,8 +766,8 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             node_tree.links.new(curve_object_info_node.outputs['Geometry'], curve_modifier_group_node.inputs['Curve'])
             node_tree.links.new(curve_modifier_group_node.outputs['Curve'], curve_to_points_group_node.inputs['Curve'])
 
-            if spacing_length is not None:
-                node_tree.links.new(spacing_length, curve_to_points_group_node.inputs['Spacing Length'])
+            if spacing_length_socket is not None:
+                node_tree.links.new(spacing_length_socket, curve_to_points_group_node.inputs['Spacing Length'])
 
             points_socket = curve_to_points_group_node.outputs['Points']
         else:
@@ -791,6 +820,10 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
                                             'terrain_normal_offset_max')
             add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Terrain Normal Offset Seed'],
                                             'terrain_normal_offset_seed')
+            add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Random Rotation Max'], 'random_rotation_max', 0)
+            add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Random Rotation Max'], 'random_rotation_max', 1)
+            add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Random Rotation Max'], 'random_rotation_max', 2)
+            add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Random Rotation Seed'], 'random_rotation_max_seed')
 
             node_tree.links.new(points_socket, scatter_layer_object_node_group_node.inputs['Points'])
             node_tree.links.new(terrain_info_object_node.outputs['Geometry'],
