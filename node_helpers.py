@@ -1,10 +1,26 @@
-from typing import Optional, Iterable, AbstractSet, Tuple, List
+import os.path
+from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable
 
 import bpy
+from zlib import adler32
 from bpy.types import NodeTree, NodeSocket, Node
 
 from .data import map_range_interpolation_type_items
 
+
+def should_rebuild_node_tree(node_tree: NodeTree, source_file: str) -> bool:
+    """
+    Determines if the node tree should be rebuilt.
+    :param node_tree: The node tree to check.
+    :param source_file: The file that the node tree was created from.
+    :return: True if the node tree should be rebuilt, otherwise False.
+    """
+
+    # Check if the node tree was created by a different version of the addon.
+    mtime = os.path.getmtime(source_file)
+    if mtime != node_tree.bdk.mtime:
+        return True
+    return False
 
 def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:
     items = {
@@ -13,20 +29,19 @@ def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Value 2'),
         ('OUTPUT', 'NodeSocketFloat', 'Value')
     }
-    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Operation', items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    output_socket = add_operation_switch_nodes(
-        node_tree,
-        input_node.outputs['Operation'],
-        input_node.outputs['Value 1'],
-        input_node.outputs['Value 2'],
-        ['ADD', 'SUBTRACT', 'MULTIPLY', 'MAXIMUM', 'MINIMUM'],
-    )
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+        output_socket = add_operation_switch_nodes(
+            node_tree,
+            input_node.outputs['Operation'],
+            input_node.outputs['Value 1'],
+            input_node.outputs['Value 2'],
+            ['ADD', 'SUBTRACT', 'MULTIPLY', 'MAXIMUM', 'MINIMUM'],
+        )
+        node_tree.links.new(output_socket, output_node.inputs['Value'])
 
-    node_tree.links.new(output_socket, output_node.inputs['Value'])
-
-    return node_tree
+    return ensure_geometry_node_tree('BDK Terrain Layer Node Operation', items, build_function)
 
 
 def add_operation_switch_nodes(
@@ -76,42 +91,44 @@ def ensure_interpolation_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
         ('BOTH', 'NodeSocketFloat', 'Value'),
+        ('BOTH', 'NodeSocketFloat', 'Value'),
     }
-    node_tree = ensure_geometry_node_tree('Interpolation', items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    last_output_node_socket: Optional[NodeSocket] = None
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    for index, interpolation_type in enumerate(map_range_interpolation_type_items):
-        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-        compare_node.data_type = 'INT'
-        compare_node.operation = 'EQUAL'
-        compare_node.inputs[3].default_value = index
-        node_tree.links.new(input_node.outputs['Interpolation Type'], compare_node.inputs[2])
+        last_output_node_socket: Optional[NodeSocket] = None
 
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'FLOAT'
+        for index, interpolation_type in enumerate(map_range_interpolation_type_items):
+            compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+            compare_node.data_type = 'INT'
+            compare_node.operation = 'EQUAL'
+            compare_node.inputs[3].default_value = index
+            node_tree.links.new(input_node.outputs['Interpolation Type'], compare_node.inputs[2])
 
-        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
+            switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+            switch_node.input_type = 'FLOAT'
 
-        map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
-        map_range_node.data_type = 'FLOAT'
-        map_range_node.interpolation_type = interpolation_type[0]
-        map_range_node.inputs[3].default_value = 1.0  # To Min
-        map_range_node.inputs[4].default_value = 0.0  # To Max
+            node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
 
-        node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs[0])
-        node_tree.links.new(map_range_node.outputs[0], switch_node.inputs['True'])
+            map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
+            map_range_node.data_type = 'FLOAT'
+            map_range_node.interpolation_type = interpolation_type[0]
+            map_range_node.inputs[3].default_value = 1.0  # To Min
+            map_range_node.inputs[4].default_value = 0.0  # To Max
+
+            node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs[0])
+            node_tree.links.new(map_range_node.outputs[0], switch_node.inputs['True'])
+
+            if last_output_node_socket:
+                node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
+
+            last_output_node_socket = switch_node.outputs[0]  # Output
 
         if last_output_node_socket:
-            node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
+            node_tree.links.new(last_output_node_socket, output_node.inputs['Value'])
 
-        last_output_node_socket = switch_node.outputs[0]  # Output
-
-    if last_output_node_socket:
-        node_tree.links.new(last_output_node_socket, output_node.inputs['Value'])
-
-    return node_tree
+    return ensure_geometry_node_tree('Interpolation', items, build_function)
 
 
 def add_noise_type_switch_nodes(
@@ -180,24 +197,27 @@ def add_noise_type_switch_nodes(
     return last_output_node_socket
 
 
-def ensure_geometry_node_tree(name: str, items: AbstractSet[Tuple[str, str, str]]) -> NodeTree:
+def ensure_geometry_node_tree(name: str, items: AbstractSet[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
     """
     Ensures that a geometry node tree with the given name, inputs and outputs exists.
     """
-    return ensure_node_tree(name, 'GeometryNodeTree', items)
+    return ensure_node_tree(name, 'GeometryNodeTree', items, build_function, should_force_build)
 
 
 def ensure_shader_node_tree(
-    name: str, items: AbstractSet[Tuple[str, str, str]]) -> NodeTree:
+    name: str, items: AbstractSet[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
     """
     Ensures that a shader node tree with the given name, inputs and outputs exists.
     """
-    return ensure_node_tree(name, 'ShaderNodeTree', items)
+    return ensure_node_tree(name, 'ShaderNodeTree', items, build_function, should_force_build)
 
 
 def ensure_node_tree(name: str,
                      node_group_type: str,
-                     items: AbstractSet[Tuple[str, str, str]]) -> NodeTree:
+                     items: AbstractSet[Tuple[str, str, str]],
+                     build_function: Callable[[NodeTree], None],
+                     should_force_build: bool = False
+                     ) -> NodeTree:
     """
     Gets or creates a node tree with the given name, type, inputs and outputs.
     """
@@ -227,7 +247,28 @@ def ensure_node_tree(name: str,
         item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
         node_tree.interface.remove(item)
 
-    node_tree.nodes.clear()
+    # Hash the build function byte-code.
+    build_hash = hex(hash(build_function.__code__.co_code))
+
+    # Check if the node tree needs to be rebuilt.
+    should_build = False
+    if should_force_build:
+        should_build = True
+    else:
+        build_hash_changed = node_tree.bdk.build_hash != build_hash
+        if build_hash_changed:
+            print(f'Build hash changed for node tree {name} from {node_tree.bdk.build_hash} to {build_hash}')
+            should_build = True
+
+    if should_build:
+        # Clear the node tree.
+        node_tree.nodes.clear()
+
+        # Rebuild the node tree using the given build function.
+        build_function(node_tree)
+
+        # Update the node tree's build code
+        node_tree.bdk.build_hash = build_hash
 
     return node_tree
 
@@ -260,47 +301,48 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
         ('BOTH', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketFloat', 'Normal Offset')
     }
-    node_tree = ensure_geometry_node_tree('BDK Offset Curve Normal', node_tree_items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Add Set Position Node
-    set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Add Resample Curve node.
-    resample_curve_node = node_tree.nodes.new(type='GeometryNodeResampleCurve')
-    resample_curve_node.mode = 'EVALUATED'
+        # Add Set Position Node
+        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
-    # Add Vector Scale node.
-    vector_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-    vector_scale_node.operation = 'SCALE'
+        # Add Resample Curve node.
+        resample_curve_node = node_tree.nodes.new(type='GeometryNodeResampleCurve')
+        resample_curve_node.mode = 'EVALUATED'
 
-    # Add Input Normal node.
-    input_normal_node = node_tree.nodes.new(type='GeometryNodeInputNormal')
+        # Add Vector Scale node.
+        vector_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        vector_scale_node.operation = 'SCALE'
 
-    # Add Switch node.
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'GEOMETRY'
+        # Add Input Normal node.
+        input_normal_node = node_tree.nodes.new(type='GeometryNodeInputNormal')
 
-    # Add Compare node.
-    compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-    compare_node.operation = 'EQUAL'
+        # Add Switch node.
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'GEOMETRY'
 
-    node_tree.links.new(input_node.outputs['Normal Offset'], compare_node.inputs[0])  # A
-    node_tree.links.new(input_node.outputs['Normal Offset'], vector_scale_node.inputs[3])  # Scale
-    node_tree.links.new(input_node.outputs['Curve'], resample_curve_node.inputs['Curve'])
-    node_tree.links.new(resample_curve_node.outputs['Curve'], set_position_node.inputs['Geometry'])
+        # Add Compare node.
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.operation = 'EQUAL'
 
-    node_tree.links.new(input_normal_node.outputs['Normal'], vector_scale_node.inputs[0])
-    node_tree.links.new(input_node.outputs['Normal Offset'], vector_scale_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Normal Offset'], compare_node.inputs[0])  # A
+        node_tree.links.new(input_node.outputs['Normal Offset'], vector_scale_node.inputs[3])  # Scale
+        node_tree.links.new(input_node.outputs['Curve'], resample_curve_node.inputs['Curve'])
+        node_tree.links.new(resample_curve_node.outputs['Curve'], set_position_node.inputs['Geometry'])
 
-    node_tree.links.new(input_node.outputs['Curve'], switch_node.inputs[15])  # True
-    node_tree.links.new(set_position_node.outputs['Geometry'], switch_node.inputs[14])  # False
-    node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs[1])  # Switch
+        node_tree.links.new(input_normal_node.outputs['Normal'], vector_scale_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Normal Offset'], vector_scale_node.inputs[1])
 
-    node_tree.links.new(vector_scale_node.outputs['Vector'], set_position_node.inputs['Offset'])
-    node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Curve'], switch_node.inputs[15])  # True
+        node_tree.links.new(set_position_node.outputs['Geometry'], switch_node.inputs[14])  # False
+        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs[1])  # Switch
 
-    return node_tree
+        node_tree.links.new(vector_scale_node.outputs['Vector'], set_position_node.inputs['Offset'])
+        node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
+
+    return ensure_geometry_node_tree('BDK Offset Curve Normal', node_tree_items, build_function)
 
 
 def ensure_trim_curve_node_tree() -> NodeTree:
@@ -312,49 +354,50 @@ def ensure_trim_curve_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Length Start'),
         ('INPUT', 'NodeSocketFloat', 'Length End'),
     }
-    node_tree = ensure_geometry_node_tree('BDK Curve Trim', items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
-    trim_curve_factor_node.mode = 'FACTOR'
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
-    trim_curve_length_node.mode = 'LENGTH'
+        trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
+        trim_curve_factor_node.mode = 'FACTOR'
 
-    node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
-    node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
+        trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
+        trim_curve_length_node.mode = 'LENGTH'
 
-    compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-    compare_node.data_type = 'INT'
-    compare_node.operation = 'EQUAL'
+        node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
 
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'GEOMETRY'
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.data_type = 'INT'
+        compare_node.operation = 'EQUAL'
 
-    node_tree.links.new(input_node.outputs['Mode'], compare_node.inputs[2])
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'GEOMETRY'
 
-    node_tree.links.new(compare_node.outputs[0], switch_node.inputs[1])  # Result -> Switch
-    node_tree.links.new(trim_curve_factor_node.outputs['Curve'], switch_node.inputs[15])  # True
-    node_tree.links.new(trim_curve_length_node.outputs['Curve'], switch_node.inputs[14])  # False
+        node_tree.links.new(input_node.outputs['Mode'], compare_node.inputs[2])
 
-    # Add curve length subtract node.
-    curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
-    node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
-    subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
-    subtract_node.operation = 'SUBTRACT'
-    node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
-    node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
+        node_tree.links.new(compare_node.outputs[0], switch_node.inputs[1])  # Result -> Switch
+        node_tree.links.new(trim_curve_factor_node.outputs['Curve'], switch_node.inputs[15])  # True
+        node_tree.links.new(trim_curve_length_node.outputs['Curve'], switch_node.inputs[14])  # False
 
-    node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
+        # Add curve length subtract node.
+        curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
+        node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
+        subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+        subtract_node.operation = 'SUBTRACT'
+        node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
+        node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
 
-    node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
-    node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
+        node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
 
-    node_tree.links.new(input_node.outputs['Length End'], subtract_node.inputs[1])
-    node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs[4])
-    node_tree.links.new(subtract_node.outputs['Value'], trim_curve_length_node.inputs[5])
+        node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
+        node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
 
-    return node_tree
+        node_tree.links.new(input_node.outputs['Length End'], subtract_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs[4])
+        node_tree.links.new(subtract_node.outputs['Value'], trim_curve_length_node.inputs[5])
+
+    return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
 
 def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:

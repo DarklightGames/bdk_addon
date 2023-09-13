@@ -27,11 +27,11 @@ def get_instance_offset(asset_instance: Object) -> Matrix:
 def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, Euler, Vector):
     """
     Converts a Blender world matrix to units suitable for exporting to Unreal Engine.
-    This also corrects for the offset that occurs when pasting an actor into the Unreal Editor.
+    This also corrects for the offset that occurs when pasting an brush_object into the Unreal Editor.
     :param matrix: The Blender world matrix.
     :return: The location, rotation and scale.
     """
-    # Location is corrected by 32 units as it gets offset when actor is pasted into the Unreal Editor.
+    # Location is corrected by 32 units as it gets offset when brush_object is pasted into the Unreal Editor.
     loc: Vector = matrix.to_translation() - Vector((32.0, -32.0, 32.0))
     # Y-Axis is inverted in Unreal Engine.
     loc.y = -loc.y

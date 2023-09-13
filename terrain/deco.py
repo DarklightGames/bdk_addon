@@ -86,43 +86,44 @@ def add_terrain_layer_node_driver(
 
 def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index: int, dataptr_id: str, nodes: Iterable) -> NodeTree:
     items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(name, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-    named_attribute_node.data_type = 'FLOAT_COLOR'
-    named_attribute_node.inputs['Name'].default_value = dataptr_id
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    add_node = node_tree.nodes.new('ShaderNodeMath')
-    add_node.inputs[0].default_value = 0.0
-    add_node.inputs[1].default_value = 0.0
-    add_node.operation = 'ADD'
+        named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+        named_attribute_node.data_type = 'FLOAT_COLOR'
+        named_attribute_node.inputs['Name'].default_value = dataptr_id
 
-    density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, nodes)
+        add_node = node_tree.nodes.new('ShaderNodeMath')
+        add_node.inputs[0].default_value = 0.0
+        add_node.inputs[1].default_value = 0.0
+        add_node.operation = 'ADD'
 
-    if density_socket is not None:
-        node_tree.links.new(density_socket, add_node.inputs[1])
+        density_socket = add_density_from_terrain_layer_nodes(node_tree, dataptr_name, dataptr_index, nodes)
 
-    node_tree.links.new(named_attribute_node.outputs[2], add_node.inputs[0])
+        if density_socket is not None:
+            node_tree.links.new(density_socket, add_node.inputs[1])
 
-    store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
-    store_named_attribute_node.data_type = 'BYTE_COLOR'
-    store_named_attribute_node.domain = 'POINT'
-    store_named_attribute_node.inputs['Name'].default_value = dataptr_id
+        node_tree.links.new(named_attribute_node.outputs[2], add_node.inputs[0])
 
-    # Add a clamp node to clamp the density values between 0 and 1.
-    clamp_node = node_tree.nodes.new('ShaderNodeClamp')
-    clamp_node.inputs['Value'].default_value = 0.0
-    clamp_node.inputs['Min'].default_value = 0.0
-    clamp_node.inputs['Max'].default_value = 1.0
+        store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
+        store_named_attribute_node.data_type = 'BYTE_COLOR'
+        store_named_attribute_node.domain = 'POINT'
+        store_named_attribute_node.inputs['Name'].default_value = dataptr_id
 
-    node_tree.links.new(add_node.outputs['Value'], clamp_node.inputs['Value'])
-    node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs[5])
+        # Add a clamp node to clamp the density values between 0 and 1.
+        clamp_node = node_tree.nodes.new('ShaderNodeClamp')
+        clamp_node.inputs['Value'].default_value = 0.0
+        clamp_node.inputs['Min'].default_value = 0.0
+        clamp_node.inputs['Max'].default_value = 1.0
 
-    node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
-    node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        node_tree.links.new(add_node.outputs['Value'], clamp_node.inputs['Value'])
+        node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs[5])
 
-    return node_tree
+        node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
+        node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree(name, items, build_function)
 
 
 def ensure_noise_node_group() -> NodeTree:
@@ -135,38 +136,39 @@ def ensure_noise_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Distortion'),
         ('OUTPUT', 'NodeSocketFloat', 'Value'),
     }
-    node_tree = ensure_geometry_node_tree('BDK Noise', items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    noise_type_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
-    noise_type_switch_node.input_type = 'FLOAT'
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    white_noise_node = node_tree.nodes.new('ShaderNodeTexWhiteNoise')
-    white_noise_node.noise_dimensions = '2D'
+        noise_type_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+        noise_type_switch_node.input_type = 'FLOAT'
 
-    perlin_noise_node = node_tree.nodes.new('ShaderNodeTexNoise')
-    perlin_noise_node.noise_dimensions = '2D'
-    perlin_noise_node.normalize = True
+        white_noise_node = node_tree.nodes.new('ShaderNodeTexWhiteNoise')
+        white_noise_node.noise_dimensions = '2D'
 
-    compare_node = node_tree.nodes.new('FunctionNodeCompare')
-    compare_node.data_type = 'INT'
-    compare_node.operation = 'EQUAL'
-    compare_node.inputs[3].default_value = 0
+        perlin_noise_node = node_tree.nodes.new('ShaderNodeTexNoise')
+        perlin_noise_node.noise_dimensions = '2D'
+        perlin_noise_node.normalize = True
 
-    node_tree.links.new(input_node.outputs['Noise Type'], compare_node.inputs[2])
-    node_tree.links.new(input_node.outputs['Perlin Noise Scale'], perlin_noise_node.inputs['Scale'])
-    node_tree.links.new(input_node.outputs['Perlin Noise Detail'], perlin_noise_node.inputs['Detail'])
-    node_tree.links.new(input_node.outputs['Perlin Noise Roughness'], perlin_noise_node.inputs['Roughness'])
-    node_tree.links.new(input_node.outputs['Perlin Noise Lacunarity'], perlin_noise_node.inputs['Lacunarity'])
-    node_tree.links.new(input_node.outputs['Perlin Noise Distortion'], perlin_noise_node.inputs['Distortion'])
+        compare_node = node_tree.nodes.new('FunctionNodeCompare')
+        compare_node.data_type = 'INT'
+        compare_node.operation = 'EQUAL'
+        compare_node.inputs[3].default_value = 0
 
-    node_tree.links.new(compare_node.outputs['Result'], noise_type_switch_node.inputs['Switch'])
-    node_tree.links.new(white_noise_node.outputs['Value'], noise_type_switch_node.inputs[3])  # True
-    node_tree.links.new(perlin_noise_node.outputs['Fac'], noise_type_switch_node.inputs[2])   # False
+        node_tree.links.new(input_node.outputs['Noise Type'], compare_node.inputs[2])
+        node_tree.links.new(input_node.outputs['Perlin Noise Scale'], perlin_noise_node.inputs['Scale'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Detail'], perlin_noise_node.inputs['Detail'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Roughness'], perlin_noise_node.inputs['Roughness'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Lacunarity'], perlin_noise_node.inputs['Lacunarity'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Distortion'], perlin_noise_node.inputs['Distortion'])
 
-    node_tree.links.new(noise_type_switch_node.outputs['Output'], output_node.inputs['Value'])
+        node_tree.links.new(compare_node.outputs['Result'], noise_type_switch_node.inputs['Switch'])
+        node_tree.links.new(white_noise_node.outputs['Value'], noise_type_switch_node.inputs[3])  # True
+        node_tree.links.new(perlin_noise_node.outputs['Fac'], noise_type_switch_node.inputs[2])   # False
 
-    return node_tree
+        node_tree.links.new(noise_type_switch_node.outputs['Output'], output_node.inputs['Value'])
+
+    return ensure_geometry_node_tree('BDK Noise', items, build_function)
 
 def add_density_from_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', node_tree: NodeTree, dataptr_name: str, dataptr_index: int, node_index: int) -> Optional[NodeSocket]:
     if node.type == 'PAINT':
@@ -250,32 +252,33 @@ def ensure_terrain_layer_node_density_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Map Range From Min'),
         ('INPUT', 'NodeSocketFloat', 'Map Range From Max'),
     }
-    node_tree = ensure_geometry_node_tree('BDK Terrain Layer Node Density', items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    map_range_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
-    map_range_switch_node.input_type = 'FLOAT'
-    map_range_switch_node.label = 'Use Map Range?'
+        map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
 
-    factor_multiply_node = node_tree.nodes.new('ShaderNodeMath')
-    factor_multiply_node.operation = 'MULTIPLY'
+        map_range_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+        map_range_switch_node.input_type = 'FLOAT'
+        map_range_switch_node.label = 'Use Map Range?'
 
-    node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs['Value'])
-    node_tree.links.new(input_node.outputs['Value'], map_range_switch_node.inputs[2])  # False
-    node_tree.links.new(map_range_node.outputs['Result'], map_range_switch_node.inputs[3])  # True
+        factor_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+        factor_multiply_node.operation = 'MULTIPLY'
 
-    node_tree.links.new(input_node.outputs['Map Range From Min'], map_range_node.inputs['From Min'])
-    node_tree.links.new(input_node.outputs['Map Range From Max'], map_range_node.inputs['From Max'])
+        node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs['Value'])
+        node_tree.links.new(input_node.outputs['Value'], map_range_switch_node.inputs[2])  # False
+        node_tree.links.new(map_range_node.outputs['Result'], map_range_switch_node.inputs[3])  # True
 
-    node_tree.links.new(input_node.outputs['Use Map Range'], map_range_switch_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Map Range From Min'], map_range_node.inputs['From Min'])
+        node_tree.links.new(input_node.outputs['Map Range From Max'], map_range_node.inputs['From Max'])
 
-    node_tree.links.new(input_node.outputs['Factor'], factor_multiply_node.inputs[0])
-    node_tree.links.new(map_range_switch_node.outputs['Output'], factor_multiply_node.inputs[1])
-    node_tree.links.new(output_node.inputs['Value'], factor_multiply_node.outputs['Value'])
+        node_tree.links.new(input_node.outputs['Use Map Range'], map_range_switch_node.inputs[0])
 
-    return node_tree
+        node_tree.links.new(input_node.outputs['Factor'], factor_multiply_node.inputs[0])
+        node_tree.links.new(map_range_switch_node.outputs['Output'], factor_multiply_node.inputs[1])
+        node_tree.links.new(output_node.inputs['Value'], factor_multiply_node.outputs['Value'])
+
+    return ensure_geometry_node_tree('BDK Terrain Layer Node Density', items, build_function)
 
 
 def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str, dataptr_index: int, nodes: Iterable) -> Optional[NodeSocket]:
@@ -344,110 +347,110 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, dataptr_name: str,
 
 
 def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> NodeTree:
-    terrain_info = get_terrain_info(terrain_info_object)
-    deco_layer_index = list(terrain_info.deco_layers).index(deco_layer)
-
     items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(deco_layer.id, items)
 
-    terrain_doodad_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
-    terrain_doodad_info_node.inputs[0].default_value = terrain_info_object
+    def build_function(node_tree: NodeTree):
+        terrain_info = get_terrain_info(terrain_info_object)
+        deco_layer_index = list(terrain_info.deco_layers).index(deco_layer)
 
-    deco_layer_node = node_tree.nodes.new('GeometryNodeBDKDecoLayer')
-    deco_layer_node.inputs['Heightmap X'].default_value = terrain_info.x_size
-    deco_layer_node.inputs['Heightmap Y'].default_value = terrain_info.y_size
-    deco_layer_node.inputs['Density Map'].default_value = 0.0
+        terrain_doodad_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
+        terrain_doodad_info_node.inputs[0].default_value = terrain_info_object
 
-    def get_deco_layer_target_data_path(deco_layer_index: int, property_name: str, index: Optional[int] = None) -> str:
-        target_data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}'
-        if index is not None:
-            target_data_path += f'[{index}]'
-        return target_data_path
+        deco_layer_node = node_tree.nodes.new('GeometryNodeBDKDecoLayer')
+        deco_layer_node.inputs['Heightmap X'].default_value = terrain_info.x_size
+        deco_layer_node.inputs['Heightmap Y'].default_value = terrain_info.y_size
+        deco_layer_node.inputs['Density Map'].default_value = 0.0
 
-    def get_terrain_info_target_data_path(property_name: str, index: Optional[int] = None) -> str:
-        target_data_path = f'bdk.terrain_info.{property_name}'
-        if index is not None:
-            target_data_path += f'[{index}]'
-        return target_data_path
+        def get_deco_layer_target_data_path(property_name: str, index: Optional[int] = None) -> str:
+            target_data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}'
+            if index is not None:
+                target_data_path += f'[{index}]'
+            return target_data_path
 
-    # TODO: move this to a helper file that can be used elsewhere (this pattern is very common!)
-    def add_driver_ex(struct: bpy_struct, target_id: ID, target_data_path: str, path: str = 'default_value', index: Optional[int] = None):
-        fcurve = struct.driver_add(path, index) if index is not None else struct.driver_add(path)
-        fcurve.driver.type = 'AVERAGE'
-        variable = fcurve.driver.variables.new()
-        variable.type = 'SINGLE_PROP'
-        target = variable.targets[0]
-        target.id_type = 'OBJECT'
-        target.id = target_id
-        target.data_path = target_data_path
+        def get_terrain_info_target_data_path(property_name: str, index: Optional[int] = None) -> str:
+            target_data_path = f'bdk.terrain_info.{property_name}'
+            if index is not None:
+                target_data_path += f'[{index}]'
+            return target_data_path
 
-    def add_deco_layer_driver_ex(struct: bpy_struct, target_id: ID, property_name: str, path: str = 'default_value', index: Optional[int] = None):
-        add_driver_ex(struct, target_id, get_deco_layer_target_data_path(deco_layer_index, property_name, index), path, index)
+        # TODO: move this to a helper file that can be used elsewhere (this pattern is very common!)
+        def add_driver_ex(struct: bpy_struct, target_id: ID, target_data_path: str, path: str = 'default_value', index: Optional[int] = None):
+            fcurve = struct.driver_add(path, index) if index is not None else struct.driver_add(path)
+            fcurve.driver.type = 'AVERAGE'
+            variable = fcurve.driver.variables.new()
+            variable.type = 'SINGLE_PROP'
+            target = variable.targets[0]
+            target.id_type = 'OBJECT'
+            target.id = target_id
+            target.data_path = target_data_path
 
-    def add_terrain_info_driver_ex(struct: bpy_struct, property_name: str, path: str = 'default_value', index: Optional[int] = None):
-        add_driver_ex(struct, terrain_info_object, get_terrain_info_target_data_path(property_name, index), path, index)
+        def add_deco_layer_driver_ex(struct: bpy_struct, target_id: ID, property_name: str, path: str = 'default_value', index: Optional[int] = None):
+            add_driver_ex(struct, target_id, get_deco_layer_target_data_path(deco_layer_index, property_name, index), path, index)
 
-    def add_deco_layer_driver(input_name: str, property_name: str, index: Optional[int] = None):
-        add_deco_layer_driver_ex(deco_layer_node.inputs[input_name], target_id=terrain_info_object, property_name=property_name, index=index)
+        def add_terrain_info_driver_ex(struct: bpy_struct, property_name: str, path: str = 'default_value', index: Optional[int] = None):
+            add_driver_ex(struct, terrain_info_object, get_terrain_info_target_data_path(property_name, index), path, index)
 
-    def add_terrain_info_driver(input_name: str, property_name: str, index: Optional[int] = None):
-        add_terrain_info_driver_ex(deco_layer_node.inputs[input_name], property_name, index=index)
+        def add_deco_layer_driver(input_name: str, property_name: str, index: Optional[int] = None):
+            add_deco_layer_driver_ex(deco_layer_node.inputs[input_name], target_id=terrain_info_object, property_name=property_name, index=index)
 
-    add_terrain_info_driver('Offset', 'deco_layer_offset')
-    # add_terrain_info_driver('Inverted', 'inverted')
+        def add_terrain_info_driver(input_name: str, property_name: str, index: Optional[int] = None):
+            add_terrain_info_driver_ex(deco_layer_node.inputs[input_name], property_name, index=index)
 
-    add_deco_layer_driver('Max Per Quad', 'max_per_quad')
-    add_deco_layer_driver('Seed', 'seed')
-    add_deco_layer_driver('Offset', 'offset')
-    add_deco_layer_driver('Show On Invisible Terrain', 'show_on_invisible_terrain')
-    add_deco_layer_driver('Align To Terrain', 'align_to_terrain')
-    add_deco_layer_driver('Random Yaw', 'random_yaw')
-    add_deco_layer_driver('Density Multiplier Min', 'density_multiplier_min')
-    add_deco_layer_driver('Density Multiplier Max', 'density_multiplier_max')
-    add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 0)
-    add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 1)
-    add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 2)
-    add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 0)
-    add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 1)
-    add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 2)
+        add_terrain_info_driver('Offset', 'deco_layer_offset')
+        # add_terrain_info_driver('Inverted', 'inverted')
 
-    static_mesh_object_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
-    static_mesh_object_info_node.inputs[0].default_value = deco_layer.static_mesh
+        add_deco_layer_driver('Max Per Quad', 'max_per_quad')
+        add_deco_layer_driver('Seed', 'seed')
+        add_deco_layer_driver('Offset', 'offset')
+        add_deco_layer_driver('Show On Invisible Terrain', 'show_on_invisible_terrain')
+        add_deco_layer_driver('Align To Terrain', 'align_to_terrain')
+        add_deco_layer_driver('Random Yaw', 'random_yaw')
+        add_deco_layer_driver('Density Multiplier Min', 'density_multiplier_min')
+        add_deco_layer_driver('Density Multiplier Max', 'density_multiplier_max')
+        add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 0)
+        add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 1)
+        add_deco_layer_driver('Scale Multiplier Min', 'scale_multiplier_min', 2)
+        add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 0)
+        add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 1)
+        add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 2)
 
-    # Add a named attribute node.
-    named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-    named_attribute_node.inputs['Name'].default_value = deco_layer.id
-    named_attribute_node.data_type = 'FLOAT'
+        static_mesh_object_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
+        static_mesh_object_info_node.inputs[0].default_value = deco_layer.static_mesh
 
-    # Add a capture attribute node to capture the density from the geometry.
-    capture_attribute_node = node_tree.nodes.new('GeometryNodeCaptureAttribute')
-    capture_attribute_node.name = 'Density'
-    capture_attribute_node.data_type = 'FLOAT'
-    capture_attribute_node.domain = 'POINT'
+        # Add a named attribute node.
+        named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+        named_attribute_node.inputs['Name'].default_value = deco_layer.id
+        named_attribute_node.data_type = 'FLOAT'
 
-    # Link the attribute output of the named attribute node to the capture attribute node.
-    node_tree.links.new(named_attribute_node.outputs[1], capture_attribute_node.inputs[2])
+        # Add a capture attribute node to capture the density from the geometry.
+        capture_attribute_node = node_tree.nodes.new('GeometryNodeCaptureAttribute')
+        capture_attribute_node.name = 'Density'
+        capture_attribute_node.data_type = 'FLOAT'
+        capture_attribute_node.domain = 'POINT'
 
-    node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
-    node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
+        # Link the attribute output of the named attribute node to the capture attribute node.
+        node_tree.links.new(named_attribute_node.outputs[1], capture_attribute_node.inputs[2])
 
-    node_tree.links.new(capture_attribute_node.outputs[2], deco_layer_node.inputs['Density Map'])
+        node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
+        node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
 
-    # Instance on Points
-    instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
-    node_tree.links.new(instance_on_points_node.inputs['Instance'], static_mesh_object_info_node.outputs['Geometry'])
-    node_tree.links.new(instance_on_points_node.inputs['Points'], deco_layer_node.outputs['Points'])
-    node_tree.links.new(instance_on_points_node.inputs['Rotation'], deco_layer_node.outputs['Rotation'])
-    node_tree.links.new(instance_on_points_node.inputs['Scale'], deco_layer_node.outputs['Scale'])
+        node_tree.links.new(capture_attribute_node.outputs[2], deco_layer_node.inputs['Density Map'])
 
-    # Realize Instances
-    realize_instances_node = node_tree.nodes.new('GeometryNodeRealizeInstances')
-    node_tree.links.new(instance_on_points_node.outputs['Instances'], realize_instances_node.inputs['Geometry'])
+        # Instance on Points
+        instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
+        node_tree.links.new(instance_on_points_node.inputs['Instance'], static_mesh_object_info_node.outputs['Geometry'])
+        node_tree.links.new(instance_on_points_node.inputs['Points'], deco_layer_node.outputs['Points'])
+        node_tree.links.new(instance_on_points_node.inputs['Rotation'], deco_layer_node.outputs['Rotation'])
+        node_tree.links.new(instance_on_points_node.inputs['Scale'], deco_layer_node.outputs['Scale'])
 
-    output_node = node_tree.nodes.new('NodeGroupOutput')
-    node_tree.links.new(output_node.inputs['Geometry'], realize_instances_node.outputs['Geometry'])
+        # Realize Instances
+        realize_instances_node = node_tree.nodes.new('GeometryNodeRealizeInstances')
+        node_tree.links.new(instance_on_points_node.outputs['Instances'], realize_instances_node.inputs['Geometry'])
 
-    return node_tree
+        output_node = node_tree.nodes.new('NodeGroupOutput')
+        node_tree.links.new(output_node.inputs['Geometry'], realize_instances_node.outputs['Geometry'])
+
+    return ensure_geometry_node_tree(deco_layer.id, items, build_function, should_force_build=True)
 
 
 def ensure_paint_layers(terrain_info_object: Object):
@@ -510,20 +513,21 @@ def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, deco_l
 
 def _create_terrain_layer_convert_node_to_paint_node_node_tree(node, dataptr_name: str, dataptr_index: int, node_index: int) -> NodeTree:
     items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(node.id, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
-    store_named_attribute_node.data_type = 'BYTE_COLOR'
-    store_named_attribute_node.domain = 'POINT'
-    store_named_attribute_node.inputs['Name'].default_value = node.id
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
-    density_socket = add_density_from_terrain_layer_node(node, node_tree, dataptr_name, dataptr_index, node_index)
+        store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
+        store_named_attribute_node.data_type = 'BYTE_COLOR'
+        store_named_attribute_node.domain = 'POINT'
+        store_named_attribute_node.inputs['Name'].default_value = node.id
 
-    if density_socket is not None:
-        node_tree.links.new(density_socket, store_named_attribute_node.inputs[5])
+        node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
+        density_socket = add_density_from_terrain_layer_node(node, node_tree, dataptr_name, dataptr_index, node_index)
 
-    node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        if density_socket is not None:
+            node_tree.links.new(density_socket, store_named_attribute_node.inputs[5])
 
-    return node_tree
+        node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree(node.id, items, build_function, should_force_build=True)

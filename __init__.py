@@ -196,6 +196,7 @@ def register():
 
     bpy.types.Object.bdk = PointerProperty(type=bdk_properties.BDK_PG_object)
     bpy.types.Material.bdk = PointerProperty(type=bdk_properties.BDK_PG_material)
+    bpy.types.NodeTree.bdk = PointerProperty(type=bdk_properties.BDK_PG_node_tree)
 
     bpy.types.TOPBAR_MT_file_import.append(material_import_menu_func)
 

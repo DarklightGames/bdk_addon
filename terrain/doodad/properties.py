@@ -30,14 +30,14 @@ def terrain_doodad_update_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context:
 
 def add_curve_modifier_properties(cls):
     # Add the curve modifier properties to the type annotation of the given class.
-    cls.__annotations__["is_curve_reversed"] = BoolProperty(name='Reverse Curve', default=False)  # TODO: Rename to curve_is_reversed
-    cls.__annotations__["curve_trim_mode"] = EnumProperty(name='Trim Mode', items=(('FACTOR', 'Factor', '', 0),('LENGTH', 'Distance', '', 1),), default='FACTOR')
-    cls.__annotations__["curve_trim_factor_start"] = FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
-    cls.__annotations__["curve_trim_factor_end"] = FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
-    cls.__annotations__["curve_trim_length_start"] = FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
-    cls.__annotations__["curve_trim_length_end"] = FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
-    cls.__annotations__["curve_normal_offset"] = FloatProperty(name='Normal Offset', default=0.0, subtype='DISTANCE')
-    cls.__annotations__["curve_align_to_tangent"] = BoolProperty(name='Align to Tangent', default=False, description='Align the X axis of the object to the tangent of the curve')
+    cls.__annotations__['is_curve_reversed'] = BoolProperty(name='Reverse Curve', default=False)  # TODO: Rename to curve_is_reversed
+    cls.__annotations__['curve_trim_mode'] = EnumProperty(name='Trim Mode', items=(('FACTOR', 'Factor', '', 0),('LENGTH', 'Distance', '', 1),), default='FACTOR')
+    cls.__annotations__['curve_trim_factor_start'] = FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+    cls.__annotations__['curve_trim_factor_end'] = FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+    cls.__annotations__['curve_trim_length_start'] = FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
+    cls.__annotations__['curve_trim_length_end'] = FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
+    cls.__annotations__['curve_normal_offset'] = FloatProperty(name='Normal Offset', default=0.0, subtype='DISTANCE')
+    cls.__annotations__['curve_align_to_tangent'] = BoolProperty(name='Align to Tangent', default=False, description='Align the X axis of the object to the tangent of the curve')
 
 
 class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
@@ -191,11 +191,7 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
     align_axis: EnumProperty(name='Align Axis', items=axis_signed_enum_items, default='Z')
 
-    curve_normal_offset_min: FloatProperty(name='Normal Offset Min', default=0.0, subtype='DISTANCE')
-    curve_normal_offset_max: FloatProperty(name='Normal Offset Max', default=0.0, subtype='DISTANCE')
-    curve_normal_offset_seed: IntProperty(name='Normal Offset Seed', default=0, min=0)
-
-    random_rotation_max: FloatProperty(name='Random Rotation', default=0.0, min=0.0, max=360.0, subtype='ANGLE')
+    random_rotation: FloatVectorProperty(name='Random Rotation', subtype='EULER')
     random_rotation_seed: IntProperty(name='Random Rotation Seed', default=0, min=0)
 
     scale_min: FloatVectorProperty(name='Scale Min', min=0.0, default=(1.0, 1.0, 1.0))
@@ -245,6 +241,10 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     curve_spacing_relative_factor: FloatProperty(name='Spacing Relative Factor', default=1.0, min=0.1, soft_max=10.0, subtype='FACTOR')
     curve_spacing_absolute: FloatProperty(name='Spacing', default=meters_to_unreal(1.0), min=1, subtype='DISTANCE')
     curve_spacing_relative_axis: EnumProperty(name='Spacing Relative Axis', items=axis_enum_items, default='X')
+
+    curve_normal_offset_min: FloatProperty(name='Normal Offset Min', default=0.0, subtype='DISTANCE')
+    curve_normal_offset_max: FloatProperty(name='Normal Offset Max', default=0.0, subtype='DISTANCE')
+    curve_normal_offset_seed: IntProperty(name='Normal Offset Seed', default=0, min=0)
 
     # Mesh Settings
     mesh_spacing_method: EnumProperty(name='Spacing Method', items=(

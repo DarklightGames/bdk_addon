@@ -1,6 +1,6 @@
 import bmesh
 import bpy
-from bpy.types import Mesh, Object
+from bpy.types import Mesh, Object, NodeTree
 from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
@@ -11,7 +11,7 @@ from ..data import UReference
 from ..material.importer import MaterialBuilder, MaterialCache
 
 
-def _ensure_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
+def _ensure_terrain_paint_layer_uv_group_node() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketFloat', 'UScale'),
         ('INPUT', 'NodeSocketFloat', 'VScale'),
@@ -19,49 +19,50 @@ def _ensure_terrain_paint_layer_uv_group_node() -> bpy.types.NodeTree:
         ('INPUT', 'NodeSocketFloat', 'TerrainScale'),
         ('OUTPUT', 'NodeSocketVector', 'UV'),
     }
-    node_tree = ensure_shader_node_tree('BDK TerrainLayerUV', items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # UScale Multiply
-    u_multiply_node = node_tree.nodes.new('ShaderNodeMath')
-    u_multiply_node.operation = 'MULTIPLY'
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    node_tree.links.new(u_multiply_node.inputs[0], input_node.outputs['UScale'])
-    node_tree.links.new(u_multiply_node.inputs[1], input_node.outputs['TerrainScale'])
+        # UScale Multiply
+        u_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+        u_multiply_node.operation = 'MULTIPLY'
 
-    # VScale Multiply
-    v_multiply_node = node_tree.nodes.new('ShaderNodeMath')
-    v_multiply_node.operation = 'MULTIPLY'
+        node_tree.links.new(u_multiply_node.inputs[0], input_node.outputs['UScale'])
+        node_tree.links.new(u_multiply_node.inputs[1], input_node.outputs['TerrainScale'])
 
-    node_tree.links.new(v_multiply_node.inputs[0], input_node.outputs['VScale'])
-    node_tree.links.new(v_multiply_node.inputs[1], input_node.outputs['TerrainScale'])
+        # VScale Multiply
+        v_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+        v_multiply_node.operation = 'MULTIPLY'
 
-    # Combine XYZ
-    combine_xyz_node = node_tree.nodes.new('ShaderNodeCombineXYZ')
+        node_tree.links.new(v_multiply_node.inputs[0], input_node.outputs['VScale'])
+        node_tree.links.new(v_multiply_node.inputs[1], input_node.outputs['TerrainScale'])
 
-    node_tree.links.new(combine_xyz_node.inputs['X'], u_multiply_node.outputs['Value'])
-    node_tree.links.new(combine_xyz_node.inputs['Y'], v_multiply_node.outputs['Value'])
+        # Combine XYZ
+        combine_xyz_node = node_tree.nodes.new('ShaderNodeCombineXYZ')
 
-    # Geometry
-    geometry_node = node_tree.nodes.new('ShaderNodeNewGeometry')
+        node_tree.links.new(combine_xyz_node.inputs['X'], u_multiply_node.outputs['Value'])
+        node_tree.links.new(combine_xyz_node.inputs['Y'], v_multiply_node.outputs['Value'])
 
-    # Divide
-    divide_node = node_tree.nodes.new('ShaderNodeVectorMath')
-    divide_node.operation = 'DIVIDE'
+        # Geometry
+        geometry_node = node_tree.nodes.new('ShaderNodeNewGeometry')
 
-    node_tree.links.new(divide_node.inputs[0], geometry_node.outputs['Position'])
-    node_tree.links.new(divide_node.inputs[1], combine_xyz_node.outputs['Vector'])
+        # Divide
+        divide_node = node_tree.nodes.new('ShaderNodeVectorMath')
+        divide_node.operation = 'DIVIDE'
 
-    # Vector Rotate
-    rotate_node = node_tree.nodes.new('ShaderNodeVectorRotate')
-    rotate_node.rotation_type = 'Z_AXIS'
+        node_tree.links.new(divide_node.inputs[0], geometry_node.outputs['Position'])
+        node_tree.links.new(divide_node.inputs[1], combine_xyz_node.outputs['Vector'])
 
-    node_tree.links.new(rotate_node.inputs['Vector'], divide_node.outputs['Vector'])
-    node_tree.links.new(rotate_node.inputs['Angle'], input_node.outputs['TextureRotation'])
+        # Vector Rotate
+        rotate_node = node_tree.nodes.new('ShaderNodeVectorRotate')
+        rotate_node.rotation_type = 'Z_AXIS'
 
-    node_tree.links.new(output_node.inputs['UV'], rotate_node.outputs['Vector'])
+        node_tree.links.new(rotate_node.inputs['Vector'], divide_node.outputs['Vector'])
+        node_tree.links.new(rotate_node.inputs['Angle'], input_node.outputs['TextureRotation'])
 
-    return node_tree
+        node_tree.links.new(output_node.inputs['UV'], rotate_node.outputs['Vector'])
+
+    return ensure_shader_node_tree('BDK TerrainLayerUV', items, build_function)
 
 
 def build_terrain_material(terrain_info_object: bpy.types.Object):

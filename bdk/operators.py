@@ -1,9 +1,8 @@
 from collections import OrderedDict
 from typing import OrderedDict as OrderedDictType
-from typing import Dict
 
-import mathutils
-from bpy.types import Operator, Context, NodeTree, Node
+import bpy
+from bpy.types import Operator, Context, Node
 from bpy.props import BoolProperty
 
 import subprocess
@@ -98,6 +97,18 @@ class BDK_OT_fix_bsp_import_materials(Operator):
             if name_references.get(material_slot.name, None) is None:
                 continue
             material_slot.material = load_bdk_material(str(name_references[material_slot.name]))
+        return {'FINISHED'}
+
+
+class BDK_OT_force_node_tree_rebuild(Operator):
+    bl_idname = 'bdk.force_node_tree_rebuild'
+    bl_label = 'Force BDK Node Tree Rebuild'
+    bl_description = 'Force all BDK node trees to be rebuilt'
+    bl_options = {'REGISTER'}
+
+    def execute(self, context: Context):
+        for node_tree in bpy.data.node_groups:
+            node_tree.bdk.mtime = 0
         return {'FINISHED'}
 
 
@@ -253,60 +264,5 @@ classes = (
     BDK_OT_select_all_of_active_class,
     BDK_OT_fix_bsp_import_materials,
     BDK_OT_generate_node_code,
+    BDK_OT_force_node_tree_rebuild,
 )
-
-"""
-map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
-map_range_node.clamp = True
-map_range_node.inputs["From Max"].default_value = 1.0
-map_range_node.inputs["Steps"].default_value = 4.0
-map_range_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-map_range_node.inputs["From Min"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-map_range_node.inputs["From Max"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-map_range_node.inputs["To Min"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-map_range_node.inputs["To Max"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-map_range_node.inputs["Steps"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-terrain_normal_offset_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-terrain_normal_offset_scale_node.label = 'Terrain Normal Offset Scale'
-terrain_normal_offset_scale_node.operation = 'SCALE'
-terrain_normal_offset_scale_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-terrain_normal_offset_scale_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
-random_value_node.inputs["Min"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-random_value_node.inputs["Max"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-random_value_node.inputs["Max"].default_value = 1.0
-random_value_node.inputs["Max"].default_value = 100
-random_value_node.inputs["Probability"].default_value = 0.5
-random_value_node.inputs["Seed"].default_value = 281
-vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-vector_math_node.operation = 'NORMALIZE'
-vector_math_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-vector_math_node.inputs["Vector"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-vector_math_node.inputs["Scale"].default_value = 1.0
-terrain_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-terrain_normal_attribute_node.label = 'Terrain Normal Attribute'
-terrain_normal_attribute_node.data_type = 'FLOAT_VECTOR'
-terrain_normal_attribute_node.inputs["Name"].default_value = terrain_normal
-mix_node = node_tree.nodes.new(type='ShaderNodeMix')
-mix_node.data_type = 'VECTOR'
-mix_node.clamp_factor = True
-mix_node.inputs["Factor"].default_value = 1.0
-mix_node.inputs["Factor"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-mix_node.inputs["A"].default_value = <bpy_float[3], NodeSocketVector.default_value>
-mix_node.inputs["A"].default_value = <bpy_float[4], NodeSocketColor.default_value>
-mix_node.inputs["B"].default_value = <bpy_float[4], NodeSocketColor.default_value>
-mix_node.inputs["A"].default_value = <Euler (x=0.0000, y=0.0000, z=0.0000), order='XYZ'>
-mix_node.inputs["B"].default_value = <Euler (x=0.0000, y=0.0000, z=0.0000), order='XYZ'>
-align_z_node = node_tree.nodes.new(type='FunctionNodeAlignEulerToVector')
-align_z_node.label = 'Align Z'
-align_z_node.axis = 'Z'
-align_z_node.inputs["Factor"].default_value = 1.0
-align_x_node = node_tree.nodes.new(type='FunctionNodeAlignEulerToVector')
-align_x_node.label = 'Align X'
-align_x_node.inputs["Rotation"].default_value = <Euler (x=0.0000, y=0.0000, z=0.0000), order='XYZ'>
-align_x_node.inputs["Factor"].default_value = 1.0
-curve_tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-curve_tangent_attribute_node.label = 'Curve Tangent Attribute'
-curve_tangent_attribute_node.data_type = 'FLOAT_VECTOR'
-curve_tangent_attribute_node.inputs["Name"].default_value = curve_tangent
-"""

@@ -222,7 +222,7 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
                 copy_actors.append(create_terrain_info_actor(obj, terrain_scale_z))
             # TODO: add handlers for other object types (outside of this function)
             elif obj.type == 'CAMERA':
-                # Create a SpectatorCam actor
+                # Create a SpectatorCam brush_object
                 actor = T3DObject('Actor')
                 actor['Class'] = 'SpectatorCam'
                 actor['Name'] = obj.name

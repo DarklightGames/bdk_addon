@@ -1,4 +1,4 @@
-from bpy.types import Menu
+from bpy.types import Menu, Panel
 
 from ..bsp import operators as bsp_operators
 from ..fluid_surface import operators as fluid_surface_operators
@@ -21,6 +21,27 @@ class BDK_MT_object_add_menu(Menu):
         self.layout.operator(bsp_operators.BDK_OT_bsp_brush_add.bl_idname, text='BSP Brush', icon='MOD_BUILD')
 
 
+class BDK_PT_node_tree(Panel):
+    bl_idname = 'BDK_PT_node_tree'
+    bl_label = 'BDK'
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = 'Group'
+    bl_order = 100
+
+    @classmethod
+    def poll(cls, context):
+        node_tree = context.space_data.edit_tree
+        return node_tree is not None and node_tree.bdk.build_hash != ''
+
+    def draw(self, context):
+        node_tree = context.space_data.edit_tree
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(node_tree.bdk, 'build_hash', text='Build Hash', icon='KEYINGSET', emboss=False)
+
 classes = (
     BDK_MT_object_add_menu,
+    BDK_PT_node_tree
 )

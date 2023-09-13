@@ -29,7 +29,7 @@ class ActorImporter:
     @classmethod
     def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
         """
-        Creates a new Blender object for the given T3DMap actor.
+        Creates a new Blender object for the given T3DMap brush_object.
         """
         raise NotImplementedError()
 
@@ -50,7 +50,7 @@ class ActorImporter:
 
 class DefaultActorImporter(ActorImporter):
     """
-    Default actor importer used when no other importer is found.
+    Default brush_object importer used when no other importer is found.
     """
 
     @classmethod
@@ -61,10 +61,10 @@ class DefaultActorImporter(ActorImporter):
         mesh = load_bdk_static_mesh(str(static_mesh_reference))
 
         if mesh is None:
-            print(f"Failed to load static mesh {static_mesh_reference} for actor {t3d_actor['Name']}.")
+            print(f"Failed to load static mesh {static_mesh_reference} for brush_object {t3d_actor['Name']}.")
             return None
 
-        # Create a new mesh object, matching the name of the actor.
+        # Create a new mesh object, matching the name of the brush_object.
         bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh)
 
         return bpy_object
@@ -72,7 +72,7 @@ class DefaultActorImporter(ActorImporter):
     @classmethod
     def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
         """
-        Creates a new Blender object for the given T3DMap actor.
+        Creates a new Blender object for the given T3DMap brush_object.
         """
         if 'StaticMesh' in t3d_actor.properties:
             return cls._create_static_mesh_object(t3d_actor)
@@ -608,29 +608,29 @@ def import_t3d(contents: str, context: Context):
         actor_class = t3d_actor.properties.get('Class', None)
 
         if actor_class is None:
-            print('Failed to import actor: ' + str(t3d_actor['Name']) + ' (no class)')
+            print('Failed to import brush_object: ' + str(t3d_actor['Name']) + ' (no class)')
             return None
 
-        print('Importing actor: ' + str(t3d_actor['Name']) + ' (' + str(actor_class) + ')')
+        print('Importing brush_object: ' + str(t3d_actor['Name']) + ' (' + str(actor_class) + ')')
 
-        # Get the actor importer for this actor type.
+        # Get the brush_object importer for this brush_object type.
         actor_importer = get_actor_type_importer(actor_class)
 
         bpy_object = actor_importer.create_object(t3d_actor, context)
 
         if bpy_object is None:
-            print('Failed to import actor: ' + str(t3d_actor['Name']) + ' (' + str(actor_class) + ')')
+            print('Failed to import brush_object: ' + str(t3d_actor['Name']) + ' (' + str(actor_class) + ')')
             return None
 
         set_custom_properties(t3d_actor, bpy_object)
 
-        # Allow the actor importer to do any additional work after the properties have been set.
+        # Allow the brush_object importer to do any additional work after the properties have been set.
         actor_importer.on_properties_hydrated(t3d_actor, bpy_object, context)
 
         # Link the new object to the scene.
         context.scene.collection.objects.link(bpy_object)
 
-        # Allow the actor importer to do any additional work after the object has been linked.
+        # Allow the brush_object importer to do any additional work after the object has been linked.
         actor_importer.on_object_linked(t3d_actor, bpy_object, context)
 
         bpy_object.select_set(True)

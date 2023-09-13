@@ -26,39 +26,40 @@ def ensure_distance_to_curve_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketBool', 'Is 3D'),
         ('OUTPUT', 'NodeSocketFloat', 'Distance'),
     }
-    node_tree = ensure_geometry_node_tree(distance_to_curve_node_group_id, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    curve_to_mesh_node = node_tree.nodes.new(type='GeometryNodeCurveToMesh')
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
-    geometry_proximity_node.target_element = 'EDGES'
+        curve_to_mesh_node = node_tree.nodes.new(type='GeometryNodeCurveToMesh')
 
-    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+        geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
+        geometry_proximity_node.target_element = 'EDGES'
 
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'FLOAT'
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
 
-    combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'FLOAT'
 
-    # Input
-    node_tree.links.new(input_node.outputs['Curve'], curve_to_mesh_node.inputs['Curve'])
-    node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
+        combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
 
-    # Internal
-    node_tree.links.new(curve_to_mesh_node.outputs['Mesh'], geometry_proximity_node.inputs['Target'])
-    node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
-    node_tree.links.new(separate_xyz_node.outputs['Z'], switch_node.inputs['True'])
-    node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node_2.inputs['X'])
-    node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node_2.inputs['Y'])
-    node_tree.links.new(switch_node.outputs['Output'], combine_xyz_node_2.inputs['Z'])
-    node_tree.links.new(combine_xyz_node_2.outputs['Vector'], geometry_proximity_node.inputs['Source Position'])
+        # Input
+        node_tree.links.new(input_node.outputs['Curve'], curve_to_mesh_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
 
-    # Output
-    node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+        # Internal
+        node_tree.links.new(curve_to_mesh_node.outputs['Mesh'], geometry_proximity_node.inputs['Target'])
+        node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_node.inputs['True'])
+        node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node_2.inputs['X'])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node_2.inputs['Y'])
+        node_tree.links.new(switch_node.outputs['Output'], combine_xyz_node_2.inputs['Z'])
+        node_tree.links.new(combine_xyz_node_2.outputs['Vector'], geometry_proximity_node.inputs['Source Position'])
 
-    return node_tree
+        # Output
+        node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+
+    return ensure_geometry_node_tree(distance_to_curve_node_group_id, items, build_function)
 
 
 def ensure_distance_noise_node_group() -> NodeTree:
@@ -70,52 +71,53 @@ def ensure_distance_noise_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Offset'),
         ('INPUT', 'NodeSocketBool', 'Use Noise'),
     }
-    node_tree = ensure_geometry_node_tree('BDK Distance Noise', items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    noise_value_socket = add_noise_type_switch_nodes(
-        node_tree,
-        position_node.outputs['Position'],
-        input_node.outputs['Type'],
-        input_node.outputs['Distortion'],
-        None
-    )
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
-    add_distance_noise_node = node_tree.nodes.new(type='ShaderNodeMath')
-    add_distance_noise_node.operation = 'ADD'
-    add_distance_noise_node.label = 'Add Noise'
+        noise_value_socket = add_noise_type_switch_nodes(
+            node_tree,
+            position_node.outputs['Position'],
+            input_node.outputs['Type'],
+            input_node.outputs['Distortion'],
+            None
+        )
 
-    use_noise_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    use_noise_switch_node.input_type = 'FLOAT'
-    use_noise_switch_node.label = 'Use Noise'
+        add_distance_noise_node = node_tree.nodes.new(type='ShaderNodeMath')
+        add_distance_noise_node.operation = 'ADD'
+        add_distance_noise_node.label = 'Add Noise'
 
-    distance_noise_factor_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
-    distance_noise_factor_multiply_node.operation = 'MULTIPLY'
-    distance_noise_factor_multiply_node.label = 'Factor'
+        use_noise_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        use_noise_switch_node.input_type = 'FLOAT'
+        use_noise_switch_node.label = 'Use Noise'
 
-    distance_noise_offset_subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
-    distance_noise_offset_subtract_node.operation = 'SUBTRACT'
-    distance_noise_offset_subtract_node.label = 'Offset'
+        distance_noise_factor_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+        distance_noise_factor_multiply_node.operation = 'MULTIPLY'
+        distance_noise_factor_multiply_node.label = 'Factor'
 
-    # Input
-    node_tree.links.new(input_node.outputs['Distance'], add_distance_noise_node.inputs[0])
-    node_tree.links.new(input_node.outputs['Offset'], distance_noise_offset_subtract_node.inputs[1])
-    node_tree.links.new(input_node.outputs['Factor'], distance_noise_factor_multiply_node.inputs[1])
-    node_tree.links.new(input_node.outputs['Use Noise'], use_noise_switch_node.inputs[0])
-    node_tree.links.new(input_node.outputs['Distance'], use_noise_switch_node.inputs[2])
+        distance_noise_offset_subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+        distance_noise_offset_subtract_node.operation = 'SUBTRACT'
+        distance_noise_offset_subtract_node.label = 'Offset'
 
-    # Internal
-    node_tree.links.new(noise_value_socket, distance_noise_offset_subtract_node.inputs[0])
-    node_tree.links.new(distance_noise_offset_subtract_node.outputs['Value'], distance_noise_factor_multiply_node.inputs[0])
-    node_tree.links.new(distance_noise_factor_multiply_node.outputs['Value'], add_distance_noise_node.inputs[1])
-    node_tree.links.new(add_distance_noise_node.outputs['Value'], use_noise_switch_node.inputs[3])
+        # Input
+        node_tree.links.new(input_node.outputs['Distance'], add_distance_noise_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Offset'], distance_noise_offset_subtract_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Factor'], distance_noise_factor_multiply_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Use Noise'], use_noise_switch_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Distance'], use_noise_switch_node.inputs[2])
 
-    # Output
-    node_tree.links.new(use_noise_switch_node.outputs[0], output_node.inputs['Distance'])
+        # Internal
+        node_tree.links.new(noise_value_socket, distance_noise_offset_subtract_node.inputs[0])
+        node_tree.links.new(distance_noise_offset_subtract_node.outputs['Value'], distance_noise_factor_multiply_node.inputs[0])
+        node_tree.links.new(distance_noise_factor_multiply_node.outputs['Value'], add_distance_noise_node.inputs[1])
+        node_tree.links.new(add_distance_noise_node.outputs['Value'], use_noise_switch_node.inputs[3])
 
-    return node_tree
+        # Output
+        node_tree.links.new(use_noise_switch_node.outputs[0], output_node.inputs['Distance'])
+
+    return ensure_geometry_node_tree('BDK Distance Noise', items, build_function)
 
 
 def ensure_doodad_paint_node_group() -> NodeTree:
@@ -134,82 +136,83 @@ def ensure_doodad_paint_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Distance Noise Offset'),
         ('INPUT', 'NodeSocketBool', 'Use Distance Noise'),
     }
-    node_tree = ensure_geometry_node_tree(uuid4().hex, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Create a new Store Named Attribute node.
-    store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-    store_named_attribute_node.data_type = 'BYTE_COLOR'
-    store_named_attribute_node.domain = 'POINT'
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Create a Named Attribute node.
-    named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-    named_attribute_node.data_type = 'FLOAT'
+        # Create a new Store Named Attribute node.
+        store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+        store_named_attribute_node.data_type = 'BYTE_COLOR'
+        store_named_attribute_node.domain = 'POINT'
 
-    # Link the Attribute output of the input node to the name input of the named attribute node.
-    node_tree.links.new(input_node.outputs['Attribute'], named_attribute_node.inputs['Name'])
-    node_tree.links.new(input_node.outputs['Attribute'], store_named_attribute_node.inputs['Name'])
+        # Create a Named Attribute node.
+        named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        named_attribute_node.data_type = 'FLOAT'
 
-    # Pass the geometry from the input to the output.
-    node_tree.links.new(input_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        # Link the Attribute output of the input node to the name input of the named attribute node.
+        node_tree.links.new(input_node.outputs['Attribute'], named_attribute_node.inputs['Name'])
+        node_tree.links.new(input_node.outputs['Attribute'], store_named_attribute_node.inputs['Name'])
 
-    # Add a subtract node.
-    subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
-    subtract_node.operation = 'SUBTRACT'
+        # Pass the geometry from the input to the output.
+        node_tree.links.new(input_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
-    # Link the distance output of the input node to the first input of the subtraction node.
-    node_tree.links.new(input_node.outputs['Radius'], subtract_node.inputs[1])
+        # Add a subtract node.
+        subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+        subtract_node.operation = 'SUBTRACT'
 
-    # Add a divide node.
-    divide_node = node_tree.nodes.new(type='ShaderNodeMath')
-    divide_node.operation = 'DIVIDE'
+        # Link the distance output of the input node to the first input of the subtraction node.
+        node_tree.links.new(input_node.outputs['Radius'], subtract_node.inputs[1])
 
-    # Link the output of the subtraction node to the first input of the divide node.
-    node_tree.links.new(subtract_node.outputs['Value'], divide_node.inputs[0])
-    node_tree.links.new(input_node.outputs['Falloff Radius'], divide_node.inputs[1])
+        # Add a divide node.
+        divide_node = node_tree.nodes.new(type='ShaderNodeMath')
+        divide_node.operation = 'DIVIDE'
 
-    # Add an interpolation group node.
-    interpolation_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-    interpolation_group_node.node_tree = ensure_interpolation_node_tree()
+        # Link the output of the subtraction node to the first input of the divide node.
+        node_tree.links.new(subtract_node.outputs['Value'], divide_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Falloff Radius'], divide_node.inputs[1])
 
-    # Add a multiply node.
-    strength_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
-    strength_multiply_node.operation = 'MULTIPLY'
-    strength_multiply_node.label = 'Strength Multiply'
+        # Add an interpolation group node.
+        interpolation_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        interpolation_group_node.node_tree = ensure_interpolation_node_tree()
 
-    value_socket = add_operation_switch_nodes(
-        node_tree,
-        input_node.outputs['Operation'],
-        named_attribute_node.outputs[1],
-        strength_multiply_node.outputs['Value'],
-        [x[0] for x in terrain_doodad_operation_items]
-    )
+        # Add a multiply node.
+        strength_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+        strength_multiply_node.operation = 'MULTIPLY'
+        strength_multiply_node.label = 'Strength Multiply'
 
-    # Add the distance noise node group.
-    distance_noise_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-    distance_noise_group_node.node_tree = ensure_distance_noise_node_group()
+        value_socket = add_operation_switch_nodes(
+            node_tree,
+            input_node.outputs['Operation'],
+            named_attribute_node.outputs[1],
+            strength_multiply_node.outputs['Value'],
+            [x[0] for x in terrain_doodad_operation_items]
+        )
 
-    # Input
-    node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
-    node_tree.links.new(input_node.outputs['Distance'], distance_noise_group_node.inputs['Distance'])
-    node_tree.links.new(input_node.outputs['Noise Type'], distance_noise_group_node.inputs['Type'])
-    node_tree.links.new(input_node.outputs['Distance Noise Factor'], distance_noise_group_node.inputs['Factor'])
-    node_tree.links.new(input_node.outputs['Distance Noise Distortion'], distance_noise_group_node.inputs['Distortion'])
-    node_tree.links.new(input_node.outputs['Distance Noise Offset'], distance_noise_group_node.inputs['Offset'])
-    node_tree.links.new(input_node.outputs['Use Distance Noise'], distance_noise_group_node.inputs['Use Noise'])
-    node_tree.links.new(input_node.outputs['Interpolation Type'], interpolation_group_node.inputs['Interpolation Type'])
-    node_tree.links.new(input_node.outputs['Strength'], strength_multiply_node.inputs[1])
+        # Add the distance noise node group.
+        distance_noise_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        distance_noise_group_node.node_tree = ensure_distance_noise_node_group()
 
-    # Internal
-    node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
-    node_tree.links.new(interpolation_group_node.outputs['Value'], strength_multiply_node.inputs[0])
-    node_tree.links.new(value_socket, store_named_attribute_node.inputs[5])
-    node_tree.links.new(distance_noise_group_node.outputs['Distance'], subtract_node.inputs[0])
+        # Input
+        node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Distance'], distance_noise_group_node.inputs['Distance'])
+        node_tree.links.new(input_node.outputs['Noise Type'], distance_noise_group_node.inputs['Type'])
+        node_tree.links.new(input_node.outputs['Distance Noise Factor'], distance_noise_group_node.inputs['Factor'])
+        node_tree.links.new(input_node.outputs['Distance Noise Distortion'], distance_noise_group_node.inputs['Distortion'])
+        node_tree.links.new(input_node.outputs['Distance Noise Offset'], distance_noise_group_node.inputs['Offset'])
+        node_tree.links.new(input_node.outputs['Use Distance Noise'], distance_noise_group_node.inputs['Use Noise'])
+        node_tree.links.new(input_node.outputs['Interpolation Type'], interpolation_group_node.inputs['Interpolation Type'])
+        node_tree.links.new(input_node.outputs['Strength'], strength_multiply_node.inputs[1])
 
-    # Output
-    node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        # Internal
+        node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
+        node_tree.links.new(interpolation_group_node.outputs['Value'], strength_multiply_node.inputs[0])
+        node_tree.links.new(value_socket, store_named_attribute_node.inputs[5])
+        node_tree.links.new(distance_noise_group_node.outputs['Distance'], subtract_node.inputs[0])
 
-    return node_tree
+        # Output
+        node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree('BDK Doodad Paint', items, build_function)
 
 
 def ensure_distance_to_mesh_node_group() -> NodeTree:
@@ -218,41 +221,42 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketBool', 'Is 3D'),
         ('OUTPUT', 'NodeSocketFloat', 'Distance')
     }
-    node_tree = ensure_geometry_node_tree(distance_to_mesh_node_group_id, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
-    geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
-    geometry_proximity_node.target_element = 'FACES'
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
 
-    transform_geometry_node = node_tree.nodes.new(type='GeometryNodeTransform')
-    transform_geometry_node.inputs['Scale'].default_value = (1.0, 1.0, 0.0)
+        geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
+        geometry_proximity_node.target_element = 'FACES'
 
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'VECTOR'
+        transform_geometry_node = node_tree.nodes.new(type='GeometryNodeTransform')
+        transform_geometry_node.inputs['Scale'].default_value = (1.0, 1.0, 0.0)
 
-    combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'VECTOR'
 
-    # Input
-    node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
-    node_tree.links.new(input_node.outputs['Geometry'], transform_geometry_node.inputs['Geometry'])
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
 
-    # Internal
-    node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
-    node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
-    node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs[8])
-    node_tree.links.new(position_node.outputs['Position'], switch_node.inputs[9])
-    node_tree.links.new(switch_node.outputs[3], geometry_proximity_node.inputs['Source Position'])
-    node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
-    node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
+        # Input
+        node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Geometry'], transform_geometry_node.inputs['Geometry'])
 
-    # Output
-    node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+        # Internal
+        node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs[8])
+        node_tree.links.new(position_node.outputs['Position'], switch_node.inputs[9])
+        node_tree.links.new(switch_node.outputs[3], geometry_proximity_node.inputs['Source Position'])
+        node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+        node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
 
-    return node_tree
+        # Output
+        node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+
+    return ensure_geometry_node_tree(distance_to_mesh_node_group_id, items, build_function)
 
 
 def ensure_distance_to_empty_node_group() -> NodeTree:
@@ -261,40 +265,41 @@ def ensure_distance_to_empty_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketBool', 'Is 3D'),
         ('OUTPUT', 'NodeSocketFloat', 'Distance')
     }
-    node_tree = ensure_geometry_node_tree(distance_to_empty_node_group_id, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'FLOAT'
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
 
-    combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'FLOAT'
 
-    vector_subtract_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-    vector_subtract_node.operation = 'SUBTRACT'
+        combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
 
-    vector_length_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-    vector_length_node.operation = 'LENGTH'
+        vector_subtract_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        vector_subtract_node.operation = 'SUBTRACT'
 
-    # Input
-    node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
-    node_tree.links.new(input_node.outputs['Location'], vector_subtract_node.inputs[0])
+        vector_length_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        vector_length_node.operation = 'LENGTH'
 
-    # Internal
-    node_tree.links.new(separate_xyz_node.outputs['Z'], switch_node.inputs['True'])
-    node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node_2.inputs['X'])
-    node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node_2.inputs['Y'])
-    node_tree.links.new(switch_node.outputs['Output'], combine_xyz_node_2.inputs['Z'])
-    node_tree.links.new(position_node.outputs['Position'], vector_subtract_node.inputs[1])
-    node_tree.links.new(vector_subtract_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
-    node_tree.links.new(combine_xyz_node_2.outputs['Vector'], vector_length_node.inputs['Vector'])
+        # Input
+        node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Location'], vector_subtract_node.inputs[0])
 
-    # Output
-    node_tree.links.new(vector_length_node.outputs['Value'], output_node.inputs['Distance'])
+        # Internal
+        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_node.inputs['True'])
+        node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node_2.inputs['X'])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node_2.inputs['Y'])
+        node_tree.links.new(switch_node.outputs['Output'], combine_xyz_node_2.inputs['Z'])
+        node_tree.links.new(position_node.outputs['Position'], vector_subtract_node.inputs[1])
+        node_tree.links.new(vector_subtract_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
+        node_tree.links.new(combine_xyz_node_2.outputs['Vector'], vector_length_node.inputs['Vector'])
 
-    return node_tree
+        # Output
+        node_tree.links.new(vector_length_node.outputs['Value'], output_node.inputs['Distance'])
+
+    return ensure_geometry_node_tree(distance_to_empty_node_group_id, items, build_function)
 
 
 def create_terrain_doodad_object(context: Context, terrain_info_object: Object, object_type: str = 'CURVE') -> Object:
@@ -692,17 +697,18 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
 
 def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(name, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    geometry_socket = input_node.outputs['Geometry']
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    for terrain_doodad in terrain_doodads:
-        geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
+        geometry_socket = input_node.outputs['Geometry']
 
-    node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        for terrain_doodad in terrain_doodads:
+            geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
 
-    return node_tree
+        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
 def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket,
@@ -780,34 +786,36 @@ def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSock
 
 def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(name, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    geometry_socket = input_node.outputs['Geometry']
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    for terrain_doodad in terrain_doodads:
-        for paint_layer in filter(lambda x: x.layer_type == 'PAINT', terrain_doodad.paint_layers):
-            geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
+        geometry_socket = input_node.outputs['Geometry']
 
-    node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        for terrain_doodad in terrain_doodads:
+            for paint_layer in filter(lambda x: x.layer_type == 'PAINT', terrain_doodad.paint_layers):
+                geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
 
-    return node_tree
+        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
 def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(name, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    geometry_socket = input_node.outputs['Geometry']
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    for terrain_doodad in terrain_doodads:
-        for paint_layer in filter(lambda x: x.layer_type == 'DECO', terrain_doodad.paint_layers):
-            geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
+        geometry_socket = input_node.outputs['Geometry']
 
-    node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        for terrain_doodad in terrain_doodads:
+            for paint_layer in filter(lambda x: x.layer_type == 'DECO', terrain_doodad.paint_layers):
+                geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
 
-    return node_tree
+        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
 def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: Set[str]) -> (NodeTree, Dict[str, str]):
@@ -817,32 +825,38 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
     :return: The terrain doodad baking node tree and a mapping of the paint layer IDs to the baked attribute names.
     """
     items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
-    node_tree = ensure_geometry_node_tree(uuid.uuid4().hex, items)
-    input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    geometry_socket = input_node.outputs['Geometry']
-
-    if 'SCULPT' in layers:
-        # Add sculpt layers for the doodad.
-        geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
-
-    # Add the paint layers for the doodad.
+    # Build a mapping of the paint layer IDs to the baked attribute names.
     attribute_map: Dict[str, str] = {}
-    if 'PAINT' in layers:
-        for doodad_paint_layer in terrain_doodad.paint_layers:
-            attribute_name = uuid4().hex
-            # We override the operation here because we want the influence of each layer to be additive for the bake.
-            # Without this, if a "SUBTRACT" operation were used, the resulting bake for the attribute would be
-            # completely black (painted with 0). The actual operation will be transferred to the associated node in the
-            # layer node tree.
-            # TODO: Ideally, we would not need these overrides because it is a little hacky. It would be cleaner to
-            #  separate out the operation from the "Paint Layer" node group, although we would need a compelling reason
-            #  to do so.
-            geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, doodad_paint_layer,
-                                                            attribute_override=attribute_name,
-                                                            operation_override='ADD')
-            attribute_map[doodad_paint_layer.id] = attribute_name
+    for paint_layer in terrain_doodad.paint_layers:
+        attribute_map[paint_layer.id] = uuid4().hex
 
-    node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        geometry_socket = input_node.outputs['Geometry']
+
+        if 'SCULPT' in layers:
+            # Add sculpt layers for the doodad.
+            geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
+
+        # Add the paint layers for the doodad.
+        if 'PAINT' in layers:
+            for doodad_paint_layer in terrain_doodad.paint_layers:
+                attribute_name = attribute_map[doodad_paint_layer.id]
+                # We override the operation here because we want the influence of each layer to be additive for the bake.
+                # Without this, if a "SUBTRACT" operation were used, the resulting bake for the attribute would be
+                # completely black (painted with 0). The actual operation will be transferred to the associated node in the
+                # layer node tree.
+                # TODO: Ideally, we would not need these overrides because it is a little hacky. It would be cleaner to
+                #  separate out the operation from the "Paint Layer" node group, although we would need a compelling reason
+                #  to do so.
+                geometry_socket = _add_paint_layer_to_node_tree(node_tree, geometry_socket, doodad_paint_layer,
+                                                                attribute_override=attribute_name,
+                                                                operation_override='ADD')
+
+        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+
+    node_tree = ensure_geometry_node_tree(uuid.uuid4().hex, items, build_function, should_force_build=True)
 
     return node_tree, attribute_map

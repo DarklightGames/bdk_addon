@@ -1,5 +1,5 @@
 from bpy.types import PropertyGroup
-from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty
+from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty, BoolProperty
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.doodad.properties import BDK_PG_terrain_doodad
 from ..bsp.properties import BDK_PG_bsp_brush
@@ -29,7 +29,12 @@ class BDK_PG_material(PropertyGroup):
     size_y: IntProperty(name='Size Y', default=512, min=1)
 
 
+class BDK_PG_node_tree(PropertyGroup):
+    build_hash: StringProperty(name='Build Function Byte-Code Hash', description='Python byte-code hash for the function that built this node tree. Used to trigger rebuilds when build functions change', options={'HIDDEN'})
+
+
 classes = (
     BDK_PG_object,
     BDK_PG_material,
+    BDK_PG_node_tree,
 )

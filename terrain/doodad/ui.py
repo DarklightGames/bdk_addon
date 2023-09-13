@@ -418,6 +418,12 @@ class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
         elif scatter_layer.curve_spacing_method == 'ABSOLUTE':
             flow.prop(scatter_layer, 'curve_spacing_absolute', text='Distance')
 
+        flow.separator()
+
+        flow.prop(scatter_layer, 'curve_normal_offset_min', text='Normal Offset Min')
+        flow.prop(scatter_layer, 'curve_normal_offset_max', text='Max')
+        flow.prop(scatter_layer, 'curve_normal_offset_seed', text='Seed')
+
 class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
     bl_label = 'Objects'
     bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_objects'
@@ -491,7 +497,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.separator()
 
-            flow.prop(scatter_layer_object, 'random_rotation_max')
+            flow.prop(scatter_layer_object, 'random_rotation')
 
             if terrain_doodad.object.type == 'CURVE':
                 flow.separator()

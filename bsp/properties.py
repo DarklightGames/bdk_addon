@@ -1,9 +1,10 @@
-import itertools
-from enum import Enum, IntFlag
+from enum import Enum
 from typing import Set
 
 from bpy.types import PropertyGroup, Object, Context
 from bpy.props import EnumProperty, PointerProperty, IntProperty
+
+from .data import PolyFlags
 
 
 class BrushColors(Enum):
@@ -13,30 +14,6 @@ class BrushColors(Enum):
     Portal      = (0.5, 1.0, 0.0, 1.0)
     NotSolid    = (0.25, 0.75, 0.125, 1.0)
     SemiSolid   = (0.875, 0.6, 0.6, 1.0)
-
-
-class PolyFlags(IntFlag):
-    Invisible       = 0x00000001
-    Masked          = 0x00000002
-    Translucent     = 0x00000004
-    NotSolid        = 0x00000008
-    Environment     = 0x00000010
-    SemiSolid       = 0x00000020
-    Modulated       = 0x00000040
-    FakeBackdrop    = 0x00000080
-    TwoSided        = 0x00000100
-    NoSmooth        = 0x00000800
-    AlphaTexture    = 0x00001000
-    Flat            = 0x00004000
-    NoMerge         = 0x00010000
-    NoZTest         = 0x00020000
-    Additive        = 0x00040000
-    SpecialLit      = 0x00100000
-    Wireframe       = 0x00200000
-    Unlit           = 0x00400000
-    Portal          = 0x04000000
-    AntiPortal      = 0x08000000
-    Mirrored        = 0x20000000
 
 
 def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, float, float, float]:
@@ -60,7 +37,6 @@ csg_operation_items = (
     ('CSG_Add', 'Add', 'Add to world', 1),
     ('CSG_Subtract', 'Subtract', 'Subtract from world', 2),
 )
-
 
 poly_flags_items = (
     ('INVISIBLE', 'Invisible', 'Poly is invisible.', 0, PolyFlags.Invisible.value),
