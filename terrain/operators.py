@@ -4,6 +4,7 @@ import uuid
 from typing import cast
 
 import bpy
+import mathutils
 import numpy
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
 from bpy.types import Operator, Context, Mesh, Object, Event
@@ -942,11 +943,113 @@ class BDK_OT_terrain_layer_paint_node_move_to_group(Operator):
     def execute(self, context: Context):
         return {'FINISHED'}
 
+def terrain_shift_x_get(self):
+    terrain_info = get_terrain_info(bpy.context.active_object)
+    return int(self.x_distance / terrain_info.terrain_scale)
+
+def terrain_shift_y_get(self):
+    terrain_info = get_terrain_info(bpy.context.active_object)
+    return int(self.y_distance / terrain_info.terrain_scale)
+
+class BDK_OT_terrain_info_translate(Operator):
+    bl_idname = 'bdk.terrain_translate'
+    bl_label = 'Shift Terrain'
+    bl_description = 'Shift the terrain elements (heightmap, paint layers, doodads, etc.) by the specified distance'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    x: IntProperty(name='X', get=terrain_shift_x_get)
+    y: IntProperty(name='Y', get=terrain_shift_y_get)
+    x_distance: FloatProperty(name='X Distance', subtype='DISTANCE')
+    y_distance: FloatProperty(name='Y Distance', subtype='DISTANCE')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+
+    def invoke(self, context: 'Context', event: 'Event'):
+        # Show a dialog
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context: Context):
+        layout = self.layout
+
+        flow = layout.grid_flow(columns=1, align=True)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+        flow.prop(self, 'x_distance', text='Distance X')
+        flow.prop(self, 'y_distance', text='Y')
+        flow.separator()
+        flow.prop(self, 'x')
+        flow.prop(self, 'y')
+
+    def execute(self, context: Context):
+        if self.x == 0.0 and self.y == 0.0:
+            return {'FINISHED'}
+
+        terrain_info_object = context.active_object
+        terrain_info = get_terrain_info(terrain_info_object)
+
+        # TODO: this thing is very slow, we should find a faster way to do this.
+
+        # Convert the z-values of the terrain info vertices to a numpy array.
+        z_values = numpy.array([v.co.z for v in terrain_info_object.data.vertices]).reshape((terrain_info.x_size, terrain_info.y_size))
+        z_values = numpy.roll(z_values, (self.x, self.y), axis=(1, 0))
+
+        # Reassign the z-values to the terrain info vertices.
+        for (vertex, z) in zip(terrain_info_object.data.vertices, z_values.flat):
+            vertex.co.z = z
+
+        for attribute in terrain_info_object.data.attributes:
+            if attribute.data_type == 'BYTE_COLOR':
+                # Convert the attribute values to a numpy array.
+                shape = (terrain_info.x_size, terrain_info.y_size, 4)
+                attribute_values = numpy.array([v.color for v in attribute.data]).reshape(shape)
+                attribute_values = numpy.roll(attribute_values, (self.x, self.y), axis=(1, 0))
+                # Reassign the attribute values.
+                attribute.data.foreach_set('color', attribute_values.flatten())
+
+        translation = mathutils.Vector((self.x * terrain_info.terrain_scale, self.y * terrain_info.terrain_scale, 0.0))
+
+        # Shift the doodads.
+        for obj in bpy.data.objects:
+            if obj.bdk.type == 'TERRAIN_DOODAD' and obj.bdk.terrain_doodad.terrain_info_object == terrain_info_object:
+                obj.location += translation
+
+        # Shift the quad tesselation.
+        quad_edge_turns = numpy.zeros((terrain_info.x_size - 1, terrain_info.y_size - 1), dtype=numpy.bool_)
+        mesh_data: Mesh = terrain_info_object.data
+        vertex_index = 0
+        for y in range(terrain_info.y_size - 1):
+            for x in range(terrain_info.x_size - 1):
+                polygon_index = y * (terrain_info.x_size - 1) + x
+                polygon = mesh_data.polygons[polygon_index]
+                loop_vertex_index = mesh_data.loops[polygon.loop_start].vertex_index
+                # Check if the first vertex in the loop for this face coincides with the natural first vertex or the vertex
+                # diagonal to it.
+                if loop_vertex_index == vertex_index or loop_vertex_index == vertex_index + terrain_info.x_size + 1:
+                    quad_edge_turns[polygon_index] = True
+                vertex_index += 1
+            vertex_index += 2
+
+        quad_edge_turns = numpy.roll(quad_edge_turns, (self.x, self.y), axis=(1, 0))
+
+        # Move the terrain holes (material indices).
+        # Convert all the material indices to a numpy array (used for terrain holes)
+        shape = (terrain_info.x_size - 1, terrain_info.y_size - 1)
+        material_indices = numpy.array(map(lambda f: f.material_index, terrain_info_object.data.polygons)).reshape(shape)
+        material_indices = numpy.roll(material_indices, (self.x, self.y), axis=(1, 0))
+        # Reassign the material indices.
+        for (face, material_index) in zip(terrain_info_object.data.polygons, material_indices.flat):
+            face.material_index = material_index
+
+        return {'FINISHED'}
+
 
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
     BDK_OT_terrain_info_repair,
+    BDK_OT_terrain_info_translate,
 
     BDK_OT_terrain_paint_layer_add,
     BDK_OT_terrain_paint_layer_remove,

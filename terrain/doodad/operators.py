@@ -694,6 +694,34 @@ class BDK_OT_terrain_doodad_scatter_layer_duplicate(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_doodad_scatter_layer_objects_duplicate(Operator):
+    bl_label = 'Duplicate Scatter Layer Object'
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_objects_duplicate'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        return terrain_doodad and terrain_doodad.scatter_layers and terrain_doodad.scatter_layers_index >= 0
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        scatter_layer_object = scatter_layer.objects[scatter_layer.objects_index]
+        scatter_layer_object_copy = add_scatter_layer_object(scatter_layer)
+        copy_simple_property_group(scatter_layer_object, scatter_layer_object_copy, {'id'})
+
+        # Set the scatter layer object index to the new scatter layer object.
+        scatter_layer.objects_index = len(scatter_layer.objects) - 1
+
+        ensure_scatter_layer(scatter_layer)
+        ensure_terrain_doodad_layer_indices(terrain_doodad)
+        ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+        return {'FINISHED'}
+
+
 class BDK_OT_terrain_doodad_bake_debug(Operator):
     bl_label = 'Bake Debug'
     bl_idname = 'bdk.terrain_doodad_bake_debug'
@@ -741,4 +769,5 @@ classes = (
     BDK_OT_terrain_doodad_scatter_layer_duplicate,
     BDK_OT_terrain_doodad_scatter_layer_objects_add,
     BDK_OT_terrain_doodad_scatter_layer_objects_remove,
+    BDK_OT_terrain_doodad_scatter_layer_objects_duplicate,
 )

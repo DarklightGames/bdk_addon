@@ -10,7 +10,8 @@ from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_do
     BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
     BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_bake_debug
+    BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_bake_debug, \
+    BDK_OT_terrain_doodad_scatter_layer_objects_duplicate
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -474,6 +475,8 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
         col.separator()
 
+        col.operator(BDK_OT_terrain_doodad_scatter_layer_objects_duplicate.bl_idname, icon='DUPLICATE', text='')
+
         scatter_layer_object = scatter_layer.objects[scatter_layer.objects_index] if len(
             scatter_layer.objects) else None
 
@@ -551,10 +554,13 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         terrain_doodad = get_terrain_doodad(context.active_object)
         scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
 
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
         flow.prop(scatter_layer, 'global_seed')
+        flow.separator()
+        flow.prop(scatter_layer, 'inert_factor')
+        flow.prop(scatter_layer, 'inert_seed')
 
 
 class BDK_PT_terrain_doodad_paint_layer_debug(Panel):

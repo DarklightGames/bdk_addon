@@ -62,7 +62,7 @@ def _ensure_terrain_paint_layer_uv_group_node() -> NodeTree:
 
         node_tree.links.new(output_node.inputs['UV'], rotate_node.outputs['Vector'])
 
-    return ensure_shader_node_tree('BDK TerrainLayerUV', items, build_function)
+    return ensure_shader_node_tree('BDK TerrainLayerUV', items, build_function, should_force_build=True)
 
 
 def build_terrain_material(terrain_info_object: bpy.types.Object):

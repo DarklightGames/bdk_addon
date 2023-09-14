@@ -325,10 +325,10 @@ def ensure_curve_modifier_node_tree() -> NodeTree:
 
         # Input
         node_tree.links.new(input_node.outputs['Normal Offset'], curve_normal_offset_group_node.inputs['Normal Offset'])
-        node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
         node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs[1])
         node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs[14])  # False
         node_tree.links.new(input_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
         node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
         node_tree.links.new(input_node.outputs['Trim Factor End'], trim_curve_group_node.inputs['Factor End'])
         node_tree.links.new(input_node.outputs['Trim Length Start'], trim_curve_group_node.inputs['Length Start'])

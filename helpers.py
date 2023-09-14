@@ -208,7 +208,7 @@ def fill_byte_color_attribute_data(attribute: ByteColorAttribute, color: Tuple[f
     vertex_count = len(attribute.data)
     color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
     color_data[:] = color
-    attribute.data.foreach_set('color', color_data.flatten())
+    attribute.data.foreach_set('color', color_data.flatten())  # TODO: Might be possible to do this with .flat to avoid the copy
 
 
 def invert_byte_color_attribute_data(attribute: ByteColorAttribute):

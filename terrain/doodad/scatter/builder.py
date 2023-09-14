@@ -34,6 +34,8 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
         seed_object.lock_rotation = (True, True, True)
         seed_object.lock_scale = (True, True, True)
         scatter_layer.seed_object = seed_object
+        scatter_layer.seed_object.parent = scatter_layer.terrain_doodad_object
+        bpy.context.scene.collection.objects.link(scatter_layer.seed_object)
 
     # Create the sprout object. This is the object that will create the instances from the seed object.
     if scatter_layer.sprout_object is None:
@@ -44,13 +46,8 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
         sprout_object.lock_rotation = (True, True, True)
         sprout_object.lock_scale = (True, True, True)
         scatter_layer.sprout_object = sprout_object
-
-    # Add the seed object and the sprout object into the scene and parent them to the terrain doodad.
-    bpy.context.scene.collection.objects.link(scatter_layer.seed_object)
-    bpy.context.scene.collection.objects.link(scatter_layer.sprout_object)
-
-    scatter_layer.seed_object.parent = scatter_layer.terrain_doodad_object
-    scatter_layer.sprout_object.parent = scatter_layer.terrain_doodad_object
+        scatter_layer.sprout_object.parent = scatter_layer.terrain_doodad_object
+        bpy.context.scene.collection.objects.link(scatter_layer.sprout_object)
 
 
 def add_scatter_layer_object(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> 'BDK_PG_terrain_doodad_scatter_layer_object':
@@ -380,6 +377,40 @@ def ensure_vector_component_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Vector Component', items, build_function)
 
 
+def ensure_delete_random_points_node_tree() -> NodeTree:
+    inputs = {
+        ('BOTH', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketFloat', 'Factor'),
+        ('INPUT', 'NodeSocketInt', 'Seed'),
+        ('INPUT', 'NodeSocketInt', 'Global Seed'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        inert_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        inert_random_value_node.label = 'Inert Random Value'
+        inert_random_value_node.data_type = 'BOOLEAN'
+
+        delete_geometry_node = node_tree.nodes.new(type='GeometryNodeDeleteGeometry')
+
+        inert_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'],
+                                                                      input_node.outputs['Global Seed']])
+
+        # Input
+        node_tree.links.new(input_node.outputs['Factor'], inert_random_value_node.inputs[6]) # Probability
+        node_tree.links.new(input_node.outputs['Points'], delete_geometry_node.inputs['Geometry'])
+
+        # Internal
+        node_tree.links.new(inert_seed_socket, inert_random_value_node.inputs['Seed'])
+        node_tree.links.new(inert_random_value_node.outputs[3], delete_geometry_node.inputs[1])  # Value -> Selection
+
+        # Output
+        node_tree.links.new(delete_geometry_node.outputs['Geometry'], output_node.inputs['Points'])
+
+    return ensure_geometry_node_tree('BDK Delete Random Points', inputs, build_function)
+
+
 def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
@@ -461,6 +492,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         node_tree.links.new(curve_to_points_node.outputs['Tangent'], tangent_scale_node.inputs[0]) # Tangent -> Vector
         node_tree.links.new(tangent_offset_negate_node.outputs[0], tangent_offset_random_value_node.inputs[2]) # Min
         node_tree.links.new(tangent_offset_random_value_node.outputs[1], tangent_scale_node.inputs['Scale'])
+        node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
 
         # Output
         node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], output_node.inputs['Points'])
@@ -831,9 +863,17 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             node_tree.links.new(scatter_layer_object_node_group_node.outputs['Points'],
                                 join_geometry_node.inputs['Geometry'])
 
+        # Pass through inertion.
+        delete_random_points_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        delete_random_points_node_group_node.node_tree = ensure_delete_random_points_node_tree()
+        node_tree.links.new(join_geometry_node.outputs['Geometry'], delete_random_points_node_group_node.inputs['Points'])
+        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Factor'], 'inert_factor')
+        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Seed'], 'inert_seed')
+        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Global Seed'], 'global_seed')
+
         # We need to convert the point cloud to a mesh so that we can inspect the attributes for T3D export.
         points_to_vertices_node = node_tree.nodes.new(type='GeometryNodePointsToVertices')
-        node_tree.links.new(join_geometry_node.outputs['Geometry'], points_to_vertices_node.inputs['Points'])
+        node_tree.links.new(delete_random_points_node_group_node.outputs['Points'], points_to_vertices_node.inputs['Points'])
 
         # Add a mute switch.
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')

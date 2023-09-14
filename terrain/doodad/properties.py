@@ -230,8 +230,10 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
 
     seed_object: PointerProperty(type=Object, name='Seed Object', options={'HIDDEN'})
     sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
+
     global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
-    rotation_seed: IntProperty(name='Rotation Seed', default=0, min=0)
+    inert_factor: FloatProperty(name='Inert Factor', default=0.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will not be scattered')
+    inert_seed: IntProperty(name='Inert Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
 
     # Curve Settings
     curve_spacing_method: EnumProperty(name='Spacing Method', items=(

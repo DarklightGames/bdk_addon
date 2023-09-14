@@ -123,7 +123,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
         node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
         node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
-    return ensure_geometry_node_tree(name, items, build_function)
+    return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
 def ensure_noise_node_group() -> NodeTree:
