@@ -127,6 +127,7 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
         ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
+        ('INPUT', 'NodeSocketVector', 'Rotation Offset')
     }
 
     def build_function(node_tree: NodeTree):
@@ -180,28 +181,35 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         random_rotation_node.label = 'Random Rotation'
         random_rotation_node.data_type = 'FLOAT_VECTOR'
 
-        rotate_euler_node = node_tree.nodes.new(type='FunctionNodeRotateEuler')
-        rotate_euler_node.space = 'LOCAL'
+        random_rotation_rotate_euler_node = node_tree.nodes.new(type='FunctionNodeRotateEuler')
+        random_rotation_rotate_euler_node.space = 'LOCAL'
+        random_rotation_rotate_euler_node.label = 'Random Rotation'
+
+        rotation_offset_rotate_euler_node = node_tree.nodes.new(type='FunctionNodeRotateEuler')
+        rotation_offset_rotate_euler_node.space = 'LOCAL'
+        rotation_offset_rotate_euler_node.label = 'Rotation Offset'
 
         # Input
         node_tree.links.new(input_node.outputs['Factor'], terrain_normal_mix_node.inputs[0])
         node_tree.links.new(input_node.outputs['Geometry'], store_rotation_attribute_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], negate_random_rotation_node.inputs[0])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], random_rotation_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Rotation Offset'], rotation_offset_rotate_euler_node.inputs[1])  # Rotate By
 
         # Internal
         node_tree.links.new(terrain_normal_mix_node.outputs[1], vector_math_node.inputs[0])  # Result -> Vector
         node_tree.links.new(terrain_normal_attribute_node.outputs[0], terrain_normal_mix_node.inputs[5])  # Attribute -> B
         node_tree.links.new(curve_tangent_attribute_node.outputs[0], align_x_node.inputs[2])  # Attribute -> Vector
-        node_tree.links.new(align_z_node.outputs[0], rotate_euler_node.inputs[0])  # Rotation -> Rotation
-        node_tree.links.new(rotate_euler_node.outputs['Rotation'], store_rotation_attribute_node.inputs[3])  # Rotation -> Value
+        node_tree.links.new(align_z_node.outputs[0], rotation_offset_rotate_euler_node.inputs[0])  # Rotation -> Rotation
+        node_tree.links.new(rotation_offset_rotate_euler_node.outputs[0], random_rotation_rotate_euler_node.inputs[0])  # Rotation -> Rotation
+        node_tree.links.new(random_rotation_node.outputs[0], random_rotation_rotate_euler_node.inputs[1])  # Value -> Rotate By
+        node_tree.links.new(rotation_offset_rotate_euler_node.outputs['Rotation'], random_rotation_rotate_euler_node.inputs[0])
+        node_tree.links.new(random_rotation_rotate_euler_node.outputs['Rotation'], store_rotation_attribute_node.inputs[3])  # Rotation -> Value
         node_tree.links.new(align_x_node.outputs[0], align_z_node.inputs[0])  # Rotation -> Rotation
         node_tree.links.new(vector_math_node.outputs[0], align_z_node.inputs[2])  # Vector -> Vector
         node_tree.links.new(up_vector_node.outputs[0], terrain_normal_mix_node.inputs[4])  # Vector -> A
-        node_tree.links.new(random_rotation_node.outputs[0], rotate_euler_node.inputs[1])  # Value -> Rotate By
         node_tree.links.new(negate_random_rotation_node.outputs[0], random_rotation_node.inputs[0])  # Vector -> Min
         node_tree.links.new(seed_socket, random_rotation_node.inputs[8])
-        node_tree.links.new(align_z_node.outputs['Rotation'], rotate_euler_node.inputs[0])
 
         # Output
         node_tree.links.new(store_rotation_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
@@ -622,6 +630,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Min'),
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Max'),
         ('INPUT', 'NodeSocketInt', 'Terrain Normal Offset Seed'),
+        ('INPUT', 'NodeSocketVector', 'Rotation Offset'),
         ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
         ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
     }
@@ -681,6 +690,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Terrain Normal Offset Max'], terrain_normal_offset_node_group_node.inputs['Terrain Normal Offset Max'])
         node_tree.links.new(input_node.outputs['Terrain Normal Offset Seed'], terrain_normal_offset_node_group_node.inputs['Seed'])
         node_tree.links.new(input_node.outputs['Global Seed'], terrain_normal_offset_node_group_node.inputs['Global Seed'])
+        node_tree.links.new(input_node.outputs['Rotation Offset'], align_to_terrain_node_group_node.inputs['Rotation Offset'])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], align_to_terrain_node_group_node.inputs['Random Rotation Max'])
         node_tree.links.new(input_node.outputs['Random Rotation Seed'], align_to_terrain_node_group_node.inputs['Random Rotation Seed'])
         node_tree.links.new(input_node.outputs['Global Seed'], align_to_terrain_node_group_node.inputs['Global Seed'])
@@ -852,6 +862,9 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
                                             'terrain_normal_offset_max')
             add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Terrain Normal Offset Seed'],
                                             'terrain_normal_offset_seed')
+            add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Rotation Offset'], 'rotation_offset', 0)
+            add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Rotation Offset'], 'rotation_offset', 1)
+            add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Rotation Offset'], 'rotation_offset', 2)
             add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Random Rotation Max'], 'random_rotation_max', 0)
             add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Random Rotation Max'], 'random_rotation_max', 1)
             add_scatter_layer_object_driver(scatter_layer_object_node_group_node.inputs['Random Rotation Max'], 'random_rotation_max', 2)

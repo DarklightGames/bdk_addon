@@ -499,6 +499,10 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.separator()
 
+            flow.prop(scatter_layer_object, 'rotation_offset')
+
+            flow.separator()
+
             flow.prop(scatter_layer_object, 'scale_min', text='Scale Min')
             flow.prop(scatter_layer_object, 'scale_max', text='Max')
             flow.prop(scatter_layer_object, 'scale_seed', text='Seed')

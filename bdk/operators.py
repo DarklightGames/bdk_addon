@@ -108,7 +108,7 @@ class BDK_OT_force_node_tree_rebuild(Operator):
 
     def execute(self, context: Context):
         for node_tree in bpy.data.node_groups:
-            node_tree.bdk.mtime = 0
+            node_tree.bdk.build_hash =''
         return {'FINISHED'}
 
 
