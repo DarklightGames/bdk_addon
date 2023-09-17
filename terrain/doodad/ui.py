@@ -244,10 +244,13 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
             if sculpt_layer.use_noise:
                 col = flow.column(align=True)
                 col.prop(sculpt_layer, 'noise_radius_factor')
+                col.prop(sculpt_layer, 'noise_strength')
                 if sculpt_layer.noise_type == 'PERLIN':
-                    col.prop(sculpt_layer, 'noise_distortion')
-                    col.prop(sculpt_layer, 'noise_roughness')
-                    col.prop(sculpt_layer, 'noise_strength')
+                    col.prop(sculpt_layer, 'perlin_noise_distortion')
+                    col.prop(sculpt_layer, 'perlin_noise_roughness')
+                    col.prop(sculpt_layer, 'perlin_noise_scale')
+                    col.prop(sculpt_layer, 'perlin_noise_lacunarity')
+                    col.prop(sculpt_layer, 'perlin_noise_detail')
 
 
 class BDK_PT_terrain_doodad_sculpt_layers(Panel):
@@ -378,6 +381,51 @@ class BDK_PT_terrain_doodad_scatter_layers(Panel):
         col.operator(BDK_OT_terrain_doodad_scatter_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
 
+class BDK_PT_terrain_doodad_scatter_layer_mesh_settings(Panel):
+    bl_label = 'Mesh Settings'
+    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_mesh_settings'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
+    bl_order = 10
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        if terrain_doodad.object.type != 'MESH':
+            return False
+        # Get selected scatter layer.
+        if len(terrain_doodad.scatter_layers) == 0:
+            return False
+        return True
+
+    def draw(self, context: 'Context'):
+        layout = self.layout
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        flow = layout.grid_flow(align=True, columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        flow.prop(scatter_layer, 'mesh_element_mode')
+
+        flow.separator()
+
+        if scatter_layer.mesh_element_mode == 'VERTEX':
+            pass
+        if scatter_layer.mesh_element_mode == 'FACE':
+            flow.prop(scatter_layer, 'mesh_face_distribute_method')
+
+            if scatter_layer.mesh_face_distribute_method == 'RANDOM':
+                flow.prop(scatter_layer, 'mesh_face_distribute_random_density')
+            elif scatter_layer.mesh_face_distribute_method == 'POISSON_DISK':
+                flow.prop(scatter_layer, 'mesh_face_distribute_poisson_distance_min')
+                flow.prop(scatter_layer, 'mesh_face_distribute_poisson_density_max')
+                flow.prop(scatter_layer, 'mesh_face_distribute_poisson_density_factor')
+
+
 class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
     bl_label = 'Curve Settings'
     bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_curve_settings'
@@ -455,7 +503,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
         flow.prop(scatter_layer, 'object_select_mode', text='Object Mode')
 
-        if scatter_layer.object_select_mode == 'RANDOM':
+        if scatter_layer.object_select_mode in {'RANDOM', 'WEIGHTED_RANDOM'}:
             flow.prop(scatter_layer, 'object_select_random_seed', text='Seed')
         elif scatter_layer.object_select_mode == 'CYCLIC':
             flow.prop(scatter_layer, 'object_select_cyclic_offset', text='Offset')
@@ -489,6 +537,11 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.separator()
 
+            # If the object mode is weighted random, show the weight slider.
+            if scatter_layer.object_select_mode == 'WEIGHTED_RANDOM':
+                flow.prop(scatter_layer_object, 'random_weight')
+                flow.separator()
+
             flow.prop(scatter_layer_object, 'snap_to_terrain')
 
             if scatter_layer_object.snap_to_terrain:
@@ -503,8 +556,24 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.separator()
 
-            flow.prop(scatter_layer_object, 'scale_min', text='Scale Min')
-            flow.prop(scatter_layer_object, 'scale_max', text='Max')
+            flow.prop(scatter_layer_object, 'scale_mode')
+
+            flow.separator()
+
+            if scatter_layer_object.scale_mode == 'UNIFORM':
+                flow.prop(scatter_layer_object, 'scale_uniform', text='Scale')
+            elif scatter_layer_object.scale_mode == 'NON_UNIFORM':
+                flow.prop(scatter_layer_object, 'scale', text='Scale')
+
+            flow.separator()
+
+            if scatter_layer_object.scale_mode == 'UNIFORM':
+                flow.prop(scatter_layer_object, 'scale_random_uniform_min', text='Random Scale Min')
+                flow.prop(scatter_layer_object, 'scale_random_uniform_max', text='Max')
+            elif scatter_layer_object.scale_mode == 'NON_UNIFORM':
+                flow.prop(scatter_layer_object, 'scale_random_min', text='Scale Min')
+                flow.prop(scatter_layer_object, 'scale_random_max', text='Max')
+
             flow.prop(scatter_layer_object, 'scale_seed', text='Seed')
 
             flow.separator()
@@ -629,6 +698,7 @@ classes = (
     BDK_PT_terrain_doodad_scatter_layer_objects,
     BDK_PT_terrain_doodad_scatter_layer_settings,
     BDK_PT_terrain_doodad_scatter_layer_curve_settings,
+    BDK_PT_terrain_doodad_scatter_layer_mesh_settings,
     BDK_PT_terrain_doodad_scatter_layer_debug,
     BDK_PT_terrain_doodad_advanced,
     BDK_PT_terrain_doodad_operators,

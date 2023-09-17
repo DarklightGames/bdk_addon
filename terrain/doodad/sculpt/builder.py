@@ -1,5 +1,6 @@
 from bpy.types import NodeTree
 
+from ...deco import ensure_noise_node_group
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_interpolation_node_tree
 
 
@@ -8,9 +9,13 @@ def ensure_sculpt_noise_node_group():
     items = {
         ('INPUT', 'NodeSocketFloat', 'Distance'),
         ('INPUT', 'NodeSocketFloat', 'Radius'),
+        ('INPUT', 'NodeSocketInt', 'Noise Type'),
         ('INPUT', 'NodeSocketFloat', 'Noise Strength'),
-        ('INPUT', 'NodeSocketFloat', 'Noise Roughness'),
-        ('INPUT', 'NodeSocketFloat', 'Noise Distortion'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Roughness'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Distortion'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Scale'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Lacunarity'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Detail'),
         ('OUTPUT', 'NodeSocketFloat', 'Offset')
     }
 
@@ -24,11 +29,8 @@ def ensure_sculpt_noise_node_group():
         multiply_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
         multiply_node_2.operation = 'MULTIPLY'
 
-        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-
-        noise_texture_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
-        noise_texture_node.noise_dimensions = '2D'
-        noise_texture_node.inputs['Scale'].default_value = 1.0
+        noise_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        noise_group_node.node_tree = ensure_noise_node_group()
 
         map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
         map_range_node.data_type = 'FLOAT'
@@ -47,12 +49,15 @@ def ensure_sculpt_noise_node_group():
         node_tree.links.new(input_node.outputs['Distance'], divide_node.inputs[0])
         node_tree.links.new(input_node.outputs['Radius'], divide_node.inputs[1])
         node_tree.links.new(input_node.outputs['Noise Strength'], multiply_node.inputs[1])
-        node_tree.links.new(input_node.outputs['Noise Roughness'], noise_texture_node.inputs['Roughness'])
-        node_tree.links.new(input_node.outputs['Noise Distortion'], noise_texture_node.inputs['Distortion'])
+        node_tree.links.new(input_node.outputs['Noise Type'], noise_group_node.inputs['Noise Type'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Roughness'], noise_group_node.inputs['Perlin Noise Roughness'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Distortion'], noise_group_node.inputs['Perlin Noise Distortion'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Scale'], noise_group_node.inputs['Perlin Noise Scale'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Lacunarity'], noise_group_node.inputs['Perlin Noise Lacunarity'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Detail'], noise_group_node.inputs['Perlin Noise Detail'])
 
         # Internal
-        node_tree.links.new(position_node.outputs['Position'], noise_texture_node.inputs['Vector'])
-        node_tree.links.new(noise_texture_node.outputs['Fac'], map_range_node.inputs['Value'])
+        node_tree.links.new(noise_group_node.outputs['Value'], map_range_node.inputs['Value'])
         node_tree.links.new(divide_node.outputs['Value'], subtract_node.inputs[1])
         node_tree.links.new(subtract_node.outputs['Value'], multiply_node_2.inputs[0])
         node_tree.links.new(map_range_node.outputs['Result'], multiply_node_2.inputs[1])
@@ -64,7 +69,7 @@ def ensure_sculpt_noise_node_group():
     return ensure_geometry_node_tree('BDK Noise 2 (deprecated)', items, build_function)
 
 
-def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
+def ensure_sculpt_node_group() -> NodeTree:
     items = {
         ('BOTH', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT','NodeSocketFloat', 'Distance'),
@@ -73,10 +78,14 @@ def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
         ('INPUT','NodeSocketFloat', 'Falloff Radius'),
         ('INPUT','NodeSocketFloat', 'Depth'),
         ('INPUT','NodeSocketFloat', 'Noise Strength'),
-        ('INPUT','NodeSocketFloat', 'Noise Roughness'),
-        ('INPUT','NodeSocketFloat', 'Noise Distortion'),
+        ('INPUT','NodeSocketFloat', 'Perlin Noise Roughness'),
+        ('INPUT','NodeSocketFloat', 'Perlin Noise Distortion'),
+        ('INPUT','NodeSocketFloat', 'Perlin Noise Scale'),
+        ('INPUT','NodeSocketFloat', 'Perlin Noise Lacunarity'),
+        ('INPUT','NodeSocketFloat', 'Perlin Noise Detail'),
         ('INPUT','NodeSocketBool', 'Use Noise'),
         ('INPUT','NodeSocketFloat', 'Noise Radius Factor'),
+        ('INPUT', 'NodeSocketInt', 'Noise Type'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -121,8 +130,12 @@ def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
         node_tree.links.new(input_node.outputs['Interpolation Type'], interpolation_group_node.inputs['Interpolation Type'])
         node_tree.links.new(input_node.outputs['Depth'], multiply_node.inputs[1])
         node_tree.links.new(input_node.outputs['Noise Strength'], noise_node.inputs['Noise Strength'])
-        node_tree.links.new(input_node.outputs['Noise Roughness'], noise_node.inputs['Noise Roughness'])
-        node_tree.links.new(input_node.outputs['Noise Distortion'], noise_node.inputs['Noise Distortion'])
+        node_tree.links.new(input_node.outputs['Noise Type'], noise_node.inputs['Noise Type'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Roughness'], noise_node.inputs['Perlin Noise Roughness'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Distortion'], noise_node.inputs['Perlin Noise Distortion'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Scale'], noise_node.inputs['Perlin Noise Scale'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Lacunarity'], noise_node.inputs['Perlin Noise Lacunarity'])
+        node_tree.links.new(input_node.outputs['Perlin Noise Detail'], noise_node.inputs['Perlin Noise Detail'])
         node_tree.links.new(input_node.outputs['Use Noise'], switch_node.inputs['Switch'])
         node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Distance'], noise_node.inputs['Distance'])
@@ -146,4 +159,4 @@ def ensure_sculpt_node_group(sculpt_layer_id: str) -> NodeTree:
         # Output
         node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
-    return ensure_geometry_node_tree(sculpt_layer_id, items, build_function)
+    return ensure_geometry_node_tree('BDK Terrain Doodad Sculpt Layer', items, build_function)

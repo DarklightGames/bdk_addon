@@ -49,6 +49,7 @@ if 'bpy' in locals():
     importlib.reload(terrain_doodad_ui)
 
     importlib.reload(terrain_doodad_scatter_builder)
+    importlib.reload(terrain_doodad_sculpt_builder)
 
     if bdk_helpers.are_bdk_dependencies_installed():
         importlib.reload(t3d_data)
@@ -106,6 +107,7 @@ else:
     from .terrain.doodad import ui as terrain_doodad_ui
 
     from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
+    from .terrain.doodad.sculpt import builder as terrain_doodad_sculpt_builder
 
     if bdk_helpers.are_bdk_dependencies_installed():
         # T3D

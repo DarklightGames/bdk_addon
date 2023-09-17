@@ -551,6 +551,7 @@ class BDK_OT_terrain_doodad_scatter_layer_add(Operator):
 
         # Add a new sculpting layer.
         scatter_layer = add_scatter_layer(terrain_doodad)
+
         ensure_scatter_layer(scatter_layer)
 
         # Add an object to the scatter layer.

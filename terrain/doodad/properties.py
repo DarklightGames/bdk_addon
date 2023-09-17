@@ -1,3 +1,4 @@
+import math
 from typing import List
 
 from bpy.props import IntProperty, PointerProperty, CollectionProperty, FloatProperty, BoolProperty, StringProperty, \
@@ -53,13 +54,17 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     noise_type: EnumProperty(name='Noise Type', items=terrain_doodad_noise_type_items, default='WHITE')
     noise_radius_factor: FloatProperty(name='Noise Radius Factor', default=1.0, subtype='FACTOR', min=RADIUS_EPSILON, soft_max=8.0)
     noise_strength: FloatProperty(name='Noise Strength', default=meters_to_unreal(0.25), subtype='DISTANCE', min=0.0, soft_max=meters_to_unreal(2.0))
-    noise_distortion: FloatProperty(name='Noise Distortion', default=1.0, min=0.0)
-    noise_roughness: FloatProperty(name='Noise Roughness', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
+    perlin_noise_distortion: FloatProperty(name='Noise Distortion', default=1.0, min=0.0)
+    perlin_noise_roughness: FloatProperty(name='Noise Roughness', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
+    perlin_noise_scale: FloatProperty(name='Noise Scale', default=1.0, min=0.0)
+    perlin_noise_lacunarity: FloatProperty(name='Noise Lacunarity', default=2.0, min=0.0)
+    perlin_noise_detail: FloatProperty(name='Noise Detail', default=8.0, min=0.0)
     mute: BoolProperty(name='Mute', default=False)
     interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
 
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_sculpt_layer)
+# TODO: add noise settings in the same manner so that we can use the same settings
 
 
 def terrain_doodad_paint_layer_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context: Context, edit_text: str) -> List[str]:
@@ -186,18 +191,26 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
                             poll=terrain_doodad_scatter_layer_object_object_poll_cb,
                             update=terrain_doodad_scatter_layer_update_cb)
 
-    random_weight: FloatProperty(name='Random Weight', default=1.0, min=0.0, max=1.0)
+    random_weight: FloatProperty(name='Random Weight', default=1.0, min=0.0, soft_max=10.0, subtype='FACTOR')
 
     is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
     align_axis: EnumProperty(name='Align Axis', items=axis_signed_enum_items, default='Z')
 
     rotation_offset: FloatVectorProperty(name='Rotation Offset', subtype='EULER', default=(0.0, 0.0, 0.0))
 
-    random_rotation_max: FloatVectorProperty(name='Random Rotation', subtype='EULER', min=0.0, max=180.0, default=(0.0, 0.0, 0.0))
+    random_rotation_max: FloatVectorProperty(name='Random Rotation', subtype='EULER', min=0.0, max=math.pi, default=(0.0, 0.0, 0.0))
     random_rotation_max_seed: IntProperty(name='Random Rotation Seed', default=0, min=0)
 
-    scale_min: FloatVectorProperty(name='Scale Min', min=0.0, default=(1.0, 1.0, 1.0))
-    scale_max: FloatVectorProperty(name='Scale Max', min=0.0, default=(1.0, 1.0, 1.0))
+    scale_mode: EnumProperty(name='Scale Mode', items=(
+        ('UNIFORM', 'Uniform', 'All axes will be scaled by the same amount', '', 0),
+        ('NON_UNIFORM', 'Non-Uniform', 'Each axis will be scaled independently', '', 1),
+    ), default='UNIFORM')
+    scale_uniform: FloatProperty(name='Scale', default=1.0, min=0.0)
+    scale: FloatVectorProperty(name='Scale', min=0.0, default=(1.0, 1.0, 1.0))
+    scale_random_uniform_min: FloatProperty(name='Scale Min', default=1.0, min=0.0)
+    scale_random_uniform_max: FloatProperty(name='Scale Max', default=1.0, min=0.0)
+    scale_random_min: FloatVectorProperty(name='Scale Min', min=0.0, default=(1.0, 1.0, 1.0))
+    scale_random_max: FloatVectorProperty(name='Scale Max', min=0.0, default=(1.0, 1.0, 1.0))
     scale_seed: IntProperty(name='Random Scale Seed', default=0, min=0)
 
     # Snap & Align to Terrain
@@ -206,6 +219,7 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     terrain_normal_offset_min: FloatProperty(name='Terrain Normal Offset Min', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_max: FloatProperty(name='Terrain Normal Offset Max', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_seed: IntProperty(name='Terrain Normal Offset Seed', default=0, min=0)
+
 
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
@@ -224,8 +238,9 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
 
     # Object Selection
     object_select_mode: EnumProperty(name='Object Select Mode', items=(
-        ('RANDOM', 'Random', 'Select a random object from the list'),
-        ('CYCLIC', 'Cyclic', 'Select from the list in the order that they appear'),
+        ('RANDOM', 'Random', 'Select a random object from the list', '', 0),
+        ('CYCLIC', 'Cyclic', 'Select from the list in the order that they appear', '', 1),
+        ('WEIGHTED_RANDOM', 'Weighted Random', 'Select a random object from the list based on the relative probability weight', '', 2)
     ), default='RANDOM')
     object_select_random_seed: IntProperty(name='Object Select Random Seed', default=0, min=0)
     object_select_cyclic_offset: IntProperty(name='Object Select Cyclic Offset', default=0, min=0)
@@ -253,13 +268,19 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     curve_tangent_offset_seed: IntProperty(name='Tangent Offset Seed', default=0, min=0)
 
     # Mesh Settings
-    mesh_spacing_method: EnumProperty(name='Spacing Method', items=(
+    mesh_element_mode: EnumProperty(name='Element Mode', items=(
+        ('FACE', 'Face', '', 'FACESEL', 0),
+        ('VERT', 'Vertex', '', 'VERTEXSEL', 1),
+    ), default='FACE')
+    mesh_face_distribute_method: EnumProperty(name='Distribution Method', items=(
         ('RANDOM', 'Random', ''),
         ('POISSON_DISK', 'Poisson Disk', ''),
     ), default='RANDOM')
-    mesh_density: FloatProperty(name='Density', default=1.0, min=0.0)
-    mesh_distribution_seed: IntProperty(name='Distribution Seed', default=0, min=0)
-
+    mesh_face_distribute_random_density: FloatProperty(name='Density', default=0.001, min=0.0, soft_max=0.1)
+    mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(1.0), min=0.0, subtype='DISTANCE')
+    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)
+    mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, soft_max=10.0, subtype='FACTOR')
+    mesh_face_distribute_seed: IntProperty(name='Distribution Seed', default=0, min=0)
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 
@@ -274,6 +295,12 @@ class BDK_PG_terrain_doodad(PropertyGroup):
     paint_layers_index: IntProperty()
     sculpt_layers: CollectionProperty(name='Sculpt Components', type=BDK_PG_terrain_doodad_sculpt_layer)
     sculpt_layers_index: IntProperty()
+
+    # TODO: not yet implemented
+    radius_factor: FloatProperty(name='Radius Factor', default=1.0, min=RADIUS_EPSILON, soft_max=10, subtype='FACTOR',
+                                 description='All radius values will be multiplied by this value. This is useful for '
+                                                'scaling the radius of all layers at once.')
+
     # TODO: we probably need a "creation index" to use a stable tie-breaker for the sort order of the terrain doodad.
     #  we are currently using the ID of the terrain doodad, but this isn't ideal because the sort order is effectively
     #  random for terrain doodad that share the same sort order.

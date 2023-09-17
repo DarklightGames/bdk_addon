@@ -117,7 +117,7 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
 
     # Noise
     noise_type: EnumProperty(name='Noise Type', items=(
-        ('WHITE', 'White', 'White Noise'),
+        ('WHITE', 'White', 'White Noise', 0),
         ('PERLIN', 'Perlin', 'Perlin Noise')
     ))
     noise_perlin_scale: FloatProperty(name='Perlin Noise Scale', default=5.0, options=set())

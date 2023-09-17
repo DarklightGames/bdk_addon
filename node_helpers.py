@@ -463,6 +463,125 @@ def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: L
     return output_socket
 
 
+def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: NodeSocket, output_value_sockets: Iterable[NodeSocket], input_type: str = 'INT') -> Optional[NodeSocket]:
+    previous_switch_output_socket = None
+    output_socket = None
+
+    valid_input_types = {'INT', 'GEOMETRY', 'VECTOR'}
+    if input_type not in valid_input_types:
+        raise ValueError(f'input_type must be {valid_input_types}, got {input_type}')
+
+    for value_index, output_value_socket in enumerate(output_value_sockets):
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = input_type
+
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.operation = 'EQUAL'
+        compare_node.data_type = 'INT'
+
+        compare_node.inputs[3].default_value = value_index  # B
+        switch_node.inputs[4].default_value = 0
+
+        node_tree.links.new(switch_value_socket, compare_node.inputs[2])  # True
+
+        match input_type:
+            case 'INT':
+                switch_switch_input_socket = switch_node.inputs[0]
+                switch_false_input_socket = switch_node.inputs[4]
+                switch_true_input_socket = switch_node.inputs[5]
+                switch_output_socket = switch_node.outputs[1]
+            case 'GEOMETRY':
+                switch_switch_input_socket = switch_node.inputs[1]
+                switch_false_input_socket = switch_node.inputs[14]
+                switch_true_input_socket = switch_node.inputs[15]
+                switch_output_socket = switch_node.outputs[6]
+            case 'VECTOR':
+                switch_switch_input_socket = switch_node.inputs[0]
+                switch_false_input_socket = switch_node.inputs[8]
+                switch_true_input_socket = switch_node.inputs[9]
+                switch_output_socket = switch_node.outputs[3]
+
+        node_tree.links.new(compare_node.outputs[0], switch_switch_input_socket)  # Result -> Switch
+        node_tree.links.new(output_value_socket, switch_true_input_socket)  # True
+        output_socket = switch_output_socket
+
+        if previous_switch_output_socket is not None:
+            node_tree.links.new(previous_switch_output_socket, switch_false_input_socket)  # Output -> False
+
+        previous_switch_output_socket = output_socket
+
+    return output_socket
+
+
+def ensure_weighted_index_node_tree() -> NodeTree:
+    inputs = {
+        ('OUTPUT', 'NodeSocketInt', 'Index'),
+        ('INPUT', 'NodeSocketInt', 'Seed'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 0'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 1'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 2'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 3'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 4'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 5'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 6'),
+        ('INPUT', 'NodeSocketFloat', 'Weight 7')
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        last_sum_socket = None
+        last_switch_false_socket = None
+        first_switch_output_socket = None
+
+        random_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        random_node.data_type = 'FLOAT'
+
+        node_tree.links.new(input_node.outputs['Seed'], random_node.inputs['Seed'])
+
+        for weight_index in range(8):
+            sum_node = node_tree.nodes.new(type='ShaderNodeMath')
+            sum_node.operation = 'ADD'
+            sum_node.inputs[0].default_value = 0.0
+            sum_node.inputs[1].default_value = 0.0
+            sum_node.label = f'Sum {weight_index}'
+
+            if last_sum_socket is not None:
+                node_tree.links.new(last_sum_socket, sum_node.inputs[0])
+
+            weight_socket = input_node.outputs[f'Weight {weight_index}']
+
+            node_tree.links.new(weight_socket, sum_node.inputs[1])
+
+            compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+            compare_node.operation = 'LESS_THAN'
+
+            switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+            switch_node.input_type = 'INT'
+
+            node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
+            switch_node.inputs[5].default_value = weight_index
+
+
+            last_sum_socket = sum_node.outputs[0]
+
+            if first_switch_output_socket is None:
+                first_switch_output_socket = switch_node.outputs[1]
+
+            if last_switch_false_socket is not None:
+                node_tree.links.new(switch_node.outputs[1], last_switch_false_socket)
+
+            last_switch_false_socket = switch_node.inputs[4]
+
+            node_tree.links.new(random_node.outputs[1], compare_node.inputs[0])  # A
+            node_tree.links.new(sum_node.outputs[0], compare_node.inputs[1])  # B
+
+        node_tree.links.new(last_sum_socket, random_node.inputs[3])  # Sum of all weight used as the Max value of the random node.
+        node_tree.links.new(first_switch_output_socket, output_node.inputs['Index'])
+
+    return ensure_geometry_node_tree('BDK Weighted Index', inputs, build_function)
+
+
 # def ensure_curve_extend_node_tree() -> NodeTree:
 #     inputs = {('NodeSocketGeometry', 'Geometry'), ('NodeSocketFloat', 'Root Length'), ('NodeSocketFloat', 'Tip Length')}
 #     outputs = {('NodeSocketGeometry', 'Geometry')}

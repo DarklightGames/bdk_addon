@@ -625,7 +625,7 @@ def add_doodad_deco_layer_driver(struct: bpy_struct, layer, data_path: str, path
 
 def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket, terrain_doodad) -> NodeSocket:
     """
-    Adds the nodes for a terrain doodad's sculpt layers.
+    Adds the nodes for a doodad's sculpt layers.
     :param node_tree: The node tree to add the nodes to.
     :param geometry_socket: The geometry socket to connect the nodes to.
     :param terrain_doodad: The terrain doodad to add the sculpt layers for.
@@ -666,7 +666,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         # =============================================================
 
         sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        sculpt_node.node_tree = ensure_sculpt_node_group(sculpt_layer.id)
+        sculpt_node.node_tree = ensure_sculpt_node_group()
         sculpt_node.label = 'Sculpt'
 
         switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
@@ -677,11 +677,16 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Falloff Radius'], sculpt_layer, 'falloff_radius')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Depth'], sculpt_layer, 'depth')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Strength'], sculpt_layer, 'noise_strength')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Roughness'], sculpt_layer, 'noise_roughness')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Distortion'], sculpt_layer, 'noise_distortion')
+        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Roughness'], sculpt_layer, 'perlin_noise_roughness')
+        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Distortion'], sculpt_layer, 'perlin_noise_distortion')
+        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Scale'], sculpt_layer, 'perlin_noise_scale')
+        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Lacunarity'], sculpt_layer, 'perlin_noise_lacunarity')
+        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Detail'], sculpt_layer, 'perlin_noise_detail')
+
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Use Noise'], sculpt_layer, 'use_noise')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Radius Factor'], sculpt_layer, 'noise_radius_factor')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Interpolation Type'], sculpt_layer, 'interpolation_type')
+        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Type'], sculpt_layer, 'noise_type')
 
         # Link the geometry socket of the object info node to the geometry socket of the sculpting node.
         node_tree.links.new(geometry_socket, sculpt_node.inputs['Geometry'])
