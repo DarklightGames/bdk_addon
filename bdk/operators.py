@@ -2,7 +2,7 @@ from collections import OrderedDict
 from typing import OrderedDict as OrderedDictType
 
 import bpy
-from bpy.types import Operator, Context, Node
+from bpy.types import Operator, Context, Node, Event
 from bpy.props import BoolProperty
 
 import subprocess
@@ -259,10 +259,63 @@ class BDK_OT_generate_node_code(Operator):
 
         return {'FINISHED'}
 
+
+def vertex_group_name_search_cb(self, context: Context, edit_text: str):
+    # List all the bones in the armature.
+    armature_object = context.object
+    return [bone.name for bone in armature_object.data.bones if edit_text.lower() in bone.name.lower()]
+
+
+class BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier(Operator):
+    bl_idname = 'bdk.assign_all_vertices_to_vertex_group'
+    bl_label = 'Assign All Vertices To Vertex Group'
+    bl_description = 'Assign all vertices to a vertex group'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    vertex_group_name: bpy.props.StringProperty(name='Vertex Group Name', search=vertex_group_name_search_cb)
+
+    @classmethod
+    def poll(cls, context):
+        # Return true if the active object is a mesh.
+        if context.object is None:
+            cls.poll_message_set('No active object')
+            return False
+        if context.object.type != 'ARMATURE':
+            cls.poll_message_set('Active object is not an armature')
+            return False
+        return True
+
+    def invoke(self, context: Context, event: Event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context: 'Context'):
+        layout = self.layout
+        layout.prop(self, 'vertex_group_name')
+
+    def execute(self, context):
+        # For all selected objects:
+        armature_object = context.object
+        for bpy_object in context.selected_objects:
+            if bpy_object.type != 'MESH':
+                continue
+            # Create a vertex group if it doesn't exist.
+            vertex_group = bpy_object.vertex_groups.get(self.vertex_group_name, None)
+            if vertex_group is None:
+                vertex_group = bpy_object.vertex_groups.new(name=self.vertex_group_name)
+            # Add all vertices to the vertex group.
+            vertex_group.add(range(len(bpy_object.data.vertices)), 1.0, 'REPLACE')
+            # Add an armature modifier if it doesn't exist.
+            armature_modifier = bpy_object.modifiers.get('Armature', None)
+            if armature_modifier is None:
+                armature_modifier = bpy_object.modifiers.new(name='Armature', type='ARMATURE')
+                armature_modifier.object = armature_object
+        return {'FINISHED'}
+
 classes = (
     BDK_OT_install_dependencies,
     BDK_OT_select_all_of_active_class,
     BDK_OT_fix_bsp_import_materials,
     BDK_OT_generate_node_code,
     BDK_OT_force_node_tree_rebuild,
+    BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier,
 )
