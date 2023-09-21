@@ -764,7 +764,7 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Face Distribute Random Density'),
         ('INPUT', 'NodeSocketFloat', 'Face Distribute Poisson Distance Min'),
         ('INPUT', 'NodeSocketFloat', 'Face Distribute Poisson Density Max'),
-        ('INPUT', 'NodeSocketInt', 'Face Distribute Poisson Density Factor'),
+        ('INPUT', 'NodeSocketFloat', 'Face Distribute Poisson Density Factor'),
         ('INPUT', 'NodeSocketInt', 'Face Distribute Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
         ('OUTPUT', 'NodeSocketGeometry', 'Points')
