@@ -227,14 +227,14 @@ def ensure_node_tree(name: str,
         node_tree = bpy.data.node_groups.new(name=name, type=node_group_type)
 
     def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str, socket_type: str):
-        for index, item in enumerate(node_tree.interface.ui_items):
+        for index, item in enumerate(node_tree.interface.items_tree):
             if item.item_type == 'SOCKET' and item.in_out ==  in_out and item.name == name and item.socket_type == socket_type:
                 return item
         return None
 
     # Compare the inputs and outputs of the node tree with the given inputs and outputs.
     # If they are different, clear the inputs and outputs and add the new ones.
-    node_tree_items = set(map(lambda x: (x.in_out, x.bl_socket_idname, x.name), node_tree.interface.ui_items))
+    node_tree_items = set(map(lambda x: (x.in_out, x.bl_socket_idname, x.name), node_tree.interface.items_tree))
 
     # For items that do not exist in the node tree, add them.
     items_to_add = (items - node_tree_items)

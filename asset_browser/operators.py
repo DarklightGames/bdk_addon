@@ -16,7 +16,7 @@ class BDK_OT_asset_import_data_linked(Operator):
         if context.mode != 'OBJECT':
             cls.poll_message_set('Must be in object mode.')
             return False
-        assets: Sequence[FileSelectEntry] = context.selected_asset_files
+        assets: Sequence[FileSelectEntry] = context.selected_assets
         if len(assets) == 0:
             cls.poll_message_set('No assets selected.')
             return False
@@ -28,7 +28,7 @@ class BDK_OT_asset_import_data_linked(Operator):
     def execute(self, context: Context) -> Set[str]:
         library_path: Path
         asset_libraries: bpy_prop_collection[UserAssetLibrary] = context.preferences.filepaths.asset_libraries
-        assets: Sequence[FileSelectEntry] = context.selected_asset_files
+        assets: Sequence[FileSelectEntry] = context.selected_assets
 
         linked_count = 0
         skipped_count = 0
