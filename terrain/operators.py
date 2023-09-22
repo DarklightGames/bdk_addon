@@ -652,6 +652,17 @@ class BDK_OT_terrain_info_repair(Operator):
         return {'FINISHED'}
 
 
+def poll_selected_terrain_layer_node_is_paint(cls, context):
+    node = get_selected_terrain_paint_layer_node(context)
+    if node is None:
+        cls.poll_message_set('No node selected')
+        return False
+    if node.id not in node.terrain_info_object.data.attributes:
+        cls.poll_message_set(f'Layer node attribute {node.id} does not exist')
+        return False
+    return node and node.type == 'PAINT'
+
+
 class BDK_OT_terrain_paint_layer_node_fill(Operator):
     bl_idname = 'bdk.terrain_paint_layer_node_fill'
     bl_label = 'Fill Terrain Paint Layer Node'
@@ -662,11 +673,7 @@ class BDK_OT_terrain_paint_layer_node_fill(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        node = get_selected_terrain_paint_layer_node(context)
-        if node.id not in node.terrain_info_object.data.attributes:
-            cls.poll_message_set(f'Layer node attribute {node.id} does not exist')
-            return {'CANCELLED'}
-        return node and node.type == 'PAINT'
+        return poll_selected_terrain_layer_node_is_paint(cls, context)
 
     def execute(self, context: Context):
         node = get_selected_terrain_paint_layer_node(context)
@@ -689,11 +696,7 @@ class BDK_OT_terrain_paint_layer_node_invert(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        node = get_selected_terrain_paint_layer_node(context)
-        if node.id not in node.terrain_info_object.data.attributes:
-            cls.poll_message_set(f'Layer node attribute {node.id} does not exist')
-            return False
-        return node and node.type == 'PAINT'
+        return poll_selected_terrain_layer_node_is_paint(cls, context)
 
     def execute(self, context: Context):
         node = get_selected_terrain_paint_layer_node(context)

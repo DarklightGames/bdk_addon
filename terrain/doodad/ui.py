@@ -571,7 +571,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
                 flow.prop(scatter_layer_object, 'scale_random_uniform_min', text='Random Scale Min')
                 flow.prop(scatter_layer_object, 'scale_random_uniform_max', text='Max')
             elif scatter_layer_object.scale_mode == 'NON_UNIFORM':
-                flow.prop(scatter_layer_object, 'scale_random_min', text='Scale Min')
+                flow.prop(scatter_layer_object, 'scale_random_min', text='Random Scale Min')
                 flow.prop(scatter_layer_object, 'scale_random_max', text='Max')
 
             flow.prop(scatter_layer_object, 'scale_seed', text='Seed')

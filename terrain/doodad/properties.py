@@ -273,9 +273,9 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
         ('VERT', 'Vertex', '', 'VERTEXSEL', 1),
     ), default='FACE')
     mesh_face_distribute_method: EnumProperty(name='Distribution Method', items=(
-        ('RANDOM', 'Random', ''),
-        ('POISSON_DISK', 'Poisson Disk', ''),
-    ), default='RANDOM')
+        ('RANDOM', 'Random', 'Points will be distributed randomly'),
+        ('POISSON_DISK', 'Poisson Disk', 'Poisson-disc sampling produces points that are tightly-packed, but no closer to each other than a specified minimum distance, resulting in a more natural pattern'),
+    ), default='POISSON_DISK')
     mesh_face_distribute_random_density: FloatProperty(name='Density', default=0.001, min=0.0, soft_max=0.1)
     mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(1.0), min=0.0, subtype='DISTANCE')
     mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)
