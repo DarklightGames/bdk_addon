@@ -71,7 +71,7 @@ def ensure_sculpt_noise_node_group():
 
 def ensure_sculpt_node_group() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT','NodeSocketFloat', 'Distance'),
         ('INPUT','NodeSocketInt', 'Interpolation Type'),
         ('INPUT','NodeSocketFloat', 'Radius'),
@@ -86,6 +86,7 @@ def ensure_sculpt_node_group() -> NodeTree:
         ('INPUT','NodeSocketBool', 'Use Noise'),
         ('INPUT','NodeSocketFloat', 'Noise Radius Factor'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):

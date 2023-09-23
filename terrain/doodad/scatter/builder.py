@@ -3,6 +3,7 @@ import uuid
 import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, Node
 
+from ....helpers import ensure_name_unique
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes
 
@@ -11,6 +12,7 @@ def add_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad') -> 'BDK_PG_terrai
     scatter_layer = terrain_doodad.scatter_layers.add()
     scatter_layer.id = uuid.uuid4().hex
     scatter_layer.terrain_doodad_object = terrain_doodad.object
+    scatter_layer.name = ensure_name_unique(scatter_layer.name, [x.name for x in terrain_doodad.scatter_layers])
 
     return scatter_layer
 
@@ -120,12 +122,13 @@ def _add_scatter_layer_object_driver_ex(
 
 def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT','NodeSocketFloat', 'Factor'),
         ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
         ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
-        ('INPUT', 'NodeSocketVector', 'Rotation Offset')
+        ('INPUT', 'NodeSocketVector', 'Rotation Offset'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry')
     }
 
     def build_function(node_tree: NodeTree):
@@ -217,9 +220,10 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
 
 def ensure_snap_to_terrain_node_tree() -> NodeTree:
     items = {
-        ('BOTH',  'NodeSocketGeometry', 'Geometry'),
+        ('INPUT',  'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketBool', 'Mute'),
+        ('OUTPUT',  'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -385,10 +389,11 @@ def ensure_vector_component_node_tree() -> NodeTree:
 
 def ensure_delete_random_points_node_tree() -> NodeTree:
     inputs = {
-        ('BOTH', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketFloat', 'Factor'),
         ('INPUT', 'NodeSocketInt', 'Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -508,7 +513,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
 
 def ensure_select_object_index_node_tree() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketInt', 'Object Count'),
         ('INPUT', 'NodeSocketInt', 'Object Select Mode'),
         ('INPUT', 'NodeSocketInt', 'Object Index Offset'),
@@ -522,6 +527,7 @@ def ensure_select_object_index_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Random Weight 5'),
         ('INPUT', 'NodeSocketFloat', 'Random Weight 6'),
         ('INPUT', 'NodeSocketFloat', 'Random Weight 7'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -590,11 +596,12 @@ def ensure_select_object_index_node_tree() -> NodeTree:
 
 def ensure_terrain_normal_offset_node_tree() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Min'),
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Max'),
         ('INPUT', 'NodeSocketInt', 'Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -632,7 +639,7 @@ def ensure_terrain_normal_offset_node_tree() -> NodeTree:
 
 def ensure_scatter_layer_object_node_tree() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketInt', 'Object Index'),
         ('INPUT', 'NodeSocketInt', 'Scale Mode'),
@@ -653,6 +660,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketVector', 'Rotation Offset'),
         ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
         ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
     }
 
     def build_function(node_tree: NodeTree):

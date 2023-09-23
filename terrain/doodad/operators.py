@@ -1,7 +1,8 @@
 import uuid
 
 import bpy
-from bpy.types import Operator, Context, Collection, Event, Object
+import mathutils
+from bpy.types import Operator, Context, Collection, Event, Object, Mesh
 from bpy.props import EnumProperty
 
 from .properties import ensure_terrain_info_modifiers
@@ -53,7 +54,6 @@ class BDK_OT_terrain_doodad_add(Operator):
         collection: Collection = terrain_info_object.users_collection[0]
 
         collection.objects.link(terrain_doodad)
-        terrain_doodad.parent = terrain_info_object
 
         # Deselect the terrain info object.
         terrain_info_object.select_set(False)
@@ -87,7 +87,7 @@ def ensure_terrain_doodad_layer_indices(terrain_doodad):
 
 
 class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
-    bl_label = 'Add Sculpt Component'
+    bl_label = 'Add Sculpt Layer'
     bl_idname = 'bdk.terrain_doodad_sculpt_layer_add'
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -117,13 +117,14 @@ class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
 
 
 class BDK_OT_terrain_doodad_sculpt_layer_remove(Operator):
-    bl_label = 'Remove Sculpt Component'
+    bl_label = 'Remove Sculpt Layer'
     bl_idname = 'bdk.terrain_doodad_sculpt_layer_remove'
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Remove the selected sculpt layer'
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected_sculpt_layer(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object
@@ -137,41 +138,6 @@ class BDK_OT_terrain_doodad_sculpt_layer_remove(Operator):
         ensure_terrain_doodad_layer_indices(terrain_doodad)
 
         # Update the geometry node tree.
-        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
-
-        return {'FINISHED'}
-
-
-# Add an operator that moves the sculpting component up and down in the list.
-class BDK_OT_terrain_doodad_sculpt_layer_move(Operator):
-    bl_idname = 'bdk.terrain_doodad_sculpt_layer_move'
-    bl_label = 'Move Sculpt Component'
-    bl_options = {'REGISTER', 'UNDO'}
-
-    direction: bpy.props.EnumProperty(
-        name='Direction',
-        items=(
-            ('UP', 'Up', ''),
-            ('DOWN', 'Down', '')
-        )
-    )
-
-    @classmethod
-    def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
-
-    def execute(self, context: Context):
-        terrain_doodad_object = context.active_object
-        terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
-        sculpt_layers_index = terrain_doodad.sculpt_layers_index
-        if self.direction == 'UP':
-            terrain_doodad.sculpt_layers.move(sculpt_layers_index, sculpt_layers_index - 1)
-            terrain_doodad.sculpt_layers_index -= 1
-        elif self.direction == 'DOWN':
-            terrain_doodad.sculpt_layers.move(sculpt_layers_index, sculpt_layers_index + 1)
-            terrain_doodad.sculpt_layers_index += 1
-
-        ensure_terrain_doodad_layer_indices(terrain_doodad)
         ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
@@ -249,16 +215,23 @@ class BDK_OT_terrain_doodad_bake(Operator):
         name='Bake Options',
         description='Bake options',
         items=(
-            ('SCULPT', 'Sculpt', ''),
-            ('PAINT', 'Paint', ''),
-            ('SCATTER', 'Scatter', '')
+            ('SCULPT', 'Sculpt', 'Sculpting layers will be baked to the terrain geometry'),
+            ('PAINT', 'Paint', 'Paint layers will be baked to the associated paint layer nodes as new paint nodes'),
+            ('SCATTER', 'Scatter', 'Scatter objects will be instances as new objects')
         ),
         default={'SCULPT', 'PAINT', 'SCATTER'},
         options={'ENUM_FLAG'}
     )
     should_merge_down_nodes: bpy.props.BoolProperty(
         name='Merge Down Nodes',
-        description='Merge down the nodes after baking',
+        description='Merge down paint and deco nodes after baking when possible.\n\nBaked paint layers will be added '
+                    'to the top of the stack, and merged with the node below if it has the same operation',
+        default=True
+    )
+
+    should_add_scatter_objects_to_collection: bpy.props.BoolProperty(
+        name='Add Scatter Objects to Collection',
+        description='Add the scatter objects to a collection',
         default=True
     )
 
@@ -277,6 +250,7 @@ class BDK_OT_terrain_doodad_bake(Operator):
         layout.prop(self, 'layers')
         layout.prop(self, 'should_delete_terrain_doodad')
         layout.prop(self, 'should_merge_down_nodes')
+        layout.prop(self, 'should_add_scatter_objects_to_collection')
 
     def execute(self, context: Context):
         """
@@ -309,8 +283,6 @@ class BDK_OT_terrain_doodad_bake(Operator):
         context.view_layer.objects.active = terrain_info_object
         terrain_info_object.select_set(True)
 
-        # TODO: we bake paint & deco layers to attributes, then add nodes to the associated layers with the ID of the attributes.
-        # QUESTION: where are the attribute IDs generated?
         # Create a new modifier for the terrain doodad bake.
         bake_node_tree, paint_layer_attribute_map = create_terrain_doodad_bake_node_tree(terrain_doodad, self.layers)
 
@@ -323,27 +295,58 @@ class BDK_OT_terrain_doodad_bake(Operator):
         bpy.ops.object.modifier_apply(modifier=terrain_doodad.id)
 
         # Create new terrain paint nodes for each paint layer.
-        for doodad_paint_layer in terrain_doodad.paint_layers:
-            nodes = get_terrain_doodad_paint_layer_nodes(doodad_paint_layer)
-            if nodes is None:
-                continue
-            node: BDK_PG_terrain_layer_node = nodes.add()
-            node.terrain_info_object = terrain_info_object
-            # The node ID is synonymous with the attribute ID.
-            # Set this new node's name to the attribute ID of the baked paint layer.
-            node.id = paint_layer_attribute_map[doodad_paint_layer.id]
-            node.type = 'PAINT'
-            node.operation = doodad_paint_layer.operation
-            node.name = terrain_doodad_object.name
-            node.paint_layer_name = doodad_paint_layer.paint_layer_name
+        if 'PAINT' in self.layers:
+            for doodad_paint_layer in terrain_doodad.paint_layers:
+                nodes = get_terrain_doodad_paint_layer_nodes(doodad_paint_layer)
+                if nodes is None:
+                    continue
+                node: BDK_PG_terrain_layer_node = nodes.add()
+                node.terrain_info_object = terrain_info_object
+                # The node ID is synonymous with the attribute ID.
+                # Set this new node's name to the attribute ID of the baked paint layer.
+                node.id = paint_layer_attribute_map[doodad_paint_layer.id]
+                node.type = 'PAINT'
+                node.operation = doodad_paint_layer.operation
+                node.name = terrain_doodad_object.name
+                node.paint_layer_name = doodad_paint_layer.paint_layer_name
 
-            # Move the new node to the top of the list.
-            nodes.move(len(nodes) - 1, 0)
+                # Move the new node to the top of the list.
+                nodes.move(len(nodes) - 1, 0)
 
-            if self.should_merge_down_nodes:
-                # If the node below us has the same operation, merge it down.
-                if len(nodes) > 1 and nodes[1].operation == node.operation:  # TODO: make this a "can merge down" function
-                    merge_down_terrain_layer_node_data(terrain_info_object, nodes, 0)
+                if self.should_merge_down_nodes:
+                    # If the node below us has the same operation, merge it down.
+                    if len(nodes) > 1 and nodes[1].operation == node.operation:  # TODO: make this a "can merge down" function
+                        merge_down_terrain_layer_node_data(terrain_info_object, nodes, 0)
+
+        if 'SCATTER' in self.layers:
+
+            if self.should_add_scatter_objects_to_collection:
+                # Add a new collection with the name of the terrain doodad.
+                scatter_object_collection = bpy.data.collections.new(terrain_doodad_object.name)
+                context.scene.collection.children.link(scatter_object_collection)
+            else:
+                scatter_object_collection = terrain_doodad_object.users_collection[0]
+
+            for scatter_layer in terrain_doodad.scatter_layers:
+                depsgraph = context.evaluated_depsgraph_get()
+                seed_object_eval = scatter_layer.seed_object.evaluated_get(depsgraph)
+
+                # Create a new linked duplicate for each scatter layer object.
+                mesh_data: Mesh = seed_object_eval.data
+                for vertex_index, vertex in enumerate(mesh_data.vertices):
+                    object_index = mesh_data.attributes['object_index'].data[vertex_index].value
+
+                    location = vertex.co
+                    rotation = mathutils.Euler(mesh_data.attributes['rotation'].data[vertex_index].vector)
+                    scale = mesh_data.attributes['scale'].data[vertex_index].vector
+
+                    object_matrix = terrain_doodad_object.matrix_world @ mathutils.Matrix.LocRotScale(location, rotation, scale)
+
+                    new_object = bpy.data.objects.new('StaticMesh', scatter_layer.objects[object_index].object.data)
+                    new_object.matrix_local = object_matrix
+
+                    # Link the new object to scatter object collection.
+                    scatter_object_collection.objects.link(new_object)
 
         # Delete the bake node tree.
         bpy.data.node_groups.remove(bake_node_tree)
@@ -402,7 +405,7 @@ class BDK_OT_terrain_doodad_paint_layer_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object is not None and context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected_paint_layer(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object
@@ -428,7 +431,7 @@ class BDK_OT_terrain_doodad_paint_layer_duplicate(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected_paint_layer(cls, context)
 
     def execute(self, context: Context):
         # TODO: wrap this into a function.
@@ -451,14 +454,69 @@ class BDK_OT_terrain_doodad_paint_layer_duplicate(Operator):
         return {'FINISHED'}
 
 
+def get_terrain_doodad_selected_sculpt_layer(context: Context):
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    if len(terrain_doodad.sculpt_layers) == 0 or terrain_doodad.sculpt_layers_index < 0:
+        return None
+    return terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index]
+
+
+def poll_has_terrain_doodad_selected(cls, context: Context) -> bool:
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    if terrain_doodad is None:
+        cls.poll_message_set('Must have a terrain doodad selected')
+        return False
+    return True
+
+def poll_has_terrain_doodad_selected_sculpt_layer(cls, context: Context) -> bool:
+    if not poll_has_terrain_doodad_selected(cls, context):
+        return False
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    if len(terrain_doodad.sculpt_layers) == 0 or terrain_doodad.sculpt_layers_index < 0:
+        cls.poll_message_set('Must have a sculpt layer selected')
+        return False
+    return True
+
+
+def poll_has_terrain_doodad_selected_paint_layer(cls, context: Context) -> bool:
+    if not poll_has_terrain_doodad_selected(cls, context):
+        return False
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    if len(terrain_doodad.paint_layers) == 0 or terrain_doodad.paint_layers_index < 0:
+        cls.poll_message_set('Must have a paint layer selected')
+        return False
+    return True
+
+
+def poll_has_terrain_doodad_selected_scatter_layer(cls, context: Context) -> bool:
+    if not poll_has_terrain_doodad_selected(cls, context):
+        return False
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    if len(terrain_doodad.scatter_layers) == 0 or terrain_doodad.scatter_layers_index < 0:
+        cls.poll_message_set('Must have a sculpt layer selected')
+        return False
+    return True
+
+def poll_has_terrain_doodad_selected_scatter_layer_object(cls, context: Context) -> bool:
+    if not poll_has_terrain_doodad_selected_scatter_layer(cls, context):
+        return False
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+    if len(scatter_layer.objects) == 0 or scatter_layer.objects_index < 0:
+        cls.poll_message_set('Must have a scatter layer object selected')
+        return False
+    return True
+
+
 class BDK_OT_terrain_doodad_sculpt_layer_duplicate(Operator):
-    bl_label = 'Duplicate Sculpt Component'
+    bl_label = 'Duplicate Sculpt Layers'
     bl_idname = 'bdk.terrain_doodad_sculpt_layer_duplicate'
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Duplicate the selected sculpt layer'
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected_sculpt_layer(cls, context)
 
     def execute(self, context: Context):
         terrain_info_object = context.active_object
@@ -506,7 +564,7 @@ class BDK_OT_terrain_doodad_delete(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object and context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected(cls, context)
 
     def execute(self, context: Context):
         delete_terrain_doodad(context, context.active_object)
@@ -543,7 +601,7 @@ class BDK_OT_terrain_doodad_scatter_layer_add(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object
@@ -574,7 +632,7 @@ class BDK_OT_terrain_doodad_scatter_layer_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected_scatter_layer(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object
@@ -622,8 +680,7 @@ class BDK_OT_terrain_doodad_scatter_layer_objects_add(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        return terrain_doodad and terrain_doodad.scatter_layers and terrain_doodad.scatter_layers_index >= 0
+        return poll_has_terrain_doodad_selected_scatter_layer(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object
@@ -649,8 +706,7 @@ class BDK_OT_terrain_doodad_scatter_layer_objects_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        return terrain_doodad and terrain_doodad.scatter_layers and terrain_doodad.scatter_layers_index >= 0
+        return poll_has_terrain_doodad_selected_scatter_layer_object(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad = get_terrain_doodad(context.active_object)
@@ -674,8 +730,7 @@ class BDK_OT_terrain_doodad_scatter_layer_duplicate(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        return terrain_doodad and terrain_doodad.scatter_layers and terrain_doodad.scatter_layers_index >= 0
+        return poll_has_terrain_doodad_selected_scatter_layer(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad = get_terrain_doodad(context.active_object)
@@ -702,8 +757,7 @@ class BDK_OT_terrain_doodad_scatter_layer_objects_duplicate(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        return terrain_doodad and terrain_doodad.scatter_layers and terrain_doodad.scatter_layers_index >= 0
+        return poll_has_terrain_doodad_selected_scatter_layer_object(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad = get_terrain_doodad(context.active_object)
@@ -747,6 +801,23 @@ class BDK_OT_terrain_doodad_bake_debug(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_doodad_demote(Operator):
+    bl_idname = 'bdk.terrain_doodad_demote'
+    bl_label = 'Demote Terrain Doodad'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_doodad(context)
+
+    def execute(self, context: Context):
+        # Remove the terrain doodad from object.
+        terrain_doodad_object = context.active_object
+        terrain_doodad_object.bdk.type = 'NONE'
+
+        return {'FINISHED'}
+
+
 # TODO: split the sculpt, paint and scatter layers into their own files.
 classes = (
     BDK_OT_convert_to_terrain_doodad,
@@ -755,10 +826,10 @@ classes = (
     BDK_OT_terrain_doodad_bake_debug,
     BDK_OT_terrain_doodad_delete,
     BDK_OT_terrain_doodad_duplicate,
+    BDK_OT_terrain_doodad_demote,
 
     BDK_OT_terrain_doodad_sculpt_layer_add,
     BDK_OT_terrain_doodad_sculpt_layer_remove,
-    BDK_OT_terrain_doodad_sculpt_layer_move,
     BDK_OT_terrain_doodad_sculpt_layer_duplicate,
 
     BDK_OT_terrain_doodad_paint_layer_add,

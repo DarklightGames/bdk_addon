@@ -657,10 +657,13 @@ def poll_selected_terrain_layer_node_is_paint(cls, context):
     if node is None:
         cls.poll_message_set('No node selected')
         return False
+    if node.type != 'PAINT':
+        cls.poll_message_set('Selected node is not a paint layer node')
+        return False
     if node.id not in node.terrain_info_object.data.attributes:
         cls.poll_message_set(f'Layer node attribute {node.id} does not exist')
         return False
-    return node and node.type == 'PAINT'
+    return True
 
 
 class BDK_OT_terrain_paint_layer_node_fill(Operator):
@@ -933,8 +936,8 @@ class BDK_OT_terrain_layer_paint_node_move_to_group(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        # TODO: make a function that checks if we have a selected paint layer node
-        return True
+        cls.poll_message_set('Not implemented yet')
+        return False
 
     def invoke(self, context: Context, event: Event):
         return context.window_manager.invoke_props_dialog(self)

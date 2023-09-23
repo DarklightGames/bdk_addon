@@ -11,7 +11,7 @@ from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_do
     BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
     BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_bake_debug, \
-    BDK_OT_terrain_doodad_scatter_layer_objects_duplicate
+    BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, BDK_OT_terrain_doodad_demote
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -38,7 +38,7 @@ class BDK_UL_terrain_doodad_paint_layers(UIList):
 
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
         if item.layer_type == 'PAINT':
-            layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='VPAINT_HLT')
+            layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='BDK_UNREAL')
         elif item.layer_type == 'DECO':
             layout.label(text=item.deco_layer_name if item.deco_layer_name else '<no layer selected>', icon='MONKEY')
         layout.prop(item, 'operation', emboss=False, text='')
@@ -155,6 +155,7 @@ class BDK_PT_terrain_doodad_operators(Panel):
         self.layout.operator(BDK_OT_terrain_doodad_bake.bl_idname, icon='RENDER_RESULT')
         self.layout.operator(BDK_OT_terrain_doodad_duplicate.bl_idname, icon='DUPLICATE')
         self.layout.operator(BDK_OT_terrain_doodad_delete.bl_idname, icon='X')
+        self.layout.operator(BDK_OT_terrain_doodad_demote.bl_idname, icon='TRIA_DOWN')
 
 
 class BDK_PT_terrain_doodad_debug(Panel):
@@ -202,6 +203,11 @@ class BDK_PT_terrain_doodad_advanced(Panel):
         flow.prop(terrain_doodad, 'sort_order')
 
 
+def has_terrain_doodad_sculpt_layer_selected(context: Context):
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    return terrain_doodad is not None and len(terrain_doodad.sculpt_layers) > 0 and terrain_doodad.sculpt_layers_index >= 0
+
+
 class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
     bl_idname = 'BDK_PT_terrain_doodad_sculpt_layer_settings'
     bl_label = 'Settings'
@@ -213,7 +219,7 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object and context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return has_terrain_doodad_sculpt_layer_selected(context)
 
     def draw(self, context: 'Context'):
         layout = self.layout
@@ -647,7 +653,9 @@ class BDK_PT_terrain_doodad_paint_layer_debug(Panel):
 
     @classmethod
     def poll(cls, context: 'Context'):
-        # TODO: also check if we have a paint layer selected
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        if not terrain_doodad or len(terrain_doodad.paint_layers) == 0 or terrain_doodad.paint_layers_index < 0:
+            return False
         return should_show_bdk_developer_extras(context)
 
     def draw(self, context: 'Context'):
@@ -670,7 +678,9 @@ class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
 
     @classmethod
     def poll(cls, context: 'Context'):
-        # TODO: also check if we have a paint layer selected
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        if not terrain_doodad or len(terrain_doodad.sculpt_layers) == 0 or terrain_doodad.sculpt_layers_index < 0:
+            return False
         return should_show_bdk_developer_extras(context)
 
     def draw(self, context: 'Context'):

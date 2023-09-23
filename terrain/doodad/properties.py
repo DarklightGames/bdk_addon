@@ -293,7 +293,7 @@ class BDK_PG_terrain_doodad(PropertyGroup):
     is_3d: BoolProperty(name='3D', default=False)
     paint_layers: CollectionProperty(name='Paint Layers', type=BDK_PG_terrain_doodad_paint_layer)
     paint_layers_index: IntProperty()
-    sculpt_layers: CollectionProperty(name='Sculpt Components', type=BDK_PG_terrain_doodad_sculpt_layer)
+    sculpt_layers: CollectionProperty(name='Sculpt Layers', type=BDK_PG_terrain_doodad_sculpt_layer)
     sculpt_layers_index: IntProperty()
 
     # TODO: not yet implemented

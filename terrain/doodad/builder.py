@@ -64,12 +64,13 @@ def ensure_distance_to_curve_node_group() -> NodeTree:
 
 def ensure_distance_noise_node_group() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketFloat', 'Distance'),
+        ('INPUT', 'NodeSocketFloat', 'Distance'),
         ('INPUT', 'NodeSocketInt', 'Type'),
         ('INPUT', 'NodeSocketFloat', 'Factor'),
         ('INPUT', 'NodeSocketFloat', 'Distortion'),
         ('INPUT', 'NodeSocketFloat', 'Offset'),
         ('INPUT', 'NodeSocketBool', 'Use Noise'),
+        ('OUTPUT', 'NodeSocketFloat', 'Distance'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -122,7 +123,7 @@ def ensure_distance_noise_node_group() -> NodeTree:
 
 def ensure_doodad_paint_node_group() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
         ('INPUT', 'NodeSocketInt', 'Operation'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
@@ -135,6 +136,7 @@ def ensure_doodad_paint_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Distance Noise Distortion'),
         ('INPUT', 'NodeSocketFloat', 'Distance Noise Offset'),
         ('INPUT', 'NodeSocketBool', 'Use Distance Noise'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -701,7 +703,10 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
 
 
 def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
-    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -790,7 +795,10 @@ def _add_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSock
 
 
 def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
-    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -807,7 +815,10 @@ def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_doodads:
 
 
 def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
-    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -829,7 +840,10 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
     :param terrain_doodad: The terrain doodad to make a baking node tree for.
     :return: The terrain doodad baking node tree and a mapping of the paint layer IDs to the baked attribute names.
     """
-    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry')
+    }
 
     # Build a mapping of the paint layer IDs to the baked attribute names.
     attribute_map: Dict[str, str] = {}

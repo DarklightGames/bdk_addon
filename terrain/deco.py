@@ -85,7 +85,10 @@ def add_terrain_layer_node_driver(
 
 
 def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index: int, dataptr_id: str, nodes: Iterable) -> NodeTree:
-    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry')
+    }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -246,11 +249,12 @@ def add_density_from_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', node_
 
 def ensure_terrain_layer_node_density_node_group() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketFloat', 'Value'),
+        ('INPUT', 'NodeSocketFloat', 'Value'),
         ('INPUT', 'NodeSocketFloat', 'Factor'),
         ('INPUT', 'NodeSocketBool', 'Use Map Range'),
         ('INPUT', 'NodeSocketFloat', 'Map Range From Min'),
         ('INPUT', 'NodeSocketFloat', 'Map Range From Max'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -512,7 +516,10 @@ def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, deco_l
 
 
 def _create_terrain_layer_convert_node_to_paint_node_node_tree(node, dataptr_name: str, dataptr_index: int, node_index: int) -> NodeTree:
-    items = {('BOTH', 'NodeSocketGeometry', 'Geometry')}
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

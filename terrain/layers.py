@@ -2,7 +2,7 @@ import bpy
 import uuid
 from bpy.types import Object
 
-from ..helpers import get_terrain_info
+from ..helpers import get_terrain_info, ensure_name_unique
 from .builder import build_terrain_material
 from .properties import BDK_PG_terrain_paint_layer
 
@@ -21,7 +21,7 @@ def add_terrain_paint_layer(terrain_info_object: Object, name: str) -> BDK_PG_te
     paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers.add()
     paint_layer.terrain_info_object = terrain_info_object
     paint_layer.id = uuid.uuid4().hex
-    paint_layer.name = name
+    paint_layer.name = ensure_name_unique(name, [x.name for x in terrain_info.paint_layers])
 
     # Create the associated modifier and node group.
     paint_layer_modifier = terrain_info_object.modifiers.new(name=paint_layer.id, type='NODES')

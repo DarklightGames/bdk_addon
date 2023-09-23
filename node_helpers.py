@@ -90,8 +90,8 @@ def add_operation_switch_nodes(
 def ensure_interpolation_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
-        ('BOTH', 'NodeSocketFloat', 'Value'),
-        ('BOTH', 'NodeSocketFloat', 'Value'),
+        ('INPUT', 'NodeSocketFloat', 'Value'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -239,7 +239,7 @@ def ensure_node_tree(name: str,
     # For items that do not exist in the node tree, add them.
     items_to_add = (items - node_tree_items)
     for in_out, socket_type, name in items_to_add:
-        node_tree.interface.new_socket(name, in_out={in_out}, socket_type=socket_type)
+        node_tree.interface.new_socket(name, in_out=in_out, socket_type=socket_type)
 
     # For items that exist in the node tree but not in the given items, remove them.
     inputs_to_remove = (node_tree_items - items)
@@ -257,7 +257,6 @@ def ensure_node_tree(name: str,
     else:
         build_hash_changed = node_tree.bdk.build_hash != build_hash
         if build_hash_changed:
-            print(f'Build hash changed for node tree {name} from {node_tree.bdk.build_hash} to {build_hash}')
             should_build = True
 
     if should_build:
@@ -298,7 +297,7 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
 
 def ensure_curve_modifier_node_tree() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketInt', 'Trim Mode'),
         ('INPUT', 'NodeSocketFloat', 'Trim Factor Start'),
         ('INPUT', 'NodeSocketFloat', 'Trim Factor End'),
@@ -306,6 +305,7 @@ def ensure_curve_modifier_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Trim Length End'),
         ('INPUT', 'NodeSocketFloat', 'Normal Offset'),
         ('INPUT', 'NodeSocketBool', 'Is Curve Reversed'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -348,8 +348,9 @@ def ensure_curve_modifier_node_tree() -> NodeTree:
 
 def ensure_curve_normal_offset_node_tree() -> NodeTree:
     node_tree_items = {
-        ('BOTH', 'NodeSocketGeometry', 'Curve'),
-        ('INPUT', 'NodeSocketFloat', 'Normal Offset')
+        ('INPUT', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketFloat', 'Normal Offset'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
     }
 
     def build_function(node_tree: NodeTree):
@@ -397,12 +398,13 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
 
 def ensure_trim_curve_node_tree() -> NodeTree:
     items = {
-        ('BOTH', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketInt', 'Mode'),
         ('INPUT', 'NodeSocketFloat', 'Factor Start'),
         ('INPUT', 'NodeSocketFloat', 'Factor End'),
         ('INPUT', 'NodeSocketFloat', 'Length Start'),
         ('INPUT', 'NodeSocketFloat', 'Length End'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
     }
 
     def build_function(node_tree: NodeTree):
