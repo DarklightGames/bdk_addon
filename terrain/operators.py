@@ -20,7 +20,7 @@ from .doodad.builder import ensure_terrain_info_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte_color_attribute_data, \
     invert_byte_color_attribute_data, accumulate_byte_color_attribute_data, copy_simple_property_group, \
-    ensure_name_unique
+    ensure_name_unique, padded_roll
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
 from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node, \
@@ -952,42 +952,6 @@ class BDK_OT_terrain_layer_paint_node_move_to_group(Operator):
         return {'FINISHED'}
 
 
-def padded_roll(array, shift):
-    """
-    Pad the array with zeros in the direction of the shift, then roll the array and remove the padding.
-
-    For our purposes, the padding preserves the relationships between the terrain vertices and quad-level data (i.e.
-    holes & edge turns) as those quad-level data cross and wrap around the edges of the terrain during a shift.
-
-    :param array:
-    :param shift:
-    :return:
-    """
-    x = shift[0]
-    y = shift[1]
-    pad_x_sign = -1 if x < 0 else 1
-    pad_y_sign = -1 if y < 0 else 1
-    pad_x_negative = 1 if x < 0 else 0
-    pad_x_positive = 1 if x >= 0 else 0
-    pad_y_negative = 1 if y < 0 else 0
-    pad_y_positive = 1 if y >= 0 else 0
-    pad_width = (
-        (pad_x_negative, pad_x_positive),
-        (pad_y_negative, pad_y_positive)
-    )
-    array = numpy.pad(array, pad_width)
-    array = numpy.roll(array, shift, (1, 0))
-
-    x_start = 1 if pad_x_sign == -1 else 0
-    x_end = None if pad_x_sign == -1 else -1
-    y_start = 1 if pad_y_sign == -1 else 0
-    y_end = None if pad_y_sign == -1 else -1
-
-    array = array[x_start:x_end, y_start:y_end]
-
-    return array
-
-
 def terrain_shift_x_get(self):
     terrain_info = get_terrain_info(bpy.context.active_object)
     return int(self.x_distance / terrain_info.terrain_scale)
@@ -1007,13 +971,15 @@ class BDK_OT_terrain_info_translate(Operator):
     x_distance: FloatProperty(name='X Distance', subtype='DISTANCE')
     y_distance: FloatProperty(name='Y Distance', subtype='DISTANCE')
 
+    selected: BoolProperty(name='Selected Objects Only', default=False)
+
     data_types: EnumProperty(name='Data', items=(
+        ('OBJECTS', 'Actors', 'Shift objects'),
         ('HEIGHTMAP', 'Heightmap', 'Shift the heightmap'),
         ('PAINT_LAYERS', 'Paint Layers', 'Shift the paint layers'),
-        ('DOODADS', 'Doodads', 'Shift the doodads'),
+        ('QUAD_TESSELATION', 'Quad Tesselation', 'Shift the quad tesselation'),
         ('TERRAIN_HOLES', 'Terrain Holes', 'Shift the terrain holes'),
-        ('QUAD_TESSELATION', 'Quad Tesselation', 'Shift the quad tesselation')
-    ), default={'HEIGHTMAP', 'PAINT_LAYERS', 'DOODADS', 'TERRAIN_HOLES', 'QUAD_TESSELATION'}, options={'ENUM_FLAG'})
+    ), default={'OBJECTS', 'HEIGHTMAP', 'PAINT_LAYERS', 'QUAD_TESSELATION', 'TERRAIN_HOLES'}, options={'ENUM_FLAG'})
 
     @classmethod
     def poll(cls, context: Context):
@@ -1035,6 +1001,8 @@ class BDK_OT_terrain_info_translate(Operator):
         flow.prop(self, 'x')
         flow.prop(self, 'y')
         flow.separator()
+        flow.prop(self, 'selected')
+        flow.separator()
         flow.prop(self, 'data_types')
 
     def execute(self, context: Context):
@@ -1043,6 +1011,19 @@ class BDK_OT_terrain_info_translate(Operator):
 
         terrain_info_object = context.active_object
         terrain_info = get_terrain_info(terrain_info_object)
+
+        translation = mathutils.Vector((self.x * terrain_info.terrain_scale, self.y * terrain_info.terrain_scale, 0.0))
+
+        if 'OBJECTS' in self.data_types:
+            # Iterate over all other objects in the scene.
+            for obj in bpy.data.objects:
+                if obj.parent is not None:
+                    # We don't want to move objects that are parented to other objects, or else we will move them twice.
+                    continue
+                if self.selected and not obj.select_get():
+                    continue
+                if obj != terrain_info_object:
+                    obj.location += translation
 
         # Convert the z-values of the terrain info vertices to a numpy array.
         if 'HEIGHTMAP' in self.data_types:
@@ -1065,14 +1046,6 @@ class BDK_OT_terrain_info_translate(Operator):
                     attribute_values = numpy.roll(attribute_values, (self.x, self.y), axis=(1, 0))
                     # Reassign the attribute values.
                     attribute.data.foreach_set('color', attribute_values.flatten())
-
-        # Shift the doodads.
-        if 'DOODADS' in self.data_types:
-            translation = mathutils.Vector((self.x * terrain_info.terrain_scale, self.y * terrain_info.terrain_scale, 0.0))
-            # TODO: figure out the parenting here, if we parent the doodads to the terrain info object, then we don't need to shift them
-            for obj in bpy.data.objects:
-                if obj.bdk.type == 'TERRAIN_DOODAD' and obj.bdk.terrain_doodad.terrain_info_object == terrain_info_object:
-                    obj.location += translation
 
         # Shift the quad tesselation.
         if 'QUAD_TESSELATION' in self.data_types:

@@ -242,3 +242,39 @@ def accumulate_byte_color_attribute_data(attribute: ByteColorAttribute, other_at
     other_color_data.resize((vertex_count, 4))
     color_data[:, 0:3] = numpy.clip(color_data[:, 0:3] + other_color_data[:, 0:3], 0.0, 1.0)
     attribute.data.foreach_set('color', color_data.flatten())
+
+
+def padded_roll(array, shift):
+    """
+    Pad the array with zeros in the direction of the shift, then roll the array and remove the padding.
+
+    For our purposes, the padding preserves the relationships between the terrain vertices and quad-level data (i.e.
+    holes & edge turns) as those quad-level data cross and wrap around the edges of the terrain during a shift.
+
+    :param array:
+    :param shift:
+    :return:
+    """
+    x = shift[0]
+    y = shift[1]
+    pad_x_sign = -1 if x < 0 else 1
+    pad_y_sign = -1 if y < 0 else 1
+    pad_x_negative = 1 if x < 0 else 0
+    pad_x_positive = 1 if x >= 0 else 0
+    pad_y_negative = 1 if y < 0 else 0
+    pad_y_positive = 1 if y >= 0 else 0
+    pad_width = (
+        (pad_x_negative, pad_x_positive),
+        (pad_y_negative, pad_y_positive)
+    )
+    array = numpy.pad(array, pad_width)
+    array = numpy.roll(array, shift, (1, 0))
+
+    x_start = 1 if pad_x_sign == -1 else 0
+    x_end = None if pad_x_sign == -1 else -1
+    y_start = 1 if pad_y_sign == -1 else 0
+    y_end = None if pad_y_sign == -1 else -1
+
+    array = array[x_start:x_end, y_start:y_end]
+
+    return array
