@@ -231,7 +231,7 @@ class BDK_OT_terrain_doodad_bake(Operator):
 
     should_add_scatter_objects_to_collection: bpy.props.BoolProperty(
         name='Add Scatter Objects to Collection',
-        description='Add the scatter objects to a collection',
+        description='Add the scatter objects to a collection with the name of the terrain doodad',
         default=True
     )
 
