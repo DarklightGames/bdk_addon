@@ -35,7 +35,7 @@ class BDK_PT_terrain_info_operators(Panel):
 
     def draw(self, context: Context):
         self.layout.operator(BDK_OT_terrain_info_repair.bl_idname, icon='FILE_REFRESH', text='Repair')
-        self.layout.operator(BDK_OT_terrain_info_translate.bl_idname, icon='TRANSFORM_ORIGINS', text='Translate')
+        self.layout.operator(BDK_OT_terrain_info_shift.bl_idname, icon='TRANSFORM_ORIGINS', text='Translate')
 
 
 class BDK_PT_terrain_info_debug(Panel):

@@ -960,10 +960,10 @@ def terrain_shift_y_get(self):
     terrain_info = get_terrain_info(bpy.context.active_object)
     return int(self.y_distance / terrain_info.terrain_scale)
 
-class BDK_OT_terrain_info_translate(Operator):
-    bl_idname = 'bdk.terrain_translate'
+class BDK_OT_terrain_info_shift(Operator):
+    bl_idname = 'bdk.terrain_info_shift'
     bl_label = 'Shift Terrain'
-    bl_description = 'Shift the terrain elements (heightmap, paint layers, doodads, etc.) by the specified distance'
+    bl_description = 'Shift the terrain data (heightmap, paint layers, doodads, etc.) by the specified distance'
     bl_options = {'REGISTER', 'UNDO'}
 
     x: IntProperty(name='X', get=terrain_shift_x_get)
@@ -1106,7 +1106,7 @@ classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
     BDK_OT_terrain_info_repair,
-    BDK_OT_terrain_info_translate,
+    BDK_OT_terrain_info_shift,
 
     BDK_OT_terrain_paint_layer_add,
     BDK_OT_terrain_paint_layer_remove,
