@@ -173,6 +173,23 @@ class BDK_OT_terrain_doodad_duplicate(Operator):
         terrain_doodad.id = new_id
         terrain_doodad.object = object_copy
 
+        # Go through the layers and sub-objects and assign them new IDs.
+        for sculpt_layer in terrain_doodad.sculpt_layers:
+            sculpt_layer.id = uuid.uuid4().hex
+
+        for scatter_layer in terrain_doodad.scatter_layers:
+            scatter_layer.id = uuid.uuid4().hex
+            scatter_layer.seed_object = None
+            scatter_layer.sprout_object = None
+            for scatter_layer_object in scatter_layer.objects:
+                scatter_layer_object.id = uuid.uuid4().hex
+            ensure_scatter_layer(scatter_layer)
+
+        for paint_layer in terrain_doodad.paint_layers:
+            paint_layer.id = uuid.uuid4().hex
+
+        ensure_scatter_layer_modifiers(context, terrain_doodad)
+
         # Add a new modifier to the terrain info object.
         terrain_info_object = terrain_doodad.terrain_info_object
         ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
@@ -543,15 +560,15 @@ def delete_terrain_doodad(context: Context, terrain_doodad_object: Object):
     # Delete the modifier from the terrain info object.
     terrain_info_object = terrain_doodad.terrain_info_object
 
-    # Delete the terrain doodad.
-    bpy.data.objects.remove(terrain_doodad_object)
-
     # Delete the scatter layers objects.
     for scatter_layer in terrain_doodad.scatter_layers:
         if scatter_layer.seed_object:
             bpy.data.objects.remove(scatter_layer.seed_object)
         if scatter_layer.sprout_object:
             bpy.data.objects.remove(scatter_layer.sprout_object)
+
+    # Delete the terrain doodad.
+    bpy.data.objects.remove(terrain_doodad_object)
 
     # Rebuild the terrain doodad modifiers.
     ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)

@@ -7,7 +7,6 @@ from typing import cast
 import bpy
 import mathutils
 import numpy
-import numpy as np
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
 from bpy.types import Operator, Context, Mesh, Object, Event
 from bpy_extras.io_utils import ExportHelper
@@ -960,6 +959,7 @@ def terrain_shift_y_get(self):
     terrain_info = get_terrain_info(bpy.context.active_object)
     return int(self.y_distance / terrain_info.terrain_scale)
 
+
 class BDK_OT_terrain_info_shift(Operator):
     bl_idname = 'bdk.terrain_info_shift'
     bl_label = 'Shift Terrain'
@@ -1011,6 +1011,7 @@ class BDK_OT_terrain_info_shift(Operator):
 
         terrain_info_object = context.active_object
         terrain_info = get_terrain_info(terrain_info_object)
+        mesh_data: Mesh = cast(Mesh, terrain_info_object.data)
 
         translation = mathutils.Vector((self.x * terrain_info.terrain_scale, self.y * terrain_info.terrain_scale, 0.0))
 
@@ -1049,7 +1050,6 @@ class BDK_OT_terrain_info_shift(Operator):
 
         # Shift the quad tesselation.
         if 'QUAD_TESSELATION' in self.data_types:
-            mesh_data: Mesh = terrain_info_object.data
             quad_edge_turns = numpy.zeros(len(mesh_data.polygons), dtype=int)
             vertex_index = 0
             for y in range(terrain_info.y_size - 1):
@@ -1066,37 +1066,34 @@ class BDK_OT_terrain_info_shift(Operator):
 
             quad_edge_turns = quad_edge_turns.reshape((terrain_info.x_size - 1, terrain_info.y_size - 1))
 
-            from pprint import pprint
-            pprint(quad_edge_turns)
-
+            # Store the original quad edge turns.
             original_quad_edge_turns = quad_edge_turns.flatten()
+
+            # Do a padded roll to shift the quad edge turns.
             new_quad_edge_turns = padded_roll(quad_edge_turns, (self.x, self.y)).flatten()
 
-            # TODO: This seems to run into issues when the quad turns cross the boundaries.
+            # Turn the edges of the quads that have changed.
             for polygon_index in range(len(original_quad_edge_turns)):
                 if original_quad_edge_turns[polygon_index] != new_quad_edge_turns[polygon_index]:
                     polygon = mesh_data.polygons[polygon_index]
                     loops = [mesh_data.loops[i] for i in range(polygon.loop_start, polygon.loop_start + polygon.loop_total)]
-                    loop_vertex_indices = deque(map(lambda loop: loop.vertex_index, loops))
+                    loop_vertex_indices = deque(map(lambda l: l.vertex_index, loops))
                     loop_vertex_indices.rotate(1)
                     for (loop, vertex_index) in zip(loops, loop_vertex_indices):
                         loop.vertex_index = vertex_index
 
             mesh_data.update(calc_edges=True)
 
-            print(f'Polygon Count: {len(terrain_info_object.data.polygons)}')
-
         if 'TERRAIN_HOLES' in self.data_types:
             # Move the terrain holes (material indices).
             # Convert all the material indices to a numpy array (used for terrain holes)
             shape = (terrain_info.x_size - 1, terrain_info.y_size - 1)
             count = terrain_info.x_size - 1 * terrain_info.y_size - 1
-            material_indices = numpy.fromiter(map(lambda f: f.material_index, terrain_info_object.data.polygons),
+            material_indices = numpy.fromiter(map(lambda f: f.material_index, mesh_data.polygons),
                                               dtype=int, count=count).reshape(shape)  # Can we avoid the reshape?
-            # material_indices = numpy.roll(material_indices, (self.x, self.y), axis=(1, 0))
             material_indices = padded_roll(material_indices, (self.x, self.y))
             # Reassign the material indices.
-            for (face, material_index) in zip(terrain_info_object.data.polygons, material_indices.flat):
+            for (face, material_index) in zip(mesh_data.polygons, material_indices.flat):
                 face.material_index = material_index
 
         return {'FINISHED'}
