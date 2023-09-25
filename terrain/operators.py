@@ -11,6 +11,7 @@ from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolPrope
 from bpy.types import Operator, Context, Mesh, Object, Event
 from bpy_extras.io_utils import ExportHelper
 
+from ..data import move_direction_items
 from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
     create_terrain_paint_layer_node_convert_to_paint_layer_node_tree
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
@@ -22,8 +23,8 @@ from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte
     ensure_name_unique, padded_roll
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
-from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node, \
-    terrain_layer_node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, \
+from .properties import node_type_items, get_selected_terrain_paint_layer_node, \
+    node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, \
     BDK_PG_terrain_deco_layer
 
 
@@ -415,7 +416,7 @@ class BDK_OT_terrain_paint_layers_hide(Operator):
 def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node = nodes.add()
     node.id = uuid.uuid4().hex
-    node.name = terrain_layer_node_type_item_names[type]
+    node.name = node_type_item_names[type]
     node.terrain_info_object = terrain_info_object
     node.type = type
 
@@ -459,18 +460,13 @@ def move_terrain_layer_node(direction: str, nodes, nodes_index: int) -> int:
     return nodes_index
 
 
-def poll_is_active_object_terrain_doodad(cls, context):
+def poll_is_active_object_terrain_info(cls, context):
     if not is_active_object_terrain_info(context):
         cls.poll_message_set('The active object is not a terrain info object')
         return False
     # TODO: should also have a selected layer.
     return True
 
-
-terrain_layer_node_move_direction_items = [
-    ('UP', 'Up', 'Move the node up'),
-    ('DOWN', 'Down', 'Move the node down')
-]
 
 
 class BDK_OT_terrain_deco_layer_nodes_add(Operator):
@@ -479,11 +475,11 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
     bl_description = 'Add a node to the selected deco layer'
     bl_options = {'REGISTER', 'UNDO'}
 
-    type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
+    type: EnumProperty(name='Type', items=node_type_items)
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -507,7 +503,7 @@ class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(context.active_object)
@@ -528,11 +524,11 @@ class BDK_OT_terrain_deco_layer_nodes_move(Operator):
     bl_description = 'Move the selected layer node'
     bl_options = {'REGISTER', 'UNDO'}
 
-    direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
+    direction: EnumProperty(name='Direction', items=move_direction_items, default='UP')
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -553,11 +549,11 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
     bl_description = 'Add a node to the selected paint layer'
     bl_options = {'REGISTER', 'UNDO'}
 
-    type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
+    type: EnumProperty(name='Type', items=node_type_items)
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -579,7 +575,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -600,11 +596,11 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
     bl_description = 'Move the selected layer node'
     bl_options = {'REGISTER', 'UNDO'}
 
-    direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
+    direction: EnumProperty(name='Direction', items=move_direction_items, default='UP')
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)

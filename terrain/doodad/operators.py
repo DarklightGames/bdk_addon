@@ -5,14 +5,15 @@ import mathutils
 from bpy.types import Operator, Context, Collection, Event, Object, Mesh
 from bpy.props import EnumProperty
 
-from .properties import ensure_terrain_info_modifiers
+from ...data import move_direction_items
+from .properties import ensure_terrain_info_modifiers, BDK_PG_terrain_doodad_scatter_layer
 from .scatter.builder import ensure_scatter_layer_modifiers, add_scatter_layer_object, add_scatter_layer, \
     ensure_scatter_layer
 from ..operators import merge_down_terrain_layer_node_data
-from ..properties import BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id, \
-    get_terrain_info_deco_layer_by_id
+from ..properties import BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id, \
+    get_terrain_info_deco_layer_by_id, node_type_items, node_type_item_names
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad, \
-    is_active_object_terrain_doodad, should_show_bdk_developer_extras
+    is_active_object_terrain_doodad, should_show_bdk_developer_extras, ensure_name_unique
 from .builder import create_terrain_doodad_object, create_terrain_doodad_bake_node_tree
 
 
@@ -285,9 +286,6 @@ class BDK_OT_terrain_doodad_bake(Operator):
         3. Add a new terrain paint nodes for each affected layer with the IDs we generated during the bake.
 
         When the user does the bake, they should be given the option to bake to a new paint node or to an exiting one.
-
-        ~~Alternatively, we could make sure there is always an implicit paint node for each layer, and then just
-        update the values of the paint node.~~
 
         The user will want a way to combine or "flatten" the layers, so we'll need to add a new operator to do that.
         """
@@ -834,6 +832,91 @@ class BDK_OT_terrain_doodad_demote(Operator):
 
         return {'FINISHED'}
 
+# TODO: this should be generic for all node trees.
+def add_scatter_layer_mask_node(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer', node_type: str):
+    node = scatter_layer.mask_nodes.add()
+    node.type = node_type
+    node.id = uuid.uuid4().hex
+    node.name = ensure_name_unique(node_type_item_names[node_type], [n.name for n in scatter_layer.mask_nodes])
+    return node
+
+
+class BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add(Operator):
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_mask_nodes_add'
+    bl_label = 'Add Scatter Layer Mask Node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    type: EnumProperty(
+        name='Type',
+        description='The type of node to add',
+        items=node_type_items
+    )
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_terrain_doodad_selected_scatter_layer(cls, context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+        add_scatter_layer_mask_node(scatter_layer, self.type)
+
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove(Operator):
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_mask_nodes_remove'
+    bl_label = 'Remove Scatter Layer Mask Node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_terrain_doodad_selected_scatter_layer(cls, context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+        scatter_layer.mask_nodes.remove(scatter_layer.mask_nodes_index)
+
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move(Operator):
+    bl_idname = 'bdk.terrain_doodad_scatter_layer_mask_nodes_move'
+    bl_label = 'Move Scatter Layer Mask Node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    direction: EnumProperty(
+        name='Direction',
+        description='The direction to move the node',
+        items=move_direction_items
+    )
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_terrain_doodad_selected_scatter_layer(cls, context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+        mask_nodes = scatter_layer.mask_nodes
+        mask_nodes_index = scatter_layer.mask_nodes_index
+
+        if self.direction == 'UP' and mask_nodes_index > 0:
+            mask_nodes.move(mask_nodes_index, mask_nodes_index - 1)
+            scatter_layer.mask_nodes_index -= 1
+        elif self.direction == 'DOWN' and mask_nodes_index < len(mask_nodes) - 1:
+            mask_nodes.move(mask_nodes_index, mask_nodes_index + 1)
+            scatter_layer.mask_nodes_index += 1
+
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
+
+        return {'FINISHED'}
+
 
 # TODO: split the sculpt, paint and scatter layers into their own files.
 classes = (
@@ -852,6 +935,10 @@ classes = (
     BDK_OT_terrain_doodad_paint_layer_add,
     BDK_OT_terrain_doodad_paint_layer_remove,
     BDK_OT_terrain_doodad_paint_layer_duplicate,
+
+    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add,
+    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove,
+    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move,
 
     BDK_OT_terrain_doodad_scatter_layer_add,
     BDK_OT_terrain_doodad_scatter_layer_remove,

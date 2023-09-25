@@ -41,7 +41,7 @@ def terrain_paint_layer_name_update_cb(self, context: Context):
                 node.paint_layer_name = self.name
 
 
-terrain_layer_node_type_icons = {
+node_type_icons = {
     'GROUP': 'FILE_FOLDER',
     'PAINT': 'BRUSH_DATA',
     'NOISE': 'MOD_NOISE',
@@ -51,18 +51,18 @@ terrain_layer_node_type_icons = {
     'PLANE_DISTANCE': 'GRADIENT'
 }
 
-terrain_layer_node_type_items = (
-    ('GROUP', 'Group', 'Group', terrain_layer_node_type_icons['GROUP'], 0),
-    ('PAINT', 'Paint', 'Paint', terrain_layer_node_type_icons['PAINT'], 1),
-    ('NOISE', 'Noise', 'Noise', terrain_layer_node_type_icons['NOISE'], 2),
-    ('PAINT_LAYER', 'Paint Layer', 'Paint Layer', terrain_layer_node_type_icons['PAINT_LAYER'], 3),
-    ('CONSTANT', 'Constant', 'Constant', terrain_layer_node_type_icons['CONSTANT'], 4),
+node_type_items = (
+    ('GROUP', 'Group', 'Group', node_type_icons['GROUP'], 0),
+    ('PAINT', 'Paint', 'Paint', node_type_icons['PAINT'], 1),
+    ('NOISE', 'Noise', 'Noise', node_type_icons['NOISE'], 2),
+    ('PAINT_LAYER', 'Paint Layer', 'Paint Layer', node_type_icons['PAINT_LAYER'], 3),
+    ('CONSTANT', 'Constant', 'Constant', node_type_icons['CONSTANT'], 4),
     ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector',
-     terrain_layer_node_type_icons['NORMAL'], 5),
-    ('PLANE_DISTANCE', 'Plane Distance', 'Plane Distance', terrain_layer_node_type_icons['PLANE_DISTANCE'], 6),
+     node_type_icons['NORMAL'], 5),
+    ('PLANE_DISTANCE', 'Plane Distance', 'Plane Distance', node_type_icons['PLANE_DISTANCE'], 6),
 )
 
-terrain_layer_node_type_item_names = {item[0]: item[1] for item in terrain_layer_node_type_items}
+node_type_item_names = {item[0]: item[1] for item in node_type_items}
 
 
 def terrain_layer_node_terrain_paint_layer_name_search_cb(self: 'BDK_PG_terrain_layer_node', context: Context,
@@ -85,7 +85,7 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     name: StringProperty(name='Name', default='Node')
-    type: EnumProperty(name='Type', items=terrain_layer_node_type_items, default='PAINT')
+    type: EnumProperty(name='Type', items=node_type_items, default='PAINT')
     operation: EnumProperty(name='Operation', items=[
         ('ADD', 'Add', 'Add'),
         ('SUBTRACT', 'Subtract', 'Subtract'),
@@ -384,6 +384,7 @@ class BDK_PG_terrain_info(PropertyGroup):
 
     # Modifier IDs for the terrain doodad passes. (why not just have a pointer to the modifier?)
     doodad_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')
+    doodad_attribute_modifier_name: StringProperty(options={'HIDDEN'}, name='Attribute Modifier Name')
     doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
     doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
 

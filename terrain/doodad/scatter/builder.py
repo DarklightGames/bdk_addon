@@ -399,22 +399,21 @@ def ensure_delete_random_points_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        inert_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
-        inert_random_value_node.label = 'Inert Random Value'
-        inert_random_value_node.data_type = 'BOOLEAN'
+        density_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        density_random_value_node.label = 'Density Random Value'
+        density_random_value_node.data_type = 'BOOLEAN'
 
         delete_geometry_node = node_tree.nodes.new(type='GeometryNodeDeleteGeometry')
 
-        inert_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'],
-                                                                      input_node.outputs['Global Seed']])
+        density_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
 
         # Input
-        node_tree.links.new(input_node.outputs['Factor'], inert_random_value_node.inputs[6]) # Probability
+        node_tree.links.new(input_node.outputs['Factor'], density_random_value_node.inputs[6]) # Probability
         node_tree.links.new(input_node.outputs['Points'], delete_geometry_node.inputs['Geometry'])
 
         # Internal
-        node_tree.links.new(inert_seed_socket, inert_random_value_node.inputs['Seed'])
-        node_tree.links.new(inert_random_value_node.outputs[3], delete_geometry_node.inputs[1])  # Value -> Selection
+        node_tree.links.new(density_seed_socket, density_random_value_node.inputs['Seed'])
+        node_tree.links.new(density_random_value_node.outputs[3], delete_geometry_node.inputs[1])  # Value -> Selection
 
         # Output
         node_tree.links.new(delete_geometry_node.outputs['Geometry'], output_node.inputs['Points'])
@@ -999,12 +998,12 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             node_tree.links.new(scatter_layer_object_node_group_node.outputs['Points'],
                                 join_geometry_node.inputs['Geometry'])
 
-        # Pass through inertion.
+        # Pass through density.
         delete_random_points_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         delete_random_points_node_group_node.node_tree = ensure_delete_random_points_node_tree()
         node_tree.links.new(join_geometry_node.outputs['Geometry'], delete_random_points_node_group_node.inputs['Points'])
-        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Factor'], 'inert_factor')
-        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Seed'], 'inert_seed')
+        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Factor'], 'density')
+        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Seed'], 'density_seed')
         add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Global Seed'], 'global_seed')
 
         # We need to convert the point cloud to a mesh so that we can inspect the attributes for T3D export.

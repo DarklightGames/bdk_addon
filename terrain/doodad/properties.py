@@ -5,6 +5,7 @@ from bpy.props import IntProperty, PointerProperty, CollectionProperty, FloatPro
     EnumProperty, FloatVectorProperty
 from bpy.types import PropertyGroup, Object, NodeTree, Context
 
+from ..properties import BDK_PG_terrain_layer_node
 from ...data import map_range_interpolation_type_items
 from ...helpers import get_terrain_info, get_terrain_doodad
 from ...units import meters_to_unreal
@@ -124,8 +125,9 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
     falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     layer_type: EnumProperty(name='Layer Type', items=(
-        ('PAINT', 'Paint', 'Paint layer.'),
-        ('DECO', 'Deco', 'Deco layer.'),
+        ('PAINT', 'Paint', 'Paint layer'),
+        ('DECO', 'Deco', 'Deco layer'),
+        ('ATTRIBUTE', 'Attribute', 'Attribute layer')
     ), default='PAINT', update=terrain_doodad_update_cb)  # TODO: switch node this as well
     paint_layer_name: StringProperty(
         name='Paint Layer',
@@ -139,6 +141,7 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
         update=terrain_doodad_paint_layer_deco_layer_name_update_cb,
         search_options={'SORT'}
     )
+    attribute_layer_id: StringProperty(name='Attribute Layer ID', default='')
     paint_layer_id: StringProperty(name='Terrain Layer ID', default='', options={'HIDDEN'})
     deco_layer_id: StringProperty(name='Deco Layer ID', default='', options={'HIDDEN'})
     mute: BoolProperty(name='Mute', default=False)
@@ -249,8 +252,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
 
     global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
-    inert_factor: FloatProperty(name='Inert Factor', default=0.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will not be scattered')
-    inert_seed: IntProperty(name='Inert Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
+    density: FloatProperty(name='Density', default=0.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will be scattered')
+    density_seed: IntProperty(name='Density Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
 
     # Curve Settings
     curve_spacing_method: EnumProperty(name='Spacing Method', items=(
@@ -278,9 +281,13 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     ), default='POISSON_DISK')
     mesh_face_distribute_random_density: FloatProperty(name='Density', default=0.001, min=0.0, soft_max=0.1)
     mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(1.0), min=0.0, subtype='DISTANCE')
-    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)
-    mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, soft_max=10.0, subtype='FACTOR')
+    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)  # We could make this a more sensible unit. IIRC, the current unit is the number of points per square unit, which is bonkers.
+    mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
     mesh_face_distribute_seed: IntProperty(name='Distribution Seed', default=0, min=0)
+
+    # Mask Settings
+    mask_nodes: CollectionProperty(name='Mask Nodes', type=BDK_PG_terrain_layer_node)
+    mask_nodes_index: IntProperty(options={'HIDDEN'})
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 
