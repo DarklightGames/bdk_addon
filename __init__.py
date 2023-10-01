@@ -15,6 +15,8 @@ bl_info = {
 if 'bpy' in locals():
     import importlib
 
+    importlib.reload(constants)
+    importlib.reload(property_group_helpers)
     importlib.reload(node_helpers)
 
     importlib.reload(bdk_helpers)
@@ -42,14 +44,16 @@ if 'bpy' in locals():
     importlib.reload(terrain_operators)
     importlib.reload(terrain_exporter)
 
+    importlib.reload(terrain_doodad_scatter_builder)
+    importlib.reload(terrain_doodad_sculpt_builder)
+    importlib.reload(terrain_doodad_sculpt_properties)
+    importlib.reload(terrain_doodad_sculpt_operators)
+
     importlib.reload(terrain_doodad_data)
     importlib.reload(terrain_doodad_builder)
     importlib.reload(terrain_doodad_properties)
     importlib.reload(terrain_doodad_operators)
     importlib.reload(terrain_doodad_ui)
-
-    importlib.reload(terrain_doodad_scatter_builder)
-    importlib.reload(terrain_doodad_sculpt_builder)
 
     if bdk_helpers.are_bdk_dependencies_installed():
         importlib.reload(t3d_data)
@@ -67,6 +71,8 @@ if 'bpy' in locals():
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
 else:
+    from . import constants as constants
+    from . import property_group_helpers as property_group_helpers
     from . import node_helpers as node_helpers
     from . import helpers as bdk_helpers
     from .bdk import operators as bdk_operators
@@ -99,15 +105,21 @@ else:
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
 
+    # Terrain Doodad Sculpt Layers
+    from .terrain.doodad.sculpt import builder as terrain_doodad_sculpt_builder
+    from .terrain.doodad.sculpt import properties as terrain_doodad_sculpt_properties
+    from .terrain.doodad.sculpt import operators as terrain_doodad_sculpt_operators
+
+    # Terrain Doodad Scatter Layers
+    from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
+
     # Terrain Doodad
     from .terrain.doodad import data as terrain_doodad_data
     from .terrain.doodad import builder as terrain_doodad_builder
+    from .terrain.doodad import kernel as terrain_doodad_kernel
     from .terrain.doodad import operators as terrain_doodad_operators
     from .terrain.doodad import properties as terrain_doodad_properties
     from .terrain.doodad import ui as terrain_doodad_ui
-
-    from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
-    from .terrain.doodad.sculpt import builder as terrain_doodad_sculpt_builder
 
     if bdk_helpers.are_bdk_dependencies_installed():
         # T3D
@@ -137,6 +149,8 @@ classes = material_importer.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
+          terrain_doodad_sculpt_properties.classes + \
+          terrain_doodad_sculpt_operators.classes + \
           terrain_doodad_operators.classes + \
           terrain_doodad_properties.classes + \
           terrain_doodad_ui.classes + \

@@ -3,11 +3,12 @@ from typing import cast
 import bpy
 from bpy.types import Panel, Context, UIList, UILayout, Curve
 
-from ..ui import draw_terrain_layer_node_list, draw_terrain_layer_node_settings
+from .sculpt.operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
+    BDK_OT_terrain_doodad_sculpt_layer_duplicate
+from ..ui import draw_terrain_layer_node_list, draw_terrain_layer_node_settings, BDK_UL_terrain_layer_nodes
 from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad, is_active_object_terrain_doodad
-from .operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
-    BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doodad_paint_layer_remove, \
-    BDK_OT_terrain_doodad_paint_layer_duplicate, BDK_OT_terrain_doodad_sculpt_layer_duplicate, \
+from .operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doodad_paint_layer_remove, \
+    BDK_OT_terrain_doodad_paint_layer_duplicate, \
     BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
     BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
@@ -300,13 +301,6 @@ class BDK_PT_terrain_doodad_sculpt_layers(Panel):
 
         col.separator()
 
-        # operator = col.operator(BDK_OT_terrain_doodad_sculpt_layer_move.bl_idname, icon='TRIA_UP', text='')
-        # operator.direction = 'UP'
-        # operator = col.operator(BDK_OT_terrain_doodad_sculpt_layer_move.bl_idname, icon='TRIA_DOWN', text='')
-        # operator.direction = 'DOWN'
-
-        # col.separator()
-
         col.operator(BDK_OT_terrain_doodad_sculpt_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
 
@@ -464,13 +458,20 @@ class BDK_PT_terrain_doodad_scatter_layer_mask(Panel):
     def poll(cls, context: 'Context'):
         return poll_has_terrain_doodad_scatter_layer_selected(cls, context)
 
+    def draw_header(self, context: 'Context'):
+        layout = self.layout
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+        layout.prop(scatter_layer, 'use_mask_nodes', text='')
+
     def draw(self, context: 'Context'):
         layout = self.layout
         terrain_doodad = get_terrain_doodad(context.active_object)
         scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
 
         # TODO: add the whole UI setup for editing a node tree.
-        draw_terrain_layer_node_list(layout, scatter_layer, 'mask_nodes', 'mask_nodes_index',
+        draw_terrain_layer_node_list(layout, 'BDK_UL_terrain_doodad_scatter_layer_nodes',
+                                     scatter_layer, 'mask_nodes', 'mask_nodes_index',
                                      BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add.bl_idname,
                                      BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove.bl_idname,
                                      BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move.bl_idname)
@@ -741,19 +742,26 @@ class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
         flow.prop(sculpt_layer, 'id')
 
 
+class BDK_UL_terrain_doodad_scatter_layer_nodes(BDK_UL_terrain_layer_nodes):
+    def get_mesh(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        return terrain_doodad.terrain_info_object.data
+
+
 classes = (
-    BDK_PT_terrain_doodad,
     BDK_UL_terrain_doodad_sculpt_layers,
+    BDK_UL_terrain_doodad_paint_layers,
+    BDK_UL_terrain_doodad_scatter_layers,
+    BDK_UL_terrain_doodad_scatter_layer_objects,
+    BDK_UL_terrain_doodad_scatter_layer_nodes,
+    BDK_PT_terrain_doodad,
     BDK_PT_terrain_doodad_sculpt_layers,
     BDK_PT_terrain_doodad_sculpt_layer_settings,
     BDK_PT_terrain_doodad_sculpt_layer_debug,
-    BDK_UL_terrain_doodad_paint_layers,
     BDK_PT_terrain_doodad_paint_layers,
     BDK_PT_terrain_doodad_paint_layer_settings,
     BDK_PT_terrain_doodad_paint_layer_debug,
-    BDK_UL_terrain_doodad_scatter_layers,
     BDK_PT_terrain_doodad_scatter_layers,
-    BDK_UL_terrain_doodad_scatter_layer_objects,
     BDK_PT_terrain_doodad_scatter_layer_objects,
     BDK_PT_terrain_doodad_scatter_layer_settings,
     BDK_PT_terrain_doodad_scatter_layer_curve_settings,

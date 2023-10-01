@@ -562,7 +562,7 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
         paint_layer = paint_layers[paint_layers_index]
 
         add_terrain_layer_node(context.active_object, paint_layer.nodes, self.type)
-        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes, context.active_object)
 
         return {'FINISHED'}
 
@@ -585,7 +585,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
         remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index)
 
-        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes, context.active_object)
 
         return {'FINISHED'}
 
@@ -609,7 +609,7 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
         paint_layer = paint_layers[paint_layers_index]
         paint_layer.nodes_index = move_terrain_layer_node(self.direction, paint_layer.nodes, paint_layer.nodes_index)
 
-        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes, context.active_object)
 
         return {'FINISHED'}
 

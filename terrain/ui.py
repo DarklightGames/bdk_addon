@@ -289,10 +289,10 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
             flow.prop(node, 'map_range_from_max', text='Max')
 
 
-def draw_terrain_layer_node_list(layout: 'UILayout', dataptr: Any, propname: str, active_propname: str, add_operator_idname: str, remove_operator_idname: str, move_operator_idname: str):
+def draw_terrain_layer_node_list(layout: 'UILayout', listtype_name: str, dataptr: Any, propname: str, active_propname: str, add_operator_idname: str, remove_operator_idname: str, move_operator_idname: str):
     row = layout.row()
     row.column().template_list(
-        'BDK_UL_terrain_layer_nodes', '',
+        listtype_name, '',
         dataptr, propname,
         dataptr, active_propname,
         sort_lock=True, rows=5)
@@ -323,6 +323,7 @@ class BDK_PT_terrain_paint_layer_nodes(Panel):
 
         paint_layer = get_selected_terrain_paint_layer(context)
         draw_terrain_layer_node_list(layout,
+                                     'BDK_UL_terrain_layer_nodes',
                                      paint_layer,
                                      'nodes',
                                      'nodes_index',
@@ -349,6 +350,7 @@ class BDK_PT_terrain_deco_layer_nodes(Panel):
 
         deco_layer = get_selected_deco_layer(context)
         draw_terrain_layer_node_list(layout,
+                                     'BDK_UL_terrain_layer_nodes',
                                      deco_layer,
                                      'nodes',
                                      'nodes_index',
@@ -550,9 +552,13 @@ class BDK_UL_terrain_deco_layers(UIList):
 
 
 class BDK_UL_terrain_layer_nodes(UIList):
+
+    def get_mesh(self, context: Context) -> Mesh:
+        return cast(Mesh, context.active_object.data)
+
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
-        mesh = cast(Mesh, context.active_object.data)
+        mesh = self.get_mesh(context)
         color_attribute_index = mesh.color_attributes.find(item.id)
         is_active_color_attribute = color_attribute_index == mesh.color_attributes.active_color_index
 

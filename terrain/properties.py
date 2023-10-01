@@ -387,6 +387,7 @@ class BDK_PG_terrain_info(PropertyGroup):
     doodad_attribute_modifier_name: StringProperty(options={'HIDDEN'}, name='Attribute Modifier Name')
     doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
     doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
+    doodad_mask_modifier_name: StringProperty(options={'HIDDEN'}, name='Mask Modifier Name')
 
 
 # TODO: maybe all of these should be in their own file?
