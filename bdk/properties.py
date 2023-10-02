@@ -1,5 +1,7 @@
 from bpy.types import PropertyGroup
 from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty, BoolProperty
+
+from ..particle.properties import BDK_PG_particle_system
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.doodad.properties import BDK_PG_terrain_doodad
 from ..bsp.properties import BDK_PG_bsp_brush
@@ -15,11 +17,13 @@ class BDK_PG_object(PropertyGroup):
                            ('TERRAIN_INFO', 'Terrain Info', ''),
                            ('TERRAIN_DOODAD', 'Terrain Doodad', ''),
                            ('BSP_BRUSH', 'BSP Brush', ''),
+                           ('PARTICLE_SYSTEM', 'Particle System', ''),
                        ),
                        default='NONE')
     terrain_info: PointerProperty(type=BDK_PG_terrain_info)
     terrain_doodad: PointerProperty(type=BDK_PG_terrain_doodad)
     bsp_brush: PointerProperty(type=BDK_PG_bsp_brush)
+    particle_system: PointerProperty(type=BDK_PG_particle_system)
     package_reference: StringProperty(name='Package Reference', options={'HIDDEN'})
 
 

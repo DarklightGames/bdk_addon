@@ -51,6 +51,12 @@ if 'bpy' in locals():
     importlib.reload(terrain_doodad_scatter_builder)
     importlib.reload(terrain_doodad_sculpt_builder)
 
+    importlib.reload(particle_data)
+    importlib.reload(particle_properties)
+    importlib.reload(particle_context)
+    importlib.reload(particle_operators)
+    importlib.reload(particle_ui)
+
     if bdk_helpers.are_bdk_dependencies_installed():
         importlib.reload(t3d_data)
         importlib.reload(t3d_operators)
@@ -109,6 +115,13 @@ else:
     from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
     from .terrain.doodad.sculpt import builder as terrain_doodad_sculpt_builder
 
+    # Particles
+    from .particle import data as particle_data
+    from .particle import properties as particle_properties
+    from .particle import context as particle_context
+    from .particle import operators as particle_operators
+    from .particle import ui as particle_ui
+
     if bdk_helpers.are_bdk_dependencies_installed():
         # T3D
         from .t3d import data as t3d_data
@@ -140,6 +153,9 @@ classes = material_importer.classes + \
           terrain_doodad_operators.classes + \
           terrain_doodad_properties.classes + \
           terrain_doodad_ui.classes + \
+          particle_properties.classes + \
+          particle_operators.classes + \
+          particle_ui.classes + \
           asset_browser_operators.classes + \
           bdk_preferences.classes + \
           bdk_operators.classes + \

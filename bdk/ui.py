@@ -5,6 +5,7 @@ from ..fluid_surface import operators as fluid_surface_operators
 from ..projector import operators as projector_operators
 from ..terrain import operators as terrain_operators
 from ..terrain.doodad import operators as terrain_doodad_operators
+from ..particle import operators as particle_operators
 
 
 class BDK_MT_object_add_menu(Menu):
@@ -19,6 +20,7 @@ class BDK_MT_object_add_menu(Menu):
         self.layout.operator(fluid_surface_operators.BDK_OT_fluid_surface_add.bl_idname, text='Fluid Surface',
                              icon='MOD_FLUIDSIM')
         self.layout.operator(bsp_operators.BDK_OT_bsp_brush_add.bl_idname, text='BSP Brush', icon='MOD_BUILD')
+        self.layout.operator(particle_operators.BDK_OT_particle_system_add.bl_idname, text='Particle System')
 
 
 class BDK_PT_node_tree(Panel):
