@@ -54,6 +54,7 @@ if 'bpy' in locals():
     importlib.reload(particle_data)
     importlib.reload(particle_properties)
     importlib.reload(particle_context)
+    importlib.reload(particle_builder)
     importlib.reload(particle_operators)
     importlib.reload(particle_ui)
 
@@ -119,6 +120,7 @@ else:
     from .particle import data as particle_data
     from .particle import properties as particle_properties
     from .particle import context as particle_context
+    from .particle import builder as particle_builder
     from .particle import operators as particle_operators
     from .particle import ui as particle_ui
 

@@ -1,9 +1,12 @@
+import uuid
+
 import bpy
 from bpy.types import Operator, Context
 from bpy.props import EnumProperty
 
+from .builder import ensure_particle_system_node_tree
 from ..helpers import ensure_name_unique
-from .context import get_selected_particle_system, has_selected_particle_system
+from .context import get_selected_particle_system
 from .properties import emitter_type_items
 
 
@@ -22,6 +25,12 @@ class BDK_OT_particle_system_add(Operator):
         context.view_layer.objects.active = particle_system_object
         particle_system_object.select_set(True)
         particle_system_object.bdk.type = 'PARTICLE_SYSTEM'
+        particle_system_object.bdk.particle_system.id = uuid.uuid4().hex
+        particle_system_object.bdk.particle_system.object = particle_system_object
+
+        # Add a geometry nodes modifier to the object with the particle system node tree.
+        modifier = particle_system_object.modifiers.new('Geometry Nodes', 'NODES')
+        modifier.node_group = ensure_particle_system_node_tree(particle_system_object.bdk.particle_system)
 
         return {'FINISHED'}
 
@@ -41,11 +50,14 @@ class BDK_OT_particle_system_emitter_add(Operator):
     def execute(self, context):
         particle_system = get_selected_particle_system(context)
         emitter =  particle_system.emitters.add()
+        emitter.id = uuid.uuid4().hex
         emitter.type = self.type
         emitter.name = ensure_name_unique('Emitter', [x.name for x in particle_system.emitters])
 
         # Select the new emitter.
         particle_system.emitters_index = len(particle_system.emitters) - 1
+
+        ensure_particle_system_node_tree(particle_system)
 
         return {'FINISHED'}
 
@@ -58,12 +70,14 @@ class BDK_OT_particle_system_emitter_remove(Operator):
 
     @classmethod
     def poll(cls, context: 'Context'):
-        return has_selected_particle_system(context) and context.active_object.bdk.particle_system.emitter_index >= 0
+        particle_system = get_selected_particle_system(context)
+        return particle_system is not None and particle_system.emitters_index >= 0
 
     def execute(self, context):
         particle_system = get_selected_particle_system(context)
         particle_system.emitters.remove(particle_system.emitters_index)
         particle_system.emitters_index = len(particle_system.emitters) - 1
+        ensure_particle_system_node_tree(particle_system)
         return {'FINISHED'}
 
 

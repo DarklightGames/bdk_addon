@@ -32,12 +32,11 @@ class BDK_PT_particle_emitter_general(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
         flow.prop(emitter, 'disable')
         flow.prop(emitter, 'max_particles')
-        flow.prop(emitter, 'name')
         flow.prop(emitter, 'automatic_initial_spawning')
         flow.prop(emitter, 'particles_per_second')
         flow.prop(emitter, 'scale_size_by_velocity_multiplier')
@@ -56,7 +55,7 @@ class BDK_PT_particle_emitter_texture(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
         flow.prop(emitter, 'texture')
@@ -84,7 +83,7 @@ class BDK_PT_particle_emitter_color_and_fading(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
@@ -95,7 +94,7 @@ class BDK_PT_particle_emitter_color_and_fading(Panel):
         flow.prop(emitter, 'fade_out_factor')
         flow.prop(emitter, 'fade_in_factor')
         flow.separator()
-        flow.prop(emitter.color_multiplier_range, 'min')
+        flow.prop(emitter.color_multiplier_range, 'min', text='Color Multiplier Min')
         flow.prop(emitter.color_multiplier_range, 'max')
         flow.separator()
         flow.prop(emitter, 'use_color_scale')
@@ -117,7 +116,7 @@ class BDK_PT_particle_emitter_rendering(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
@@ -140,17 +139,17 @@ class BDK_PT_particle_emitter_time(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
-        flow.prop(emitter.lifetime_range, 'min')
+        flow.prop(emitter.lifetime_range, 'min', text='Lifetime Min')
         flow.prop(emitter.lifetime_range, 'max')
         flow.separator()
-        flow.prop(emitter.initial_time_range, 'min')
+        flow.prop(emitter.initial_time_range, 'min', text='Initial Time Min')
         flow.prop(emitter.initial_time_range, 'max')
         flow.separator()
-        flow.prop(emitter.initial_delay_range, 'min')
+        flow.prop(emitter.initial_delay_range, 'min', text='Initial Delay Min')
         flow.prop(emitter.initial_delay_range, 'max')
         flow.separator()
         flow.prop(emitter, 'seconds_before_inactive')
@@ -171,23 +170,26 @@ class BDK_PT_particle_emitter_location(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
         flow.prop(emitter, 'start_location_shape')
+        flow.separator()
 
         if emitter.start_location_shape == 'PTLS_Box':
             flow.prop(emitter.start_location_range, 'min')
             flow.prop(emitter.start_location_range, 'max')
         elif emitter.start_location_shape == 'PTLS_Sphere':
-            flow.prop(emitter.sphere_radius_range, 'min')
+            flow.prop(emitter.sphere_radius_range, 'min', text='Radius Min')
             flow.prop(emitter.sphere_radius_range, 'max')
         elif emitter.start_location_shape == 'PTLS_Polar':
-            flow.prop(emitter.start_location_polar_range, 'min')
+            flow.prop(emitter.start_location_polar_range, 'min', text='Polar Min')
             flow.prop(emitter.start_location_polar_range, 'max')
 
+        flow.separator()
         flow.prop(emitter, 'start_location_offset')
+        flow.separator()
         flow.prop(emitter, 'add_location_from_other_emitter')   # This is an index into the emitters list
 
 
@@ -203,18 +205,18 @@ class BDK_PT_particle_emitter_movement(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
         flow.prop(emitter, 'coordinate_system')
         flow.separator()
-        flow.prop(emitter.start_velocity_range, 'min')
+        flow.prop(emitter.start_velocity_range, 'min', text='Start Velocity Min')
         flow.prop(emitter.start_velocity_range, 'max')
         flow.separator()
         flow.prop(emitter, 'acceleration')
         flow.separator()
-        flow.prop(emitter.velocity_loss_range, 'min')
+        flow.prop(emitter.velocity_loss_range, 'min', text='Velocity Loss Min')
         flow.prop(emitter.velocity_loss_range, 'max')
         flow.separator()
         flow.prop(emitter, 'max_abs_velocity')
@@ -224,12 +226,12 @@ class BDK_PT_particle_emitter_movement(Panel):
         flow.prop(emitter, 'add_velocity_from_other_emitter')   # This is an index into the emitters list
 
         if emitter.add_velocity_from_other_emitter != -1:
-            flow.prop(emitter.add_velocity_multiplier_range, 'min')
+            flow.prop(emitter.add_velocity_multiplier_range, 'min', text='Add Velocity Multiplier Min')
             flow.prop(emitter.add_velocity_multiplier_range, 'max')
 
         flow.prop(emitter, 'get_velocity_direction_from')
         flow.separator()
-        flow.prop(emitter.start_velocity_radial_range, 'min')
+        flow.prop(emitter.start_velocity_radial_range, 'min', text='Start Velocity Radial Min')
         flow.prop(emitter.start_velocity_radial_range, 'max')
 
 
@@ -245,17 +247,17 @@ class BDK_PT_particle_emitter_rotation(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
         flow.prop(emitter, 'spin_particles')
 
         if emitter.spin_particles:
-            flow.prop(emitter.start_spin_range, 'min')
+            flow.prop(emitter.start_spin_range, 'min', text='Start Spin Min')
             flow.prop(emitter.start_spin_range, 'max')
             flow.separator()
-            flow.prop(emitter.spins_per_second_range, 'min')
+            flow.prop(emitter.spins_per_second_range, 'min', 'Spins Per Second Min')
             flow.prop(emitter.spins_per_second_range, 'max')
             flow.separator()
             flow.prop(emitter, 'spin_ccw_or_cw')
@@ -286,14 +288,15 @@ class BDK_PT_particle_emitter_size(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
         flow.prop(emitter, 'uniform_size')
         flow.separator()
-        flow.prop(emitter.start_size_range, 'min')
-        flow.prop(emitter.start_size_range, 'max')
+        flow.prop(emitter.start_size_range, 'min', text='Start Size Min')
+        flow.separator()
+        flow.prop(emitter.start_size_range, 'max', text='Max')
         flow.separator()
         flow.prop(emitter, 'use_size_scale')
 
@@ -315,7 +318,7 @@ class BDK_PT_particle_emitter_collision(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
@@ -325,12 +328,12 @@ class BDK_PT_particle_emitter_collision(Panel):
         if emitter.use_collision:
             flow.prop(emitter, 'extent_multiplier')
             flow.separator()
-            flow.prop(emitter.damping_factor_range, 'min')
+            flow.prop(emitter.damping_factor_range, 'min', text='Damping Factor Min')
             flow.prop(emitter.damping_factor_range, 'max')
             flow.separator()
-            flow.prop(emitter, 'use_rotation_damping')
-            if emitter.use_rotation_damping:
-                flow.prop(emitter.rotation_damping_factor_range, 'min')
+            flow.prop(emitter, 'damp_rotation')
+            if emitter.damp_rotation:
+                flow.prop(emitter.rotation_damping_factor_range, 'min', text='Rotation Damping Factor Min')
                 flow.prop(emitter.rotation_damping_factor_range, 'max')
             flow.separator()
             flow.prop(emitter, 'use_collision_planes')
@@ -339,7 +342,7 @@ class BDK_PT_particle_emitter_collision(Panel):
                 pass
             flow.prop(emitter, 'use_max_collisions')
             if emitter.use_max_collisions:
-                flow.prop(emitter.max_collisions, 'min')
+                flow.prop(emitter.max_collisions, 'min', text='Max Collisions Min')
                 flow.prop(emitter.max_collisions, 'max')
             flow.separator()
             flow.prop(emitter, 'spawn_from_other_emitter')
@@ -348,15 +351,15 @@ class BDK_PT_particle_emitter_collision(Panel):
             flow.separator()
             flow.prop(emitter, 'use_spawned_velocity_scale')
             if emitter.use_spawned_velocity_scale:
-                flow.prop(emitter.spawned_velocity_scale_range, 'min')
+                flow.prop(emitter.spawned_velocity_scale_range, 'min', text='Spawned Velocity Scale Min')
                 flow.prop(emitter.spawned_velocity_scale_range, 'max')
             flow.separator()
             flow.prop(emitter, 'collision_sound')
             if emitter.collision_sound != 'PTCS_None':
-                flow.prop(emitter.collision_sound_index, 'min')
+                flow.prop(emitter.collision_sound_index, 'min', text='Collision Sound Index Min')
                 flow.prop(emitter.collision_sound_index, 'max')
                 flow.separator()
-                flow.prop(emitter.collision_sound_probability, 'min')
+                flow.prop(emitter.collision_sound_probability, 'min', text='Collision Sound Probability Min')
                 flow.prop(emitter.collision_sound_probability, 'max')
                 flow.separator()
                 # TODO: collision sound list
@@ -380,7 +383,7 @@ class BDK_PT_particle_emitter_mesh(Panel):
     def draw(self, context: Context):
         layout = self.layout
         emitter = get_selected_particle_emitter(context)
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
@@ -408,17 +411,18 @@ class BDK_PT_particle_system(Panel):
     def draw(self, context: Context):
         layout = self.layout
         row = layout.row()
-        row.template_list('BDK_UL_emitters', '', context.active_object.bdk.particle_system, 'emitters', context.active_object.bdk.particle_system, 'emitters_index', rows=3)
+        row.template_list('BDK_UL_particle_emitters', '', context.active_object.bdk.particle_system, 'emitters', context.active_object.bdk.particle_system, 'emitters_index', rows=3)
         column = row.column(align=True)
         column.operator_menu_enum(BDK_OT_particle_system_emitter_add.bl_idname, 'type', icon='ADD', text='')
         column.operator(BDK_OT_particle_system_emitter_remove.bl_idname, icon='REMOVE', text='')
 
 
-class BDK_UL_emitters(UIList):
-    bl_idname = 'BDK_UL_emitters'
+class BDK_UL_particle_emitters(UIList):
+    bl_idname = 'BDK_UL_particle_emitters'
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         layout.prop(item, 'name', text='', emboss=False, icon_value=icon)
+        layout.prop(item, 'mute', text='', icon='HIDE_OFF' if item.mute else 'HIDE_ON', emboss=False)
 
 
 classes = (
@@ -435,5 +439,5 @@ classes = (
     BDK_PT_particle_emitter_size,
     BDK_PT_particle_emitter_collision,
     # BDK_PT_particle_emitter_mesh,,
-    BDK_UL_emitters,
+    BDK_UL_particle_emitters,
 )

@@ -294,6 +294,13 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
 
     return input_node, output_node
 
+def add_simulation_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
+    # https://projects.blender.org/blender/blender/src/branch/main/scripts/startup/bl_operators/node.py#L165
+    input_node = node_tree.nodes.new('GeometryNodeSimulationInput')
+    output_node = node_tree.nodes.new('GeometryNodeSimulationOutput')
+    input_node.pair_with_output(output_node)
+    return input_node, output_node
+
 
 def ensure_curve_modifier_node_tree() -> NodeTree:
     items = {

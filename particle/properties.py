@@ -141,8 +141,10 @@ emitter_type_items = (
 
 
 class BDK_PG_particle_emitter(PropertyGroup):
-
+    id: StringProperty(name='ID')
     type: EnumProperty(name='Type', items=emitter_type_items, default='SPRITE')
+    mute: BoolProperty(name='Mute', default=False)
+    index: IntProperty(name='Index', default=-1, options={'HIDDEN'})
 
     # Collision
     use_collision: BoolProperty(name='Use Collision', default=False)
@@ -242,7 +244,7 @@ class BDK_PG_particle_emitter(PropertyGroup):
     detail_mode: EnumProperty(name='Detail Mode', items=detail_mode_items)
 
     # Location
-    start_location_offset: FloatVectorProperty(name='Start Location Offset', size=3)
+    start_location_offset: FloatVectorProperty(name='Start Location Offset', size=3, subtype='TRANSLATION')
     start_location_range: PointerProperty(name='Start Location Range', type=BDK_PG_range_vector)
     add_location_from_other_emitter: IntProperty(name='Add Location From Other Emitter')
     start_location_shape: EnumProperty(name='Start Location Shape', items=start_location_shape_items)
@@ -351,6 +353,8 @@ class BDK_PG_particle_emitter(PropertyGroup):
     projection_normal: FloatVectorProperty(name='Projection Normal', size=3)
 
 class BDK_PG_particle_system(PropertyGroup):
+    id: StringProperty(name='ID')
+    object: PointerProperty(type=Object, name='Object', description='The object this property group is attached to', options={'HIDDEN'})
     emitters: CollectionProperty(name='Emitters', type=BDK_PG_particle_emitter)
     emitters_index: IntProperty(name='Emitter Index', default=-1)
 
