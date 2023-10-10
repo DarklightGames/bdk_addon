@@ -108,21 +108,34 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
     actor.properties['CsgOper'] = bsp_brush.csg_operation  # Convert the IDs to the expected format
     actor.properties['PolyFlags'] = get_poly_flags_int(bsp_brush.poly_flags)
 
-    add_movement_properties_to_actor(actor, bsp_brush_object)
+    add_movement_properties_to_actor(actor, bsp_brush_object, do_rotation=False, do_scale=False)
 
     brush = T3DObject('Brush')
     brush.properties['Name'] = object_name
 
     poly_list = T3DObject('PolyList')
 
-    mesh_object = bsp_brush_object
-    mesh_data = cast(Mesh, bsp_brush_object.data)
+    bm = bmesh.new()
+    bm.from_mesh(bsp_brush_object.data)
+    uv_layer = bm.loops.layers.uv.verify()
 
-    for polygon_index, polygon in enumerate(mesh_data.polygons):
+    bdk_poly_flags_layer = bm.faces.layers.int.get('bdk.poly_flags', None)
+
+    """
+    In the engine, BSP brushes ignore scale & rotation during the CSG build.
+    Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
+    Then
+    """
+    scale_matrix = Matrix.Diagonal(bsp_brush_object.scale).to_4x4()
+    rotation_matrix = bsp_brush_object.rotation_euler.to_matrix().to_4x4()
+    transform_matrix = rotation_matrix @ scale_matrix
+
+    for face_index, face in enumerate(bm.faces):
         poly = T3DObject('Polygon')
         poly.properties['Texture'] = 'None'
-        poly.properties['Link'] = polygon_index
-        poly.polygon = create_bsp_brush_polygon(mesh_object, polygon)
+        poly.properties['Link'] = face_index
+        poly.properties['Flags'] = face[bdk_poly_flags_layer] if bdk_poly_flags_layer else 0
+        poly.polygon = create_bsp_brush_polygon(bsp_brush_object, uv_layer, face, transform_matrix)
         poly_list.children.append(poly)
 
     brush.children.append(poly_list)

@@ -9,33 +9,6 @@ from ..node_helpers import add_operation_switch_nodes, ensure_input_and_output_n
     ensure_terrain_layer_node_operation_node_tree
 
 
-# TODO: this file needs to be renamed.
-
-
-def add_terrain_deco_layer(terrain_info_object: Object, name: str = 'DecoLayer'):
-    """
-    Adds a deco layer to the terrain.
-    This adds a new entry to the deco layers array in the terrain info and creates the associated deco layer object and
-    mesh attributes.
-    """
-    terrain_info = get_terrain_info(terrain_info_object)
-
-    # Create the deco layer object.
-    deco_layer = terrain_info.deco_layers.add()
-    deco_layer.name = name
-    deco_layer.id = uuid.uuid4().hex
-    deco_layer.modifier_name = uuid.uuid4().hex
-    deco_layer.object = create_deco_layer_object(deco_layer)
-    deco_layer.terrain_info_object = terrain_info_object
-
-    # Link and parent the deco layer object to the terrain info object.
-    collection: Collection = terrain_info_object.users_collection[0]
-    collection.objects.link(deco_layer.object)
-    deco_layer.object.parent = terrain_info_object
-
-    return deco_layer
-
-
 def add_terrain_deco_layer_node_driver(
         dataptr_index: int,
         node_index: int,
@@ -49,7 +22,7 @@ def add_terrain_deco_layer_node_driver(
     add_terrain_layer_node_driver('deco_layers', dataptr_index, node_index, terrain_info_object, struct, path, property_name, index, invert)
 
 
-def terrain_layer_node_data_path_get(dataptr_name: str, dataptr_index: int, node_index: int, property_name: str, index: Optional[int] = None) -> str:
+def _terrain_layer_node_data_path_get(dataptr_name: str, dataptr_index: int, node_index: int, property_name: str, index: Optional[int] = None) -> str:
     if index is not None:
         return f'bdk.terrain_info.{dataptr_name}[{dataptr_index}].nodes[{node_index}].{property_name}[{index}]'
     else:
@@ -108,7 +81,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
         add_node.inputs[1].default_value = 0.0
         add_node.operation = 'ADD'
 
-        density_socket = add_density_from_terrain_layer_nodes(node_tree, target_id, dataptr_name, dataptr_index, nodes, terrain_layer_node_data_path_get)
+        density_socket = add_density_from_terrain_layer_nodes(node_tree, target_id, dataptr_name, dataptr_index, nodes, _terrain_layer_node_data_path_get)
 
         if density_socket is not None:
             node_tree.links.new(density_socket, add_node.inputs[1])
@@ -503,21 +476,13 @@ def ensure_deco_layers(terrain_info_object: Object):
             modifier.node_group = build_deco_layer_node_group(terrain_info_object, deco_layer)
 
 
-def create_deco_layer_object(deco_layer) -> Object:
-    # Create a new mesh object with empty data.
-    mesh_data = bpy.data.meshes.new(deco_layer.id)
-    deco_layer_object = bpy.data.objects.new(deco_layer.id, mesh_data)
-    deco_layer_object.hide_select = True
-    return deco_layer_object
-
-
 # TODO: the naming is ugly and unwieldy here
 def create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, paint_layer_index: int, node_index: int) -> NodeTree:
-    return _create_convert_node_to_paint_node_node_tree(node, 'paint_layers', paint_layer_index, node_index, terrain_layer_node_data_path_get)
+    return _create_convert_node_to_paint_node_node_tree(node, 'paint_layers', paint_layer_index, node_index, _terrain_layer_node_data_path_get)
 
 
 def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, deco_layer_index: int, node_index: int) -> NodeTree:
-    return _create_convert_node_to_paint_node_node_tree(node, 'deco_layers', deco_layer_index, node_index, terrain_layer_node_data_path_get)
+    return _create_convert_node_to_paint_node_node_tree(node, 'deco_layers', deco_layer_index, node_index, _terrain_layer_node_data_path_get)
 
 
 def _create_convert_node_to_paint_node_node_tree(node, dataptr_name: str, dataptr_index: int, node_index: int, data_path_function: NodeDataPathFunctionType) -> NodeTree:
