@@ -367,7 +367,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
             target.data_path = target_data_path
 
         def add_deco_layer_driver_ex(struct: bpy_struct, target_id: ID, property_name: str, path: str = 'default_value', index: Optional[int] = None):
-            add_driver_ex(struct, target_id, get_deco_layer_target_data_path(deco_layer_index, property_name, index), path, index)
+            add_driver_ex(struct, target_id, get_deco_layer_target_data_path(property_name, index), path, index)
 
         def add_terrain_info_driver_ex(struct: bpy_struct, property_name: str, path: str = 'default_value', index: Optional[int] = None):
             add_driver_ex(struct, terrain_info_object, get_terrain_info_target_data_path(property_name, index), path, index)
@@ -477,15 +477,15 @@ def ensure_deco_layers(terrain_info_object: Object):
 
 
 # TODO: the naming is ugly and unwieldy here
-def create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, paint_layer_index: int, node_index: int) -> NodeTree:
-    return _create_convert_node_to_paint_node_node_tree(node, 'paint_layers', paint_layer_index, node_index, _terrain_layer_node_data_path_get)
+def create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, target_id: ID, paint_layer_index: int, node_index: int) -> NodeTree:
+    return _create_convert_node_to_paint_node_node_tree(node, target_id, 'paint_layers', paint_layer_index, node_index, _terrain_layer_node_data_path_get)
 
 
-def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, deco_layer_index: int, node_index: int) -> NodeTree:
-    return _create_convert_node_to_paint_node_node_tree(node, 'deco_layers', deco_layer_index, node_index, _terrain_layer_node_data_path_get)
+def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, target_id: ID, deco_layer_index: int, node_index: int) -> NodeTree:
+    return _create_convert_node_to_paint_node_node_tree(node, target_id, 'deco_layers', deco_layer_index, node_index, _terrain_layer_node_data_path_get)
 
 
-def _create_convert_node_to_paint_node_node_tree(node, dataptr_name: str, dataptr_index: int, node_index: int, data_path_function: NodeDataPathFunctionType) -> NodeTree:
+def _create_convert_node_to_paint_node_node_tree(node, target_id: ID, dataptr_name: str, dataptr_index: int, node_index: int, data_path_function: NodeDataPathFunctionType) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -500,7 +500,7 @@ def _create_convert_node_to_paint_node_node_tree(node, dataptr_name: str, datapt
         store_named_attribute_node.inputs['Name'].default_value = node.id
 
         node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
-        density_socket = add_density_from_terrain_layer_node(node, node_tree, dataptr_name, dataptr_index, node_index, data_path_function)
+        density_socket = add_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
 
         if density_socket is not None:
             node_tree.links.new(density_socket, store_named_attribute_node.inputs[5])

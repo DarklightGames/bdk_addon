@@ -7,7 +7,7 @@ from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, bpy_struct
 
 from .sculpt.builder import ensure_sculpt_node_group
-from ..deco import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
+from ..kernel import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
 from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_trim_curve_node_tree, \
     ensure_curve_normal_offset_node_tree

@@ -1,6 +1,6 @@
 from bpy.types import NodeTree
 
-from ...deco import ensure_noise_node_group
+from ...kernel import ensure_noise_node_group
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_interpolation_node_tree
 
 

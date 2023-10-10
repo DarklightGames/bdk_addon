@@ -3,7 +3,7 @@ import uuid
 import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, Node
 
-from ...deco import add_density_from_terrain_layer_nodes
+from ...kernel import add_density_from_terrain_layer_nodes
 from ....helpers import ensure_name_unique
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes

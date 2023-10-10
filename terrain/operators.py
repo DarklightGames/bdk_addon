@@ -12,7 +12,9 @@ from bpy.types import Operator, Context, Mesh, Object, Event
 from bpy_extras.io_utils import ExportHelper
 
 from ..data import move_direction_items
-from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
+from .context import get_selected_terrain_paint_layer_node
+from .layers import add_terrain_deco_layer
+from .kernel import ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
     create_terrain_paint_layer_node_convert_to_paint_layer_node_tree
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
@@ -23,9 +25,8 @@ from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte
     ensure_name_unique, padded_roll
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_coordinates
-from .properties import node_type_items, get_selected_terrain_paint_layer_node, \
-    node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, \
-    BDK_PG_terrain_deco_layer
+from .properties import node_type_items, node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, \
+    BDK_PG_terrain_layer_node, BDK_PG_terrain_deco_layer
 
 
 class BDK_OT_terrain_paint_layer_remove(Operator):
@@ -890,7 +891,7 @@ class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
         node: 'BDK_PG_terrain_layer_node' = nodes[paint_layer.nodes_index] if len(nodes) > paint_layer.nodes_index else None
 
         modifier = terrain_info_object.modifiers.new(node.id, 'NODES')
-        bake_node_tree = create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, terrain_info.paint_layers_index, paint_layer.nodes_index)
+        bake_node_tree = create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, terrain_info_object, terrain_info.paint_layers_index, paint_layer.nodes_index)
         modifier.node_group = bake_node_tree
 
         # TODO: get the index of the sculpt modifier and add one? (wouldn't that just be the first one?)

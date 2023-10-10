@@ -15,8 +15,8 @@ from ..bsp.properties import get_poly_flags_keys_from_value
 from ..terrain.operators import add_terrain_layer_node
 from ..projector.builder import build_projector_node_tree
 from ..terrain.builder import create_terrain_info_object
-from ..terrain.layers import add_terrain_paint_layer
-from ..terrain.deco import add_terrain_deco_layer, ensure_paint_layers, ensure_deco_layers
+from ..terrain.layers import add_terrain_paint_layer, add_terrain_deco_layer
+from ..terrain.kernel import ensure_paint_layers, ensure_deco_layers
 from ..data import URotator, UReference
 from ..helpers import load_bdk_static_mesh, load_bdk_material
 from ..units import unreal_to_radians

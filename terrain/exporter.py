@@ -12,7 +12,7 @@ from mathutils import Vector, Matrix, Euler
 from ..t3d.data import T3DObject
 from ..t3d.writer import T3DWriter
 from ..helpers import get_terrain_info
-from .g16 import write_bmp_g16
+from ..g16.g16 import write_bmp_g16
 
 
 def get_instance_offset(asset_instance: Object) -> Matrix:
@@ -39,16 +39,19 @@ def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, 
 
 
 # TODO: kind of ugly
-def add_movement_properties_to_actor(actor: T3DObject, bpy_object: Object, asset_instance: Optional[Object] = None) -> None:
+def add_movement_properties_to_actor(actor: T3DObject, bpy_object: Object, asset_instance: Optional[Object] = None, do_location = True, do_rotation = True, do_scale = True) -> None:
     if asset_instance:
         matrix_world: Matrix = asset_instance.matrix_world @ get_instance_offset(asset_instance) @ bpy_object.matrix_local
     else:
         matrix_world = bpy_object.matrix_world
 
     location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix_world)
-    actor.properties['Location'] = location
-    actor.properties['Rotation'] = rotation
-    actor.properties['DrawScale3D'] = scale
+    if do_location:
+        actor.properties['Location'] = location
+    if do_rotation:
+        actor.properties['Rotation'] = rotation
+    if do_scale:
+        actor.properties['DrawScale3D'] = scale
 
 
 def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optional[Object] = None) -> T3DObject:

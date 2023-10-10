@@ -1,9 +1,8 @@
 from bpy.types import Panel, UIList, UILayout, AnyType, Menu, Modifier
 from typing import Optional, Any
 
-from .doodad.operators import BDK_OT_terrain_doodad_bake_debug
-from .properties import node_type_icons, BDK_PG_terrain_layer_node, has_terrain_paint_layer_selected, \
-    get_selected_terrain_paint_layer, get_selected_deco_layer, has_deco_layer_selected
+from .properties import node_type_icons, BDK_PG_terrain_layer_node
+from .context import has_terrain_paint_layer_selected, get_selected_terrain_paint_layer, get_selected_deco_layer, has_deco_layer_selected
 from .operators import *
 from ..helpers import is_active_object_terrain_info, get_terrain_info, should_show_bdk_developer_extras
 
