@@ -6,7 +6,7 @@ from bpy.types import PropertyGroup, Object, Context, Mesh, Material
 from bpy.props import PointerProperty, BoolProperty, FloatProperty, CollectionProperty, IntProperty, StringProperty, \
     FloatVectorProperty, EnumProperty
 
-from .deco import ensure_deco_layers
+from .kernel import ensure_deco_layers
 from ..helpers import is_bdk_material, is_bdk_static_mesh_actor, get_terrain_info
 from .builder import build_terrain_material
 
@@ -41,7 +41,7 @@ def terrain_paint_layer_name_update_cb(self, context: Context):
                 node.paint_layer_name = self.name
 
 
-terrain_layer_node_type_icons = {
+node_type_icons = {
     'GROUP': 'FILE_FOLDER',
     'PAINT': 'BRUSH_DATA',
     'NOISE': 'MOD_NOISE',
@@ -51,18 +51,18 @@ terrain_layer_node_type_icons = {
     'PLANE_DISTANCE': 'GRADIENT'
 }
 
-terrain_layer_node_type_items = (
-    ('GROUP', 'Group', 'Group', terrain_layer_node_type_icons['GROUP'], 0),
-    ('PAINT', 'Paint', 'Paint', terrain_layer_node_type_icons['PAINT'], 1),
-    ('NOISE', 'Noise', 'Noise', terrain_layer_node_type_icons['NOISE'], 2),
-    ('PAINT_LAYER', 'Paint Layer', 'Paint Layer', terrain_layer_node_type_icons['PAINT_LAYER'], 3),
-    ('CONSTANT', 'Constant', 'Constant', terrain_layer_node_type_icons['CONSTANT'], 4),
+node_type_items = (
+    ('GROUP', 'Group', 'Group', node_type_icons['GROUP'], 0),
+    ('PAINT', 'Paint', 'Paint', node_type_icons['PAINT'], 1),
+    ('NOISE', 'Noise', 'Noise', node_type_icons['NOISE'], 2),
+    ('PAINT_LAYER', 'Paint Layer', 'Paint Layer', node_type_icons['PAINT_LAYER'], 3),
+    ('CONSTANT', 'Constant', 'Constant', node_type_icons['CONSTANT'], 4),
     ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector',
-     terrain_layer_node_type_icons['NORMAL'], 5),
-    ('PLANE_DISTANCE', 'Plane Distance', 'Plane Distance', terrain_layer_node_type_icons['PLANE_DISTANCE'], 6),
+     node_type_icons['NORMAL'], 5),
+    ('PLANE_DISTANCE', 'Plane Distance', 'Plane Distance', node_type_icons['PLANE_DISTANCE'], 6),
 )
 
-terrain_layer_node_type_item_names = {item[0]: item[1] for item in terrain_layer_node_type_items}
+node_type_item_names = {item[0]: item[1] for item in node_type_items}
 
 
 def terrain_layer_node_terrain_paint_layer_name_search_cb(self: 'BDK_PG_terrain_layer_node', context: Context,
@@ -85,7 +85,7 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     name: StringProperty(name='Name', default='Node')
-    type: EnumProperty(name='Type', items=terrain_layer_node_type_items, default='PAINT')
+    type: EnumProperty(name='Type', items=node_type_items, default='PAINT')
     operation: EnumProperty(name='Operation', items=[
         ('ADD', 'Add', 'Add'),
         ('SUBTRACT', 'Subtract', 'Subtract'),
@@ -137,8 +137,8 @@ BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name=
 
 def terrain_paint_layer_texel_density_get(self: 'BDK_PG_terrain_paint_layer') -> float:
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
-    x = self.material.get('UClamp', 0) if self.material else 0
-    y = self.material.get('VClamp', 0) if self.material else 0
+    x = self.material.bdk.size_x if self.material else 0
+    y = self.material.bdk.size_y if self.material else 0
     pixels_per_quad = ((x / self.u_scale) * (y / self.v_scale))
     quad_area = pow(terrain_info.terrain_scale, 2)
     return abs(pixels_per_quad / quad_area)
@@ -152,8 +152,8 @@ def terrain_paint_layer_texel_density_set(self, texel_density: float):
     :return:
     """
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
-    x = self.material.get('UClamp', 0) if self.material else 0
-    y = self.material.get('VClamp', 0) if self.material else 0
+    x = self.material.bdk.size_x if self.material else 0
+    y = self.material.bdk.size_y if self.material else 0
     quad_area = pow(terrain_info.terrain_scale, 2)
     scale = math.sqrt((x * y) / (texel_density * quad_area))
     self.u_scale = scale
@@ -370,9 +370,20 @@ def on_terrain_info_paint_layers_index_update(self: 'BDK_PG_terrain_info', _: Co
         bpy.ops.ed.undo_push(message=f"Select '{paint_layer.name}' Layer")
 
 
+def terrain_info_max_elevation_get(self: 'BDK_PG_terrain_info') -> float:
+    return self.terrain_scale_z * 256 * 2
+
+def terrain_info_heightmap_resolution_get(self: 'BDK_PG_terrain_info') -> float:
+    return self.max_elevation / 65536.0
+
 class BDK_PG_terrain_info(PropertyGroup):
     terrain_info_object: PointerProperty(type=Object)
     terrain_scale: FloatProperty(name='Terrain Scale', options={'HIDDEN'}, subtype='DISTANCE')
+    terrain_scale_z: FloatProperty(name='Heightmap Scale', options={'HIDDEN'}, default=64.0, min=0, soft_min=16.0, soft_max=128.0, max=512)
+    max_elevation: FloatProperty(name='Max Elevation Range', options={'HIDDEN'}, subtype='DISTANCE', get=terrain_info_max_elevation_get,
+                                 description='The maximum elevation range of the terrain given the heightmap scale.')
+    heightmap_resolution: FloatProperty(name='Heightmap Resolution', options={'HIDDEN'}, subtype='DISTANCE', get=terrain_info_heightmap_resolution_get,
+                                        description='The z-resolution of the heightmap when exported to a heightmap image. Lower values are better')
     paint_layers: CollectionProperty(name='Paint Layers', type=BDK_PG_terrain_paint_layer)
     paint_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_info_paint_layers_index_update)
     deco_layers: CollectionProperty(name='Deco Layers', type=BDK_PG_terrain_deco_layer)
@@ -384,39 +395,10 @@ class BDK_PG_terrain_info(PropertyGroup):
 
     # Modifier IDs for the terrain doodad passes. (why not just have a pointer to the modifier?)
     doodad_sculpt_modifier_name: StringProperty(options={'HIDDEN'}, name='Sculpt Modifier Name')
+    doodad_attribute_modifier_name: StringProperty(options={'HIDDEN'}, name='Attribute Modifier Name')
     doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
     doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
-
-
-# TODO: maybe all of these should be in their own file?
-def has_deco_layer_selected(context: Context) -> bool:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info and 0 <= terrain_info.deco_layers_index < len(terrain_info.deco_layers)
-
-
-def get_selected_deco_layer(context: Context) -> BDK_PG_terrain_deco_layer:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info.deco_layers[terrain_info.deco_layers_index]
-
-
-def has_terrain_paint_layer_selected(context: Context) -> bool:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info and 0 <= terrain_info.paint_layers_index < len(terrain_info.paint_layers)
-
-
-# TODO: replace this with a context property (i.e. context.terrain_layer)
-def get_selected_terrain_paint_layer(context: Context) -> BDK_PG_terrain_paint_layer:
-    terrain_info = get_terrain_info(context.active_object)
-    return terrain_info.paint_layers[terrain_info.paint_layers_index]
-
-
-def get_selected_terrain_paint_layer_node(context: Context) -> Optional[BDK_PG_terrain_layer_node]:
-    if not has_terrain_paint_layer_selected(context):
-        return None
-    paint_layer = get_selected_terrain_paint_layer(context)
-    nodes_index = paint_layer.nodes_index
-    nodes = paint_layer.nodes
-    return nodes[nodes_index] if 0 <= nodes_index < len(nodes) else None
+    doodad_mask_modifier_name: StringProperty(options={'HIDDEN'}, name='Mask Modifier Name')
 
 
 def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> Optional[BDK_PG_terrain_paint_layer]:
@@ -443,10 +425,6 @@ def get_terrain_info_deco_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer
         if deco_layer.id == layer_id:
             return deco_layer
     return None
-
-
-def has_selected_terrain_paint_layer_node(context) -> bool:
-    return get_selected_terrain_paint_layer_node(context) is not None
 
 
 classes = (

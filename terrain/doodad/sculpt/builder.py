@@ -1,7 +1,8 @@
 from bpy.types import NodeTree
 
-from ...deco import ensure_noise_node_group
-from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_interpolation_node_tree
+from ...kernel import ensure_noise_node_group
+from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_interpolation_node_tree, \
+    add_geometry_node_switch_nodes
 
 
 def ensure_sculpt_noise_node_group():
@@ -86,6 +87,7 @@ def ensure_sculpt_node_group() -> NodeTree:
         ('INPUT','NodeSocketBool', 'Use Noise'),
         ('INPUT','NodeSocketFloat', 'Noise Radius Factor'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
+        ('INPUT', 'NodeSocketInt', 'Operation'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
@@ -105,9 +107,8 @@ def ensure_sculpt_node_group() -> NodeTree:
         multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
         multiply_node.operation = 'MULTIPLY'
 
-        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-
-        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+        add_combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+        add_set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
         noise_node = node_tree.nodes.new(type='GeometryNodeGroup')
         noise_node.node_tree = ensure_sculpt_noise_node_group()
@@ -125,6 +126,38 @@ def ensure_sculpt_node_group() -> NodeTree:
         noise_radius_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
         noise_radius_multiply_node.operation = 'MULTIPLY'
 
+        # Set Operation
+        set_set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+        group_input_node = node_tree.nodes.new(type='NodeGroupInput')
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+        mix_node = node_tree.nodes.new(type='ShaderNodeMix')
+        mix_node.clamp_factor = True
+
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        # Internal Links
+        node_tree.links.new(group_input_node.outputs[0], mix_node.inputs[3])  # Depth -> B
+        node_tree.links.new(separate_xyz_node.outputs[1], combine_xyz_node.inputs[1])  # Y -> Y
+        node_tree.links.new(mix_node.outputs[0], combine_xyz_node.inputs[2])  # Result -> Z
+        node_tree.links.new(combine_xyz_node.outputs[0], set_set_position_node.inputs[2])  # Vector -> Position
+        node_tree.links.new(position_node.outputs[0], separate_xyz_node.inputs[0])  # Position -> Vector
+        node_tree.links.new(separate_xyz_node.outputs[2], mix_node.inputs[2])  # Z -> A
+        node_tree.links.new(separate_xyz_node.outputs[0], combine_xyz_node.inputs[0])  # X -> X
+        node_tree.links.new(interpolation_group_node.outputs['Value'], mix_node.inputs[0])  # Value -> Factor
+
+        add_set_position_geometry_socket = add_set_position_node.outputs[0]
+        operation_set_geometry_socket = set_set_position_node.outputs[0]
+
+        # Add Operation Socket
+        geometry_socket = add_geometry_node_switch_nodes(
+            node_tree,
+            input_node.outputs['Operation'],
+            [add_set_position_geometry_socket, operation_set_geometry_socket],
+            'GEOMETRY'
+        )
+
         # Input
         node_tree.links.new(input_node.outputs['Distance'], subtract_node_2.inputs[0])
         node_tree.links.new(input_node.outputs['Radius'], subtract_node_2.inputs[1])
@@ -138,7 +171,8 @@ def ensure_sculpt_node_group() -> NodeTree:
         node_tree.links.new(input_node.outputs['Perlin Noise Lacunarity'], noise_node.inputs['Perlin Noise Lacunarity'])
         node_tree.links.new(input_node.outputs['Perlin Noise Detail'], noise_node.inputs['Perlin Noise Detail'])
         node_tree.links.new(input_node.outputs['Use Noise'], switch_node.inputs['Switch'])
-        node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Geometry'], add_set_position_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Geometry'], set_set_position_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Distance'], noise_node.inputs['Distance'])
         node_tree.links.new(input_node.outputs['Radius'], add_node_2.inputs[0])
         node_tree.links.new(input_node.outputs['Falloff Radius'], add_node_2.inputs[1])
@@ -148,16 +182,16 @@ def ensure_sculpt_node_group() -> NodeTree:
         # Internal
         node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
         node_tree.links.new(interpolation_group_node.outputs['Value'], multiply_node.inputs[0])
-        node_tree.links.new(combine_xyz_node.outputs['Vector'], set_position_node.inputs['Offset'])
+        node_tree.links.new(add_combine_xyz_node.outputs['Vector'], add_set_position_node.inputs['Offset'])
         node_tree.links.new(noise_node.outputs['Offset'], switch_node.inputs['True'])
         node_tree.links.new(multiply_node.outputs['Value'], add_node.inputs[0])
         node_tree.links.new(switch_node.outputs['Output'], add_node.inputs[1])
-        node_tree.links.new(add_node.outputs['Value'], combine_xyz_node.inputs['Z'])
+        node_tree.links.new(add_node.outputs['Value'], add_combine_xyz_node.inputs['Z'])
         node_tree.links.new(add_node_2.outputs['Value'], noise_radius_multiply_node.inputs[0])
         node_tree.links.new(noise_radius_multiply_node.outputs['Value'], noise_node.inputs['Radius'])
         node_tree.links.new(subtract_node_2.outputs['Value'], divide_node.inputs[0])
 
         # Output
-        node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree('BDK Terrain Doodad Sculpt Layer', items, build_function)

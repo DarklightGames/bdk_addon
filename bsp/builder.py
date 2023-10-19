@@ -1,24 +1,42 @@
 # NOTE: This is taken more or less verbatim from the ase2t3d source, adopted for Python.
 # In the future, clean this up so that it's more clear what is going on.
-from typing import cast
+from typing import cast, Iterable, Optional
 
-import bmesh
-import bpy
-from bpy.types import Object, MeshPolygon, Mesh
+import mathutils
+from bmesh.types import BMFace
+from bpy.types import Object, Material
 
 from ..t3d.data import Polygon
 import numpy as np
 from math import isnan
 
 
-def create_bsp_brush_polygon(mesh_object: Object, polygon: MeshPolygon) -> Polygon:
-    mesh_data = cast(Mesh, mesh_object.data)
+def get_uvs_for_vertices(polygon: Polygon, material: Material, vertices: Iterable[mathutils.Vector]):
+    # Create a rotation & scale matrix from the UV-space vectors.
+    rotation_matrix = mathutils.Matrix.Identity(3)
+    rotation_matrix[0][0:3] = polygon.texture_u
+    rotation_matrix[1][0:3] = polygon.texture_v
+    rotation_matrix[2][0:3] = polygon.normal
 
-    uv_layer = mesh_data.uv_layers[0]
-    texture_coordinates = [
-        (uv_layer.data[i].uv[0], uv_layer.data[i].uv[1]) for i in polygon.loop_indices[0:3]
-    ]
-    material = mesh_object.material_slots[polygon.material_index].material if polygon.material_index < len(mesh_object.material_slots) else None
+    # Create a translation matrix from the origin.
+    translation_matrix = mathutils.Matrix.Translation(polygon.origin)
+
+    # Create a scale matrix from the material's texture size.
+    scale_matrix = mathutils.Matrix.Identity(3)
+    scale_matrix[0][0] = material.bdk.size_x
+    scale_matrix[1][1] = material.bdk.size_y
+
+    # Create the final transformation matrix.
+    transform_matrix = translation_matrix @ rotation_matrix @ scale_matrix
+    transform_matrix.invert()
+
+    # Transform the vertices.
+    return [transform_matrix @ vertex for vertex in vertices]
+
+
+def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFace, transform_matrix) -> Polygon:
+    texture_coordinates = [loop[uv_layer].uv for loop in face.loops[0:3]]
+
     texture_width = material.bdk.size_x if material else 512
     texture_height = material.bdk.size_y if material else 512
 
@@ -67,14 +85,14 @@ def create_bsp_brush_polygon(mesh_object: Object, polygon: MeshPolygon) -> Polyg
     t1 -= v_translate
     t2 -= v_translate
 
+    # Flip the Y axis
+    vertices = [transform_matrix @ mathutils.Vector(vert.co) for vert in face.verts]
+    for vert in vertices:
+        vert[1] = -vert[1]
+    vertices.reverse()
+
     # Coordinates
-    vertices = [np.array(mesh_object.matrix_world @ mesh_data.vertices[i].co) for i in polygon.vertices]
-
     pt0, pt1, pt2 = vertices[0:3]
-
-    pt0[1] = -pt0[1]
-    pt1[1] = -pt1[1]
-    pt2[1] = -pt2[1]
 
     dpt1 = np.subtract(pt1, pt0)
     dpt2 = np.subtract(pt2, pt0)
@@ -138,10 +156,6 @@ def create_bsp_brush_polygon(mesh_object: Object, polygon: MeshPolygon) -> Polyg
     origin = pt1 if impossible else p_base
     texture_u = normal if impossible else p_grad_u
     texture_v = normal if impossible else p_grad_v
-
-    # Repeated from above, so inefficient, but avoids modifying the original vertices.
-    # Figure out a way around this later.
-    vertices = [np.array(mesh_object.matrix_world @ mesh_data.vertices[i].co) for i in polygon.vertices]
 
     return Polygon(
         link=0,

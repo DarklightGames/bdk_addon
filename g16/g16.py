@@ -59,6 +59,11 @@ def write_bmp_g16(path: str, pixels: numpy.ndarray):
 
 
 def read_bmp_g16(path: str) -> np.ndarray:
+    """
+    Reads a 16-bit grayscale bitmap.
+    :param path: The path to the bitmap file.
+    :return: The bitmap as a numpy array.
+    """
     buffer = Path(path).read_bytes()
     offset = 0
 

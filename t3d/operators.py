@@ -10,6 +10,7 @@ from bpy.types import Operator, Context, Object, Mesh
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
+from ..data import UReference
 from ..bsp.properties import __poly_flag_keys_to_values__
 from ..bsp.builder import create_bsp_brush_polygon
 from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, get_terrain_heightmap, \
@@ -108,21 +109,40 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
     actor.properties['CsgOper'] = bsp_brush.csg_operation  # Convert the IDs to the expected format
     actor.properties['PolyFlags'] = get_poly_flags_int(bsp_brush.poly_flags)
 
-    add_movement_properties_to_actor(actor, bsp_brush_object)
+    add_movement_properties_to_actor(actor, bsp_brush_object, do_rotation=False, do_scale=False)
 
     brush = T3DObject('Brush')
     brush.properties['Name'] = object_name
 
     poly_list = T3DObject('PolyList')
 
-    mesh_object = bsp_brush_object
-    mesh_data = cast(Mesh, bsp_brush_object.data)
+    bm = bmesh.new()
+    bm.from_mesh(bsp_brush_object.data)
+    uv_layer = bm.loops.layers.uv.verify()
 
-    for polygon_index, polygon in enumerate(mesh_data.polygons):
+    bdk_poly_flags_layer = bm.faces.layers.int.get('bdk.poly_flags', None)
+
+    """
+    In the engine, BSP brushes ignore scale & rotation during the CSG build.
+    Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
+    We let the actor's location handle the translation.
+    """
+    scale_matrix = Matrix.Diagonal(bsp_brush_object.scale).to_4x4()
+    rotation_matrix = bsp_brush_object.rotation_euler.to_matrix().to_4x4()
+    transform_matrix = rotation_matrix @ scale_matrix
+
+    for face_index, face in enumerate(bm.faces):
+        material = bsp_brush_object.material_slots[face.material_index].material if face.material_index < len(bsp_brush_object.material_slots) else None
+        # T3D texture references only have the package and object name.
+        texture = UReference.from_string(material.bdk.package_reference) if material else None
+        if texture:
+            texture = f'{texture.package_name}.{texture.object_name}'
+
         poly = T3DObject('Polygon')
-        poly.properties['Texture'] = 'None'
-        poly.properties['Link'] = polygon_index
-        poly.polygon = create_bsp_brush_polygon(mesh_object, polygon)
+        poly.properties['Texture'] = texture if texture else 'None'
+        poly.properties['Link'] = face_index
+        poly.properties['Flags'] = face[bdk_poly_flags_layer] if bdk_poly_flags_layer is not None else 0
+        poly.polygon = create_bsp_brush_polygon(material, uv_layer, face, transform_matrix)
         poly_list.children.append(poly)
 
     brush.children.append(poly_list)
@@ -172,7 +192,6 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
         for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
             # TODO: The order of operations here is probably wrong.
             matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
-
             static_mesh_object = scatter_layer.objects[object_index].object
             actor = T3DObject(type_name='Actor')
             actor.properties['Class'] = 'StaticMeshActor'
@@ -217,9 +236,8 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
             if obj.bdk.type == 'TERRAIN_DOODAD':
                 copy_actors += terrain_doodad_to_t3d_objects(context, obj)
             elif obj.bdk.type == 'TERRAIN_INFO':
-                # TODO: terrain scale might be an issue for people just editing existing maps
-                heightmap, terrain_scale_z = get_terrain_heightmap(obj, depsgraph)
-                copy_actors.append(create_terrain_info_actor(obj, terrain_scale_z))
+                heightmap = get_terrain_heightmap(obj, depsgraph)
+                copy_actors.append(create_terrain_info_actor(obj))
             # TODO: add handlers for other object types (outside of this function)
             elif obj.type == 'CAMERA':
                 # Create a SpectatorCam brush_object

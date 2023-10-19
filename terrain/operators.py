@@ -11,7 +11,11 @@ from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolPrope
 from bpy.types import Operator, Context, Mesh, Object, Event
 from bpy_extras.io_utils import ExportHelper
 
-from .deco import add_terrain_deco_layer, ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
+from ..g16.g16 import read_bmp_g16
+from ..data import move_direction_items
+from .context import get_selected_terrain_paint_layer_node
+from .layers import add_terrain_deco_layer
+from .kernel import ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
     create_terrain_paint_layer_node_convert_to_paint_layer_node_tree
 from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
@@ -21,10 +25,9 @@ from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte
     invert_byte_color_attribute_data, accumulate_byte_color_attribute_data, copy_simple_property_group, \
     ensure_name_unique, padded_roll
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
-    get_terrain_info_vertex_coordinates
-from .properties import terrain_layer_node_type_items, get_selected_terrain_paint_layer_node, \
-    terrain_layer_node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, BDK_PG_terrain_layer_node, \
-    BDK_PG_terrain_deco_layer
+    get_terrain_info_vertex_xy_coordinates
+from .properties import node_type_items, node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, \
+    BDK_PG_terrain_layer_node, BDK_PG_terrain_deco_layer
 
 
 class BDK_OT_terrain_paint_layer_remove(Operator):
@@ -415,7 +418,7 @@ class BDK_OT_terrain_paint_layers_hide(Operator):
 def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node = nodes.add()
     node.id = uuid.uuid4().hex
-    node.name = terrain_layer_node_type_item_names[type]
+    node.name = node_type_item_names[type]
     node.terrain_info_object = terrain_info_object
     node.type = type
 
@@ -459,18 +462,13 @@ def move_terrain_layer_node(direction: str, nodes, nodes_index: int) -> int:
     return nodes_index
 
 
-def poll_is_active_object_terrain_doodad(cls, context):
+def poll_is_active_object_terrain_info(cls, context):
     if not is_active_object_terrain_info(context):
         cls.poll_message_set('The active object is not a terrain info object')
         return False
     # TODO: should also have a selected layer.
     return True
 
-
-terrain_layer_node_move_direction_items = [
-    ('UP', 'Up', 'Move the node up'),
-    ('DOWN', 'Down', 'Move the node down')
-]
 
 
 class BDK_OT_terrain_deco_layer_nodes_add(Operator):
@@ -479,11 +477,11 @@ class BDK_OT_terrain_deco_layer_nodes_add(Operator):
     bl_description = 'Add a node to the selected deco layer'
     bl_options = {'REGISTER', 'UNDO'}
 
-    type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
+    type: EnumProperty(name='Type', items=node_type_items)
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -507,7 +505,7 @@ class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(context.active_object)
@@ -528,11 +526,11 @@ class BDK_OT_terrain_deco_layer_nodes_move(Operator):
     bl_description = 'Move the selected layer node'
     bl_options = {'REGISTER', 'UNDO'}
 
-    direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
+    direction: EnumProperty(name='Direction', items=move_direction_items, default='UP')
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -553,11 +551,11 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
     bl_description = 'Add a node to the selected paint layer'
     bl_options = {'REGISTER', 'UNDO'}
 
-    type: EnumProperty(name='Type', items=terrain_layer_node_type_items)
+    type: EnumProperty(name='Type', items=node_type_items)
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -566,7 +564,7 @@ class BDK_OT_terrain_paint_layer_nodes_add(Operator):
         paint_layer = paint_layers[paint_layers_index]
 
         add_terrain_layer_node(context.active_object, paint_layer.nodes, self.type)
-        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes, context.active_object)
 
         return {'FINISHED'}
 
@@ -579,7 +577,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -589,7 +587,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
 
         remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index)
 
-        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes, context.active_object)
 
         return {'FINISHED'}
 
@@ -600,11 +598,11 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
     bl_description = 'Move the selected layer node'
     bl_options = {'REGISTER', 'UNDO'}
 
-    direction: EnumProperty(name='Direction', items=terrain_layer_node_move_direction_items, default='UP')
+    direction: EnumProperty(name='Direction', items=move_direction_items, default='UP')
 
     @classmethod
     def poll(cls, context: Context):
-        return poll_is_active_object_terrain_doodad(cls, context)
+        return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
@@ -613,7 +611,7 @@ class BDK_OT_terrain_paint_layer_nodes_move(Operator):
         paint_layer = paint_layers[paint_layers_index]
         paint_layer.nodes_index = move_terrain_layer_node(self.direction, paint_layer.nodes, paint_layer.nodes_index)
 
-        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes)
+        ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes, context.active_object)
 
         return {'FINISHED'}
 
@@ -635,7 +633,7 @@ class BDK_OT_terrain_info_repair(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        vertex_coordinates = get_terrain_info_vertex_coordinates(resolution=terrain_info.x_size, size=terrain_info.x_size * terrain_info.terrain_scale)
+        vertex_coordinates = get_terrain_info_vertex_xy_coordinates(resolution=terrain_info.x_size, size=terrain_info.terrain_scale)
         mesh_data = context.active_object.data
         vertex_repair_count = 0
         for vertex in mesh_data.vertices:
@@ -894,7 +892,7 @@ class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
         node: 'BDK_PG_terrain_layer_node' = nodes[paint_layer.nodes_index] if len(nodes) > paint_layer.nodes_index else None
 
         modifier = terrain_info_object.modifiers.new(node.id, 'NODES')
-        bake_node_tree = create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, terrain_info.paint_layers_index, paint_layer.nodes_index)
+        bake_node_tree = create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, terrain_info_object, terrain_info.paint_layers_index, paint_layer.nodes_index)
         modifier.node_group = bake_node_tree
 
         # TODO: get the index of the sculpt modifier and add one? (wouldn't that just be the first one?)
@@ -1099,11 +1097,98 @@ class BDK_OT_terrain_info_shift(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_info_set_terrain_scale(Operator):
+    bl_idname = 'bdk.terrain_info_set_terrain_scale'
+    bl_label = 'Set Terrain Scale'
+    bl_description = 'Set the terrain scale'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    terrain_scale: FloatProperty(name='Terrain Scale', default=64.0, min=0, soft_min=16.0, soft_max=128.0, max=512, subtype='DISTANCE')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+
+    def invoke(self, context: Context, event: Event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+
+        # TODO: this isn't tested yet!
+        xy_coordinates_iter = get_terrain_info_vertex_xy_coordinates(terrain_info.x_size, self.terrain_scale)
+
+        mesh_data = context.active_object.data
+        for vertex in mesh_data.vertices:
+            x, y = next(xy_coordinates_iter)
+            vertex.co.x = x
+            vertex.co.y = y
+
+        terrain_info.terrain_scale = self.terrain_scale
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_info_heightmap_import(Operator):
+    bl_idname = 'bdk.terrain_info_heightmap_import'
+    bl_label = 'Import Heightmap'
+    bl_description = 'Import a heightmap image'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filepath: StringProperty(name='File Path', subtype='FILE_PATH')
+    filter_glob: StringProperty(default='*.tga;*.bmp', options={'HIDDEN'})
+
+    terrain_scale_z: FloatProperty(name='Heightmap Scale', default=64.0, min=0, soft_min=16.0, soft_max=128.0, max=512)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+
+    def invoke(self, context: Context, event: Event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context: Context):
+        extension = os.path.splitext(self.filepath)[1]
+
+        if extension == '.tga':
+            # TODO: assume we are dealing with a UModel TGA file, where the heights are stored in the RGB channels.
+            self.report({'ERROR'}, 'TGA files are not supported yet')
+            return {'CANCELLED'}
+        elif extension == '.bmp':
+            # Read the G16 BMP file.
+            try:
+                heightmap = read_bmp_g16(self.filepath)
+            except IOError as e:
+                self.report({'ERROR'}, str(e))
+                return {'CANCELLED'}
+
+            # Make sure the heightmap is the correct size.
+            terrain_info = get_terrain_info(context.active_object)
+            if heightmap.shape != (terrain_info.x_size, terrain_info.y_size):
+                self.report({'ERROR'}, f'Heightmap is the wrong size. Expected {terrain_info.x_size}x{terrain_info.y_size}, got {heightmap.shape[0]}x{heightmap.shape[1]}')
+                return {'CANCELLED'}
+
+            # Convert the heightmap to floating point values.
+            heightmap = heightmap.astype(float)
+            # De-quantize the heightmap.
+            heightmap = (heightmap / 65535.0) - 0.5
+
+        # Apply the heightmap to the mesh.
+        mesh_data = context.active_object.data
+        for (vertex, z) in zip(mesh_data.vertices, heightmap.flat):
+            vertex.co.z = z * self.terrain_scale_z * 256.0
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
     BDK_OT_terrain_info_repair,
     BDK_OT_terrain_info_shift,
+    BDK_OT_terrain_info_heightmap_import,
+    BDK_OT_terrain_info_set_terrain_scale,
 
     BDK_OT_terrain_paint_layer_add,
     BDK_OT_terrain_paint_layer_remove,

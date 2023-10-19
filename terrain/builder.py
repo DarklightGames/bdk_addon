@@ -147,27 +147,27 @@ def get_terrain_quad_size(size: float, resolution: int) -> float:
     return size / (resolution - 1)
 
 
-def get_terrain_info_vertex_coordinates(resolution: int, size: float) -> Iterator[Tuple[float, float]]:
+def get_terrain_info_vertex_xy_coordinates(resolution: int, terrain_scale: float) -> Iterator[Tuple[float, float]]:
     """
     Gets the horizontal (X,Y) coordinates of the vertices for a terrain info object given the resolution and size.
     """
-    quad_length = float(size) / resolution
+    # NOTE: There is a bug in Unreal where the terrain is off-center, so we deliberately
+    # have to miscalculate things in order to replicate the behavior seen in the engine.
+    size = resolution * terrain_scale
     size_half = 0.5 * size
     for y in range(resolution):
         for x in range(resolution):
-            yield quad_length * x - size_half, quad_length * y - size_half + quad_length
+            yield terrain_scale * x - size_half, terrain_scale * y - size_half + terrain_scale
 
 
 def create_terrain_info_object(name: str, resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
-    # NOTE: There is a bug in Unreal where the terrain is off-center, so we deliberately
-    # have to miscalculate things in order to replicate the behavior seen in the engine.
-
     bm = bmesh.new()
 
     if heightmap is None:
         heightmap = np.full(resolution * resolution, fill_value=0, dtype=float)
 
-    coordinates_iter = get_terrain_info_vertex_coordinates(resolution, size)
+    terrain_scale = size / resolution
+    coordinates_iter = get_terrain_info_vertex_xy_coordinates(resolution, terrain_scale)
     coordinates = np.fromiter(((x, y, z) for ((x, y), z) in zip(coordinates_iter, heightmap)), dtype=np.dtype((float, 3)))
 
     for co in coordinates:

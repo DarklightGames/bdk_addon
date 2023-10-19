@@ -5,17 +5,16 @@ from bpy.props import IntProperty, PointerProperty, CollectionProperty, FloatPro
     EnumProperty, FloatVectorProperty
 from bpy.types import PropertyGroup, Object, NodeTree, Context
 
+from ...constants import RADIUS_EPSILON
+from .sculpt.properties import BDK_PG_terrain_doodad_sculpt_layer
+from ...property_group_helpers import add_curve_modifier_properties
+from ..properties import BDK_PG_terrain_layer_node
 from ...data import map_range_interpolation_type_items
 from ...helpers import get_terrain_info, get_terrain_doodad
 from ...units import meters_to_unreal
 from .builder import ensure_terrain_info_modifiers
 from .data import terrain_doodad_noise_type_items, terrain_doodad_operation_items
 from .scatter.builder import ensure_scatter_layer_modifiers
-
-
-# This value was determined experimentally. Any lower than this and doodad paint layers
-# will start to have artifacts.
-RADIUS_EPSILON = 0.001
 
 
 def terrain_doodad_sort_order_update_cb(self: 'BDK_PG_terrain_doodad', context: Context):
@@ -27,44 +26,6 @@ def terrain_doodad_update_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context:
     # We update the node group whe the operation is changed since we don't want to use drivers to control the
     # operation for performance reasons. (TODO: NOT TRUE!)
     ensure_terrain_info_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info)
-
-
-def add_curve_modifier_properties(cls):
-    # Add the curve modifier properties to the type annotation of the given class.
-    cls.__annotations__['is_curve_reversed'] = BoolProperty(name='Reverse Curve', default=False)  # TODO: Rename to curve_is_reversed
-    cls.__annotations__['curve_trim_mode'] = EnumProperty(name='Trim Mode', items=(('FACTOR', 'Factor', '', 0),('LENGTH', 'Distance', '', 1),), default='FACTOR')
-    cls.__annotations__['curve_trim_factor_start'] = FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
-    cls.__annotations__['curve_trim_factor_end'] = FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
-    cls.__annotations__['curve_trim_length_start'] = FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')
-    cls.__annotations__['curve_trim_length_end'] = FloatProperty(name='Trim Length End', default=0.0, min=0.0, subtype='DISTANCE')
-    cls.__annotations__['curve_normal_offset'] = FloatProperty(name='Normal Offset', default=0.0, subtype='DISTANCE')
-    cls.__annotations__['curve_align_to_tangent'] = BoolProperty(name='Align to Tangent', default=False, description='Align the X axis of the object to the tangent of the curve')
-
-
-class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
-    id: StringProperty(name='ID', default='')
-    name: StringProperty(name='Name', default='Sculpt Layer')
-    terrain_doodad_object: PointerProperty(type=Object, options={'HIDDEN'})
-    index: IntProperty(options={'HIDDEN'})
-    radius: FloatProperty(name='Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)
-    falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)
-    depth: FloatProperty(name='Depth', default=meters_to_unreal(0.5), subtype='DISTANCE')
-    strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
-    use_noise: BoolProperty(name='Use Noise', default=False)
-    noise_type: EnumProperty(name='Noise Type', items=terrain_doodad_noise_type_items, default='WHITE')
-    noise_radius_factor: FloatProperty(name='Noise Radius Factor', default=1.0, subtype='FACTOR', min=RADIUS_EPSILON, soft_max=8.0)
-    noise_strength: FloatProperty(name='Noise Strength', default=meters_to_unreal(0.25), subtype='DISTANCE', min=0.0, soft_max=meters_to_unreal(2.0))
-    perlin_noise_distortion: FloatProperty(name='Noise Distortion', default=1.0, min=0.0)
-    perlin_noise_roughness: FloatProperty(name='Noise Roughness', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
-    perlin_noise_scale: FloatProperty(name='Noise Scale', default=1.0, min=0.0)
-    perlin_noise_lacunarity: FloatProperty(name='Noise Lacunarity', default=2.0, min=0.0)
-    perlin_noise_detail: FloatProperty(name='Noise Detail', default=8.0, min=0.0)
-    mute: BoolProperty(name='Mute', default=False)
-    interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
-
-
-add_curve_modifier_properties(BDK_PG_terrain_doodad_sculpt_layer)
-# TODO: add noise settings in the same manner so that we can use the same settings
 
 
 def terrain_doodad_paint_layer_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context: Context, edit_text: str) -> List[str]:
@@ -124,8 +85,9 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
     falloff_radius: FloatProperty(name='Falloff Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)
     strength: FloatProperty(name='Strength', default=1.0, subtype='FACTOR', min=0.0, max=1.0)
     layer_type: EnumProperty(name='Layer Type', items=(
-        ('PAINT', 'Paint', 'Paint layer.'),
-        ('DECO', 'Deco', 'Deco layer.'),
+        ('PAINT', 'Paint', 'Paint layer'),
+        ('DECO', 'Deco', 'Deco layer'),
+        ('ATTRIBUTE', 'Attribute', 'Attribute layer')
     ), default='PAINT', update=terrain_doodad_update_cb)  # TODO: switch node this as well
     paint_layer_name: StringProperty(
         name='Paint Layer',
@@ -139,6 +101,7 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
         update=terrain_doodad_paint_layer_deco_layer_name_update_cb,
         search_options={'SORT'}
     )
+    attribute_layer_id: StringProperty(name='Attribute Layer ID', default='')
     paint_layer_id: StringProperty(name='Terrain Layer ID', default='', options={'HIDDEN'})
     deco_layer_id: StringProperty(name='Deco Layer ID', default='', options={'HIDDEN'})
     mute: BoolProperty(name='Mute', default=False)
@@ -249,8 +212,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
 
     global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
-    inert_factor: FloatProperty(name='Inert Factor', default=0.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will not be scattered')
-    inert_seed: IntProperty(name='Inert Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
+    density: FloatProperty(name='Density', default=0.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will be scattered')
+    density_seed: IntProperty(name='Density Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
 
     # Curve Settings
     curve_spacing_method: EnumProperty(name='Spacing Method', items=(
@@ -278,9 +241,15 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     ), default='POISSON_DISK')
     mesh_face_distribute_random_density: FloatProperty(name='Density', default=0.001, min=0.0, soft_max=0.1)
     mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(1.0), min=0.0, subtype='DISTANCE')
-    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)
-    mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, soft_max=10.0, subtype='FACTOR')
+    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)  # We could make this a more sensible unit. IIRC, the current unit is the number of points per square unit, which is bonkers.
+    mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
     mesh_face_distribute_seed: IntProperty(name='Distribution Seed', default=0, min=0)
+
+    # Mask Settings
+    use_mask_nodes: BoolProperty(name='Use Mask Nodes', default=False, options=set())
+    mask_nodes: CollectionProperty(name='Mask Nodes', type=BDK_PG_terrain_layer_node)
+    mask_nodes_index: IntProperty(options={'HIDDEN'})
+    mask_attribute_id: StringProperty(name='Mask Attribute ID', default='', options={'HIDDEN'})
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 
@@ -313,7 +282,6 @@ class BDK_PG_terrain_doodad(PropertyGroup):
 
 classes = (
     BDK_PG_terrain_doodad_paint_layer,
-    BDK_PG_terrain_doodad_sculpt_layer,
     BDK_PG_terrain_doodad_scatter_layer_object,
     BDK_PG_terrain_doodad_scatter_layer,
     BDK_PG_terrain_doodad,

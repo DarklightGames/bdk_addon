@@ -1,9 +1,9 @@
 from bpy.types import Panel, UIList, UILayout, AnyType, Menu, Modifier
 from typing import Optional, Any
 
-from .doodad.operators import BDK_OT_terrain_doodad_bake_debug
-from .properties import terrain_layer_node_type_icons, BDK_PG_terrain_layer_node, has_terrain_paint_layer_selected, \
-    get_selected_terrain_paint_layer, get_selected_deco_layer, has_deco_layer_selected
+from ..units import unreal_to_meters
+from .properties import node_type_icons, BDK_PG_terrain_layer_node
+from .context import has_terrain_paint_layer_selected, get_selected_terrain_paint_layer, get_selected_deco_layer, has_deco_layer_selected
 from .operators import *
 from ..helpers import is_active_object_terrain_info, get_terrain_info, should_show_bdk_developer_extras
 
@@ -23,19 +23,33 @@ class BDK_PT_terrain_info(Panel):
         pass
 
 
-class BDK_PT_terrain_info_operators(Panel):
-    bl_idname = 'BDK_PT_terrain_info_operators'
-    bl_label = 'Operators'
+class BDK_PT_terrain_info_advanced(Panel):
+    bl_idname = 'BDK_PT_terrain_info_advanced'
+    bl_label = 'Advanced'
     bl_parent_id = 'BDK_PT_terrain_info'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'BDK'
     bl_options = {'DEFAULT_CLOSED'}
-    bl_order = 3
+    bl_order = 4
 
     def draw(self, context: Context):
+        layout = self.layout
+
+        terrain_info = get_terrain_info(context.active_object)
+        layout = self.layout
+        flow = layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+        flow.prop(terrain_info, 'terrain_scale_z')
+        flow.prop(terrain_info, 'max_elevation')
+        flow.prop(terrain_info, 'heightmap_resolution')
         self.layout.operator(BDK_OT_terrain_info_repair.bl_idname, icon='FILE_REFRESH', text='Repair')
-        self.layout.operator(BDK_OT_terrain_info_shift.bl_idname, icon='TRANSFORM_ORIGINS', text='Translate')
+        self.layout.operator(BDK_OT_terrain_info_shift.bl_idname, icon='TRANSFORM_ORIGINS', text='Shift')
+        self.layout.operator(BDK_OT_terrain_info_heightmap_import.bl_idname, icon='IMPORT', text='Import Heightmap')
+        self.layout.operator(BDK_OT_terrain_info_set_terrain_scale.bl_idname, icon='MOD_SOLIDIFY', text='Set Terrain Scale')
+
+        # layout.operator(BDK_OT_terrain_info_.bl_idname, icon='FILE_REFRESH', text='Repair')
 
 
 class BDK_PT_terrain_info_debug(Panel):
@@ -62,10 +76,6 @@ class BDK_PT_terrain_info_debug(Panel):
 
         col.prop(terrain_info, 'x_size', text='Size X')
         col.prop(terrain_info, 'y_size', text='Y')
-        flow.prop(terrain_info, 'terrain_scale')
-        flow.prop(terrain_info, 'doodad_sculpt_modifier_name')
-        flow.prop(terrain_info, 'doodad_paint_modifier_name')
-        flow.prop(terrain_info, 'doodad_deco_modifier_name')
 
         # Modifier Performance
         depsgraph = context.evaluated_depsgraph_get()
@@ -75,6 +85,11 @@ class BDK_PT_terrain_info_debug(Panel):
         modifier = object_eval.modifiers.get(terrain_info.doodad_sculpt_modifier_name)
         if modifier:
             flow.prop(modifier, 'execution_time', text='Doodad Sculpt Execution Time', emboss=False)
+
+        # Attribute
+        modifier = object_eval.modifiers.get(terrain_info.doodad_attribute_modifier_name)
+        if modifier:
+            flow.prop(modifier, 'execution_time', text='Doodad Attribute Execution Time', emboss=False)
 
         # Paint
         modifier = object_eval.modifiers.get(terrain_info.doodad_paint_modifier_name)
@@ -283,20 +298,20 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
             flow.prop(node, 'map_range_from_max', text='Max')
 
 
-def draw_terrain_layer_node_list(layout: 'UILayout', dataptr: Any, add_operator: str, remove_operator: str, move_operator: str):
+def draw_terrain_layer_node_list(layout: 'UILayout', listtype_name: str, dataptr: Any, propname: str, active_propname: str, add_operator_idname: str, remove_operator_idname: str, move_operator_idname: str):
     row = layout.row()
     row.column().template_list(
-        'BDK_UL_terrain_layer_nodes', '',
-        dataptr, 'nodes',
-        dataptr, 'nodes_index',
+        listtype_name, 'neat',
+        dataptr, propname,
+        dataptr, active_propname,
         sort_lock=True, rows=5)
 
     col = row.column(align=True)
-    col.operator_menu_enum(add_operator, 'type', icon='ADD', text='')
-    col.operator(remove_operator, icon='REMOVE', text='')
+    col.operator_menu_enum(add_operator_idname, 'type', icon='ADD', text='')
+    col.operator(remove_operator_idname, icon='REMOVE', text='')
     col.separator()
-    col.operator(move_operator, icon='TRIA_UP', text='').direction = 'UP'
-    col.operator(move_operator, icon='TRIA_DOWN', text='').direction = 'DOWN'
+    col.operator(move_operator_idname, icon='TRIA_UP', text='').direction = 'UP'
+    col.operator(move_operator_idname, icon='TRIA_DOWN', text='').direction = 'DOWN'
     col.separator()
     col.menu(BDK_MT_terrain_layer_nodes_context_menu.bl_idname, icon='DOWNARROW_HLT', text='')
 
@@ -317,11 +332,13 @@ class BDK_PT_terrain_paint_layer_nodes(Panel):
 
         paint_layer = get_selected_terrain_paint_layer(context)
         draw_terrain_layer_node_list(layout,
+                                     'BDK_UL_terrain_layer_nodes',
                                      paint_layer,
-                                     add_operator=BDK_OT_terrain_paint_layer_nodes_add.bl_idname,
-                                     remove_operator=BDK_OT_terrain_paint_layer_nodes_remove.bl_idname,
-                                     move_operator=BDK_OT_terrain_paint_layer_nodes_move.bl_idname)
-
+                                     'nodes',
+                                     'nodes_index',
+                                     add_operator_idname=BDK_OT_terrain_paint_layer_nodes_add.bl_idname,
+                                     remove_operator_idname=BDK_OT_terrain_paint_layer_nodes_remove.bl_idname,
+                                     move_operator_idname=BDK_OT_terrain_paint_layer_nodes_move.bl_idname)
         node = get_selected_terrain_paint_layer_node(context)
         draw_terrain_layer_node_settings(layout, node)
 
@@ -342,10 +359,13 @@ class BDK_PT_terrain_deco_layer_nodes(Panel):
 
         deco_layer = get_selected_deco_layer(context)
         draw_terrain_layer_node_list(layout,
+                                     'BDK_UL_terrain_layer_nodes',
                                      deco_layer,
-                                     add_operator=BDK_OT_terrain_deco_layer_nodes_add.bl_idname,
-                                     remove_operator=BDK_OT_terrain_deco_layer_nodes_remove.bl_idname,
-                                     move_operator=BDK_OT_terrain_deco_layer_nodes_move.bl_idname)
+                                     'nodes',
+                                     'nodes_index',
+                                     add_operator_idname=BDK_OT_terrain_deco_layer_nodes_add.bl_idname,
+                                     remove_operator_idname=BDK_OT_terrain_deco_layer_nodes_remove.bl_idname,
+                                     move_operator_idname=BDK_OT_terrain_deco_layer_nodes_move.bl_idname)
 
         node = get_selected_deco_layer_node(context)
         draw_terrain_layer_node_settings(layout, node)
@@ -540,43 +560,48 @@ class BDK_UL_terrain_deco_layers(UIList):
         row.prop(item.object, 'hide_viewport', icon=('HIDE_OFF' if not item.object.hide_viewport else 'HIDE_ON'), text='', emboss=False)
 
 
+def draw_terrain_layer_node_item(layout: UILayout, item, mesh):
+    color_attribute_index = mesh.color_attributes.find(item.id)
+    is_active_color_attribute = color_attribute_index == mesh.color_attributes.active_color_index
+
+    row = layout.row()
+    # Display an icon if this is the active color attribute.
+    row.label(text='', icon='VPAINT_HLT' if is_active_color_attribute else 'BLANK1')
+
+    col = row.column(align=True)
+
+    if item.type == 'PAINT_LAYER':
+        if item.paint_layer_name:
+            col.label(text=item.paint_layer_name, icon=node_type_icons[item.type])
+        else:
+            col.label(text='<no layer selected>', icon=node_type_icons[item.type])
+    else:
+        col.prop(item, 'name', text='', emboss=False, icon=node_type_icons[item.type])
+
+    row = row.row(align=True)
+    row.prop(item, 'operation', text='', emboss=False)
+    row.prop(item, 'mute', text='', emboss=False, icon='HIDE_OFF' if not item.mute else 'HIDE_ON')
+
+
 class BDK_UL_terrain_layer_nodes(UIList):
+
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
         mesh = cast(Mesh, context.active_object.data)
-        color_attribute_index = mesh.color_attributes.find(item.id)
-        is_active_color_attribute = color_attribute_index == mesh.color_attributes.active_color_index
-
-        row = layout.row()
-        # Display an icon if this is the active color attribute.
-        row.label(text='', icon='VPAINT_HLT' if is_active_color_attribute else 'BLANK1')
-
-        col = row.column(align=True)
-
-        if item.type == 'PAINT_LAYER':
-            if item.paint_layer_name:
-                col.label(text=item.paint_layer_name, icon=terrain_layer_node_type_icons[item.type])
-            else:
-                col.label(text='<no layer selected>', icon=terrain_layer_node_type_icons[item.type])
-        else:
-            col.prop(item, 'name', text='', emboss=False, icon=terrain_layer_node_type_icons[item.type])
-
-        row = row.row(align=True)
-        row.prop(item, 'operation', text='', emboss=False)
-        row.prop(item, 'mute', text='', emboss=False, icon='HIDE_OFF' if not item.mute else 'HIDE_ON')
+        draw_terrain_layer_node_item(layout, item, mesh)
 
 
 classes = (
     BDK_PT_terrain_info,
-    BDK_PT_terrain_info_operators,
+    BDK_PT_terrain_info_advanced,
     BDK_PT_terrain_info_debug,
+    BDK_UL_terrain_layer_nodes,
     BDK_PT_terrain_paint_layers,
     BDK_PT_terrain_deco_layers,
     BDK_UL_terrain_paint_layers,
     BDK_PT_terrain_paint_layer_settings,
     BDK_PT_terrain_paint_layer_debug,
     BDK_UL_terrain_deco_layers,
-    BDK_UL_terrain_layer_nodes,
     BDK_PT_terrain_deco_layer_mesh,
     BDK_PT_terrain_deco_layer_settings,
     BDK_PT_terrain_deco_layer_nodes,

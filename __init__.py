@@ -15,11 +15,15 @@ bl_info = {
 if 'bpy' in locals():
     import importlib
 
+    importlib.reload(constants)
+    importlib.reload(property_group_helpers)
     importlib.reload(node_helpers)
 
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
+
+    importlib.reload(g16)
 
     importlib.reload(material_data)
     importlib.reload(material_reader)
@@ -27,29 +31,34 @@ if 'bpy' in locals():
     importlib.reload(material_operators)
     importlib.reload(material_ui)
 
+    # Projector
     importlib.reload(projector_builder)
     importlib.reload(projector_operators)
 
+    # Fluid Surface
     importlib.reload(fluid_surface_builder)
     importlib.reload(fluid_surface_operators)
 
-    importlib.reload(terrain_layers)
-    importlib.reload(terrain_deco)
-    importlib.reload(terrain_g16)
-    importlib.reload(terrain_ui)
+    # Terrain
     importlib.reload(terrain_properties)
+    importlib.reload(terrain_context)
+    importlib.reload(terrain_kernel)
     importlib.reload(terrain_builder)
-    importlib.reload(terrain_operators)
     importlib.reload(terrain_exporter)
+    importlib.reload(terrain_operators)
+    importlib.reload(terrain_ui)
+
+    # Terrain Doodad
+    importlib.reload(terrain_doodad_scatter_builder)
+    importlib.reload(terrain_doodad_sculpt_builder)
+    importlib.reload(terrain_doodad_sculpt_properties)
+    importlib.reload(terrain_doodad_sculpt_operators)
 
     importlib.reload(terrain_doodad_data)
     importlib.reload(terrain_doodad_builder)
     importlib.reload(terrain_doodad_properties)
     importlib.reload(terrain_doodad_operators)
     importlib.reload(terrain_doodad_ui)
-
-    importlib.reload(terrain_doodad_scatter_builder)
-    importlib.reload(terrain_doodad_sculpt_builder)
 
     importlib.reload(particle_data)
     importlib.reload(particle_properties)
@@ -59,12 +68,14 @@ if 'bpy' in locals():
     importlib.reload(particle_ui)
 
     if bdk_helpers.are_bdk_dependencies_installed():
+        # T3D
         importlib.reload(t3d_data)
         importlib.reload(t3d_operators)
         importlib.reload(t3d_importer)
         importlib.reload(t3d_writer)
         importlib.reload(t3d_ui)
 
+        # BSP
         importlib.reload(bsp_builder)
         importlib.reload(bsp_properties)
         importlib.reload(bsp_operators)
@@ -74,18 +85,20 @@ if 'bpy' in locals():
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
 else:
-    from . import node_helpers as node_helpers
     from . import helpers as bdk_helpers
     from .bdk import operators as bdk_operators
     from .bdk import properties as bdk_properties
     from .bdk import ui as bdk_ui
     from .bdk import preferences as bdk_preferences
 
+     # G16
+    from .g16 import g16
+
     # Material
-    from .material import importer as material_importer
-    from .material import operators as material_operators
     from .material import data as material_data
     from .material import reader as material_reader
+    from .material import importer as material_importer
+    from .material import operators as material_operators
     from .material import ui as material_ui
 
     # Projector
@@ -97,24 +110,28 @@ else:
     from .fluid_surface import operators as fluid_surface_operators
 
     # Terrain
+    from .terrain import properties as terrain_properties
+    from .terrain import context as terrain_context
+    from .terrain import kernel as terrain_kernel
     from .terrain import builder as terrain_builder
     from .terrain import exporter as terrain_exporter
-    from .terrain import layers as terrain_layers  # TODO: rename to paint??
-    from .terrain import deco as terrain_deco
-    from .terrain import g16 as terrain_g16
-    from .terrain import properties as terrain_properties
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
+
+    # Terrain Doodad Sculpt Layers
+    from .terrain.doodad.sculpt import builder as terrain_doodad_sculpt_builder
+    from .terrain.doodad.sculpt import properties as terrain_doodad_sculpt_properties
+    from .terrain.doodad.sculpt import operators as terrain_doodad_sculpt_operators
+
+    # Terrain Doodad Scatter Layers
+    from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
 
     # Terrain Doodad
     from .terrain.doodad import data as terrain_doodad_data
     from .terrain.doodad import builder as terrain_doodad_builder
-    from .terrain.doodad import operators as terrain_doodad_operators
     from .terrain.doodad import properties as terrain_doodad_properties
+    from .terrain.doodad import operators as terrain_doodad_operators
     from .terrain.doodad import ui as terrain_doodad_ui
-
-    from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
-    from .terrain.doodad.sculpt import builder as terrain_doodad_sculpt_builder
 
     # Particles
     from .particle import data as particle_data
@@ -127,10 +144,10 @@ else:
     if bdk_helpers.are_bdk_dependencies_installed():
         # T3D
         from .t3d import data as t3d_data
-        from .t3d import importer as t3d_importer
-        from .t3d import writer as t3d_writer
         from .t3d import ui as t3d_ui
         from .t3d import operators as t3d_operators
+        from .t3d import importer as t3d_importer
+        from .t3d import writer as t3d_writer
 
         # BSP
         from .bsp import builder as bsp_builder
@@ -152,6 +169,8 @@ classes = material_importer.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
+          terrain_doodad_sculpt_properties.classes + \
+          terrain_doodad_sculpt_operators.classes + \
           terrain_doodad_operators.classes + \
           terrain_doodad_properties.classes + \
           terrain_doodad_ui.classes + \
@@ -179,7 +198,7 @@ def material_import_menu_func(self, _context: bpy.types.Context):
 
 def bdk_add_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.menu(bdk_ui.BDK_MT_object_add_menu.bl_idname, text='BDK', icon='BDK_LOGO')
+    self.layout.menu(bdk_ui.BDK_MT_object_add_menu.bl_idname, text='BDK')
 
 
 def bdk_select_menu_func(self, _context: bpy.types.Context):
