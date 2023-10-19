@@ -11,6 +11,7 @@ from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolPrope
 from bpy.types import Operator, Context, Mesh, Object, Event
 from bpy_extras.io_utils import ExportHelper
 
+from ..g16.g16 import read_bmp_g16
 from ..data import move_direction_items
 from .context import get_selected_terrain_paint_layer_node
 from .layers import add_terrain_deco_layer
@@ -24,7 +25,7 @@ from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte
     invert_byte_color_attribute_data, accumulate_byte_color_attribute_data, copy_simple_property_group, \
     ensure_name_unique, padded_roll
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
-    get_terrain_info_vertex_coordinates
+    get_terrain_info_vertex_xy_coordinates
 from .properties import node_type_items, node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, \
     BDK_PG_terrain_layer_node, BDK_PG_terrain_deco_layer
 
@@ -632,7 +633,7 @@ class BDK_OT_terrain_info_repair(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        vertex_coordinates = get_terrain_info_vertex_coordinates(resolution=terrain_info.x_size, size=terrain_info.x_size * terrain_info.terrain_scale)
+        vertex_coordinates = get_terrain_info_vertex_xy_coordinates(resolution=terrain_info.x_size, size=terrain_info.terrain_scale)
         mesh_data = context.active_object.data
         vertex_repair_count = 0
         for vertex in mesh_data.vertices:
@@ -1096,11 +1097,98 @@ class BDK_OT_terrain_info_shift(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_info_set_terrain_scale(Operator):
+    bl_idname = 'bdk.terrain_info_set_terrain_scale'
+    bl_label = 'Set Terrain Scale'
+    bl_description = 'Set the terrain scale'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    terrain_scale: FloatProperty(name='Terrain Scale', default=64.0, min=0, soft_min=16.0, soft_max=128.0, max=512, subtype='DISTANCE')
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+
+    def invoke(self, context: Context, event: Event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+
+        # TODO: this isn't tested yet!
+        xy_coordinates_iter = get_terrain_info_vertex_xy_coordinates(terrain_info.x_size, self.terrain_scale)
+
+        mesh_data = context.active_object.data
+        for vertex in mesh_data.vertices:
+            x, y = next(xy_coordinates_iter)
+            vertex.co.x = x
+            vertex.co.y = y
+
+        terrain_info.terrain_scale = self.terrain_scale
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_info_heightmap_import(Operator):
+    bl_idname = 'bdk.terrain_info_heightmap_import'
+    bl_label = 'Import Heightmap'
+    bl_description = 'Import a heightmap image'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filepath: StringProperty(name='File Path', subtype='FILE_PATH')
+    filter_glob: StringProperty(default='*.tga;*.bmp', options={'HIDDEN'})
+
+    terrain_scale_z: FloatProperty(name='Heightmap Scale', default=64.0, min=0, soft_min=16.0, soft_max=128.0, max=512)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+
+    def invoke(self, context: Context, event: Event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context: Context):
+        extension = os.path.splitext(self.filepath)[1]
+
+        if extension == '.tga':
+            # TODO: assume we are dealing with a UModel TGA file, where the heights are stored in the RGB channels.
+            self.report({'ERROR'}, 'TGA files are not supported yet')
+            return {'CANCELLED'}
+        elif extension == '.bmp':
+            # Read the G16 BMP file.
+            try:
+                heightmap = read_bmp_g16(self.filepath)
+            except IOError as e:
+                self.report({'ERROR'}, str(e))
+                return {'CANCELLED'}
+
+            # Make sure the heightmap is the correct size.
+            terrain_info = get_terrain_info(context.active_object)
+            if heightmap.shape != (terrain_info.x_size, terrain_info.y_size):
+                self.report({'ERROR'}, f'Heightmap is the wrong size. Expected {terrain_info.x_size}x{terrain_info.y_size}, got {heightmap.shape[0]}x{heightmap.shape[1]}')
+                return {'CANCELLED'}
+
+            # Convert the heightmap to floating point values.
+            heightmap = heightmap.astype(float)
+            # De-quantize the heightmap.
+            heightmap = (heightmap / 65535.0) - 0.5
+
+        # Apply the heightmap to the mesh.
+        mesh_data = context.active_object.data
+        for (vertex, z) in zip(mesh_data.vertices, heightmap.flat):
+            vertex.co.z = z * self.terrain_scale_z * 256.0
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
     BDK_OT_terrain_info_repair,
     BDK_OT_terrain_info_shift,
+    BDK_OT_terrain_info_heightmap_import,
+    BDK_OT_terrain_info_set_terrain_scale,
 
     BDK_OT_terrain_paint_layer_add,
     BDK_OT_terrain_paint_layer_remove,

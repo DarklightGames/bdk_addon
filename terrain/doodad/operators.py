@@ -15,7 +15,8 @@ from ..properties import BDK_PG_terrain_layer_node, get_terrain_info_paint_layer
     get_terrain_info_deco_layer_by_id, node_type_items, node_type_item_names
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad, \
     is_active_object_terrain_doodad, should_show_bdk_developer_extras, ensure_name_unique
-from .builder import create_terrain_doodad_object, create_terrain_doodad_bake_node_tree
+from .builder import create_terrain_doodad_object, create_terrain_doodad_bake_node_tree, \
+    convert_object_to_terrain_doodad
 
 
 class BDK_OT_terrain_doodad_add(Operator):
@@ -468,6 +469,14 @@ class BDK_OT_terrain_doodad_delete(Operator):
         return {'FINISHED'}
 
 
+def get_selected_terrain_info_object(context: Context) -> Object:
+    for selected_object in context.selected_objects:
+        if selected_object.bdk.type == 'TERRAIN_INFO':
+            return selected_object
+    return None
+
+
+
 class BDK_OT_convert_to_terrain_doodad(Operator):
     bl_idname = 'bdk.convert_to_terrain_doodad'
     bl_label = 'Convert to Terrain Doodad'
@@ -476,18 +485,36 @@ class BDK_OT_convert_to_terrain_doodad(Operator):
     @classmethod
     def poll(cls, context: Context):
         terrain_doodad_object_types = {'MESH', 'CURVE', 'EMPTY'}
+
         # Check if object is already a terrain doodad.
         if is_active_object_terrain_doodad(context):
             cls.poll_message_set('Object is already a terrain doodad')
             return False
+
         # Check if object is a mesh, curve or empty.
         if context.active_object is None or context.active_object.type not in terrain_doodad_object_types:
-            cls.poll_message_set('Active object must be a mesh, curve or empty.')
+            cls.poll_message_set('Active object must be a mesh, curve or empty')
             return False
+
+        # Make sure that the only other selected object is a terrain info object.
+        terrain_info_object = get_selected_terrain_info_object(context)
+
+        if terrain_info_object is None:
+            cls.poll_message_set('Must have a terrain info object selected')
+            return False
+
         return True
 
     def execute(self, context: Context):
-        # TODO: convert to terrain doodad (refactor from terrain doodad add)
+        # Get the selected terrain info object.
+        terrain_info_object = get_selected_terrain_info_object(context)
+
+        # Convert the object to a terrain doodad.
+        convert_object_to_terrain_doodad(context.active_object, terrain_info_object)
+
+        # Update the terrain info modifiers.
+        ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
+
         return {'FINISHED'}
 
 

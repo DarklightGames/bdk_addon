@@ -1,11 +1,12 @@
 import uuid
 
+from bpy.props import EnumProperty
 from bpy.types import Operator, Context
 
 from ..builder import ensure_terrain_info_modifiers
 from ..kernel import ensure_terrain_doodad_layer_indices
 from ..operators import poll_has_terrain_doodad_selected
-from ....helpers import copy_simple_property_group, get_terrain_doodad
+from ....helpers import copy_simple_property_group, get_terrain_doodad, ensure_name_unique
 
 
 def poll_has_terrain_doodad_selected_sculpt_layer(cls, context: Context) -> bool:
@@ -35,6 +36,7 @@ class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
         sculpt_layer = terrain_doodad.sculpt_layers.add()
         sculpt_layer.id = uuid.uuid4().hex
         sculpt_layer.terrain_doodad_object = terrain_doodad.object
+        sculpt_layer.name = ensure_name_unique(sculpt_layer.name, [layer.name for layer in terrain_doodad.sculpt_layers])
 
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)
@@ -46,6 +48,37 @@ class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
         ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
+
+
+class BDK_OT_terrain_doodad_sculpt_layer_move(Operator):
+    bl_idname = 'bdk.terrain_doodad_sculpt_layer_move'
+    bl_label = 'Move Sculpt Layer'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    direction: EnumProperty(name='Direction', items=(('UP', 'Up', ''), ('DOWN', 'Down', '')))
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_terrain_doodad_selected_sculpt_layer(cls, context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        sculpt_layers = terrain_doodad.sculpt_layers
+        sculpt_layers_index = terrain_doodad.sculpt_layers_index
+
+        if self.direction == 'UP' and sculpt_layers_index > 0:
+            sculpt_layers.move(sculpt_layers_index, sculpt_layers_index - 1)
+            terrain_doodad.sculpt_layers_index -= 1
+        elif self.direction == 'DOWN' and sculpt_layers_index < len(sculpt_layers) - 1:
+            sculpt_layers.move(sculpt_layers_index, sculpt_layers_index + 1)
+            terrain_doodad.sculpt_layers_index += 1
+
+        # The order of the sculpt layers has changed, so we need to rebuild the geometry node tree (perhaps just limit
+        # this to the appropriate modifiers instead of doing everything!)
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
+
+        return {'FINISHED'}
+
 
 
 class BDK_OT_terrain_doodad_sculpt_layer_remove(Operator):
@@ -86,26 +119,27 @@ class BDK_OT_terrain_doodad_sculpt_layer_duplicate(Operator):
         return poll_has_terrain_doodad_selected_sculpt_layer(cls, context)
 
     def execute(self, context: Context):
-        terrain_info_object = context.active_object
-        terrain_doodad = terrain_info_object.bdk.terrain_doodad
+        terrain_doodad = get_terrain_doodad(context.active_object)
         sculpt_layer_copy = terrain_doodad.sculpt_layers.add()
 
         copy_simple_property_group(terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index], sculpt_layer_copy)
 
         # Make sure the copy has a unique id.
         sculpt_layer_copy.id = uuid.uuid4().hex
+        sculpt_layer_copy.name = ensure_name_unique(sculpt_layer_copy.name, [layer.name for layer in terrain_doodad.sculpt_layers])
 
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)
 
         # Update the geometry node tree.
-        ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
 
 classes = (
     BDK_OT_terrain_doodad_sculpt_layer_add,
+    BDK_OT_terrain_doodad_sculpt_layer_move,
     BDK_OT_terrain_doodad_sculpt_layer_remove,
     BDK_OT_terrain_doodad_sculpt_layer_duplicate,
 )

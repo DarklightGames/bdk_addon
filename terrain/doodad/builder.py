@@ -10,7 +10,7 @@ from .sculpt.builder import ensure_sculpt_node_group
 from ..kernel import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
 from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_trim_curve_node_tree, \
-    ensure_curve_normal_offset_node_tree
+    ensure_curve_normal_offset_node_tree, add_geometry_node_switch_nodes
 from .data import terrain_doodad_operation_items
 from ...units import meters_to_unreal
 
@@ -313,10 +313,8 @@ def create_terrain_doodad_object(context: Context, terrain_info_object: Object, 
     :param object_type: The type of object to create. Valid values are 'CURVE', 'MESH' and 'EMPTY'
     :return:
     """
-    terrain_doodad_id = uuid4().hex
-
     if object_type == 'CURVE':
-        object_data = bpy.data.curves.new(name=terrain_doodad_id, type='CURVE')
+        object_data = bpy.data.curves.new(name=uuid4().hex, type='CURVE')
         spline = object_data.splines.new(type='BEZIER')
 
         # Add some points to the spline.
@@ -339,7 +337,7 @@ def create_terrain_doodad_object(context: Context, terrain_info_object: Object, 
     elif object_type == 'EMPTY':
         object_data = None
     elif object_type == 'MESH':
-        object_data = bpy.data.meshes.new(name=terrain_doodad_id)
+        object_data = bpy.data.meshes.new(name=uuid4().hex)
         # Create a plane using bmesh.
         bm = bmesh.new()
         bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=meters_to_unreal(1.0))
@@ -356,42 +354,36 @@ def create_terrain_doodad_object(context: Context, terrain_info_object: Object, 
     elif object_type == 'MESH':
         bpy_object.display_type = 'WIRE'
 
-    # Hide from rendering and Cycles passes.
-    bpy_object.hide_render = True
-
-    # Disable all ray visibility settings (this stops it from being visible in Cycles rendering in the viewport).
-    bpy_object.visible_camera = False
-    bpy_object.visible_diffuse = False
-    bpy_object.visible_glossy = False
-    bpy_object.visible_transmission = False
-    bpy_object.visible_volume_scatter = False
-    bpy_object.visible_shadow = False
-
-    bpy_object.bdk.type = 'TERRAIN_DOODAD'
-    bpy_object.bdk.terrain_doodad.id = terrain_doodad_id
-    bpy_object.bdk.terrain_doodad.terrain_info_object = terrain_info_object
-    bpy_object.bdk.terrain_doodad.object = bpy_object
-    bpy_object.bdk.terrain_doodad.node_tree = bpy.data.node_groups.new(name=terrain_doodad_id, type='GeometryNodeTree')
-    bpy_object.show_in_front = True
-    bpy_object.lock_location = (False, False, True)
-    bpy_object.lock_rotation = (True, True, False)
-
-    terrain_doodad = bpy_object.bdk.terrain_doodad
-
-    # Add sculpt and paint layers.
-    # In the future, we will allow the user to select a preset for the terrain doodad.
-    sculpt_layer = terrain_doodad.sculpt_layers.add()
-    sculpt_layer.id = uuid4().hex
-    sculpt_layer.terrain_doodad_object = terrain_doodad.object
-
-    paint_layer = terrain_doodad.paint_layers.add()
-    paint_layer.id = uuid4().hex
-    paint_layer.terrain_doodad_object = terrain_doodad.object
-
     # Set the location of the curve object to the 3D cursor.
     bpy_object.location = context.scene.cursor.location
 
+    # Convert the newly made object to a terrain doodad.
+    convert_object_to_terrain_doodad(bpy_object, terrain_info_object)
+
     return bpy_object
+
+def convert_object_to_terrain_doodad(obj: Object, terrain_info_object: Object):
+    # Hide from rendering and Cycles passes.
+    obj.hide_render = True
+
+    # Disable all ray visibility settings (this stops it from being visible in Cycles rendering in the viewport).
+    obj.visible_camera = False
+    obj.visible_diffuse = False
+    obj.visible_glossy = False
+    obj.visible_transmission = False
+    obj.visible_volume_scatter = False
+    obj.visible_shadow = False
+
+    terrain_doodad_id = uuid4().hex
+    obj.bdk.type = 'TERRAIN_DOODAD'
+    obj.bdk.terrain_doodad.id = terrain_doodad_id
+    obj.bdk.terrain_doodad.terrain_info_object = terrain_info_object
+    obj.bdk.terrain_doodad.object = obj
+    obj.bdk.terrain_doodad.node_tree = bpy.data.node_groups.new(name=terrain_doodad_id, type='GeometryNodeTree')
+
+    obj.show_in_front = True
+    obj.lock_location = (False, False, True)
+    obj.lock_rotation = (True, True, False)
 
 
 def get_terrain_doodads_for_terrain_info_object(context: Context, terrain_info_object: Object) -> List['BDK_PG_terrain_doodad']:
@@ -684,10 +676,10 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         sculpt_node.node_tree = ensure_sculpt_node_group()
         sculpt_node.label = 'Sculpt'
 
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'GEOMETRY'
+        mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        mute_switch_node.input_type = 'GEOMETRY'
 
-        add_doodad_sculpt_layer_driver(switch_node.inputs[1], sculpt_layer, 'mute')
+        add_doodad_sculpt_layer_driver(mute_switch_node.inputs[1], sculpt_layer, 'mute')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Radius'], sculpt_layer, 'radius')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Falloff Radius'], sculpt_layer, 'falloff_radius')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Depth'], sculpt_layer, 'depth')
@@ -697,20 +689,20 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Scale'], sculpt_layer, 'perlin_noise_scale')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Lacunarity'], sculpt_layer, 'perlin_noise_lacunarity')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Detail'], sculpt_layer, 'perlin_noise_detail')
-
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Use Noise'], sculpt_layer, 'use_noise')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Radius Factor'], sculpt_layer, 'noise_radius_factor')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Interpolation Type'], sculpt_layer, 'interpolation_type')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Type'], sculpt_layer, 'noise_type')
+        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Operation'], sculpt_layer, 'operation')
 
         # Link the geometry socket of the object info node to the geometry socket of the sculpting node.
         node_tree.links.new(geometry_socket, sculpt_node.inputs['Geometry'])
         node_tree.links.new(distance_socket, sculpt_node.inputs['Distance'])
 
-        node_tree.links.new(sculpt_node.outputs['Geometry'], switch_node.inputs[14])  # False (not muted)
-        node_tree.links.new(geometry_socket, switch_node.inputs[15])  # True (muted)
+        node_tree.links.new(sculpt_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False (not muted)
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs[15])  # True (muted)
 
-        geometry_socket = switch_node.outputs[6]
+        geometry_socket = mute_switch_node.outputs[6]
 
     return geometry_socket
 

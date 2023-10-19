@@ -21,7 +21,7 @@ class UReference:
 
     @staticmethod
     def from_string(string: str) -> Optional['UReference']:
-        if string == 'None':
+        if string == 'None' or string == '':
             return None
 
         # Test for a type-qualified reference (e.g. StaticMesh'MyPackage.MyGroup.MyName').
@@ -30,6 +30,9 @@ class UReference:
 
         pattern = r'(\w+)\'([\w\.\d\-\_]+)\''
         match = re.match(pattern, string)
+
+        print('UReference.from_string')
+        print(string)
 
         if match is not None:
             # Type-qualified reference match succeeded.

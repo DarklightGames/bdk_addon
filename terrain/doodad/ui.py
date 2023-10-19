@@ -1,18 +1,18 @@
-from typing import cast
+from typing import cast, Optional, Any
 
 import bpy
-from bpy.types import Panel, Context, UIList, UILayout, Curve
+from bpy.types import Panel, Context, UIList, UILayout, Curve, AnyType
 
 from .sculpt.operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
-    BDK_OT_terrain_doodad_sculpt_layer_duplicate
-from ..ui import draw_terrain_layer_node_list, draw_terrain_layer_node_settings, BDK_UL_terrain_layer_nodes
+    BDK_OT_terrain_doodad_sculpt_layer_duplicate, BDK_OT_terrain_doodad_sculpt_layer_move
+from ..ui import draw_terrain_layer_node_list, draw_terrain_layer_node_settings, draw_terrain_layer_node_item
 from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad, is_active_object_terrain_doodad
 from .operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doodad_paint_layer_remove, \
     BDK_OT_terrain_doodad_paint_layer_duplicate, \
     BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
     BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_bake_debug, \
+    BDK_OT_terrain_doodad_scatter_layer_duplicate, \
     BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, BDK_OT_terrain_doodad_demote, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add, BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move
@@ -35,7 +35,9 @@ class BDK_UL_terrain_doodad_scatter_layers(UIList):
 class BDK_UL_terrain_doodad_sculpt_layers(UIList):
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
         layout.prop(item, 'name', icon='SCULPTMODE_HLT', emboss=False, text='')
-        layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
+        row = layout.row(align=True)
+        row.prop(item, 'operation', text='', emboss=False)
+        row.prop(item, 'mute', text='', emboss=False, icon='HIDE_OFF' if not item.mute else 'HIDE_ON')
 
 
 class BDK_UL_terrain_doodad_paint_layers(UIList):
@@ -250,21 +252,22 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
             draw_curve_modifier_settings(flow, sculpt_layer)
             flow.separator()
 
-        flow.prop(sculpt_layer, 'use_noise')
-
-        if sculpt_layer.use_noise:
-            flow.prop(sculpt_layer, 'noise_type')
+        if sculpt_layer.operation == 'ADD':
+            flow.prop(sculpt_layer, 'use_noise')
 
             if sculpt_layer.use_noise:
-                col = flow.column(align=True)
-                col.prop(sculpt_layer, 'noise_radius_factor')
-                col.prop(sculpt_layer, 'noise_strength')
-                if sculpt_layer.noise_type == 'PERLIN':
-                    col.prop(sculpt_layer, 'perlin_noise_distortion')
-                    col.prop(sculpt_layer, 'perlin_noise_roughness')
-                    col.prop(sculpt_layer, 'perlin_noise_scale')
-                    col.prop(sculpt_layer, 'perlin_noise_lacunarity')
-                    col.prop(sculpt_layer, 'perlin_noise_detail')
+                flow.prop(sculpt_layer, 'noise_type')
+
+                if sculpt_layer.use_noise:
+                    col = flow.column(align=True)
+                    col.prop(sculpt_layer, 'noise_radius_factor')
+                    col.prop(sculpt_layer, 'noise_strength')
+                    if sculpt_layer.noise_type == 'PERLIN':
+                        col.prop(sculpt_layer, 'perlin_noise_distortion')
+                        col.prop(sculpt_layer, 'perlin_noise_roughness')
+                        col.prop(sculpt_layer, 'perlin_noise_scale')
+                        col.prop(sculpt_layer, 'perlin_noise_lacunarity')
+                        col.prop(sculpt_layer, 'perlin_noise_detail')
 
 
 class BDK_PT_terrain_doodad_sculpt_layers(Panel):
@@ -298,6 +301,11 @@ class BDK_PT_terrain_doodad_sculpt_layers(Panel):
         col = row.column(align=True)
         col.operator(BDK_OT_terrain_doodad_sculpt_layer_add.bl_idname, icon='ADD', text='')
         col.operator(BDK_OT_terrain_doodad_sculpt_layer_remove.bl_idname, icon='REMOVE', text='')
+
+        col.separator()
+
+        col.operator(BDK_OT_terrain_doodad_sculpt_layer_move.bl_idname, icon='TRIA_UP', text='').direction = 'UP'
+        col.operator(BDK_OT_terrain_doodad_sculpt_layer_move.bl_idname, icon='TRIA_DOWN', text='').direction = 'DOWN'
 
         col.separator()
 
@@ -742,10 +750,21 @@ class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
         flow.prop(sculpt_layer, 'id')
 
 
-class BDK_UL_terrain_doodad_scatter_layer_nodes(BDK_UL_terrain_layer_nodes):
-    def get_mesh(self, context: Context):
+class BDK_UL_terrain_doodad_scatter_layer_nodes(UIList):
+
+    def draw_item(self,
+                  context: Optional['Context'],
+                  layout: 'UILayout',
+                  data: Optional[AnyType],
+                  item: Optional[AnyType],
+                  icon: Optional[int],
+                  active_data: 'AnyType',
+                  active_property: str,
+                  index: Optional[Any] = 0,
+                  flt_flag: Optional[Any] = 0):
         terrain_doodad = get_terrain_doodad(context.active_object)
-        return terrain_doodad.terrain_info_object.data
+        mesh = terrain_doodad.terrain_info_object.data
+        draw_terrain_layer_node_item(layout, item, mesh)
 
 
 classes = (

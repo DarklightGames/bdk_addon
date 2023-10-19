@@ -335,16 +335,20 @@ class TerrainInfoImporter(ActorImporter):
             edge_turn_bitmap[index] = value
 
         # TODO: make create_terrain_info_object take quad_size instead of full resolution
-        mesh_object = create_terrain_info_object(name=terrain_map_reference.object_name,
-                                                 resolution=resolution, size=resolution * size, heightmap=heightmap,
-                                                 edge_turn_bitmap=edge_turn_bitmap)
-        mesh_data: Mesh = cast(Mesh, mesh_object.data)
+        terrain_info_object = create_terrain_info_object(name=terrain_map_reference.object_name,
+                                                         resolution=resolution, size=resolution * size,
+                                                         heightmap=heightmap, edge_turn_bitmap=edge_turn_bitmap)
+
+        terrain_info = terrain_info_object.bdk.terrain_info
+        terrain_info.terrain_scale_z = terrain_scale_z
+
+        mesh_data: Mesh = cast(Mesh, terrain_info_object.data)
 
         # Link the new object to the scene.
         # Note that it is necessary to do this here because the code below relies on the terrain info object already
         # existing in the scene.
-        if mesh_object is not None:
-            context.scene.collection.objects.link(mesh_object)
+        if terrain_info_object is not None:
+            context.scene.collection.objects.link(terrain_info_object)
 
         # Layers
         for layer_index, layer in layers:
@@ -356,14 +360,14 @@ class TerrainInfoImporter(ActorImporter):
             else:
                 paint_layer_name = uuid.uuid4().hex
 
-            paint_layer = add_terrain_paint_layer(mesh_object, paint_layer_name)
+            paint_layer = add_terrain_paint_layer(terrain_info_object, paint_layer_name)
             paint_layer.u_scale = layer.get('UScale', 1.0)
             paint_layer.v_scale = layer.get('VScale', 1.0)
             paint_layer.texture_rotation = unreal_to_radians(layer.get('TextureRotation', 0))
 
             if alpha_map_reference:
                 # Add the node group and rebuild the node tree.
-                paint_node = add_terrain_layer_node(mesh_object, paint_layer.nodes, type='PAINT')
+                paint_node = add_terrain_layer_node(terrain_info_object, paint_layer.nodes, type='PAINT')
 
                 # Alpha Map
                 alpha_map_image_name = f'{paint_layer_name}.tga'
@@ -396,7 +400,7 @@ class TerrainInfoImporter(ActorImporter):
 
             # TODO: current scheme assumes 1:1 density map; provide a way to flag that we have our own density map we
             #  want to use (i.e. reuse the deco layers)
-            deco_layer = add_terrain_deco_layer(mesh_object, name=deco_layer_name)
+            deco_layer = add_terrain_deco_layer(terrain_info_object, name=deco_layer_name)
 
             static_mesh_data = load_bdk_static_mesh(str(static_mesh_reference))
             deco_static_mesh_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)
@@ -449,7 +453,7 @@ class TerrainInfoImporter(ActorImporter):
                 if density_map_image:
                     print(f'Density map image found for deco layer {density_map_image}')
                     # Create the paint node for the deco layer.
-                    paint_node = add_terrain_layer_node(mesh_object, deco_layer.nodes, type='PAINT')
+                    paint_node = add_terrain_layer_node(terrain_info_object, deco_layer.nodes, type='PAINT')
                     if terrain_map_image.size != density_map_image.size:
                         # Print out a warning if the alpha map image is not the same size as the terrain map image.
                         print(
@@ -466,7 +470,7 @@ class TerrainInfoImporter(ActorImporter):
                     print(f'Could not find density map image: {density_map_image_name}')
 
         # Deco Layer Offset
-        mesh_object.bdk.terrain_info.deco_layer_offset = deco_layer_offset
+        terrain_info.deco_layer_offset = deco_layer_offset
 
         # Quad Visibility Bitmap.
         quad_visibility_bitmap = np.zeros(shape=int(math.ceil((resolution * resolution) / 32)), dtype=np.int32)
@@ -485,10 +489,10 @@ class TerrainInfoImporter(ActorImporter):
             bitmap_index += 1
 
         # Ensure the paint layers are set up correctly.
-        ensure_paint_layers(mesh_object)
-        ensure_deco_layers(mesh_object)
+        ensure_paint_layers(terrain_info_object)
+        ensure_deco_layers(terrain_info_object)
 
-        return mesh_object
+        return terrain_info_object
 
     @classmethod
     def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):

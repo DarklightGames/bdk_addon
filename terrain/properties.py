@@ -137,8 +137,8 @@ BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name=
 
 def terrain_paint_layer_texel_density_get(self: 'BDK_PG_terrain_paint_layer') -> float:
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
-    x = self.material.get('UClamp', 0) if self.material else 0
-    y = self.material.get('VClamp', 0) if self.material else 0
+    x = self.material.bdk.size_x if self.material else 0
+    y = self.material.bdk.size_y if self.material else 0
     pixels_per_quad = ((x / self.u_scale) * (y / self.v_scale))
     quad_area = pow(terrain_info.terrain_scale, 2)
     return abs(pixels_per_quad / quad_area)
@@ -152,8 +152,8 @@ def terrain_paint_layer_texel_density_set(self, texel_density: float):
     :return:
     """
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
-    x = self.material.get('UClamp', 0) if self.material else 0
-    y = self.material.get('VClamp', 0) if self.material else 0
+    x = self.material.bdk.size_x if self.material else 0
+    y = self.material.bdk.size_y if self.material else 0
     quad_area = pow(terrain_info.terrain_scale, 2)
     scale = math.sqrt((x * y) / (texel_density * quad_area))
     self.u_scale = scale
@@ -370,9 +370,20 @@ def on_terrain_info_paint_layers_index_update(self: 'BDK_PG_terrain_info', _: Co
         bpy.ops.ed.undo_push(message=f"Select '{paint_layer.name}' Layer")
 
 
+def terrain_info_max_elevation_get(self: 'BDK_PG_terrain_info') -> float:
+    return self.terrain_scale_z * 256 * 2
+
+def terrain_info_heightmap_resolution_get(self: 'BDK_PG_terrain_info') -> float:
+    return self.max_elevation / 65536.0
+
 class BDK_PG_terrain_info(PropertyGroup):
     terrain_info_object: PointerProperty(type=Object)
     terrain_scale: FloatProperty(name='Terrain Scale', options={'HIDDEN'}, subtype='DISTANCE')
+    terrain_scale_z: FloatProperty(name='Heightmap Scale', options={'HIDDEN'}, default=64.0, min=0, soft_min=16.0, soft_max=128.0, max=512)
+    max_elevation: FloatProperty(name='Max Elevation Range', options={'HIDDEN'}, subtype='DISTANCE', get=terrain_info_max_elevation_get,
+                                 description='The maximum elevation range of the terrain given the heightmap scale.')
+    heightmap_resolution: FloatProperty(name='Heightmap Resolution', options={'HIDDEN'}, subtype='DISTANCE', get=terrain_info_heightmap_resolution_get,
+                                        description='The z-resolution of the heightmap when exported to a heightmap image. Lower values are better')
     paint_layers: CollectionProperty(name='Paint Layers', type=BDK_PG_terrain_paint_layer)
     paint_layers_index: IntProperty(options={'HIDDEN'}, update=on_terrain_info_paint_layers_index_update)
     deco_layers: CollectionProperty(name='Deco Layers', type=BDK_PG_terrain_deco_layer)

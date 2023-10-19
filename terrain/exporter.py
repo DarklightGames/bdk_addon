@@ -15,7 +15,7 @@ from ..helpers import get_terrain_info
 from ..g16.g16 import write_bmp_g16
 
 
-def get_instance_offset(asset_instance: Object) -> Matrix:
+def get_instance_offset(asset_instance: Object) -> Matrix:  # TODO: move to generic helpers
     try:
         local_offset: Vector = asset_instance.instance_collection.instance_offset
         return Matrix().Translation(local_offset).inverted()
@@ -71,7 +71,7 @@ def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optiona
     return actor
 
 
-def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: float) -> T3DObject:
+def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
     terrain_info = get_terrain_info(terrain_info_object)
 
     actor = T3DObject('Actor')
@@ -179,7 +179,7 @@ def create_terrain_info_actor(terrain_info_object: Object, terrain_scale_z: floa
     actor.properties['TerrainScale'] = Vector((
         terrain_info.terrain_scale,
         terrain_info.terrain_scale,
-        max(1.0, terrain_scale_z / 256.0)))  # A scale of 0 makes the terrain not display.
+        terrain_info.terrain_scale_z))
     actor.properties['DecoLayerOffset'] = terrain_info_object.bdk.terrain_info.deco_layer_offset
 
     add_movement_properties_to_actor(actor, terrain_info_object)
@@ -277,7 +277,7 @@ def create_image_from_attribute(terrain_info_object: Object, depsgraph: Depsgrap
     return image
 
 
-def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph) -> (np.ndarray, float):
+def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph) -> np.ndarray:
     terrain_info = get_terrain_info(terrain_info_object)
     if terrain_info is None:
         raise RuntimeError('Invalid object')
@@ -288,20 +288,20 @@ def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph) -> 
     # TODO: support "multiple terrains"
     shape = (terrain_info.x_size, terrain_info.y_size)
     heightmap = np.array([v.co[2] for v in mesh_data.vertices], dtype=float)
-    heightmap, terrain_scale_z = normalize_and_quantize_heights(heightmap)
-    return heightmap.reshape(shape), terrain_scale_z
+    heightmap = quantize_heightmap(heightmap, terrain_info.terrain_scale_z)
+    return heightmap.reshape(shape)
 
 
 def export_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
-    heightmap, _ = get_terrain_heightmap(terrain_info_object, depsgraph)
+    heightmap = get_terrain_heightmap(terrain_info_object, depsgraph)
     path = os.path.join(directory, f'{terrain_info_object.name}.bmp')
     write_bmp_g16(path, pixels=heightmap)
 
 
 def write_terrain_t3d(terrain_info_object: Object, depsgraph: Depsgraph, fp: io.TextIOBase):
-    heightmap, terrain_scale_z = get_terrain_heightmap(terrain_info_object, depsgraph)
+    heightmap = get_terrain_heightmap(terrain_info_object, depsgraph)
     t3d = T3DObject('Map')
-    t3d.children.append(create_terrain_info_actor(terrain_info_object, terrain_scale_z))
+    t3d.children.append(create_terrain_info_actor(terrain_info_object))
     T3DWriter(fp).write(t3d)
 
 
@@ -314,12 +314,21 @@ def get_terrain_height_range(heightmap: np.ndarray) -> (float, float):
     return height_min, height_max
 
 
-def normalize_and_quantize_heights(heightmap: np.array) -> (np.array, float):
+def get_best_terrain_scale_z(heightmap: np.ndarray) -> float:
     height_min, height_max = get_terrain_height_range(heightmap)
-    terrain_scale_z = height_max - height_min
+    return height_max - height_min
+
+
+def quantize_heightmap(heightmap: np.array, terrain_scale_z: float) -> np.array:
     if terrain_scale_z == 0:
         heightmap.fill(0.5)
     else:
-        heightmap = (heightmap - height_min) / terrain_scale_z
+        # Calculate the maximum height value based on the terrain scale.
+        terrain_max_height = terrain_scale_z * 256.0
+        # Raise the heightmap so that the minimum height is >=0.
+        heightmap = (heightmap / terrain_max_height) + 0.5
+        # If the heightmap has any values outside the range [0, 1], throw an error.
+        if np.any(heightmap < 0) or np.any(heightmap > 1):
+            raise RuntimeError('The TerrainScale.Z value is too small for the heightmap.')
     heightmap = np.uint16(heightmap * 65535)
-    return heightmap, terrain_scale_z
+    return heightmap
