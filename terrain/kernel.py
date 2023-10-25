@@ -1,11 +1,8 @@
-import bpy
-import uuid
-
-from bpy.types import Object, NodeTree, Collection, NodeSocket, bpy_struct, ID
+from bpy.types import Object, NodeTree, NodeSocket, bpy_struct, ID
 from typing import Optional, Iterable, Callable
 
 from ..helpers import get_terrain_info
-from ..node_helpers import add_operation_switch_nodes, ensure_input_and_output_nodes, ensure_geometry_node_tree, \
+from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree, \
     ensure_terrain_layer_node_operation_node_tree
 
 

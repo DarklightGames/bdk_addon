@@ -15,7 +15,8 @@ from .operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doo
     BDK_OT_terrain_doodad_scatter_layer_duplicate, \
     BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, BDK_OT_terrain_doodad_demote, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add, BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move
+    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move, BDK_OT_terrain_doodad_save_preset, \
+    BDK_OT_terrain_doodad_load_preset
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -166,6 +167,9 @@ class BDK_PT_terrain_doodad_operators(Panel):
         self.layout.operator(BDK_OT_terrain_doodad_duplicate.bl_idname, icon='DUPLICATE')
         self.layout.operator(BDK_OT_terrain_doodad_delete.bl_idname, icon='X')
         self.layout.operator(BDK_OT_terrain_doodad_demote.bl_idname, icon='TRIA_DOWN')
+        self.layout.operator(BDK_OT_terrain_doodad_save_preset.bl_idname, icon='FILE_TICK')
+        self.layout.operator(BDK_OT_terrain_doodad_load_preset.bl_idname, icon='FILE_FOLDER')
+
 
 
 class BDK_PT_terrain_doodad_debug(Panel):
@@ -663,6 +667,8 @@ def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = Non
         col = layout.column(align=True)
         col.prop(data, 'curve_trim_factor_start', text='Trim Start')
         col.prop(data, 'curve_trim_factor_end', text='End')
+        if data.curve_trim_factor_start >= data.curve_trim_factor_end:
+            layout.label(text='Trim start should be less than trim end', icon='ERROR')
     elif data.curve_trim_mode == 'LENGTH':
         col = layout.column(align=True)
         col.prop(data, 'curve_trim_length_start', text='Trim Start')

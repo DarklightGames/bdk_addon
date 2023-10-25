@@ -1,8 +1,7 @@
 from bpy.types import Panel, UIList, UILayout, AnyType, Menu, Modifier
 from typing import Optional, Any
 
-from ..units import unreal_to_meters
-from .properties import node_type_icons, BDK_PG_terrain_layer_node
+from .properties import node_type_icons
 from .context import has_terrain_paint_layer_selected, get_selected_terrain_paint_layer, get_selected_deco_layer, has_deco_layer_selected
 from .operators import *
 from ..helpers import is_active_object_terrain_info, get_terrain_info, should_show_bdk_developer_extras
@@ -84,22 +83,30 @@ class BDK_PT_terrain_info_debug(Panel):
         # Sculpt
         modifier = object_eval.modifiers.get(terrain_info.doodad_sculpt_modifier_name)
         if modifier:
-            flow.prop(modifier, 'execution_time', text='Doodad Sculpt Execution Time', emboss=False)
+            row = flow.row()
+            row.prop(modifier, 'execution_time', text='Doodad Sculpt Execution Time', emboss=False)
+            row.prop(terrain_info, 'is_sculpt_modifier_muted', text='', icon='HIDE_ON' if terrain_info.is_sculpt_modifier_muted else 'HIDE_OFF')
 
         # Attribute
         modifier = object_eval.modifiers.get(terrain_info.doodad_attribute_modifier_name)
         if modifier:
-            flow.prop(modifier, 'execution_time', text='Doodad Attribute Execution Time', emboss=False)
+            row = flow.row()
+            row.prop(modifier, 'execution_time', text='Doodad Attribute Execution Time', emboss=False)
+            row.prop(terrain_info, 'is_attribute_modifier_muted', text='', icon='HIDE_ON' if terrain_info.is_attribute_modifier_muted else 'HIDE_OFF')
 
         # Paint
         modifier = object_eval.modifiers.get(terrain_info.doodad_paint_modifier_name)
         if modifier:
-            flow.prop(modifier, 'execution_time', text='Doodad Paint Execution Time', emboss=False)
+            row = flow.row()
+            row.prop(modifier, 'execution_time', text='Doodad Paint Execution Time', emboss=False)
+            row.prop(terrain_info, 'is_paint_modifier_muted', text='', icon='HIDE_ON' if terrain_info.is_paint_modifier_muted else 'HIDE_OFF')
 
         # Deco
         modifier = object_eval.modifiers.get(terrain_info.doodad_deco_modifier_name)
         if modifier:
-            flow.prop(modifier, 'execution_time', text='Doodad Deco Execution Time', emboss=False)
+            row = flow.row()
+            row.prop(modifier, 'execution_time', text='Doodad Deco Execution Time', emboss=False)
+            row.prop(terrain_info, 'is_deco_modifier_muted', text='', icon='HIDE_ON' if terrain_info.is_deco_modifier_muted else 'HIDE_OFF')
 
 
 class BDK_PT_terrain_paint_layers(Panel):
@@ -298,7 +305,15 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
             flow.prop(node, 'map_range_from_max', text='Max')
 
 
-def draw_terrain_layer_node_list(layout: 'UILayout', listtype_name: str, dataptr: Any, propname: str, active_propname: str, add_operator_idname: str, remove_operator_idname: str, move_operator_idname: str):
+def draw_terrain_layer_node_list(
+        layout: 'UILayout',
+        listtype_name: str,
+        dataptr: Any,
+        propname: str,
+        active_propname: str,
+        add_operator_idname: str,
+        remove_operator_idname: str,
+        move_operator_idname: str):
     row = layout.row()
     row.column().template_list(
         listtype_name, 'neat',

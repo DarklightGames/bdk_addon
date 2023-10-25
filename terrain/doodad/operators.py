@@ -1,14 +1,15 @@
 import uuid
+from typing import Optional
 
 import bpy
 import mathutils
 from bpy.types import Operator, Context, Collection, Event, Object, Mesh
-from bpy.props import EnumProperty
+from bpy.props import EnumProperty, StringProperty
 
-from .kernel import ensure_terrain_doodad_layer_indices
+from .kernel import ensure_terrain_doodad_layer_indices, add_terrain_doodad_sculpt_layer, add_terrain_doodad_paint_layer
 from ...data import move_direction_items
 from .properties import ensure_terrain_info_modifiers, BDK_PG_terrain_doodad_scatter_layer
-from .scatter.builder import ensure_scatter_layer_modifiers, add_scatter_layer_object, add_scatter_layer, \
+from .scatter.builder import ensure_scatter_layer_modifiers, add_scatter_layer_object, add_terrain_doodad_scatter_layer, \
     ensure_scatter_layer
 from ..operators import merge_down_terrain_layer_node_data
 from ..properties import BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id, \
@@ -376,16 +377,13 @@ class BDK_OT_terrain_doodad_paint_layer_duplicate(Operator):
         return poll_has_terrain_doodad_selected_paint_layer(cls, context)
 
     def execute(self, context: Context):
-        # TODO: wrap this into a function.
         terrain_doodad_object = context.active_object
         terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
-        paint_layer_copy = terrain_doodad.paint_layers.add()
+        paint_layer = get_terrain_doodad_selected_paint_layer(context)
+        paint_layer_copy = add_terrain_doodad_paint_layer(terrain_doodad, paint_layer.name)
 
         # Copy the paint layer. Ignore the name because changing it will trigger the name change callback.
-        copy_simple_property_group(terrain_doodad.paint_layers[terrain_doodad.paint_layers_index], paint_layer_copy,
-                                   ignore={'name'})
-
-        paint_layer_copy.id = uuid.uuid4().hex
+        copy_simple_property_group(paint_layer, paint_layer_copy, ignore={'id', 'name'})
 
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)
@@ -402,6 +400,15 @@ def poll_has_terrain_doodad_selected(cls, context: Context) -> bool:
         cls.poll_message_set('Must have a terrain doodad selected')
         return False
     return True
+
+
+def get_terrain_doodad_selected_paint_layer(context: Context):
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    if terrain_doodad is None:
+        return None
+    if len(terrain_doodad.paint_layers) == 0 or terrain_doodad.paint_layers_index < 0:
+        return None
+    return terrain_doodad.paint_layers[terrain_doodad.paint_layers_index]
 
 
 def poll_has_terrain_doodad_selected_paint_layer(cls, context: Context) -> bool:
@@ -532,7 +539,7 @@ class BDK_OT_terrain_doodad_scatter_layer_add(Operator):
         terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
 
         # Add a new sculpting layer.
-        scatter_layer = add_scatter_layer(terrain_doodad)
+        scatter_layer = add_terrain_doodad_scatter_layer(terrain_doodad)
 
         ensure_scatter_layer(scatter_layer)
 
@@ -670,14 +677,17 @@ class BDK_OT_terrain_doodad_scatter_layer_duplicate(Operator):
     def execute(self, context: Context):
         terrain_doodad = get_terrain_doodad(context.active_object)
         scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
-        scatter_layer_copy = add_scatter_layer(terrain_doodad)
-        copy_simple_property_group(scatter_layer, scatter_layer_copy, {'id', 'seed_object', 'sprout_object', 'mask_attribute_id'})
+        scatter_layer_copy = add_terrain_doodad_scatter_layer(terrain_doodad, scatter_layer.name)
+        copy_simple_property_group(scatter_layer, scatter_layer_copy, {'id', 'name', 'seed_object', 'sprout_object', 'mask_attribute_id'})
 
         # Copy the scatter layer objects.
         for scatter_layer_object in scatter_layer.objects:
             scatter_layer_object_copy = scatter_layer_copy.objects.add()
             scatter_layer_object_copy.id = uuid.uuid4().hex
             copy_simple_property_group(scatter_layer_object, scatter_layer_object_copy, {'id'})
+
+        # Select the new scatter layer.
+        terrain_doodad.scatter_layers_index = len(terrain_doodad.scatter_layers) - 1
 
         ensure_scatter_layer(scatter_layer_copy)
         ensure_terrain_doodad_layer_indices(terrain_doodad)
@@ -751,6 +761,8 @@ class BDK_OT_terrain_doodad_demote(Operator):
         # Remove the terrain doodad from object.
         terrain_doodad_object = context.active_object
         terrain_doodad_object.bdk.type = 'NONE'
+
+        ensure_terrain_info_modifiers(context, terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
@@ -841,6 +853,80 @@ class BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_doodad_save_preset(Operator):
+    bl_idname = 'bdk.terrain_doodad_save_preset'
+    bl_label = 'Save Terrain Doodad Preset'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    name: StringProperty(name='Name')
+
+    def invoke(self, context: Context, event: Event):
+        # Pre-populate the name field with the name of the active object.
+        self.name = context.active_object.name
+        return context.window_manager.invoke_props_dialog(self)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_terrain_doodad_selected(cls, context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+
+        # Save the settings to the scene.
+        terrain_doodad_preset = context.scene.bdk.terrain_doodad_presets.add()
+        terrain_doodad_preset.id = uuid.uuid4().hex
+        terrain_doodad_preset.name = self.name
+        copy_simple_property_group(terrain_doodad, terrain_doodad_preset.settings, ignore={'id', 'terrain_info_object'})
+
+        return {'FINISHED'}
+
+def terrain_doodad_load_preset_name_search_cb(self, context: Context, edit_text: str):
+    return [x.name for x in context.scene.bdk.terrain_doodad_presets]
+
+
+class BDK_OT_terrain_doodad_load_preset(Operator):
+    bl_idname = 'bdk.terrain_doodad_load_preset'
+    bl_label = 'Load Terrain Doodad Preset'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    name: StringProperty(name='Name', search=terrain_doodad_load_preset_name_search_cb, search_options={'SORT'})
+
+    def invoke(self, context: Context, event: Event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_terrain_doodad_selected(cls, context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+
+        terrain_info_object = terrain_doodad.terrain_info_object
+
+        # Find the preset with the given name.
+        for terrain_doodad_preset in context.scene.bdk.terrain_doodad_presets:
+            if terrain_doodad_preset.name == self.name:
+                terrain_doodad.sculpt_layers.clear()
+                for sculpt_layer in terrain_doodad_preset.settings.sculpt_layers:
+                    new_sculpt_layer = add_terrain_doodad_sculpt_layer(terrain_doodad, sculpt_layer.name)
+                    copy_simple_property_group(sculpt_layer, new_sculpt_layer, ignore={'id', 'terrain_doodad_object', 'index'})
+
+                terrain_doodad.paint_layers.clear()
+                for paint_layer in terrain_doodad_preset.settings.paint_layers:
+                    new_paint_layer = add_terrain_doodad_paint_layer(terrain_doodad, paint_layer.name)
+                    copy_simple_property_group(paint_layer, new_paint_layer, ignore={'id', 'terrain_doodad_object'})
+
+                terrain_doodad.scatter_layers.clear()
+                for scatter_layer in terrain_doodad_preset.settings.scatter_layers:
+                    new_scatter_layer = add_terrain_doodad_scatter_layer(terrain_doodad, scatter_layer.name)
+                    copy_simple_property_group(scatter_layer, new_scatter_layer, ignore={'id', 'objects', 'terrain_doodad_object'})
+                break
+
+        # Ensure the modifiers
+        ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
+
+        return {'FINISHED'}
+
 # TODO: split the sculpt, paint and scatter layers into their own files.
 classes = (
     BDK_OT_convert_to_terrain_doodad,
@@ -865,4 +951,7 @@ classes = (
     BDK_OT_terrain_doodad_scatter_layer_objects_add,
     BDK_OT_terrain_doodad_scatter_layer_objects_remove,
     BDK_OT_terrain_doodad_scatter_layer_objects_duplicate,
+
+    BDK_OT_terrain_doodad_save_preset,
+    BDK_OT_terrain_doodad_load_preset,
 )

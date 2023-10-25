@@ -174,6 +174,10 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     scale_random_uniform_max: FloatProperty(name='Scale Max', default=1.0, min=0.0)
     scale_random_min: FloatVectorProperty(name='Scale Min', min=0.0, default=(1.0, 1.0, 1.0))
     scale_random_max: FloatVectorProperty(name='Scale Max', min=0.0, default=(1.0, 1.0, 1.0))
+    scale_random_distribution: EnumProperty(name='Scale Random Distribution', items=(
+        ('UNIFORM', 'Uniform', 'Uniform distribution', '', 0),
+        ('GAUSSIAN', 'Gaussian', 'Gaussian distribution', '', 1),
+    ), default='UNIFORM')
     scale_seed: IntProperty(name='Random Scale Seed', default=0, min=0)
 
     # Snap & Align to Terrain

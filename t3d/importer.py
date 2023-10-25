@@ -11,6 +11,7 @@ from bpy.types import Context, Object, Mesh, Image, Camera
 from mathutils import Matrix
 from typing import List, Optional, Dict, Any, cast, Type
 
+from ..fluid_surface.operators import create_fluid_surface_object
 from ..bsp.properties import get_poly_flags_keys_from_value
 from ..terrain.operators import add_terrain_layer_node
 from ..projector.builder import build_projector_node_tree
@@ -198,49 +199,21 @@ class BrushImporter(ActorImporter):
 class FluidSurfaceInfoImporter(ActorImporter):
     @classmethod
     def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
-        name = t3d_actor.properties.get('Name')
-        mesh_data: Mesh = cast(Mesh, bpy.data.meshes.new(name))
-        return bpy.data.objects.new(name, mesh_data)
+        return create_fluid_surface_object(t3d_actor.properties.get('Name'))
 
     @classmethod
     def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
         # Create a new geometry node tree.
-        geometry_node_tree = bpy.data.node_groups.new(name=bpy_object.name, type="GeometryNodeTree")
-        geometry_node_tree.inputs.clear()
-
-        geometry_node_tree.outputs.new("NodeSocketGeometry", "Geometry")
-
-        fluid_surface_node = geometry_node_tree.nodes.new(type="GeometryNodeBDKFluidSurface")
-        set_material_node = geometry_node_tree.nodes.new(type="GeometryNodeSetMaterial")
-        output_node = geometry_node_tree.nodes.new(type="NodeGroupOutput")
-
-        geometry_node_tree.links.new(fluid_surface_node.outputs["Geometry"], set_material_node.inputs["Geometry"])
-        geometry_node_tree.links.new(set_material_node.outputs["Geometry"], output_node.inputs["Geometry"])
-
-        # Add geometry node modifier to fluid_surface_object.
-        geometry_node_modifier = bpy_object.modifiers.new(name="FluidSurfaceInfo", type="NODES")
-        geometry_node_modifier.node_group = geometry_node_tree
-
-        input_names = [
-            "FluidGridType",
-            "FluidGridSpacing",
-            "FluidXSize",
-            "FluidYSize",
-            "UTiles",
-            "UOffset",
-            "VTiles",
-            "VOffset"
-        ]
-
-        # Create drivers on fluid surface node inputs that map to the properties on the fluid surface object.
-        for input_name in input_names:
-            driver = fluid_surface_node.inputs[input_name].driver_add("default_value").driver
-            driver.type = 'AVERAGE'
-            var = driver.variables.new()
-            var.name = input_name
-            var.type = 'SINGLE_PROP'
-            var.targets[0].id = bpy_object
-            var.targets[0].data_path = f"[\"{input_name}\"]"
+        fluid_surface = bpy_object.bdk.fluid_surface
+        fluid_surface.fluid_grid_type = t3d_actor.properties.get('FluidGridType', 'FGT_Hexagonal')
+        fluid_surface.fluid_grid_spacing = t3d_actor.properties.get('FluidGridSpacing', 24.0)
+        fluid_surface.fluid_x_size = t3d_actor.properties.get('FluidXSize', 48)
+        fluid_surface.fluid_y_size = t3d_actor.properties.get('FluidYSize', 48)
+        fluid_surface.u_tiles = t3d_actor.properties.get('UTiles', 1)
+        fluid_surface.u_offset = t3d_actor.properties.get('UOffset', 0.0)
+        fluid_surface.v_tiles = t3d_actor.properties.get('VTiles', 1)
+        fluid_surface.v_offset = t3d_actor.properties.get('VOffset', 0.0)
+        fluid_surface.material = load_bdk_material(t3d_actor.properties.get('Texture', r"Texture'Engine.S_FluidSurf'"))
 
 
 class ProjectorImporter(ActorImporter):

@@ -37,7 +37,9 @@ if 'bpy' in locals():
 
     # Fluid Surface
     importlib.reload(fluid_surface_builder)
+    importlib.reload(fluid_surface_properties)
     importlib.reload(fluid_surface_operators)
+    importlib.reload(fluid_surface_ui)
 
     # Terrain
     importlib.reload(terrain_properties)
@@ -100,7 +102,9 @@ else:
 
     # Fluid Surface
     from .fluid_surface import builder as fluid_surface_builder
+    from .fluid_surface import properties as fluid_surface_properties
     from .fluid_surface import operators as fluid_surface_operators
+    from .fluid_surface import ui as fluid_surface_ui
 
     # Terrain
     from .terrain import properties as terrain_properties
@@ -150,7 +154,9 @@ classes = material_importer.classes + \
           material_operators.classes + \
           material_ui.classes + \
           projector_operators.classes + \
+          fluid_surface_properties.classes + \
           fluid_surface_operators.classes + \
+          fluid_surface_ui.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
@@ -218,6 +224,7 @@ def register():
     bpy.types.Object.bdk = PointerProperty(type=bdk_properties.BDK_PG_object)
     bpy.types.Material.bdk = PointerProperty(type=bdk_properties.BDK_PG_material)
     bpy.types.NodeTree.bdk = PointerProperty(type=bdk_properties.BDK_PG_node_tree)
+    bpy.types.Scene.bdk = PointerProperty(type=bdk_properties.BDK_PG_scene)
 
     bpy.types.TOPBAR_MT_file_import.append(material_import_menu_func)
 
@@ -227,6 +234,7 @@ def register():
     bpy.types.VIEW3D_MT_object.append(bdk_object_menu_func)
 
     bpy.types.VIEW3D_MT_select_object.append(bdk_select_menu_func)
+
 
     if bdk_helpers.are_bdk_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)

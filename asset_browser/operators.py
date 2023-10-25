@@ -1,7 +1,7 @@
 import bpy
-from bpy.types import Operator, FileSelectEntry, Context, bpy_prop_collection, UserAssetLibrary
+from bpy.types import Operator, Context
 from pathlib import Path
-from typing import Set, Sequence, Optional
+from typing import Set
 
 
 class BDK_OT_asset_import_data_linked(Operator):
@@ -16,7 +16,7 @@ class BDK_OT_asset_import_data_linked(Operator):
             # TODO: why is this a requirement?
             cls.poll_message_set('Must be in object mode')
             return False
-        assets: Sequence[FileSelectEntry] = context.selected_assets
+        assets = context.selected_assets
         if len(assets) == 0:
             cls.poll_message_set('No assets selected')
             return False
@@ -27,7 +27,7 @@ class BDK_OT_asset_import_data_linked(Operator):
 
     def execute(self, context: Context) -> Set[str]:
         library_path: Path
-        assets: Sequence[FileSelectEntry] = context.selected_assets
+        assets = context.selected_assets
 
         linked_count = 0
         skipped_count = 0

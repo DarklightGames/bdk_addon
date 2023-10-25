@@ -1,10 +1,11 @@
 import sys
 from collections import OrderedDict
 from enum import Enum
-from typing import Set
+from typing import Set, cast
 
 import bpy
-from bpy.types import Operator, Object, Context, Depsgraph
+from bpy.props import FloatProperty, EnumProperty
+from bpy.types import Operator, Object, Context, Depsgraph, Mesh
 import bmesh
 
 from .properties import csg_operation_items
@@ -16,19 +17,22 @@ class BDK_OT_bsp_brush_add(Operator):
     bl_description = 'Add a BSP brush to the scene'
     bl_options = {'REGISTER', 'UNDO'}
 
-    csg_operation: bpy.props.EnumProperty(
+    csg_operation: EnumProperty(
         name='CSG Operation',
         items=csg_operation_items,
         default='CSG_Add',
     )
 
+    size: FloatProperty(name='Size', default=256.0, min=0.0)
+
     # TODO: options for shape, size etc.
 
-    def draw(self, context: 'Context'):
+    def draw(self, context: Context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.prop(self, 'csg_operation')
+        layout.prop(self, 'size')
 
     def execute(self, context):
 
@@ -36,7 +40,7 @@ class BDK_OT_bsp_brush_add(Operator):
         mesh = bpy.data.meshes.new('Brush')
 
         bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=64.0)
+        bmesh.ops.create_cube(bm, size=self.size)
         bm.to_mesh(mesh)
 
         poly_flags_attribute = mesh.attributes.new('bdk.poly_flags', 'INT', 'FACE')
@@ -47,6 +51,8 @@ class BDK_OT_bsp_brush_add(Operator):
         obj.bdk.bsp_brush.object = obj
         obj.bdk.bsp_brush.csg_operation = self.csg_operation
         obj.bdk.bsp_brush.object = obj
+
+        obj.location = context.scene.cursor.location
 
         # Add the object to the active collection.
         context.collection.objects.link(obj)
@@ -114,7 +120,7 @@ class BDK_OT_convert_to_bsp_brush(Operator):
         return {'FINISHED'}
 
 
-def poll_is_active_object_bsp_brush(cls, context: 'Context'):
+def poll_is_active_object_bsp_brush(cls, context: Context):
     if context.object is None:
         cls.poll_message_set('No object selected')
         return False
@@ -123,7 +129,7 @@ def poll_is_active_object_bsp_brush(cls, context: 'Context'):
         return False
     return True
 
-def poll_has_selected_bsp_brushes(cls, context: 'Context'):
+def poll_has_selected_bsp_brushes(cls, context: Context):
     if context.selected_objects is None:
         cls.poll_message_set('No objects selected')
         return False
@@ -261,10 +267,12 @@ class BDK_OT_bsp_brush_snap_to_grid(Operator):
         return poll_has_selected_bsp_brushes(cls, context)
 
     def execute(self, context):
-        obj = context.object
         snap_count = 0
         for obj in context.selected_objects:
-            for vertex in obj.data.vertices:
+            if obj.bdk.type != 'BSP_BRUSH':
+                continue
+            mesh_data = cast(Mesh, obj.data)
+            for vertex in mesh_data.vertices:
                 # Check if any of the vertex coordinates are not on the grid.
                 if any(map(lambda v: v % 1 != 0, vertex.co)):
                     snap_count += 1

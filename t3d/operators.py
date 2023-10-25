@@ -57,7 +57,6 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
     bl_label = 'Import T3DMap (*.t3d)'
     bl_options = {'REGISTER', 'UNDO'}
     filename_ext: StringProperty(default='.t3d', options={'HIDDEN'})
-    filepath: StringProperty()
     filter_glob: StringProperty(default='*.t3d', options={'HIDDEN'})
     filepath: StringProperty(
         name='File Path',

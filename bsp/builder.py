@@ -1,10 +1,10 @@
 # NOTE: This is taken more or less verbatim from the ase2t3d source, adopted for Python.
 # In the future, clean this up so that it's more clear what is going on.
-from typing import cast, Iterable, Optional
+from typing import Iterable, Optional
 
 import mathutils
 from bmesh.types import BMFace
-from bpy.types import Object, Material
+from bpy.types import Material
 
 from ..t3d.data import Polygon
 import numpy as np

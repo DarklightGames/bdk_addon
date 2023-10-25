@@ -39,7 +39,7 @@ class MaterialCache:
         # Build list of texture packages.
         file_paths = manifest['files'].keys()
 
-        package_paths = filter(lambda x: os.path.splitext(x)[1] in ['.utx', '.usx', '.rom'], file_paths)
+        package_paths = filter(lambda x: os.path.splitext(x)[1] in ['.u', '.utx', '.usx', '.rom'], file_paths)
 
         # Register package name with package directory
         for package_path in package_paths:
@@ -914,7 +914,6 @@ class BDK_OT_material_import(Operator, ImportHelper):
     bl_idname = 'bdk.import_material'
     bl_label = 'Import Unreal Material'
     filename_ext = '.props.txt'
-    filepath: StringProperty()
     filter_glob: StringProperty(default='*.props.txt', options={'HIDDEN'})
     filepath: StringProperty(
         name='File Path',

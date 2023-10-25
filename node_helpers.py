@@ -2,7 +2,6 @@ import os.path
 from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable
 
 import bpy
-from zlib import adler32
 from bpy.types import NodeTree, NodeSocket, Node
 
 from .data import map_range_interpolation_type_items
@@ -416,37 +415,32 @@ def ensure_trim_curve_node_tree() -> NodeTree:
         trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
         trim_curve_length_node.mode = 'LENGTH'
 
-        node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
-        node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
-
-        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-        compare_node.data_type = 'INT'
-        compare_node.operation = 'EQUAL'
-
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'GEOMETRY'
-
-        node_tree.links.new(input_node.outputs['Mode'], compare_node.inputs[2])
-
-        node_tree.links.new(compare_node.outputs[0], switch_node.inputs[1])  # Result -> Switch
-        node_tree.links.new(trim_curve_factor_node.outputs['Curve'], switch_node.inputs[15])  # True
-        node_tree.links.new(trim_curve_length_node.outputs['Curve'], switch_node.inputs[14])  # False
-
-        # Add curve length subtract node.
         curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
-        node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
+
         subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
         subtract_node.operation = 'SUBTRACT'
-        node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
-        node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
 
-        node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
+        trim_curve_output_socket = add_geometry_node_switch_nodes(
+            node_tree,
+            input_node.outputs['Mode'],
+            [input_node.outputs['Curve'], trim_curve_factor_node.outputs['Curve'], trim_curve_length_node.outputs['Curve']],
+            'GEOMETRY')
 
+        # Inputs
+        node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
         node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
         node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
-
         node_tree.links.new(input_node.outputs['Length End'], subtract_node.inputs[1])
         node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs[4])
+
+        # Internal
+        node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
+        node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
+        node_tree.links.new(trim_curve_output_socket, output_node.inputs['Curve'])
+
+        # Outputs
         node_tree.links.new(subtract_node.outputs['Value'], trim_curve_length_node.inputs[5])
 
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
@@ -502,6 +496,8 @@ def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: Nod
                 switch_false_input_socket = switch_node.inputs[8]
                 switch_true_input_socket = switch_node.inputs[9]
                 switch_output_socket = switch_node.outputs[3]
+            case _:
+                raise ValueError(f'input_type must be {valid_input_types}, got {input_type}')
 
         node_tree.links.new(compare_node.outputs[0], switch_switch_input_socket)  # Result -> Switch
         node_tree.links.new(output_value_socket, switch_true_input_socket)  # True

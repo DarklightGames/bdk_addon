@@ -428,11 +428,11 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
 
     # Ensure the node groups for the pass modifiers.
     modifiers = terrain_info_object.modifiers
-    modifiers[terrain_info.doodad_sculpt_modifier_name].node_group = _ensure_terrain_doodad_sculpt_modifier_node_group(terrain_info.doodad_sculpt_modifier_name, terrain_doodads)
-    modifiers[terrain_info.doodad_attribute_modifier_name].node_group = _ensure_terrain_doodad_attribute_modifier_node_group(terrain_info.doodad_attribute_modifier_name, terrain_doodads)
-    modifiers[terrain_info.doodad_paint_modifier_name].node_group = _ensure_terrain_doodad_paint_modifier_node_group(terrain_info.doodad_paint_modifier_name, terrain_doodads)
-    modifiers[terrain_info.doodad_deco_modifier_name].node_group = _ensure_terrain_doodad_deco_modifier_node_group(terrain_info.doodad_deco_modifier_name, terrain_doodads)
-    modifiers[terrain_info.doodad_mask_modifier_name].node_group = _ensure_terrain_doodad_scatter_layer_mask_modifier_node_group(terrain_info.doodad_mask_modifier_name, terrain_doodads)
+    modifiers[terrain_info.doodad_sculpt_modifier_name].node_group = _ensure_terrain_doodad_sculpt_modifier_node_group(terrain_info.doodad_sculpt_modifier_name, terrain_info, terrain_doodads)
+    modifiers[terrain_info.doodad_attribute_modifier_name].node_group = _ensure_terrain_doodad_attribute_modifier_node_group(terrain_info.doodad_attribute_modifier_name, terrain_info, terrain_doodads)
+    modifiers[terrain_info.doodad_paint_modifier_name].node_group = _ensure_terrain_doodad_paint_modifier_node_group(terrain_info.doodad_paint_modifier_name, terrain_info, terrain_doodads)
+    modifiers[terrain_info.doodad_deco_modifier_name].node_group = _ensure_terrain_doodad_deco_modifier_node_group(terrain_info.doodad_deco_modifier_name, terrain_info, terrain_doodads)
+    modifiers[terrain_info.doodad_mask_modifier_name].node_group = _ensure_terrain_doodad_scatter_layer_mask_modifier_node_group(terrain_info.doodad_mask_modifier_name, terrain_info, terrain_doodads)
 
     # Rebuild the modifier node trees for the paint and deco layers.
     ensure_paint_layers(terrain_info_object)
@@ -503,8 +503,18 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
         bpy.ops.object.mode_set(mode=current_mode)
 
 
-def _add_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terrain_doodad', data_path: str,
-                              path: str = 'default_value'):
+def _add_terrain_info_driver(struct: bpy_struct, terrain_info: 'BDK_PG_terrain_info', data_path: str,
+                             path: str = 'default_value'):
+    driver = struct.driver_add(path).driver
+    driver.type = 'AVERAGE'
+    var = driver.variables.new()
+    var.name = data_path
+    var.type = 'SINGLE_PROP'
+    var.targets[0].id = terrain_info.terrain_info_object
+    var.targets[0].data_path = f"bdk.terrain_info.{data_path}"
+
+def _add_terrain_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terrain_doodad', data_path: str,
+                               path: str = 'default_value'):
     driver = struct.driver_add(path).driver
     driver.type = 'AVERAGE'
     var = driver.variables.new()
@@ -565,7 +575,7 @@ def add_distance_to_doodad_layer_nodes(node_tree: NodeTree, layer, layer_type: s
         distance_to_curve_node.node_tree = distance_to_curve_node_group
 
         node_tree.links.new(curve_socket, distance_to_curve_node.inputs['Curve'])
-        _add_doodad_driver(distance_to_curve_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
+        _add_terrain_doodad_driver(distance_to_curve_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
 
         return distance_to_curve_node.outputs['Distance']
     elif terrain_doodad.object.type == 'MESH':
@@ -587,7 +597,7 @@ def add_distance_to_doodad_layer_nodes(node_tree: NodeTree, layer, layer_type: s
         distance_to_empty_node.label = 'Distance to Empty'
 
         node_tree.links.new(doodad_object_info_node.outputs['Location'], distance_to_empty_node.inputs['Location'])
-        _add_doodad_driver(distance_to_empty_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
+        _add_terrain_doodad_driver(distance_to_empty_node.inputs['Is 3D'], terrain_doodad, 'is_3d')
 
         return distance_to_empty_node.outputs['Distance']
     else:
@@ -707,7 +717,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
     return geometry_socket
 
 
-def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
+def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -716,12 +726,25 @@ def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_doodads
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
+        mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        mute_switch_node.input_type = 'GEOMETRY'
+
         geometry_socket = input_node.outputs['Geometry']
 
         for terrain_doodad in terrain_doodads:
             geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
 
-        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        # Drivers
+        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_sculpt_modifier_muted')
+
+        # Inputs
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+
+        # Internal
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+
+        # Outputs
+        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
@@ -817,7 +840,7 @@ def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree, geometry_s
     return switch_node.outputs[6]  # Output
 
 
-def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
+def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -826,18 +849,31 @@ def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_doodads:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
+        mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        mute_switch_node.input_type = 'GEOMETRY'
+
         geometry_socket = input_node.outputs['Geometry']
 
         for terrain_doodad in terrain_doodads:
             for paint_layer in filter(lambda x: x.layer_type == 'PAINT', terrain_doodad.paint_layers):
                 geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
 
-        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        # Drivers
+        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_paint_modifier_muted')
+
+        # Inputs
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+
+        # Internal
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+
+        # Outputs
+        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
-def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
+def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -856,7 +892,7 @@ def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_doodads: 
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
-def _ensure_terrain_doodad_scatter_layer_mask_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
+def _ensure_terrain_doodad_scatter_layer_mask_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -875,7 +911,7 @@ def _ensure_terrain_doodad_scatter_layer_mask_modifier_node_group(name: str, ter
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
-def _ensure_terrain_doodad_attribute_modifier_node_group(name: str, terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
+def _ensure_terrain_doodad_attribute_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -884,13 +920,26 @@ def _ensure_terrain_doodad_attribute_modifier_node_group(name: str, terrain_dood
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
+        mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        mute_switch_node.input_type = 'GEOMETRY'
+
         geometry_socket = input_node.outputs['Geometry']
 
         for terrain_doodad in terrain_doodads:
             for paint_layer in filter(lambda x: x.layer_type == 'ATTRIBUTE', terrain_doodad.paint_layers):
                 geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
 
-        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        # Drivers
+        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_attribute_modifier_muted')
+
+        # Inputs
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+
+        # Internal
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+
+        # Outputs
+        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 

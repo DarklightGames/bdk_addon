@@ -64,6 +64,8 @@ node_type_items = (
 
 node_type_item_names = {item[0]: item[1] for item in node_type_items}
 
+empty_set = set()
+
 
 def terrain_layer_node_terrain_paint_layer_name_search_cb(self: 'BDK_PG_terrain_layer_node', context: Context,
                                                           edit_text: str) -> List[str]:
@@ -107,24 +109,24 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
     paint_layer_id: StringProperty(name='Paint Layer ID', options={'HIDDEN'})
 
     # Normal
-    normal_angle_min: FloatProperty(name='Angle Min', default=math.radians(5.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
-    normal_angle_max: FloatProperty(name='Angle Max', default=math.radians(10.0), min=0, max=math.pi / 2, subtype='ANGLE', options=set())
+    normal_angle_min: FloatProperty(name='Angle Min', default=math.radians(5.0), min=0, max=math.pi / 2, subtype='ANGLE', options=empty_set)
+    normal_angle_max: FloatProperty(name='Angle Max', default=math.radians(10.0), min=0, max=math.pi / 2, subtype='ANGLE', options=empty_set)
 
     # Map Range
-    use_map_range: BoolProperty(name='Map Range', default=False, options=set())
-    map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR', options=set())
-    map_range_from_max: FloatProperty(name='From Max', default=1.0, min=0, max=1.0, subtype='FACTOR', options=set())
+    use_map_range: BoolProperty(name='Map Range', default=False, options=empty_set)
+    map_range_from_min: FloatProperty(name='From Min', default=0.0, min=0, max=1.0, subtype='FACTOR', options=empty_set)
+    map_range_from_max: FloatProperty(name='From Max', default=1.0, min=0, max=1.0, subtype='FACTOR', options=empty_set)
 
     # Noise
     noise_type: EnumProperty(name='Noise Type', items=(
         ('WHITE', 'White', 'White Noise', 0),
         ('PERLIN', 'Perlin', 'Perlin Noise')
     ))
-    noise_perlin_scale: FloatProperty(name='Perlin Noise Scale', default=5.0, options=set())
-    noise_perlin_detail: FloatProperty(name='Perlin Noise Detail', default=2.0, options=set())
-    noise_perlin_roughness: FloatProperty(name='Perlin Noise Roughness', default=0.5, min=0.0, max=1.0, options=set())
-    noise_perlin_lacunarity: FloatProperty(name='Perlin Noise Lacunarity', default=2.0, options=set())
-    noise_perlin_distortion: FloatProperty(name='Perlin Noise Distortion', default=0.0, options=set())
+    noise_perlin_scale: FloatProperty(name='Perlin Noise Scale', default=5.0, options=empty_set)
+    noise_perlin_detail: FloatProperty(name='Perlin Noise Detail', default=2.0, options=empty_set)
+    noise_perlin_roughness: FloatProperty(name='Perlin Noise Roughness', default=0.5, min=0.0, max=1.0, options=empty_set)
+    noise_perlin_lacunarity: FloatProperty(name='Perlin Noise Lacunarity', default=2.0, options=empty_set)
+    noise_perlin_distortion: FloatProperty(name='Perlin Noise Distortion', default=0.0, options=empty_set)
 
 
 # Add the children property to the node property group (this must be done after the class is defined).
@@ -172,9 +174,9 @@ def terrain_paint_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_paint_layer'
 class BDK_PG_terrain_paint_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer', update=terrain_paint_layer_name_update_cb)
-    u_scale: FloatProperty(name='UScale', default=2.0, options=set())
-    v_scale: FloatProperty(name='VScale', default=2.0, options=set())
-    texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE', options=set())
+    u_scale: FloatProperty(name='UScale', default=2.0, options=empty_set)
+    v_scale: FloatProperty(name='VScale', default=2.0, options=empty_set)
+    texture_rotation: FloatProperty(name='TextureRotation', subtype='ANGLE', options=empty_set)
     material: PointerProperty(name='Material', type=Material, update=on_material_update, poll=material_poll)
     terrain_info_object: PointerProperty(type=Object, options={'HIDDEN'})
     is_visible: BoolProperty(options={'HIDDEN'}, default=True)
@@ -248,7 +250,7 @@ def deco_layer_linked_layer_name_update(self: 'BDK_PG_terrain_deco_layer', conte
         return
     self.linked_layer_id = ''
     for i, layer in enumerate(terrain_info.paint_layers):
-        if layer.name == self.linked_layer_name:
+        if layer.name == self.linked_layer_id:
             self.linked_layer_id = layer.id
             break
     # Trigger an update of the deco layers.
@@ -399,6 +401,12 @@ class BDK_PG_terrain_info(PropertyGroup):
     doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
     doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
     doodad_mask_modifier_name: StringProperty(options={'HIDDEN'}, name='Mask Modifier Name')
+
+    is_sculpt_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Sculpt Modifier')
+    is_attribute_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Attribute Modifier')
+    is_paint_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Paint Modifier')
+    is_deco_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Deco Modifier')
+    is_mask_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Mask Modifier')
 
 
 def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> Optional[BDK_PG_terrain_paint_layer]:

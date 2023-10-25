@@ -9,14 +9,29 @@ from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes
 
 
-def add_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad') -> 'BDK_PG_terrain_doodad_scatter_layer':
+def add_terrain_doodad_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad', name: str = 'Scatter Layer') -> 'BDK_PG_terrain_doodad_scatter_layer':
     scatter_layer = terrain_doodad.scatter_layers.add()
     scatter_layer.id = uuid.uuid4().hex
     scatter_layer.terrain_doodad_object = terrain_doodad.object
-    scatter_layer.name = ensure_name_unique(scatter_layer.name, [x.name for x in terrain_doodad.scatter_layers])
+    scatter_layer.name = ensure_name_unique(name, [x.name for x in terrain_doodad.scatter_layers])
     scatter_layer.mask_attribute_id = uuid.uuid4().hex
 
     return scatter_layer
+
+def ensure_scatter_layer_seed_and_sprout_collection(context: Context) -> bpy.types.Collection:
+    """
+    Ensures that the scatter layer seed and sprout collection exists and returns it.
+    :param context:
+    :return:
+    """
+    collection_name = 'BDK Scatter Layer Seed and Sprout'
+    collection = bpy.data.collections.get(collection_name)
+    if collection is None:
+        collection = bpy.data.collections.new(collection_name)
+        collection.hide_select = True
+        context.scene.collection.children.link(collection)
+    return collection
+
 
 
 def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
@@ -25,6 +40,9 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
     :param scatter_layer:
     :return:
     """
+
+    seed_and_sprout_collection = ensure_scatter_layer_seed_and_sprout_collection(bpy.context)
+
     # Create the seed object. This is the object that will have vertices with instance attributes scattered on it.
     # This will be used by the sprout object, but also by the T3D exporter.
     if scatter_layer.seed_object is None:
@@ -35,8 +53,10 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
         seed_object.lock_rotation = (True, True, True)
         seed_object.lock_scale = (True, True, True)
         scatter_layer.seed_object = seed_object
-        scatter_layer.seed_object.parent = scatter_layer.terrain_doodad_object
-        bpy.context.scene.collection.objects.link(scatter_layer.seed_object)
+        # We need to add this to a collection that the user isn't going to interact with.
+        # We can't just parent it to the terrain doodad object because it screws up
+        # the ability of the modifiers to snap the objects to the terrain.
+        seed_and_sprout_collection.objects.link(scatter_layer.seed_object)
 
     # Create the sprout object. This is the object that will create the instances from the seed object.
     if scatter_layer.sprout_object is None:
@@ -47,8 +67,7 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
         sprout_object.lock_rotation = (True, True, True)
         sprout_object.lock_scale = (True, True, True)
         scatter_layer.sprout_object = sprout_object
-        scatter_layer.sprout_object.parent = scatter_layer.terrain_doodad_object
-        bpy.context.scene.collection.objects.link(scatter_layer.sprout_object)
+        seed_and_sprout_collection.objects.link(scatter_layer.sprout_object)
 
 
 def add_scatter_layer_object(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> 'BDK_PG_terrain_doodad_scatter_layer_object':

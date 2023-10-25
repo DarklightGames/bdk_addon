@@ -275,13 +275,13 @@ class BDK_OT_terrain_info_export(Operator, ExportHelper):
     filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
 
     @classmethod
-    def poll(cls, context: 'Context'):
+    def poll(cls, context: Context):
         if not is_active_object_terrain_info(context):
             cls.poll_message_set('The active object must be a TerrainInfo object')
             return False
         return True
 
-    def invoke(self, context: 'Context', event: 'Event'):
+    def invoke(self, context: Context, event: Event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
@@ -423,7 +423,7 @@ def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node.type = type
 
     if type == 'PAINT':
-        mesh_data = terrain_info_object.data
+        mesh_data = cast(Mesh, terrain_info_object.data)
         # TODO: when we can paint non-color data, rewrite this!
         # Add the density map attribute to the TerrainInfo mesh.
         attribute = mesh_data.attributes.new(node.id, 'BYTE_COLOR', domain='POINT')
@@ -442,7 +442,7 @@ def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: i
     node = nodes[nodes_index]
 
     if node.type == 'PAINT':
-        mesh_data = terrain_info_object.data
+        mesh_data = cast(Mesh, terrain_info_object.data)
         if node.id in mesh_data.attributes:
             attribute = mesh_data.attributes[node.id]
             mesh_data.attributes.remove(attribute)
@@ -633,8 +633,8 @@ class BDK_OT_terrain_info_repair(Operator):
 
     def execute(self, context: Context):
         terrain_info = get_terrain_info(context.active_object)
-        vertex_coordinates = get_terrain_info_vertex_xy_coordinates(resolution=terrain_info.x_size, size=terrain_info.terrain_scale)
-        mesh_data = context.active_object.data
+        vertex_coordinates = get_terrain_info_vertex_xy_coordinates(resolution=terrain_info.x_size, terrain_scale=terrain_info.terrain_scale)
+        mesh_data = cast(Mesh, context.active_object.data)
         vertex_repair_count = 0
         for vertex in mesh_data.vertices:
             co = next(vertex_coordinates)
@@ -983,7 +983,7 @@ class BDK_OT_terrain_info_shift(Operator):
     def poll(cls, context: Context):
         return is_active_object_terrain_info(context)
 
-    def invoke(self, context: 'Context', event: 'Event'):
+    def invoke(self, context: Context, event: Event):
         # Show a dialog
         return context.window_manager.invoke_props_dialog(self)
 
@@ -1028,15 +1028,15 @@ class BDK_OT_terrain_info_shift(Operator):
         if 'HEIGHTMAP' in self.data_types:
             shape = terrain_info.x_size, terrain_info.y_size
             count = terrain_info.x_size * terrain_info.y_size
-            z_values = numpy.fromiter(map(lambda v: v.co.z, terrain_info_object.data.vertices), dtype=float, count=count).reshape(shape)
+            z_values = numpy.fromiter(map(lambda v: v.co.z, mesh_data.vertices), dtype=float, count=count).reshape(shape)
             z_values = numpy.roll(z_values, (self.x, self.y), axis=(1, 0))
 
             # Reassign the z-values to the terrain info vertices.
-            for (vertex, z) in zip(terrain_info_object.data.vertices, z_values.flat):
+            for (vertex, z) in zip(mesh_data.vertices, z_values.flat):
                 vertex.co.z = z
 
         if 'PAINT_LAYERS' in self.data_types:
-            for attribute in terrain_info_object.data.attributes:
+            for attribute in mesh_data.attributes:
                 if attribute.data_type == 'BYTE_COLOR':
                     # Convert the attribute values to a numpy array.
                     shape = (terrain_info.x_size, terrain_info.y_size, 4)
@@ -1118,7 +1118,7 @@ class BDK_OT_terrain_info_set_terrain_scale(Operator):
         # TODO: this isn't tested yet!
         xy_coordinates_iter = get_terrain_info_vertex_xy_coordinates(terrain_info.x_size, self.terrain_scale)
 
-        mesh_data = context.active_object.data
+        mesh_data = cast(Mesh, context.active_object.data)
         for vertex in mesh_data.vertices:
             x, y = next(xy_coordinates_iter)
             vertex.co.x = x
@@ -1173,9 +1173,12 @@ class BDK_OT_terrain_info_heightmap_import(Operator):
             heightmap = heightmap.astype(float)
             # De-quantize the heightmap.
             heightmap = (heightmap / 65535.0) - 0.5
+        else:
+            self.report({'ERROR'}, f'Unsupported file extension {extension}')
+            return {'CANCELLED'}
 
         # Apply the heightmap to the mesh.
-        mesh_data = context.active_object.data
+        mesh_data = cast(Mesh, context.active_object.data)
         for (vertex, z) in zip(mesh_data.vertices, heightmap.flat):
             vertex.co.z = z * self.terrain_scale_z * 256.0
 

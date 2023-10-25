@@ -100,7 +100,7 @@ class BDK_PG_bsp_brush(PropertyGroup):
         name='Poly Flags',
         description='The flags to apply to the polygons of this brush',
         items=poly_flags_items,
-        default=set(),
+        default=empty_set,
         options={'ENUM_FLAG'},
         update=bsp_brush_update,
     )

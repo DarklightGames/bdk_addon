@@ -4,7 +4,7 @@ from bpy.props import EnumProperty
 from bpy.types import Operator, Context
 
 from ..builder import ensure_terrain_info_modifiers
-from ..kernel import ensure_terrain_doodad_layer_indices
+from ..kernel import ensure_terrain_doodad_layer_indices, add_terrain_doodad_sculpt_layer
 from ..operators import poll_has_terrain_doodad_selected
 from ....helpers import copy_simple_property_group, get_terrain_doodad, ensure_name_unique
 
@@ -33,10 +33,7 @@ class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
         terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
 
         # Add a new sculpting layer.
-        sculpt_layer = terrain_doodad.sculpt_layers.add()
-        sculpt_layer.id = uuid.uuid4().hex
-        sculpt_layer.terrain_doodad_object = terrain_doodad.object
-        sculpt_layer.name = ensure_name_unique(sculpt_layer.name, [layer.name for layer in terrain_doodad.sculpt_layers])
+        add_terrain_doodad_sculpt_layer(terrain_doodad)
 
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)
