@@ -218,6 +218,8 @@ class BDK_OT_terrain_doodad_bake(Operator):
         The user will want a way to combine or "flatten" the layers, so we'll need to add a new operator to do that.
         """
 
+        depsgraph = context.evaluated_depsgraph_get()
+
         terrain_doodad_object = context.active_object
         terrain_doodad = get_terrain_doodad(terrain_doodad_object)
         terrain_info_object = terrain_doodad.terrain_info_object
@@ -225,6 +227,33 @@ class BDK_OT_terrain_doodad_bake(Operator):
         # Select the terrain info object and make it the active object.
         context.view_layer.objects.active = terrain_info_object
         terrain_info_object.select_set(True)
+
+        # Bake the scatter layers first, otherwise the bake modifier will stack with the sculpt layers.
+        if 'SCATTER' in self.layers:
+            if self.should_add_scatter_objects_to_collection:
+                # Add a new collection with the name of the terrain doodad.
+                scatter_object_collection = bpy.data.collections.new(terrain_doodad_object.name)
+                context.scene.collection.children.link(scatter_object_collection)
+            else:
+                scatter_object_collection = terrain_doodad_object.users_collection[0]
+
+            for scatter_layer in terrain_doodad.scatter_layers:
+                seed_object_eval = scatter_layer.seed_object.evaluated_get(depsgraph)
+
+                # Create a new linked duplicate for each scatter layer object.
+                mesh_data: Mesh = seed_object_eval.data
+                for vertex_index, vertex in enumerate(mesh_data.vertices):
+                    object_index = mesh_data.attributes['object_index'].data[vertex_index].value
+
+                    location = vertex.co
+                    rotation = mathutils.Euler(mesh_data.attributes['rotation'].data[vertex_index].vector)
+                    scale = mesh_data.attributes['scale'].data[vertex_index].vector
+
+                    new_object = bpy.data.objects.new('StaticMesh', scatter_layer.objects[object_index].object.data)
+                    new_object.matrix_local = mathutils.Matrix.LocRotScale(location, rotation, scale)
+
+                    # Link the new object to scatter object collection.
+                    scatter_object_collection.objects.link(new_object)
 
         # Create a new modifier for the terrain doodad bake.
         bake_node_tree, paint_layer_attribute_map = create_terrain_doodad_bake_node_tree(terrain_doodad, self.layers)
@@ -260,36 +289,6 @@ class BDK_OT_terrain_doodad_bake(Operator):
                     # If the node below us has the same operation, merge it down.
                     if len(nodes) > 1 and nodes[1].operation == node.operation:  # TODO: make this a "can merge down" function
                         merge_down_terrain_layer_node_data(terrain_info_object, nodes, 0)
-
-        if 'SCATTER' in self.layers:
-
-            if self.should_add_scatter_objects_to_collection:
-                # Add a new collection with the name of the terrain doodad.
-                scatter_object_collection = bpy.data.collections.new(terrain_doodad_object.name)
-                context.scene.collection.children.link(scatter_object_collection)
-            else:
-                scatter_object_collection = terrain_doodad_object.users_collection[0]
-
-            for scatter_layer in terrain_doodad.scatter_layers:
-                depsgraph = context.evaluated_depsgraph_get()
-                seed_object_eval = scatter_layer.seed_object.evaluated_get(depsgraph)
-
-                # Create a new linked duplicate for each scatter layer object.
-                mesh_data: Mesh = seed_object_eval.data
-                for vertex_index, vertex in enumerate(mesh_data.vertices):
-                    object_index = mesh_data.attributes['object_index'].data[vertex_index].value
-
-                    location = vertex.co
-                    rotation = mathutils.Euler(mesh_data.attributes['rotation'].data[vertex_index].vector)
-                    scale = mesh_data.attributes['scale'].data[vertex_index].vector
-
-                    object_matrix = terrain_doodad_object.matrix_world @ mathutils.Matrix.LocRotScale(location, rotation, scale)
-
-                    new_object = bpy.data.objects.new('StaticMesh', scatter_layer.objects[object_index].object.data)
-                    new_object.matrix_local = object_matrix
-
-                    # Link the new object to scatter object collection.
-                    scatter_object_collection.objects.link(new_object)
 
         # Delete the bake node tree.
         bpy.data.node_groups.remove(bake_node_tree)
