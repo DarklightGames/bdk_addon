@@ -73,8 +73,8 @@ class BDK_PT_terrain_info_debug(Panel):
 
         col = flow.column(align=True)
 
-        col.prop(terrain_info, 'x_size', text='Size X')
-        col.prop(terrain_info, 'y_size', text='Y')
+        col.prop(terrain_info, 'x_size', text='Size X', emboss=True)
+        col.prop(terrain_info, 'y_size', text='Y', emboss=True)
 
         # Modifier Performance
         depsgraph = context.evaluated_depsgraph_get()

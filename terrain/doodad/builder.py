@@ -656,8 +656,9 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
 
     # Now chain the node components together.
     for sculpt_layer in terrain_doodad.sculpt_layers:
-        # Add the distance to doodad layer nodes.
-        distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT', doodad_object_info_node=object_info_node)
+        distance_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        distance_attribute_node.inputs['Name'].default_value = sculpt_layer.id
+        distance_attribute_node.data_type = 'FLOAT'
 
         # Store the calculated distance to a named attribute.
         # This is faster than recalculating the distance when evaluating each layer. (~20% faster)
@@ -666,22 +667,6 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         store_distance_attribute_node.data_type = 'FLOAT'
         store_distance_attribute_node.domain = 'POINT'
 
-        # Link the geometry from the input node to the input of the store distance attribute node.
-        node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
-
-        # Link the distance socket to the input of the store distance attribute node.
-        node_tree.links.new(distance_socket, store_distance_attribute_node.inputs[4])
-
-        # Create a named attribute node for the distance.
-        distance_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-        distance_attribute_node.inputs['Name'].default_value = sculpt_layer.id
-        distance_attribute_node.data_type = 'FLOAT'
-
-        distance_socket = distance_attribute_node.outputs[1]
-        geometry_socket = store_distance_attribute_node.outputs['Geometry']
-
-        # =============================================================
-
         sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
         sculpt_node.node_tree = ensure_sculpt_node_group()
         sculpt_node.label = 'Sculpt'
@@ -689,6 +674,11 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         mute_switch_node.input_type = 'GEOMETRY'
 
+        # Add the distance to the doodad layer nodes.
+        distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT',
+                                                             doodad_object_info_node=object_info_node)
+
+        # Drivers
         add_doodad_sculpt_layer_driver(mute_switch_node.inputs[1], sculpt_layer, 'mute')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Radius'], sculpt_layer, 'radius')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Falloff Radius'], sculpt_layer, 'falloff_radius')
@@ -705,12 +695,13 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Type'], sculpt_layer, 'noise_type')
         add_doodad_sculpt_layer_driver(sculpt_node.inputs['Operation'], sculpt_layer, 'operation')
 
-        # Link the geometry socket of the object info node to the geometry socket of the sculpting node.
-        node_tree.links.new(geometry_socket, sculpt_node.inputs['Geometry'])
-        node_tree.links.new(distance_socket, sculpt_node.inputs['Distance'])
-
+        # Links
+        node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
+        node_tree.links.new(distance_socket, store_distance_attribute_node.inputs[4])  # Value
+        node_tree.links.new(store_distance_attribute_node.outputs['Geometry'], sculpt_node.inputs['Geometry'])
+        node_tree.links.new(distance_attribute_node.outputs[1], sculpt_node.inputs['Distance'])
         node_tree.links.new(sculpt_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False (not muted)
-        node_tree.links.new(geometry_socket, mute_switch_node.inputs[15])  # True (muted)
+        node_tree.links.new(store_distance_attribute_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
 
         geometry_socket = mute_switch_node.outputs[6]
 
@@ -769,6 +760,10 @@ def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree, geometry_s
                                                  terrain_doodad_paint_layer: 'BDK_PG_terrain_doodad_paint_layer',
                                                  attribute_override: Optional[str] = None,
                                                  operation_override: Optional[str] = None) -> NodeSocket:
+
+    # Check if the terrain doodad is frozen.
+    if terrain_doodad_paint_layer.terrain_doodad_object.bdk.terrain_doodad.is_frozen:
+        pass
 
     def add_paint_layer_driver(struct: bpy_struct, paint_layer: 'BDK_PG_terrain_doodad_paint_layer', data_path: str,
                                path: str = 'default_value'):

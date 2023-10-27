@@ -34,6 +34,8 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     perlin_noise_lacunarity: FloatProperty(name='Noise Lacunarity', default=2.0, min=0.0)
     perlin_noise_detail: FloatProperty(name='Noise Detail', default=8.0, min=0.0)
     interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items, default='LINEAR')
+    is_frozen: BoolProperty(name='Is Frozen', default=False)
+    frozen_attribute_id: StringProperty(name='Frozen Attribute ID', default='')
 
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_sculpt_layer)

@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import Optional, cast
 
 import bpy
 import mathutils
@@ -143,6 +143,90 @@ def get_terrain_doodad_paint_layer_nodes(doodad_paint_layer: 'BDK_PG_terrain_doo
         terrain_info_deco_layer = get_terrain_info_deco_layer_by_id(terrain_info, doodad_paint_layer.deco_layer_id)
         return terrain_info_deco_layer.nodes if terrain_info_deco_layer is not None else None
     return None
+
+
+class BDK_OT_terrain_doodad_freeze(Operator):
+    bl_label = 'Freeze Terrain Doodad'
+    bl_idname = 'bdk.terrain_doodad_freeze'
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Freeze the terrain doodad by caching the current state of all layers instead of recalculating '\
+                     'them when the terrain is modified.'
+
+    @classmethod
+    def poll(cls, context: Context):
+        # TODO: maybe some things cannot be frozen, i.e., using a set operator on a sculpt layer.
+        if not poll_has_terrain_doodad_selected(cls, context):
+            return False
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        if terrain_doodad.is_frozen:
+            cls.poll_message_set('Terrain doodad is already frozen')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        depsgraph = context.evaluated_depsgraph_get()
+
+        terrain_doodad_object = context.active_object
+        terrain_doodad = get_terrain_doodad(terrain_doodad_object)
+        terrain_info_object = terrain_doodad.terrain_info_object
+
+        terrain_doodad.is_frozen = True
+
+        # # Select the terrain info object and make it the active object.
+        # context.view_layer.objects.active = terrain_info_object
+        # terrain_info_object.select_set(True)
+
+        """
+        We need to make a node tree that saves all of the attributes to the terrain.
+        """
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_doodad_unfreeze(Operator):
+    bl_label = 'Unfreeze Terrain Doodad'
+    bl_idname = 'bdk.terrain_doodad_unfreeze'
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Unfreeze the terrain doodad by recalculating all layers.'
+
+    @classmethod
+    def poll(cls, context: Context):
+        if not poll_has_terrain_doodad_selected(cls, context):
+            return False
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        if not terrain_doodad.is_frozen:
+            cls.poll_message_set('Terrain doodad is not frozen')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        terrain_info_object = terrain_doodad.terrain_info_object
+        mesh_data = cast(Mesh, terrain_info_object.data)
+        attributes = mesh_data.attributes
+
+        # Delete the frozen attributes.
+        for sculpt_layer in terrain_doodad.sculpt_layers:
+            if sculpt_layer.frozen_attribute_id not in attributes:
+                self.report({'WARNING'}, f'Frozen attribute for sculpt layer \'{sculpt_layer.name}\' {sculpt_layer.frozen_attribute_id} not found')
+                continue
+            attributes.remove(attributes[sculpt_layer.frozen_attribute_id])
+
+        for paint_layer in terrain_doodad.paint_layers:
+            if paint_layer.frozen_attribute_id not in attributes:
+                self.report({'WARNING'}, f'Frozen attribute for paint layer \'{paint_layer.name}\' {paint_layer.frozen_attribute_id} not found')
+                continue
+            attributes.remove(attributes[paint_layer.frozen_attribute_id])
+
+        # TODO: unfreeze scatter layers.
+
+        # Mark the doodad as not frozen.
+        terrain_doodad.is_frozen = False
+
+        # Update the terrain info modifiers.
+        ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
+
+        return {'FINISHED'}
 
 
 class BDK_OT_terrain_doodad_bake(Operator):
@@ -930,6 +1014,8 @@ class BDK_OT_terrain_doodad_load_preset(Operator):
 classes = (
     BDK_OT_convert_to_terrain_doodad,
     BDK_OT_terrain_doodad_add,
+    BDK_OT_terrain_doodad_freeze,
+    BDK_OT_terrain_doodad_unfreeze,
     BDK_OT_terrain_doodad_bake,
     BDK_OT_terrain_doodad_bake_debug,
     BDK_OT_terrain_doodad_delete,

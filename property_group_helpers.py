@@ -4,7 +4,7 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty
 def add_curve_modifier_properties(cls):
     # Add the curve modifier properties to the type annotation of the given class.
     cls.__annotations__['is_curve_reversed'] = BoolProperty(name='Reverse Curve', default=False)  # TODO: Rename to curve_is_reversed
-    cls.__annotations__['curve_trim_mode'] = EnumProperty(name='Trim Mode', items=(('NONE', 'None', '', 0), ('FACTOR', 'Factor', '', 1),('LENGTH', 'Distance', '', 2),), default='FACTOR')
+    cls.__annotations__['curve_trim_mode'] = EnumProperty(name='Trim Mode', items=(('NONE', 'None', '', 0), ('FACTOR', 'Factor', '', 1),('LENGTH', 'Distance', '', 2),), default='NONE')
     cls.__annotations__['curve_trim_factor_start'] = FloatProperty(name='Trim Factor Start', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
     cls.__annotations__['curve_trim_factor_end'] = FloatProperty(name='Trim Factor End', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
     cls.__annotations__['curve_trim_length_start'] = FloatProperty(name='Trim Length Start', default=0.0, min=0.0, subtype='DISTANCE')

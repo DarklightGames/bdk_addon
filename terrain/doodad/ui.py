@@ -16,7 +16,7 @@ from .operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doo
     BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, BDK_OT_terrain_doodad_demote, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add, BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move, BDK_OT_terrain_doodad_save_preset, \
-    BDK_OT_terrain_doodad_load_preset
+    BDK_OT_terrain_doodad_load_preset, BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -163,7 +163,15 @@ class BDK_PT_terrain_doodad_operators(Panel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context: 'Context'):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+
         self.layout.operator(BDK_OT_terrain_doodad_bake.bl_idname, icon='RENDER_RESULT')
+
+        if terrain_doodad.is_frozen:
+            self.layout.operator(BDK_OT_terrain_doodad_unfreeze.bl_idname, icon='LIGHT_SUN')
+        else:
+            self.layout.operator(BDK_OT_terrain_doodad_freeze.bl_idname, icon='FREEZE')
+
         self.layout.operator(BDK_OT_terrain_doodad_duplicate.bl_idname, icon='DUPLICATE')
         self.layout.operator(BDK_OT_terrain_doodad_delete.bl_idname, icon='X')
         self.layout.operator(BDK_OT_terrain_doodad_demote.bl_idname, icon='TRIA_DOWN')
@@ -222,6 +230,11 @@ def has_terrain_doodad_sculpt_layer_selected(context: Context):
     return terrain_doodad is not None and len(terrain_doodad.sculpt_layers) > 0 and terrain_doodad.sculpt_layers_index >= 0
 
 
+def get_terrain_doodad_selected_sculpt_layer(context: Context):
+    terrain_doodad = get_terrain_doodad(context.active_object)
+    return terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index]
+
+
 class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
     bl_idname = 'BDK_PT_terrain_doodad_sculpt_layer_settings'
     bl_label = 'Settings'
@@ -237,8 +250,7 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
 
     def draw(self, context: 'Context'):
         layout = self.layout
-        terrain_doodad = context.active_object.bdk.terrain_doodad
-        sculpt_layer = terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index]
+        sculpt_layer = get_terrain_doodad_selected_sculpt_layer(context)
         flow = layout.grid_flow(columns=1)
         flow.use_property_split = True
         flow.use_property_decorate = False
@@ -250,28 +262,64 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
         col.prop(sculpt_layer, 'falloff_radius')
         col.prop(sculpt_layer, 'interpolation_type')
 
-        flow.separator()
 
-        if terrain_doodad.object.type == 'CURVE':
-            draw_curve_modifier_settings(flow, sculpt_layer)
-            flow.separator()
+class BDK_PT_terrain_doodad_sculpt_layer_curve_settings(Panel):
+    bl_idname = 'BDK_PT_terrain_doodad_sculpt_layer_curve_settings'
+    bl_label = 'Curve Settings'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_doodad_sculpt_layer_settings'
 
-        if sculpt_layer.operation == 'ADD':
-            flow.prop(sculpt_layer, 'use_noise')
+    @classmethod
+    def poll(cls, context: Context):
+        if not has_terrain_doodad_sculpt_layer_selected(context):
+            return False
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        return terrain_doodad.object.type == 'CURVE'
 
-            if sculpt_layer.use_noise:
-                flow.prop(sculpt_layer, 'noise_type')
+    def draw(self, context: Context):
+        sculpt_layer = get_terrain_doodad_selected_sculpt_layer(context)
+        flow = self.layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+        draw_curve_modifier_settings(flow, sculpt_layer)
 
-                if sculpt_layer.use_noise:
-                    col = flow.column(align=True)
-                    col.prop(sculpt_layer, 'noise_radius_factor')
-                    col.prop(sculpt_layer, 'noise_strength')
-                    if sculpt_layer.noise_type == 'PERLIN':
-                        col.prop(sculpt_layer, 'perlin_noise_distortion')
-                        col.prop(sculpt_layer, 'perlin_noise_roughness')
-                        col.prop(sculpt_layer, 'perlin_noise_scale')
-                        col.prop(sculpt_layer, 'perlin_noise_lacunarity')
-                        col.prop(sculpt_layer, 'perlin_noise_detail')
+
+class BDK_PT_terrain_doodad_sculpt_layer_noise(Panel):
+    bl_idname = 'BDK_PT_terrain_doodad_sculpt_layer_noise'
+    bl_label = 'Noise'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_doodad_sculpt_layers'
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        return has_terrain_doodad_sculpt_layer_selected(context)
+
+    def draw_header(self, context: Context):
+        sculpt_layer = get_terrain_doodad_selected_sculpt_layer(context)
+        self.layout.prop(sculpt_layer, 'use_noise', text='')
+
+    def draw(self, context: 'Context'):
+        flow = self.layout.grid_flow(columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        sculpt_layer = get_terrain_doodad_selected_sculpt_layer(context)
+
+        flow.prop(sculpt_layer, 'noise_type')
+
+        col = flow.column(align=True)
+        col.prop(sculpt_layer, 'noise_radius_factor')
+        col.prop(sculpt_layer, 'noise_strength')
+        if sculpt_layer.noise_type == 'PERLIN':
+            col.prop(sculpt_layer, 'perlin_noise_distortion')
+            col.prop(sculpt_layer, 'perlin_noise_roughness')
+            col.prop(sculpt_layer, 'perlin_noise_scale')
+            col.prop(sculpt_layer, 'perlin_noise_lacunarity')
+            col.prop(sculpt_layer, 'perlin_noise_detail')
 
 
 class BDK_PT_terrain_doodad_sculpt_layers(Panel):
@@ -614,6 +662,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             if scatter_layer_object.snap_to_terrain:
                 flow.prop(scatter_layer_object, 'align_to_terrain_factor')
+                flow.separator()
                 flow.prop(scatter_layer_object, 'terrain_normal_offset_min', text='Terrain Offset Min')
                 flow.prop(scatter_layer_object, 'terrain_normal_offset_max', text='Max')
                 flow.prop(scatter_layer_object, 'terrain_normal_offset_seed', text='Seed')
@@ -648,14 +697,6 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
             flow.prop(scatter_layer_object, 'random_rotation_max')
             flow.prop(scatter_layer_object, 'random_rotation_max_seed', text='Seed')
-
-            if terrain_doodad.object.type == 'CURVE':
-                flow.separator()
-
-                col = flow.column(align=True)
-                col.prop(scatter_layer_object, 'curve_normal_offset_min')
-                col.prop(scatter_layer_object, 'curve_normal_offset_max', text='Max')
-                col.prop(scatter_layer_object, 'curve_normal_offset_seed', text='Seed')
 
 
 def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = None):
@@ -749,11 +790,10 @@ class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
 
     def draw(self, context: 'Context'):
         layout = self.layout
-        terrain_doodad = context.active_object.bdk.terrain_doodad
-        sculpt_layer = terrain_doodad.sculpt_layers[terrain_doodad.sculpt_layers_index]
+        sculpt_layer = get_terrain_doodad_selected_sculpt_layer(context)
         flow = layout.grid_flow(align=True, columns=1)
         flow.use_property_split = True
-        flow.prop(sculpt_layer, 'id')
+        flow.prop(sculpt_layer, 'id', emboss=False)
 
 
 class BDK_UL_terrain_doodad_scatter_layer_nodes(UIList):
@@ -782,6 +822,8 @@ classes = (
     BDK_PT_terrain_doodad,
     BDK_PT_terrain_doodad_sculpt_layers,
     BDK_PT_terrain_doodad_sculpt_layer_settings,
+    BDK_PT_terrain_doodad_sculpt_layer_noise,
+    BDK_PT_terrain_doodad_sculpt_layer_curve_settings,
     BDK_PT_terrain_doodad_sculpt_layer_debug,
     BDK_PT_terrain_doodad_paint_layers,
     BDK_PT_terrain_doodad_paint_layer_settings,

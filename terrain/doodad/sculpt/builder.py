@@ -73,25 +73,31 @@ def ensure_sculpt_noise_node_group():
 def ensure_sculpt_node_group() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('INPUT','NodeSocketFloat', 'Distance'),
-        ('INPUT','NodeSocketInt', 'Interpolation Type'),
-        ('INPUT','NodeSocketFloat', 'Radius'),
-        ('INPUT','NodeSocketFloat', 'Falloff Radius'),
-        ('INPUT','NodeSocketFloat', 'Depth'),
-        ('INPUT','NodeSocketFloat', 'Noise Strength'),
-        ('INPUT','NodeSocketFloat', 'Perlin Noise Roughness'),
-        ('INPUT','NodeSocketFloat', 'Perlin Noise Distortion'),
-        ('INPUT','NodeSocketFloat', 'Perlin Noise Scale'),
-        ('INPUT','NodeSocketFloat', 'Perlin Noise Lacunarity'),
-        ('INPUT','NodeSocketFloat', 'Perlin Noise Detail'),
-        ('INPUT','NodeSocketBool', 'Use Noise'),
-        ('INPUT','NodeSocketFloat', 'Noise Radius Factor'),
+        ('INPUT', 'NodeSocketFloat', 'Distance'),
+        ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
+        ('INPUT', 'NodeSocketFloat', 'Radius'),
+        ('INPUT', 'NodeSocketFloat', 'Falloff Radius'),
+        ('INPUT', 'NodeSocketFloat', 'Depth'),
+        ('INPUT', 'NodeSocketFloat', 'Noise Strength'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Roughness'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Distortion'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Scale'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Lacunarity'),
+        ('INPUT', 'NodeSocketFloat', 'Perlin Noise Detail'),
+        ('INPUT', 'NodeSocketBool', 'Use Noise'),
+        ('INPUT', 'NodeSocketFloat', 'Noise Radius Factor'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
         ('INPUT', 'NodeSocketInt', 'Operation'),
+        # ('INPUT', 'NodeSocketString', 'Attribute ID'),      # The attribute ID of the influence field.
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):
+        # TODO: we need to disentangle the "set position" here.
+        #  It is probably dramatically faster to write each of these sculpt layers out as an influence field and then
+        #  run all the influence fields through a single "set position" node.
+        #  This would also make it easier to add the freeze functionality.
+
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         subtract_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
@@ -113,9 +119,9 @@ def ensure_sculpt_node_group() -> NodeTree:
         noise_node = node_tree.nodes.new(type='GeometryNodeGroup')
         noise_node.node_tree = ensure_sculpt_noise_node_group()
 
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'FLOAT'
-        switch_node.label = 'Use Distance Noise'
+        use_noise_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        use_noise_switch_node.input_type = 'FLOAT'
+        use_noise_switch_node.label = 'Use Distance Noise'
 
         add_node = node_tree.nodes.new(type='ShaderNodeMath')
         add_node.operation = 'ADD'
@@ -128,7 +134,6 @@ def ensure_sculpt_node_group() -> NodeTree:
 
         # Set Operation
         set_set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
-        group_input_node = node_tree.nodes.new(type='NodeGroupInput')
         position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
         separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
 
@@ -138,13 +143,13 @@ def ensure_sculpt_node_group() -> NodeTree:
         combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
 
         # Internal Links
-        node_tree.links.new(group_input_node.outputs[0], mix_node.inputs[3])  # Depth -> B
+        node_tree.links.new(input_node.outputs["Depth"], mix_node.inputs[3])  # Depth -> B
+        node_tree.links.new(separate_xyz_node.outputs[0], combine_xyz_node.inputs[0])  # X -> X
         node_tree.links.new(separate_xyz_node.outputs[1], combine_xyz_node.inputs[1])  # Y -> Y
+        node_tree.links.new(separate_xyz_node.outputs[2], mix_node.inputs[2])  # Z -> A
         node_tree.links.new(mix_node.outputs[0], combine_xyz_node.inputs[2])  # Result -> Z
         node_tree.links.new(combine_xyz_node.outputs[0], set_set_position_node.inputs[2])  # Vector -> Position
         node_tree.links.new(position_node.outputs[0], separate_xyz_node.inputs[0])  # Position -> Vector
-        node_tree.links.new(separate_xyz_node.outputs[2], mix_node.inputs[2])  # Z -> A
-        node_tree.links.new(separate_xyz_node.outputs[0], combine_xyz_node.inputs[0])  # X -> X
         node_tree.links.new(interpolation_group_node.outputs['Value'], mix_node.inputs[0])  # Value -> Factor
 
         add_set_position_geometry_socket = add_set_position_node.outputs[0]
@@ -170,25 +175,34 @@ def ensure_sculpt_node_group() -> NodeTree:
         node_tree.links.new(input_node.outputs['Perlin Noise Scale'], noise_node.inputs['Perlin Noise Scale'])
         node_tree.links.new(input_node.outputs['Perlin Noise Lacunarity'], noise_node.inputs['Perlin Noise Lacunarity'])
         node_tree.links.new(input_node.outputs['Perlin Noise Detail'], noise_node.inputs['Perlin Noise Detail'])
-        node_tree.links.new(input_node.outputs['Use Noise'], switch_node.inputs['Switch'])
-        node_tree.links.new(input_node.outputs['Geometry'], add_set_position_node.inputs['Geometry'])
-        node_tree.links.new(input_node.outputs['Geometry'], set_set_position_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Use Noise'], use_noise_switch_node.inputs['Switch'])
         node_tree.links.new(input_node.outputs['Distance'], noise_node.inputs['Distance'])
         node_tree.links.new(input_node.outputs['Radius'], add_node_2.inputs[0])
         node_tree.links.new(input_node.outputs['Falloff Radius'], add_node_2.inputs[1])
         node_tree.links.new(input_node.outputs['Noise Radius Factor'], noise_radius_multiply_node.inputs[1])
         node_tree.links.new(input_node.outputs['Falloff Radius'], divide_node.inputs[1])
 
+        node_tree.links.new(input_node.outputs['Geometry'], add_set_position_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Geometry'], set_set_position_node.inputs['Geometry'])
+
         # Internal
         node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
         node_tree.links.new(interpolation_group_node.outputs['Value'], multiply_node.inputs[0])
-        node_tree.links.new(add_combine_xyz_node.outputs['Vector'], add_set_position_node.inputs['Offset'])
-        node_tree.links.new(noise_node.outputs['Offset'], switch_node.inputs['True'])
         node_tree.links.new(multiply_node.outputs['Value'], add_node.inputs[0])
-        node_tree.links.new(switch_node.outputs['Output'], add_node.inputs[1])
+        node_tree.links.new(use_noise_switch_node.outputs['Output'], add_node.inputs[1])
+
+        # TODO: add_node.outputs['Value'] or interpolation_group_node.outputs['Value']
+        #  I think this is the thing we want, as it is the raw influence value after noise, interpolation etc.
+        #  Right now, our "set" operation is ignoring noise and is using the raw [0..1] influence value from the
+        #  interpolation output, prior to being multiplied by the distance factor and having the noise added.
+        #  We could have the noise changed to use a factor value instead of a distance value, which would allow us to
+        #  use the noise values in the "set" operation. I think this would also be a bit cleaner.
+
         node_tree.links.new(add_node.outputs['Value'], add_combine_xyz_node.inputs['Z'])
+        node_tree.links.new(add_combine_xyz_node.outputs['Vector'], add_set_position_node.inputs['Offset'])
         node_tree.links.new(add_node_2.outputs['Value'], noise_radius_multiply_node.inputs[0])
         node_tree.links.new(noise_radius_multiply_node.outputs['Value'], noise_node.inputs['Radius'])
+        node_tree.links.new(noise_node.outputs['Offset'], use_noise_switch_node.inputs['True'])
         node_tree.links.new(subtract_node_2.outputs['Value'], divide_node.inputs[0])
 
         # Output

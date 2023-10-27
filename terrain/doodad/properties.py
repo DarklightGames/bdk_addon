@@ -182,7 +182,7 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
 
     # Snap & Align to Terrain
     snap_to_terrain: BoolProperty(name='Snap to Terrain', default=True)
-    align_to_terrain_factor: FloatProperty(name='Align to Terrain Factor', min=0.0, max=1.0, default=1.0, description='Align the Z axis to the terrain normal', subtype='FACTOR')
+    align_to_terrain_factor: FloatProperty(name='Align to Terrain', min=0.0, max=1.0, default=1.0, description='Align the Z axis to the terrain normal', subtype='FACTOR')
     terrain_normal_offset_min: FloatProperty(name='Terrain Normal Offset Min', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_max: FloatProperty(name='Terrain Normal Offset Max', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_seed: IntProperty(name='Terrain Normal Offset Seed', default=0, min=0)
@@ -282,6 +282,8 @@ class BDK_PG_terrain_doodad(PropertyGroup):
                             update=terrain_doodad_sort_order_update_cb)
     scatter_layers: CollectionProperty(name='Scatter Layers', type=BDK_PG_terrain_doodad_scatter_layer)
     scatter_layers_index: IntProperty()
+
+    is_frozen: BoolProperty(name='Is Frozen', default=False)
 
 
 classes = (
