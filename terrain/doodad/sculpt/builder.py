@@ -2,7 +2,7 @@ from bpy.types import NodeTree
 
 from ...kernel import ensure_noise_node_group
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_interpolation_node_tree, \
-    add_geometry_node_switch_nodes
+    ensure_trim_curve_node_tree, ensure_curve_normal_offset_node_tree
 
 
 def ensure_sculpt_noise_node_group():
@@ -70,10 +70,57 @@ def ensure_sculpt_noise_node_group():
     return ensure_geometry_node_tree('BDK Noise 2 (deprecated)', items, build_function)
 
 
+def ensure_curve_modifier_node_group():
+    items = {
+        ('INPUT', 'NodeSocketObject', 'Terrain Doodad Object'),
+        ('INPUT', 'NodeSocketBool', 'Reverse Curve'),
+        ('INPUT', 'NodeSocketFloat', 'Curve Trim Factor Start'),
+        ('INPUT', 'NodeSocketFloat', 'Curve Trim Factor End'),
+        ('INPUT', 'NodeSocketFloat', 'Curve Trim Mode'),
+        ('INPUT', 'NodeSocketFloat', 'Curve Trim Length Start'),
+        ('INPUT', 'NodeSocketFloat', 'Curve Trim Length End'),
+        ('INPUT', 'NodeSocketFloat', 'Curve Normal Offset'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+        object_info_node.transform_space = 'RELATIVE'
+
+        reverse_curve_node = node_tree.nodes.new(type='GeometryNodeReverseCurve')
+
+        reverse_curve_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        reverse_curve_switch_node.input_type = 'GEOMETRY'
+
+        curve_trim_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        curve_trim_node_group_node.node_tree = ensure_trim_curve_node_tree()
+
+        offset_curve_normal_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        offset_curve_normal_node_group_node.node_tree = ensure_curve_normal_offset_node_tree()
+
+        node_tree.links.new(input_node.outputs['Terrain Doodad Object'], object_info_node.inputs['Object'])
+        node_tree.links.new(object_info_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
+        node_tree.links.new(object_info_node.outputs['Curve'], curve_trim_node_group_node.inputs[14])  # False
+        node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
+        node_tree.links.new(reverse_curve_switch_node.outputs['Output'], curve_trim_node_group_node.inputs['Curve'])
+        node_tree.links.new(curve_trim_node_group_node.outputs['Curve'], offset_curve_normal_node_group_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Reverse Curve'], reverse_curve_switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Curve Trim Factor Start'], curve_trim_node_group_node.inputs['Factor Start'])
+        node_tree.links.new(input_node.outputs['Curve Trim Factor End'], curve_trim_node_group_node.inputs['Factor End'])
+        node_tree.links.new(input_node.outputs['Curve Trim Mode'], curve_trim_node_group_node.inputs['Trim Mode'])
+        node_tree.links.new(input_node.outputs['Curve Trim Length Start'], curve_trim_node_group_node.inputs['Length Start'])
+        node_tree.links.new(input_node.outputs['Curve Trim Length End'], curve_trim_node_group_node.inputs['Length End'])
+        node_tree.links.new(input_node.outputs['Curve Normal Offset'], offset_curve_normal_node_group_node.inputs['Offset'])
+        node_tree.links.new(offset_curve_normal_node_group_node.outputs['Curve'], output_node.inputs['Curve'])
+
+    return ensure_geometry_node_tree('BDK Curve Modifier', items, build_function)
+
 def ensure_sculpt_value_node_group() -> NodeTree:
     items = {
-        ('INPUT', 'NodeSocketFloat', 'Distance'),
         ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
+        ('INPUT', 'NodeSocketFloat', 'Distance'),
         ('INPUT', 'NodeSocketFloat', 'Radius'),
         ('INPUT', 'NodeSocketFloat', 'Falloff Radius'),
         ('INPUT', 'NodeSocketFloat', 'Noise Strength'),
