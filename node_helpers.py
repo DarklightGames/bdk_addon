@@ -463,7 +463,7 @@ def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: Nod
     previous_switch_output_socket = None
     output_socket = None
 
-    valid_input_types = {'INT', 'GEOMETRY', 'VECTOR'}
+    valid_input_types = {'INT', 'GEOMETRY', 'VECTOR', 'FLOAT'}
     if input_type not in valid_input_types:
         raise ValueError(f'input_type must be {valid_input_types}, got {input_type}')
 
@@ -496,6 +496,11 @@ def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: Nod
                 switch_false_input_socket = switch_node.inputs[8]
                 switch_true_input_socket = switch_node.inputs[9]
                 switch_output_socket = switch_node.outputs[3]
+            case 'FLOAT':
+                switch_switch_input_socket = switch_node.inputs[0]
+                switch_false_input_socket = switch_node.inputs[2]
+                switch_true_input_socket = switch_node.inputs[3]
+                switch_output_socket = switch_node.outputs[0]
             case _:
                 raise ValueError(f'input_type must be {valid_input_types}, got {input_type}')
 

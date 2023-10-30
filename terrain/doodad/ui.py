@@ -309,17 +309,19 @@ class BDK_PT_terrain_doodad_sculpt_layer_noise(Panel):
 
         sculpt_layer = get_terrain_doodad_selected_sculpt_layer(context)
 
-        flow.prop(sculpt_layer, 'noise_type')
-
         col = flow.column(align=True)
-        col.prop(sculpt_layer, 'noise_radius_factor')
-        col.prop(sculpt_layer, 'noise_strength')
+        col.prop(sculpt_layer, 'noise_radius_factor', text='Radius Factor')
+        col.prop(sculpt_layer, 'noise_strength', text='Strength')
+
+        flow.prop(sculpt_layer, 'noise_type', text='Type')
+
         if sculpt_layer.noise_type == 'PERLIN':
-            col.prop(sculpt_layer, 'perlin_noise_distortion')
-            col.prop(sculpt_layer, 'perlin_noise_roughness')
-            col.prop(sculpt_layer, 'perlin_noise_scale')
-            col.prop(sculpt_layer, 'perlin_noise_lacunarity')
-            col.prop(sculpt_layer, 'perlin_noise_detail')
+            col = flow.column(align=True)
+            col.prop(sculpt_layer, 'perlin_noise_distortion', text='Distortion')
+            col.prop(sculpt_layer, 'perlin_noise_roughness', text='Roughness')
+            col.prop(sculpt_layer, 'perlin_noise_scale', text='Scale')
+            col.prop(sculpt_layer, 'perlin_noise_lacunarity', text='Lacunarity')
+            col.prop(sculpt_layer, 'perlin_noise_detail', text='Detail')
 
 
 class BDK_PT_terrain_doodad_sculpt_layers(Panel):
@@ -794,6 +796,7 @@ class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
         flow = layout.grid_flow(align=True, columns=1)
         flow.use_property_split = True
         flow.prop(sculpt_layer, 'id', emboss=False)
+        flow.prop(sculpt_layer, 'frozen_attribute_id', emboss=False)
 
 
 class BDK_UL_terrain_doodad_scatter_layer_nodes(UIList):

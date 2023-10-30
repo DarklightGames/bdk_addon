@@ -6,7 +6,7 @@ import bpy
 from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, bpy_struct
 
-from .sculpt.builder import ensure_sculpt_node_group
+from .sculpt.builder import ensure_sculpt_value_node_group
 from ..kernel import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
 from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, ensure_trim_curve_node_tree, \
@@ -640,6 +640,43 @@ def add_doodad_deco_layer_driver(struct: bpy_struct, layer, data_path: str, path
     add_doodad_layer_driver(struct, layer, 'DECO', data_path, path)
 
 
+def ensure_sculpt_operation_node_group() -> NodeTree:
+    items = {
+        ('INPUT', 'NodeSocketFloat', 'Value 1'),
+        ('INPUT', 'NodeSocketFloat', 'Value 2'),
+        ('INPUT', 'NodeSocketFloat', 'Depth'),
+        ('INPUT', 'NodeSocketInt', 'Operation'),
+        ('OUTPUT', 'NodeSocketFloat', 'Output')
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        set_mix_node = node_tree.nodes.new(type='ShaderNodeMix')
+        set_socket = set_mix_node.outputs['Result']
+
+        add_node = node_tree.nodes.new(type='ShaderNodeMath')
+        add_node.operation = 'ADD'
+        add_socket = add_node.outputs['Value']
+
+        add_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+        add_multiply_node.operation = 'MULTIPLY'
+
+        node_tree.links.new(input_node.outputs['Value 2'], add_multiply_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Depth'], add_multiply_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Value 1'], add_node.inputs[0])
+        node_tree.links.new(add_multiply_node.outputs['Value'], add_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Value 2'], set_mix_node.inputs['Factor'])
+        node_tree.links.new(input_node.outputs['Value 1'], set_mix_node.inputs['A'])
+        node_tree.links.new(input_node.outputs['Depth'], set_mix_node.inputs['B'])
+
+        operation_result_socket = add_geometry_node_switch_nodes(node_tree, input_node.outputs['Operation'], [add_socket, set_socket], 'FLOAT')
+
+        node_tree.links.new(operation_result_socket, output_node.inputs['Output'])
+
+    return ensure_geometry_node_tree('BDK Sculpt Operation', items, build_function)
+
+
 def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket, terrain_doodad) -> NodeSocket:
     """
     Adds the nodes for a doodad's sculpt layers.
@@ -654,58 +691,76 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
     object_info_node.inputs[0].default_value = terrain_doodad.object
     object_info_node.transform_space = 'RELATIVE'
 
+    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+    set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+    combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+    z_socket = separate_xyz_node.outputs['Z']
+
     # Now chain the node components together.
     for sculpt_layer in terrain_doodad.sculpt_layers:
-        distance_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-        distance_attribute_node.inputs['Name'].default_value = sculpt_layer.id
-        distance_attribute_node.data_type = 'FLOAT'
-
-        # Store the calculated distance to a named attribute.
-        # This is faster than recalculating the distance when evaluating each layer. (~20% faster)
-        store_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-        store_distance_attribute_node.inputs['Name'].default_value = sculpt_layer.id
-        store_distance_attribute_node.data_type = 'FLOAT'
-        store_distance_attribute_node.domain = 'POINT'
-
-        sculpt_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        sculpt_node.node_tree = ensure_sculpt_node_group()
-        sculpt_node.label = 'Sculpt'
+        sculpt_value_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        sculpt_value_node.node_tree = ensure_sculpt_value_node_group()
 
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        mute_switch_node.input_type = 'GEOMETRY'
+        mute_switch_node.input_type = 'FLOAT'
+
+        mute_or_node = node_tree.nodes.new(type='FunctionNodeBooleanMath')
+        mute_or_node.operation = 'OR'
+
+        frozen_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        frozen_named_attribute_node.inputs['Name'].default_value = sculpt_layer.frozen_attribute_id
+
+        is_frozen_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        is_frozen_switch_node.input_type = 'FLOAT'
 
         # Add the distance to the doodad layer nodes.
         distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT',
                                                              doodad_object_info_node=object_info_node)
 
+        sculpt_operation_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        sculpt_operation_node.node_tree = ensure_sculpt_operation_node_group()
+
         # Drivers
-        add_doodad_sculpt_layer_driver(mute_switch_node.inputs[1], sculpt_layer, 'mute')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Radius'], sculpt_layer, 'radius')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Falloff Radius'], sculpt_layer, 'falloff_radius')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Depth'], sculpt_layer, 'depth')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Strength'], sculpt_layer, 'noise_strength')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Roughness'], sculpt_layer, 'perlin_noise_roughness')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Distortion'], sculpt_layer, 'perlin_noise_distortion')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Scale'], sculpt_layer, 'perlin_noise_scale')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Lacunarity'], sculpt_layer, 'perlin_noise_lacunarity')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Perlin Noise Detail'], sculpt_layer, 'perlin_noise_detail')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Use Noise'], sculpt_layer, 'use_noise')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Radius Factor'], sculpt_layer, 'noise_radius_factor')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Interpolation Type'], sculpt_layer, 'interpolation_type')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Noise Type'], sculpt_layer, 'noise_type')
-        add_doodad_sculpt_layer_driver(sculpt_node.inputs['Operation'], sculpt_layer, 'operation')
+        add_doodad_sculpt_layer_driver(mute_switch_node.inputs[0], sculpt_layer, 'mute')
+        add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Operation'], sculpt_layer, 'operation')
+        add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Depth'], sculpt_layer, 'depth')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Radius'], sculpt_layer, 'radius')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Falloff Radius'], sculpt_layer, 'falloff_radius')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Noise Strength'], sculpt_layer, 'noise_strength')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Perlin Noise Roughness'], sculpt_layer, 'perlin_noise_roughness')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Perlin Noise Distortion'], sculpt_layer, 'perlin_noise_distortion')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Perlin Noise Scale'], sculpt_layer, 'perlin_noise_scale')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Perlin Noise Lacunarity'], sculpt_layer, 'perlin_noise_lacunarity')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Perlin Noise Detail'], sculpt_layer, 'perlin_noise_detail')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Use Noise'], sculpt_layer, 'use_noise')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Noise Radius Factor'], sculpt_layer, 'noise_radius_factor')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Interpolation Type'], sculpt_layer, 'interpolation_type')
+        add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Noise Type'], sculpt_layer, 'noise_type')
+        add_doodad_sculpt_layer_driver(is_frozen_switch_node.inputs['Switch'], sculpt_layer, 'is_frozen')
+
+        # add_doodad_sculpt_layer_driver(sculpt_value_node.inputs['Depth'], sculpt_layer, 'depth')
 
         # Links
-        node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
-        node_tree.links.new(distance_socket, store_distance_attribute_node.inputs[4])  # Value
-        node_tree.links.new(store_distance_attribute_node.outputs['Geometry'], sculpt_node.inputs['Geometry'])
-        node_tree.links.new(distance_attribute_node.outputs[1], sculpt_node.inputs['Distance'])
-        node_tree.links.new(sculpt_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False (not muted)
-        node_tree.links.new(store_distance_attribute_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+        node_tree.links.new(sculpt_operation_node.outputs['Output'], mute_switch_node.inputs[2])
+        node_tree.links.new(z_socket, mute_switch_node.inputs[3])
+        node_tree.links.new(distance_socket, sculpt_value_node.inputs['Distance'])
+        node_tree.links.new(sculpt_value_node.outputs['Value'], is_frozen_switch_node.inputs[2])  # False
+        node_tree.links.new(frozen_named_attribute_node.outputs[1], is_frozen_switch_node.inputs[3])  # True
+        node_tree.links.new(z_socket, sculpt_operation_node.inputs['Value 1'])
+        node_tree.links.new(is_frozen_switch_node.outputs[0], sculpt_operation_node.inputs['Value 2'])
 
-        geometry_socket = mute_switch_node.outputs[6]
+        z_socket = mute_switch_node.outputs['Output']
 
-    return geometry_socket
+    node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+    node_tree.links.new(geometry_socket, set_position_node.inputs['Geometry'])
+    node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
+    node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
+    node_tree.links.new(z_socket, combine_xyz_node.inputs['Z'])
+    node_tree.links.new(combine_xyz_node.outputs['Vector'], set_position_node.inputs['Position'])
+
+    return set_position_node.outputs['Geometry']
 
 
 def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:

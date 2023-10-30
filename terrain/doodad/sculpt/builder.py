@@ -70,14 +70,12 @@ def ensure_sculpt_noise_node_group():
     return ensure_geometry_node_tree('BDK Noise 2 (deprecated)', items, build_function)
 
 
-def ensure_sculpt_node_group() -> NodeTree:
+def ensure_sculpt_value_node_group() -> NodeTree:
     items = {
-        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketFloat', 'Distance'),
         ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
         ('INPUT', 'NodeSocketFloat', 'Radius'),
         ('INPUT', 'NodeSocketFloat', 'Falloff Radius'),
-        ('INPUT', 'NodeSocketFloat', 'Depth'),
         ('INPUT', 'NodeSocketFloat', 'Noise Strength'),
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Roughness'),
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Distortion'),
@@ -87,17 +85,10 @@ def ensure_sculpt_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketBool', 'Use Noise'),
         ('INPUT', 'NodeSocketFloat', 'Noise Radius Factor'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
-        ('INPUT', 'NodeSocketInt', 'Operation'),
-        # ('INPUT', 'NodeSocketString', 'Attribute ID'),      # The attribute ID of the influence field.
-        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value'),
     }
 
     def build_function(node_tree: NodeTree):
-        # TODO: we need to disentangle the "set position" here.
-        #  It is probably dramatically faster to write each of these sculpt layers out as an influence field and then
-        #  run all the influence fields through a single "set position" node.
-        #  This would also make it easier to add the freeze functionality.
-
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         subtract_node_2 = node_tree.nodes.new(type='ShaderNodeMath')
@@ -109,12 +100,6 @@ def ensure_sculpt_node_group() -> NodeTree:
 
         interpolation_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         interpolation_group_node.node_tree = ensure_interpolation_node_tree()
-
-        multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
-        multiply_node.operation = 'MULTIPLY'
-
-        add_combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-        add_set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
         noise_node = node_tree.nodes.new(type='GeometryNodeGroup')
         noise_node.node_tree = ensure_sculpt_noise_node_group()
@@ -132,42 +117,10 @@ def ensure_sculpt_node_group() -> NodeTree:
         noise_radius_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
         noise_radius_multiply_node.operation = 'MULTIPLY'
 
-        # Set Operation
-        set_set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
-        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-
-        mix_node = node_tree.nodes.new(type='ShaderNodeMix')
-        mix_node.clamp_factor = True
-
-        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-
-        # Internal Links
-        node_tree.links.new(input_node.outputs["Depth"], mix_node.inputs[3])  # Depth -> B
-        node_tree.links.new(separate_xyz_node.outputs[0], combine_xyz_node.inputs[0])  # X -> X
-        node_tree.links.new(separate_xyz_node.outputs[1], combine_xyz_node.inputs[1])  # Y -> Y
-        node_tree.links.new(separate_xyz_node.outputs[2], mix_node.inputs[2])  # Z -> A
-        node_tree.links.new(mix_node.outputs[0], combine_xyz_node.inputs[2])  # Result -> Z
-        node_tree.links.new(combine_xyz_node.outputs[0], set_set_position_node.inputs[2])  # Vector -> Position
-        node_tree.links.new(position_node.outputs[0], separate_xyz_node.inputs[0])  # Position -> Vector
-        node_tree.links.new(interpolation_group_node.outputs['Value'], mix_node.inputs[0])  # Value -> Factor
-
-        add_set_position_geometry_socket = add_set_position_node.outputs[0]
-        operation_set_geometry_socket = set_set_position_node.outputs[0]
-
-        # Add Operation Socket
-        geometry_socket = add_geometry_node_switch_nodes(
-            node_tree,
-            input_node.outputs['Operation'],
-            [add_set_position_geometry_socket, operation_set_geometry_socket],
-            'GEOMETRY'
-        )
-
         # Input
         node_tree.links.new(input_node.outputs['Distance'], subtract_node_2.inputs[0])
         node_tree.links.new(input_node.outputs['Radius'], subtract_node_2.inputs[1])
         node_tree.links.new(input_node.outputs['Interpolation Type'], interpolation_group_node.inputs['Interpolation Type'])
-        node_tree.links.new(input_node.outputs['Depth'], multiply_node.inputs[1])
         node_tree.links.new(input_node.outputs['Noise Strength'], noise_node.inputs['Noise Strength'])
         node_tree.links.new(input_node.outputs['Noise Type'], noise_node.inputs['Noise Type'])
         node_tree.links.new(input_node.outputs['Perlin Noise Roughness'], noise_node.inputs['Perlin Noise Roughness'])
@@ -182,13 +135,9 @@ def ensure_sculpt_node_group() -> NodeTree:
         node_tree.links.new(input_node.outputs['Noise Radius Factor'], noise_radius_multiply_node.inputs[1])
         node_tree.links.new(input_node.outputs['Falloff Radius'], divide_node.inputs[1])
 
-        node_tree.links.new(input_node.outputs['Geometry'], add_set_position_node.inputs['Geometry'])
-        node_tree.links.new(input_node.outputs['Geometry'], set_set_position_node.inputs['Geometry'])
-
         # Internal
         node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
-        node_tree.links.new(interpolation_group_node.outputs['Value'], multiply_node.inputs[0])
-        node_tree.links.new(multiply_node.outputs['Value'], add_node.inputs[0])
+        node_tree.links.new(interpolation_group_node.outputs['Value'], add_node.inputs[0])
         node_tree.links.new(use_noise_switch_node.outputs['Output'], add_node.inputs[1])
 
         # TODO: add_node.outputs['Value'] or interpolation_group_node.outputs['Value']
@@ -198,14 +147,12 @@ def ensure_sculpt_node_group() -> NodeTree:
         #  We could have the noise changed to use a factor value instead of a distance value, which would allow us to
         #  use the noise values in the "set" operation. I think this would also be a bit cleaner.
 
-        node_tree.links.new(add_node.outputs['Value'], add_combine_xyz_node.inputs['Z'])
-        node_tree.links.new(add_combine_xyz_node.outputs['Vector'], add_set_position_node.inputs['Offset'])
         node_tree.links.new(add_node_2.outputs['Value'], noise_radius_multiply_node.inputs[0])
         node_tree.links.new(noise_radius_multiply_node.outputs['Value'], noise_node.inputs['Radius'])
         node_tree.links.new(noise_node.outputs['Offset'], use_noise_switch_node.inputs['True'])
         node_tree.links.new(subtract_node_2.outputs['Value'], divide_node.inputs[0])
 
         # Output
-        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        node_tree.links.new(add_node.outputs['Value'], output_node.inputs['Value'])
 
     return ensure_geometry_node_tree('BDK Terrain Doodad Sculpt Layer', items, build_function)
