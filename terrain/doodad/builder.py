@@ -753,6 +753,7 @@ def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: '
         geometry_socket = input_node.outputs['Geometry']
 
         for terrain_doodad in terrain_doodads:
+            ensure_terrain_doodad_freeze_attribute_ids(terrain_doodad)
             geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
 
         # Drivers
@@ -1016,11 +1017,24 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
     return node_tree, attribute_map
 
 
+def ensure_terrain_doodad_freeze_attribute_ids(terrain_doodad: 'BDK_PG_terrain_doodad'):
+    """
+    Ensures that all the freeze attribute IDs are set for the given terrain doodad.
+    :param terrain_doodad:
+    :return:
+    """
+    for sculpt_layer in terrain_doodad.sculpt_layers:
+        if sculpt_layer.frozen_attribute_id == '':
+            sculpt_layer.frozen_attribute_id = uuid4().hex
+
+
 def ensure_terrain_doodad_freeze_node_group(terrain_doodad: 'BDK_PG_terrain_doodad') -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
+
+    ensure_terrain_doodad_freeze_attribute_ids(terrain_doodad)
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1029,11 +1043,10 @@ def ensure_terrain_doodad_freeze_node_group(terrain_doodad: 'BDK_PG_terrain_dood
 
         # Now chain the node components together.
         for sculpt_layer in terrain_doodad.sculpt_layers:
-            mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-            mute_switch_node.input_type = 'FLOAT'
-
             store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-            store_named_attribute_node.inputs['Name'] = sculpt_layer.frozen_attribute_id
+            store_named_attribute_node.domain = 'POINT'
+            store_named_attribute_node.data_type = 'FLOAT'
+            store_named_attribute_node.inputs['Name'].default_value = sculpt_layer.frozen_attribute_id
 
             value_socket = add_terrain_doodad_sculpt_layer_value_nodes(node_tree, sculpt_layer)
 
@@ -1041,5 +1054,7 @@ def ensure_terrain_doodad_freeze_node_group(terrain_doodad: 'BDK_PG_terrain_dood
             node_tree.links.new(value_socket, store_named_attribute_node.inputs['Value'])
 
             geometry_socket = store_named_attribute_node.outputs['Geometry']
+
+        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(f'BDK Terrain Doodad Freeze {terrain_doodad.id}', items, build_function, should_force_build=True)

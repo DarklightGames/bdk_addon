@@ -115,6 +115,8 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
     distance_noise_distortion: FloatProperty(name='Distance Noise Distortion', default=1.0, min=0.0)
     distance_noise_offset: FloatProperty(name='Distance Noise Offset', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
 
+    frozen_attribute_id: StringProperty(name='Frozen Attribute ID', default='', options={'HIDDEN'})
+
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_paint_layer)
 

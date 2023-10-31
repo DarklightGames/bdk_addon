@@ -17,7 +17,7 @@ from ..properties import BDK_PG_terrain_layer_node, get_terrain_info_paint_layer
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad, \
     is_active_object_terrain_doodad, should_show_bdk_developer_extras, ensure_name_unique
 from .builder import create_terrain_doodad_object, create_terrain_doodad_bake_node_tree, \
-    convert_object_to_terrain_doodad
+    convert_object_to_terrain_doodad, ensure_terrain_doodad_freeze_node_group
 
 
 class BDK_OT_terrain_doodad_add(Operator):
@@ -170,15 +170,29 @@ class BDK_OT_terrain_doodad_freeze(Operator):
         terrain_doodad = get_terrain_doodad(terrain_doodad_object)
         terrain_info_object = terrain_doodad.terrain_info_object
 
+        # Add the freeze modifier to the top of the terrain info's modifier stack.
+        modifier_id = uuid.uuid4().hex
+        freeze_modifier = terrain_info_object.modifiers.new(modifier_id, 'NODES')
+        freeze_modifier.node_group = ensure_terrain_doodad_freeze_node_group(terrain_doodad)
+
+        # Move the freeze modifier to the top of the stack and apply it.
+        terrain_info_object.modifiers.move(len(terrain_info_object.modifiers) - 1, 0)
+
+        # Make the terrain info object the selected and active object.
+        context.view_layer.objects.active = terrain_info_object
+        terrain_info_object.select_set(True)
+
+        # Apply the freeze modifier.
+        bpy.ops.object.modifier_apply(modifier=modifier_id)
+
+        for sculpt_layer in terrain_doodad.sculpt_layers:
+            # TODO: this should just be stored in the doodad, not the layer.
+            sculpt_layer.is_frozen = True
+
         terrain_doodad.is_frozen = True
 
-        # # Select the terrain info object and make it the active object.
-        # context.view_layer.objects.active = terrain_info_object
-        # terrain_info_object.select_set(True)
-
-        """
-        We need to make a node tree that saves all of the attributes to the terrain.
-        """
+        terrain_info_object.update_tag()
+        terrain_doodad_object.update_tag() # from edit_mode?
 
         return {'FINISHED'}
 
@@ -211,17 +225,21 @@ class BDK_OT_terrain_doodad_unfreeze(Operator):
                 self.report({'WARNING'}, f'Frozen attribute for sculpt layer \'{sculpt_layer.name}\' {sculpt_layer.frozen_attribute_id} not found')
                 continue
             attributes.remove(attributes[sculpt_layer.frozen_attribute_id])
+            sculpt_layer.is_frozen = False
 
         for paint_layer in terrain_doodad.paint_layers:
             if paint_layer.frozen_attribute_id not in attributes:
                 self.report({'WARNING'}, f'Frozen attribute for paint layer \'{paint_layer.name}\' {paint_layer.frozen_attribute_id} not found')
                 continue
             attributes.remove(attributes[paint_layer.frozen_attribute_id])
+            paint_layer.is_frozen = False
 
         # TODO: unfreeze scatter layers.
 
         # Mark the doodad as not frozen.
         terrain_doodad.is_frozen = False
+
+        terrain_info_object.update_tag()
 
         # Update the terrain info modifiers.
         ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
