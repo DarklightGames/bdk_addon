@@ -680,7 +680,7 @@ def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree, sculpt_laye
     return sculpt_value_node.outputs['Value']
 
 
-def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket, terrain_doodad) -> NodeSocket:
+def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: NodeSocket, terrain_doodad) -> NodeSocket:
     """
     Adds the nodes for a doodad's sculpt layers.
     :param node_tree: The node tree to add the nodes to.
@@ -688,13 +688,6 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
     :param terrain_doodad: The terrain doodad to add the sculpt layers for.
     :return: The geometry output socket (either the one passed in or the one from the last node added).
     """
-    position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-    set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
-    combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-
-    z_socket = separate_xyz_node.outputs['Z']
-
     # Now chain the node components together.
     for sculpt_layer in terrain_doodad.sculpt_layers:
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
@@ -728,14 +721,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSo
 
         z_socket = mute_switch_node.outputs['Output']
 
-    node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
-    node_tree.links.new(geometry_socket, set_position_node.inputs['Geometry'])
-    node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
-    node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
-    node_tree.links.new(z_socket, combine_xyz_node.inputs['Z'])
-    node_tree.links.new(combine_xyz_node.outputs['Vector'], set_position_node.inputs['Position'])
-
-    return set_position_node.outputs['Geometry']
+    return z_socket
 
 
 def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
@@ -752,9 +738,27 @@ def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: '
 
         geometry_socket = input_node.outputs['Geometry']
 
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+        node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+
+        z_socket = separate_xyz_node.outputs['Z']
+
         for terrain_doodad in terrain_doodads:
             ensure_terrain_doodad_freeze_attribute_ids(terrain_doodad)
-            geometry_socket = _add_sculpt_layers_to_node_tree(node_tree, geometry_socket, terrain_doodad)
+            z_socket = _add_sculpt_layers_to_node_tree(node_tree, z_socket, terrain_doodad)
+
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
+        node_tree.links.new(z_socket, combine_xyz_node.inputs['Z'])
+
+        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], set_position_node.inputs['Position'])
+        node_tree.links.new(geometry_socket, set_position_node.inputs['Geometry'])
 
         # Drivers
         _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_sculpt_modifier_muted')
@@ -763,7 +767,7 @@ def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: '
         node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
 
         # Internal
-        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+        node_tree.links.new(set_position_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False (not muted)
 
         # Outputs
         node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
