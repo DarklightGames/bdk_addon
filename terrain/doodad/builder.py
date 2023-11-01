@@ -5,6 +5,7 @@ import bmesh
 import bpy
 from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, bpy_struct, Node
+from itertools import chain
 
 from .sculpt.builder import ensure_sculpt_value_node_group
 from ..kernel import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
@@ -121,14 +122,34 @@ def ensure_distance_noise_node_group() -> NodeTree:
     return ensure_geometry_node_tree('BDK Distance Noise', items, build_function)
 
 
-def ensure_doodad_paint_node_group() -> NodeTree:
+def ensure_terrain_doodad_paint_operation_node_group() -> NodeTree:
     items = {
-        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
         ('INPUT', 'NodeSocketInt', 'Operation'),
+        ('INPUT', 'NodeSocketFloat', 'Value 1'),
+        ('INPUT', 'NodeSocketFloat', 'Value 2'),
+        ('OUTPUT', 'NodeSocketFloat', 'Output'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        value_socket = add_operation_switch_nodes(
+            node_tree,
+            input_node.outputs['Operation'],
+            input_node.outputs['Value 1'],
+            input_node.outputs['Value 2'],
+            [x[0] for x in terrain_doodad_operation_items]
+        )
+
+        node_tree.links.new(value_socket, output_node.inputs['Output'])
+
+    return ensure_geometry_node_tree('BDK Terrain Doodad Paint Operation', items, build_function)
+
+def ensure_terrain_doodad_paint_node_group() -> NodeTree:
+    items = {
+        ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
         ('INPUT', 'NodeSocketFloat', 'Distance'),
-        ('INPUT', 'NodeSocketString', 'Attribute'),
         ('INPUT', 'NodeSocketFloat', 'Radius'),
         ('INPUT', 'NodeSocketFloat', 'Falloff Radius'),
         ('INPUT', 'NodeSocketFloat', 'Strength'),
@@ -136,27 +157,11 @@ def ensure_doodad_paint_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Distance Noise Distortion'),
         ('INPUT', 'NodeSocketFloat', 'Distance Noise Offset'),
         ('INPUT', 'NodeSocketBool', 'Use Distance Noise'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value'),
     }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
-
-        # Create a new Store Named Attribute node.
-        store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-        store_named_attribute_node.data_type = 'BYTE_COLOR'
-        store_named_attribute_node.domain = 'POINT'
-
-        # Create a Named Attribute node.
-        named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-        named_attribute_node.data_type = 'FLOAT'
-
-        # Link the Attribute output of the input node to the name input of the named attribute node.
-        node_tree.links.new(input_node.outputs['Attribute'], named_attribute_node.inputs['Name'])
-        node_tree.links.new(input_node.outputs['Attribute'], store_named_attribute_node.inputs['Name'])
-
-        # Pass the geometry from the input to the output.
-        node_tree.links.new(input_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
         # Add a subtract node.
         subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
@@ -182,20 +187,11 @@ def ensure_doodad_paint_node_group() -> NodeTree:
         strength_multiply_node.operation = 'MULTIPLY'
         strength_multiply_node.label = 'Strength Multiply'
 
-        value_socket = add_operation_switch_nodes(
-            node_tree,
-            input_node.outputs['Operation'],
-            named_attribute_node.outputs[1],
-            strength_multiply_node.outputs['Value'],
-            [x[0] for x in terrain_doodad_operation_items]
-        )
-
         # Add the distance noise node group.
         distance_noise_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         distance_noise_group_node.node_tree = ensure_distance_noise_node_group()
 
         # Input
-        node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Distance'], distance_noise_group_node.inputs['Distance'])
         node_tree.links.new(input_node.outputs['Noise Type'], distance_noise_group_node.inputs['Type'])
         node_tree.links.new(input_node.outputs['Distance Noise Factor'], distance_noise_group_node.inputs['Factor'])
@@ -208,11 +204,10 @@ def ensure_doodad_paint_node_group() -> NodeTree:
         # Internal
         node_tree.links.new(divide_node.outputs['Value'], interpolation_group_node.inputs['Value'])
         node_tree.links.new(interpolation_group_node.outputs['Value'], strength_multiply_node.inputs[0])
-        node_tree.links.new(value_socket, store_named_attribute_node.inputs[5])
         node_tree.links.new(distance_noise_group_node.outputs['Distance'], subtract_node.inputs[0])
 
         # Output
-        node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        node_tree.links.new(strength_multiply_node.outputs['Value'], output_node.inputs['Value'])
 
     return ensure_geometry_node_tree('BDK Doodad Paint', items, build_function)
 
@@ -680,6 +675,10 @@ def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree, sculpt_laye
     return sculpt_value_node.outputs['Value']
 
 
+def add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree, paint_layer: 'BDK_PG_terrain_doodad_paint_layer') -> NodeSocket:
+    return _add_terrain_doodad_paint_layer_value_nodes(node_tree, paint_layer)
+
+
 def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: NodeSocket, terrain_doodad) -> NodeSocket:
     """
     Adds the nodes for a doodad's sculpt layers.
@@ -707,7 +706,7 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: NodeSocket, t
 
         # Drivers
         add_doodad_sculpt_layer_driver(mute_switch_node.inputs[0], sculpt_layer, 'mute')
-        add_doodad_sculpt_layer_driver(is_frozen_switch_node.inputs['Switch'], sculpt_layer, 'is_frozen')
+        _add_terrain_doodad_driver(is_frozen_switch_node.inputs['Switch'], terrain_doodad, 'is_frozen')
         add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Operation'], sculpt_layer, 'operation')
         add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Depth'], sculpt_layer, 'depth')
 
@@ -791,85 +790,91 @@ def _add_terrain_doodad_scatter_layer_mask_to_node_tree(node_tree: NodeTree, geo
     return geometry_socket
 
 
-def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket,
-                                                 terrain_doodad_paint_layer: 'BDK_PG_terrain_doodad_paint_layer',
-                                                 attribute_override: Optional[str] = None,
-                                                 operation_override: Optional[str] = None) -> NodeSocket:
+def add_paint_layer_driver(struct: bpy_struct, paint_layer: 'BDK_PG_terrain_doodad_paint_layer', data_path: str,
+                           path: str = 'default_value'):
+    driver = struct.driver_add(path).driver
+    driver.type = 'AVERAGE'
+    var = driver.variables.new()
+    var.name = data_path
+    var.type = 'SINGLE_PROP'
+    var.targets[0].id = paint_layer.terrain_doodad_object
+    var.targets[0].data_path = f"bdk.terrain_doodad.paint_layers[{paint_layer.index}].{data_path}"
 
-    # Check if the terrain doodad is frozen.
-    if terrain_doodad_paint_layer.terrain_doodad_object.bdk.terrain_doodad.is_frozen:
-        pass
 
-    def add_paint_layer_driver(struct: bpy_struct, paint_layer: 'BDK_PG_terrain_doodad_paint_layer', data_path: str,
-                               path: str = 'default_value'):
-        driver = struct.driver_add(path).driver
-        driver.type = 'AVERAGE'
-        var = driver.variables.new()
-        var.name = data_path
-        var.type = 'SINGLE_PROP'
-        var.targets[0].id = paint_layer.terrain_doodad_object
-        var.targets[0].data_path = f"bdk.terrain_doodad.paint_layers[{paint_layer.index}].{data_path}"
-
+def _add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree, paint_layer: 'BDK_PG_terrain_doodad_paint_layer') -> NodeSocket:
     doodad_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-    doodad_object_info_node.inputs[0].default_value = terrain_doodad_paint_layer.terrain_doodad_object
+    doodad_object_info_node.inputs[0].default_value = paint_layer.terrain_doodad_object
     doodad_object_info_node.transform_space = 'RELATIVE'
 
-    distance_socket = add_distance_to_doodad_layer_nodes(node_tree, terrain_doodad_paint_layer, 'PAINT', doodad_object_info_node)
-
-    store_distance_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-    store_distance_attribute_node.inputs['Name'].default_value = terrain_doodad_paint_layer.id
-    store_distance_attribute_node.data_type = 'FLOAT'
-    store_distance_attribute_node.domain = 'POINT'
-
-    node_tree.links.new(geometry_socket, store_distance_attribute_node.inputs['Geometry'])
-
-    geometry_socket = store_distance_attribute_node.outputs['Geometry']
+    distance_socket = add_distance_to_doodad_layer_nodes(node_tree, paint_layer, 'PAINT', doodad_object_info_node)
 
     paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
-    paint_node.node_tree = ensure_doodad_paint_node_group()
-    paint_node.label = 'Paint'
+    paint_node.node_tree = ensure_terrain_doodad_paint_node_group()
 
-    if attribute_override is not None:
-        paint_node.inputs['Attribute'].default_value = attribute_override
-    else:
-        # These attributes are not pre-calculated anymore, so we need to do it here.
-        if terrain_doodad_paint_layer.layer_type == 'PAINT':
-            paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.paint_layer_id
-        elif terrain_doodad_paint_layer.layer_type == 'DECO':
-            paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.deco_layer_id
-        elif terrain_doodad_paint_layer.layer_type == 'ATTRIBUTE':
-            paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.attribute_layer_id
+    add_paint_layer_driver(paint_node.inputs['Radius'], paint_layer, 'radius')
+    add_paint_layer_driver(paint_node.inputs['Falloff Radius'], paint_layer, 'falloff_radius')
+    add_paint_layer_driver(paint_node.inputs['Strength'], paint_layer, 'strength')
+    add_paint_layer_driver(paint_node.inputs['Use Distance Noise'], paint_layer, 'use_distance_noise')
+    add_paint_layer_driver(paint_node.inputs['Distance Noise Distortion'], paint_layer, 'distance_noise_distortion')
+    add_paint_layer_driver(paint_node.inputs['Distance Noise Factor'], paint_layer, 'distance_noise_factor')
+    add_paint_layer_driver(paint_node.inputs['Distance Noise Offset'], paint_layer, 'distance_noise_offset')
+    add_paint_layer_driver(paint_node.inputs['Interpolation Type'], paint_layer, 'interpolation_type')
+    add_paint_layer_driver(paint_node.inputs['Noise Type'], paint_layer, 'noise_type')
 
-    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-    switch_node.input_type = 'GEOMETRY'
+    node_tree.links.new(distance_socket, paint_node.inputs['Distance'])
 
-    add_paint_layer_driver(switch_node.inputs[1], terrain_doodad_paint_layer, 'mute')
-    add_paint_layer_driver(paint_node.inputs['Radius'], terrain_doodad_paint_layer, 'radius')
-    add_paint_layer_driver(paint_node.inputs['Falloff Radius'], terrain_doodad_paint_layer, 'falloff_radius')
-    add_paint_layer_driver(paint_node.inputs['Strength'], terrain_doodad_paint_layer, 'strength')
-    add_paint_layer_driver(paint_node.inputs['Use Distance Noise'], terrain_doodad_paint_layer, 'use_distance_noise')
-    add_paint_layer_driver(paint_node.inputs['Distance Noise Distortion'], terrain_doodad_paint_layer, 'distance_noise_distortion')
-    add_paint_layer_driver(paint_node.inputs['Distance Noise Factor'], terrain_doodad_paint_layer, 'distance_noise_factor')
-    add_paint_layer_driver(paint_node.inputs['Distance Noise Offset'], terrain_doodad_paint_layer, 'distance_noise_offset')
-    add_paint_layer_driver(paint_node.inputs['Interpolation Type'], terrain_doodad_paint_layer, 'interpolation_type')
+    return paint_node.outputs['Value']
+
+
+def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree,
+                                                 terrain_doodad_paint_layer: 'BDK_PG_terrain_doodad_paint_layer',
+                                                 operand_value_socket: Optional[NodeSocket] = None,
+                                                 operation_override: Optional[str] = None) -> NodeSocket:
+
+    terrain_doodad = terrain_doodad_paint_layer.terrain_doodad_object.bdk.terrain_doodad
+
+    frozen_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+    frozen_named_attribute_node.inputs['Name'].default_value = terrain_doodad_paint_layer.frozen_attribute_id
+
+    frozen_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    frozen_switch_node.input_type = 'FLOAT'
+    frozen_switch_node.label = 'Frozen'
+
+    mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    mute_switch_node.input_type = 'FLOAT'
+    mute_switch_node.label = 'Mute'
+
+    paint_value_socket = _add_terrain_doodad_paint_layer_value_nodes(node_tree, terrain_doodad_paint_layer)
+
+    paint_operation_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    paint_operation_node.node_tree = ensure_terrain_doodad_paint_operation_node_group()
+
+    if operand_value_socket is not None:
+        node_tree.links.new(operand_value_socket, paint_operation_node.inputs['Value 1'])
+        node_tree.links.new(operand_value_socket, mute_switch_node.inputs[3])  # True
+
+    node_tree.links.new(paint_operation_node.outputs['Output'], mute_switch_node.inputs[2])  # False
 
     if operation_override is not None:
         # Handle operation override. This is used when baking.
         operation_keys = [item[0] for item in terrain_doodad_operation_items]
-        paint_node.inputs['Operation'].default_value = operation_keys.index(operation_override)
+        paint_operation_node.inputs['Operation'].default_value = operation_keys.index(operation_override)
     else:
-        add_paint_layer_driver(paint_node.inputs['Operation'], terrain_doodad_paint_layer, 'operation')
+        add_paint_layer_driver(paint_operation_node.inputs['Operation'], terrain_doodad_paint_layer, 'operation')
 
-    add_paint_layer_driver(paint_node.inputs['Noise Type'], terrain_doodad_paint_layer, 'noise_type')
+    # Drivers
+    _add_terrain_doodad_driver(frozen_switch_node.inputs[0], terrain_doodad, 'is_frozen')  # Switch
+    add_paint_layer_driver(mute_switch_node.inputs[0], terrain_doodad_paint_layer, 'mute')
 
-    node_tree.links.new(geometry_socket, paint_node.inputs['Geometry'])
-    node_tree.links.new(distance_socket, paint_node.inputs['Distance'])
-    node_tree.links.new(paint_node.outputs['Geometry'], switch_node.inputs[14])  # False (not muted)
-    node_tree.links.new(geometry_socket, switch_node.inputs[15])  # True (muted)
+    # Links
+    node_tree.links.new(paint_value_socket, frozen_switch_node.inputs[2])  # False
+    node_tree.links.new(frozen_named_attribute_node.outputs[1], frozen_switch_node.inputs[3])  # True
+    node_tree.links.new(frozen_switch_node.outputs[0], paint_operation_node.inputs['Value 2'])  # False
 
-    return switch_node.outputs[6]  # Output
+    return mute_switch_node.outputs[0]
 
 
+# TODO: this thing can probably made generic for any layer type
 def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -884,9 +889,40 @@ def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_info: 'B
 
         geometry_socket = input_node.outputs['Geometry']
 
-        for terrain_doodad in terrain_doodads:
-            for paint_layer in filter(lambda x: x.layer_type == 'PAINT', terrain_doodad.paint_layers):
-                geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
+        paint_layers = list(filter(lambda x: x.layer_type == 'PAINT', chain.from_iterable(map(lambda x: x.paint_layers, terrain_doodads))))
+        paint_layer_ids = set(map(lambda x: x.paint_layer_id, paint_layers))
+
+        for paint_layer_id in paint_layer_ids:
+            named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+            named_attribute_node.data_type = 'FLOAT'
+            named_attribute_node.inputs['Name'].default_value = paint_layer_id
+
+            value_socket = named_attribute_node.outputs['Attribute']
+
+            # TODO: somehow incorporate this into the node tree (was moved from inner fn)
+            # if attribute_override is not None:
+            #     paint_node.inputs['Attribute'].default_value = attribute_override
+            # else:
+            #     # These attributes are not pre-calculated anymore, so we need to do it here.
+            #     if terrain_doodad_paint_layer.layer_type == 'PAINT':
+            #         paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.paint_layer_id
+            #     elif terrain_doodad_paint_layer.layer_type == 'DECO':
+            #         paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.deco_layer_id
+            #     elif terrain_doodad_paint_layer.layer_type == 'ATTRIBUTE':
+            #         paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.attribute_layer_id
+
+            for paint_layer in filter(lambda x: x.paint_layer_id == paint_layer_id, paint_layers):
+                value_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, paint_layer, value_socket)
+
+            store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_named_attribute_node.data_type = 'FLOAT'
+            store_named_attribute_node.domain = 'POINT'
+            store_named_attribute_node.inputs['Name'].default_value = paint_layer_id
+
+            node_tree.links.new(value_socket, store_named_attribute_node.inputs['Value'])
+            node_tree.links.new(geometry_socket, store_named_attribute_node.inputs['Geometry'])
+
+            geometry_socket = store_named_attribute_node.outputs['Geometry']
 
         # Drivers
         _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_paint_modifier_muted')
@@ -1011,7 +1047,7 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
                 #  separate out the operation from the "Paint Layer" node group, although we would need a compelling reason
                 #  to do so.
                 geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, doodad_paint_layer,
-                                                                               attribute_override=attribute_name,
+                                                                               # attribute_override=attribute_name,
                                                                                operation_override='ADD')
 
         node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
@@ -1024,12 +1060,17 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
 def ensure_terrain_doodad_freeze_attribute_ids(terrain_doodad: 'BDK_PG_terrain_doodad'):
     """
     Ensures that all the freeze attribute IDs are set for the given terrain doodad.
+    This is only used because previous versions didn't have this attribute. This can be removed in the future.
     :param terrain_doodad:
     :return:
     """
     for sculpt_layer in terrain_doodad.sculpt_layers:
         if sculpt_layer.frozen_attribute_id == '':
             sculpt_layer.frozen_attribute_id = uuid4().hex
+
+    for paint_layer in terrain_doodad.paint_layers:
+        if paint_layer.frozen_attribute_id == '':
+            paint_layer.frozen_attribute_id = uuid4().hex
 
 
 def ensure_terrain_doodad_freeze_node_group(terrain_doodad: 'BDK_PG_terrain_doodad') -> NodeTree:
@@ -1045,7 +1086,6 @@ def ensure_terrain_doodad_freeze_node_group(terrain_doodad: 'BDK_PG_terrain_dood
 
         geometry_socket = input_node.outputs['Geometry']
 
-        # Now chain the node components together.
         for sculpt_layer in terrain_doodad.sculpt_layers:
             store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
             store_named_attribute_node.domain = 'POINT'
@@ -1053,6 +1093,19 @@ def ensure_terrain_doodad_freeze_node_group(terrain_doodad: 'BDK_PG_terrain_dood
             store_named_attribute_node.inputs['Name'].default_value = sculpt_layer.frozen_attribute_id
 
             value_socket = add_terrain_doodad_sculpt_layer_value_nodes(node_tree, sculpt_layer)
+
+            node_tree.links.new(geometry_socket, store_named_attribute_node.inputs['Geometry'])
+            node_tree.links.new(value_socket, store_named_attribute_node.inputs['Value'])
+
+            geometry_socket = store_named_attribute_node.outputs['Geometry']
+
+        for paint_layer in terrain_doodad.paint_layers:
+            store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_named_attribute_node.domain = 'POINT'
+            store_named_attribute_node.data_type = 'FLOAT'
+            store_named_attribute_node.inputs['Name'].default_value = paint_layer.frozen_attribute_id
+
+            value_socket = add_terrain_doodad_paint_layer_value_nodes(node_tree, paint_layer)
 
             node_tree.links.new(geometry_socket, store_named_attribute_node.inputs['Geometry'])
             node_tree.links.new(value_socket, store_named_attribute_node.inputs['Value'])

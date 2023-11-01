@@ -185,14 +185,20 @@ class BDK_OT_terrain_doodad_freeze(Operator):
         # Apply the freeze modifier.
         bpy.ops.object.modifier_apply(modifier=modifier_id)
 
-        for sculpt_layer in terrain_doodad.sculpt_layers:
-            # TODO: this should just be stored in the doodad, not the layer.
-            sculpt_layer.is_frozen = True
-
         terrain_doodad.is_frozen = True
 
         terrain_info_object.update_tag()
-        terrain_doodad_object.update_tag() # from edit_mode?
+        terrain_doodad_object.update_tag()
+
+        ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
+
+        # Deselect the terrain info object.
+        terrain_info_object.select_set(False)
+
+        # Make the terrain doodad the active object again.
+        context.view_layer.objects.active = terrain_doodad_object
+
+        self.report({'INFO'}, f'Terrain doodad \'{terrain_doodad_object.name}\' frozen')  # TODO: give stats on how many layers were frozen
 
         return {'FINISHED'}
 
@@ -240,6 +246,7 @@ class BDK_OT_terrain_doodad_unfreeze(Operator):
         terrain_doodad.is_frozen = False
 
         terrain_info_object.update_tag()
+        terrain_doodad.object.update_tag()
 
         # Update the terrain info modifiers.
         ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
@@ -426,9 +433,8 @@ class BDK_OT_terrain_doodad_paint_layer_add(Operator):
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object
         terrain_doodad = get_terrain_doodad(terrain_doodad_object)
-        paint_layer = terrain_doodad.paint_layers.add()
-        paint_layer.id = uuid.uuid4().hex
-        paint_layer.terrain_doodad_object = terrain_doodad_object
+
+        add_terrain_doodad_paint_layer(terrain_doodad, 'Paint Layer')
 
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)

@@ -127,7 +127,7 @@ def ensure_interpolation_node_tree() -> NodeTree:
         if last_output_node_socket:
             node_tree.links.new(last_output_node_socket, output_node.inputs['Value'])
 
-    return ensure_geometry_node_tree('Interpolation', items, build_function)
+    return ensure_geometry_node_tree('BDK Interpolation', items, build_function)
 
 
 def add_noise_type_switch_nodes(

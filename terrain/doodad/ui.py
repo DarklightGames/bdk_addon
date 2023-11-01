@@ -165,18 +165,18 @@ class BDK_PT_terrain_doodad_operators(Panel):
     def draw(self, context: 'Context'):
         terrain_doodad = get_terrain_doodad(context.active_object)
 
-        self.layout.operator(BDK_OT_terrain_doodad_bake.bl_idname, icon='RENDER_RESULT')
+        self.layout.operator(BDK_OT_terrain_doodad_bake.bl_idname, icon='RENDER_RESULT', text='Bake')
 
         if terrain_doodad.is_frozen:
-            self.layout.operator(BDK_OT_terrain_doodad_unfreeze.bl_idname, icon='LIGHT_SUN')
+            self.layout.operator(BDK_OT_terrain_doodad_unfreeze.bl_idname, icon='LIGHT_SUN', text='Unfreeze')
         else:
-            self.layout.operator(BDK_OT_terrain_doodad_freeze.bl_idname, icon='FREEZE')
+            self.layout.operator(BDK_OT_terrain_doodad_freeze.bl_idname, icon='FREEZE', text='Freeze')
 
-        self.layout.operator(BDK_OT_terrain_doodad_duplicate.bl_idname, icon='DUPLICATE')
-        self.layout.operator(BDK_OT_terrain_doodad_delete.bl_idname, icon='X')
-        self.layout.operator(BDK_OT_terrain_doodad_demote.bl_idname, icon='TRIA_DOWN')
-        self.layout.operator(BDK_OT_terrain_doodad_save_preset.bl_idname, icon='FILE_TICK')
-        self.layout.operator(BDK_OT_terrain_doodad_load_preset.bl_idname, icon='FILE_FOLDER')
+        self.layout.operator(BDK_OT_terrain_doodad_duplicate.bl_idname, icon='DUPLICATE', text='Duplicate')
+        self.layout.operator(BDK_OT_terrain_doodad_delete.bl_idname, icon='X', text='Delete')
+        self.layout.operator(BDK_OT_terrain_doodad_demote.bl_idname, icon='TRIA_DOWN', text='Demote')
+        self.layout.operator(BDK_OT_terrain_doodad_save_preset.bl_idname, icon='FILE_TICK', text='Save Preset')
+        self.layout.operator(BDK_OT_terrain_doodad_load_preset.bl_idname, icon='FILE_FOLDER', text='Load Preset')
 
 
 
@@ -771,7 +771,8 @@ class BDK_PT_terrain_doodad_paint_layer_debug(Panel):
         paint_layer = terrain_doodad.paint_layers[terrain_doodad.paint_layers_index]
         flow = layout.grid_flow(align=True, columns=1)
         flow.use_property_split = True
-        flow.row().prop(paint_layer, 'id')
+        flow.row().prop(paint_layer, 'id', emboss=False)
+        flow.row().prop(paint_layer, 'frozen_attribute_id', emboss=False)
 
 
 class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
