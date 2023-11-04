@@ -191,15 +191,27 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
         for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
             # TODO: The order of operations here is probably wrong.
             matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
+            scatter_layer_object = scatter_layer.objects[object_index]
             static_mesh_object = scatter_layer.objects[object_index].object
             actor = T3DObject(type_name='Actor')
-            actor.properties['Class'] = 'StaticMeshActor'
             actor.properties['Name'] = static_mesh_object.name
             actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
             location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
             actor.properties['Location'] = location
             actor.properties['Rotation'] = rotation
             actor.properties['DrawScale3D'] = scale
+
+            actor_properties = scatter_layer_object.actor_properties
+            actor.properties['Class'] = actor_properties.class_name
+            collision_flags = actor_properties.collision_flags
+            if actor_properties.should_use_cull_distance:
+                actor.properties['CullDistance'] = actor_properties.cull_distance
+            actor.properties['bBlockActors'] = 'BLOCK_ACTORS' in collision_flags
+            actor.properties['bBlockKarma'] = 'BLOCK_KARMA' in collision_flags
+            actor.properties['bBlockNonZeroExtentTraces'] = 'BLOCK_NON_ZERO_EXTENT_TRACES' in collision_flags
+            actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
+            actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
+
             actors.append(actor)
 
     return actors

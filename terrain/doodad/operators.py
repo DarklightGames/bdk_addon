@@ -96,7 +96,7 @@ class BDK_OT_terrain_doodad_duplicate(Operator):
         collection = terrain_doodad_object.users_collection[0]  # TODO: issue with RigidBody collection
         collection.objects.link(object_copy)
 
-        copy_simple_property_group(terrain_doodad_object.bdk.terrain_doodad, object_copy.bdk.terrain_doodad)
+        copy_simple_property_group(terrain_doodad_object.bdk.terrain_doodad, object_copy.bdk.terrain_doodad, ignore={'is_frozen'})
 
         terrain_doodad = object_copy.bdk.terrain_doodad
         terrain_doodad.id = new_id

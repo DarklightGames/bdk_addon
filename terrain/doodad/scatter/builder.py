@@ -408,38 +408,32 @@ def ensure_vector_component_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Vector Component', items, build_function)
 
 
-def ensure_delete_random_points_node_tree() -> NodeTree:
+def ensure_select_random_node_tree() -> NodeTree:
     inputs = {
-        ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketFloat', 'Factor'),
         ('INPUT', 'NodeSocketInt', 'Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
+        ('OUTPUT', 'NodeSocketBool', 'Selection'),
     }
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        density_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
-        density_random_value_node.label = 'Density Random Value'
-        density_random_value_node.data_type = 'BOOLEAN'
+        random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        random_value_node.data_type = 'BOOLEAN'
 
-        delete_geometry_node = node_tree.nodes.new(type='GeometryNodeDeleteGeometry')
-
-        density_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
+        seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
 
         # Input
-        node_tree.links.new(input_node.outputs['Factor'], density_random_value_node.inputs[6]) # Probability
-        node_tree.links.new(input_node.outputs['Points'], delete_geometry_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Factor'], random_value_node.inputs[6]) # Probability
 
         # Internal
-        node_tree.links.new(density_seed_socket, density_random_value_node.inputs['Seed'])
-        node_tree.links.new(density_random_value_node.outputs[3], delete_geometry_node.inputs[1])  # Value -> Selection
+        node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
 
         # Output
-        node_tree.links.new(delete_geometry_node.outputs['Geometry'], output_node.inputs['Points'])
+        node_tree.links.new(random_value_node.outputs[3], output_node.inputs['Selection'])
 
-    return ensure_geometry_node_tree('BDK Delete Random Points', inputs, build_function)
+    return ensure_geometry_node_tree('BDK Select Random Points', inputs, build_function)
 
 
 def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
@@ -1024,16 +1018,16 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         add_scatter_layer_driver(mask_switch_node.inputs['Switch'], 'use_mask_nodes')
 
         # Pass through density.
-        delete_random_points_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        delete_random_points_node_group_node.node_tree = ensure_delete_random_points_node_tree()
-        node_tree.links.new(join_geometry_node.outputs['Geometry'], delete_random_points_node_group_node.inputs['Points'])
-        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Factor'], 'density')
-        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Seed'], 'density_seed')
-        add_scatter_layer_driver(delete_random_points_node_group_node.inputs['Global Seed'], 'global_seed')
+        select_random_points_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        select_random_points_node.node_tree = ensure_select_random_node_tree()
+        add_scatter_layer_driver(select_random_points_node.inputs['Factor'], 'density')
+        add_scatter_layer_driver(select_random_points_node.inputs['Seed'], 'density_seed')
+        add_scatter_layer_driver(select_random_points_node.inputs['Global Seed'], 'global_seed')
 
         # Convert the point cloud to a mesh so that we can inspect the attributes for T3D export.
         points_to_vertices_node = node_tree.nodes.new(type='GeometryNodePointsToVertices')
-        node_tree.links.new(delete_random_points_node_group_node.outputs['Points'], points_to_vertices_node.inputs['Points'])
+        node_tree.links.new(join_geometry_node.outputs['Geometry'], points_to_vertices_node.inputs['Points'])
+        node_tree.links.new(select_random_points_node.outputs['Selection'], points_to_vertices_node.inputs['Selection'])
 
         # Add a mute switch.
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
@@ -1051,14 +1045,19 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
 def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_terrain_doodad'):
     # Add modifiers for any scatter layers that do not have a modifier and ensure the node tree.
     for scatter_layer in terrain_doodad.scatter_layers:
-        # Seed
+
+        # Ensure that the seed & sprout objects exist and have the correct modifiers.
+        ensure_scatter_layer(scatter_layer)
+
+        # Seed object
         seed_object = scatter_layer.seed_object
         if scatter_layer.id not in seed_object.modifiers.keys():
             modifier = seed_object.modifiers.new(name=scatter_layer.id, type='NODES')
         else:
             modifier = seed_object.modifiers[scatter_layer.id]
         modifier.node_group = ensure_scatter_layer_seed_node_tree(scatter_layer)
-        # Sprout
+
+        # Sprout object
         sprout_object = scatter_layer.sprout_object
         if scatter_layer.id not in sprout_object.modifiers.keys():
             modifier = sprout_object.modifiers.new(name=scatter_layer.id, type='NODES')

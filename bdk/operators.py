@@ -311,6 +311,97 @@ class BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier(Opera
                 armature_modifier.object = armature_object
         return {'FINISHED'}
 
+
+class BDK_OT_node_join_group_input_nodes(Operator):
+    bl_label = "Join Group Input Nodes"
+    bl_idname = "bdk.node_join_group_input_nodes"
+    bl_description = "Join all group input nodes into a single node"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        if context.active_node is None:
+            cls.poll_message_set('A node must be active')
+            return False
+        if context.active_node.bl_idname != 'NodeGroupInput':
+            cls.poll_message_set('The active node must be a group input node')
+            return False
+        return True
+
+    def execute(self, context):
+        # Get the selected nodes in the node editor.
+        node_tree = context.space_data.edit_tree
+        active_node = context.active_node
+
+        # Iterate over the selected nodes that are group input nodes.
+        group_input_nodes = list(filter(lambda node: node.bl_idname == 'NodeGroupInput' and node != active_node, context.selected_nodes))
+
+        # TODO: doesn't seem to work in nested groups
+
+        # Reroute the links from the group input nodes to the active node.
+        new_links = []
+        for group_input_node in group_input_nodes:
+            for output in filter(lambda x: x.is_linked, group_input_node.outputs):
+                for link in output.links:
+                    new_links.append((active_node.outputs[link.from_socket.name], link.to_socket))
+
+            node_tree.nodes.remove(group_input_node)
+
+        # Create the new links.
+        for (from_socket, to_socket) in new_links:
+            node_tree.links.new(from_socket, to_socket)
+
+        node_tree.update_tag()
+
+        return {'FINISHED'}
+
+
+class BDK_OT_node_split_group_input_nodes(Operator):
+    bl_label = "Split Group Input Nodes"
+    bl_idname = "bdk.node_split_group_input_nodes"
+    bl_description = "Split a group input node into multiple nodes, one for each node that is linked to it"
+
+    @classmethod
+    def poll(cls, context: Context):
+        if context.active_node is None:
+            cls.poll_message_set('A node must be active')
+            return False
+        if context.active_node.bl_idname != 'NodeGroupInput':
+            cls.poll_message_set('The active node must be a group input node')
+            return False
+        return True
+
+    def execute(self, context: Context):
+        node_tree = context.space_data.edit_tree
+        active_node = context.active_node
+        location = active_node.location.copy()
+
+        # Create new input nodes for each node link.
+        node_input_nodes = dict()
+        for output in filter(lambda output: output.is_linked, active_node.outputs):
+            for link in output.links:
+                if link.to_node not in node_input_nodes:
+                    if len(node_input_nodes) == 0:
+                        input_node = active_node
+                    else:
+                        input_node = node_tree.nodes.new(type='NodeGroupInput')
+                    input_node.location = location
+                    location[1] -= 100
+                    node_input_nodes[link.to_node] = input_node
+                else:
+                    input_node = node_input_nodes[link.to_node]
+                node_tree.links.new(input_node.outputs[link.from_socket.name], link.to_socket)
+
+        # Hide unlinked sockets for the new input nodes.
+        for input_node in node_input_nodes.values():
+            for socket in input_node.outputs:
+                if not socket.is_linked:
+                    socket.hide = True
+
+        # TODO: instead, keep the active node, that way we don't need to reselect anything.
+
+        return {'FINISHED'}
+
 classes = (
     BDK_OT_install_dependencies,
     BDK_OT_select_all_of_active_class,
@@ -318,4 +409,6 @@ classes = (
     BDK_OT_generate_node_code,
     BDK_OT_force_node_tree_rebuild,
     BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier,
+    BDK_OT_node_join_group_input_nodes,
+    BDK_OT_node_split_group_input_nodes,
 )

@@ -214,7 +214,7 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     select: bpy.props.BoolProperty(
-        name='Select',
+        name='Selected',
         description='Select the object if it has errors',
         default=True,
     )

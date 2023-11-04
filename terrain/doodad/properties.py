@@ -16,6 +16,8 @@ from .builder import ensure_terrain_info_modifiers
 from .data import terrain_doodad_noise_type_items, terrain_doodad_operation_items
 from .scatter.builder import ensure_scatter_layer_modifiers
 
+empty_set = set()
+
 
 def terrain_doodad_sort_order_update_cb(self: 'BDK_PG_terrain_doodad', context: Context):
     terrain_info: 'BDK_PG_terrain_info' = get_terrain_info(self.terrain_info_object)
@@ -146,6 +148,22 @@ def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_
     ensure_scatter_layer_modifiers(context, terrain_doodad)
 
 
+collision_flags_enum_items = (
+    ('BLOCK_ACTORS', 'Block Actors', 'Blocks other non-player actors'),
+    ('BLOCK_KARMA', 'Block Karma', 'Block actors being simulated with Karma such as vehicles and rag-dolls'),
+    ('BLOCK_NON_ZERO_EXTENT_TRACES', 'Block Non-Zero Extent Traces', 'Block non-zero extent traces such as pawn capsules'),
+    ('BLOCK_ZERO_EXTENT_TRACES', 'Block Zero Extent Traces', 'Block zero extent traces such as projectiles'),
+    ('COLLIDE_ACTORS', 'Collide Actors', 'Collides with other actors'),
+)
+
+
+class BDK_PG_actor_properties(PropertyGroup):
+    class_name: StringProperty(name='Class Name', default='StaticMeshActor')
+    should_use_cull_distance: BoolProperty(name='Use Culling', default=True)
+    cull_distance: FloatProperty(name='Cull Distance', default=meters_to_unreal(50.0), min=0.0, subtype='DISTANCE', description='The distance beyond which the actor will not be rendered')
+    collision_flags: EnumProperty(name='Collision Flags', items=collision_flags_enum_items, options={'ENUM_FLAG'})
+
+
 class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Name')
@@ -189,6 +207,10 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     terrain_normal_offset_max: FloatProperty(name='Terrain Normal Offset Max', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_seed: IntProperty(name='Terrain Normal Offset Seed', default=0, min=0)
 
+    # Actor Properties
+    actor_properties: PointerProperty(type=BDK_PG_actor_properties, name='Actor Properties', options={'HIDDEN'})
+
+
 
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
@@ -218,7 +240,7 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
 
     global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
-    density: FloatProperty(name='Density', default=0.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will be scattered')
+    density: FloatProperty(name='Density', default=1.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will be scattered')
     density_seed: IntProperty(name='Density Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
 
     # Curve Settings
@@ -289,6 +311,7 @@ class BDK_PG_terrain_doodad(PropertyGroup):
 
 
 classes = (
+    BDK_PG_actor_properties,
     BDK_PG_terrain_doodad_paint_layer,
     BDK_PG_terrain_doodad_scatter_layer_object,
     BDK_PG_terrain_doodad_scatter_layer,
