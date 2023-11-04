@@ -927,6 +927,38 @@ class BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_terrain_doodad_paint_layer_move(Operator):
+    bl_idname = 'bdk.terrain_doodad_paint_layer_move'
+    bl_label = 'Move Paint Layer'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    direction: EnumProperty(
+        name='Direction',
+        description='The direction to move the layer',
+        items=move_direction_items
+    )
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_terrain_doodad_selected_paint_layer(cls, context)
+
+    def execute(self, context: Context):
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        paint_layers = terrain_doodad.paint_layers
+        paint_layers_index = terrain_doodad.paint_layers_index
+
+        if self.direction == 'UP' and paint_layers_index > 0:
+            paint_layers.move(paint_layers_index, paint_layers_index - 1)
+            terrain_doodad.paint_layers_index -= 1
+        elif self.direction == 'DOWN' and paint_layers_index < len(paint_layers) - 1:
+            paint_layers.move(paint_layers_index, paint_layers_index + 1)
+            terrain_doodad.paint_layers_index += 1
+
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
+
+        return {'FINISHED'}
+
+
 class BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move(Operator):
     bl_idname = 'bdk.terrain_doodad_scatter_layer_mask_nodes_move'
     bl_label = 'Move Scatter Layer Mask Node'
@@ -1034,6 +1066,7 @@ class BDK_OT_terrain_doodad_load_preset(Operator):
 
         return {'FINISHED'}
 
+
 # TODO: split the sculpt, paint and scatter layers into their own files.
 classes = (
     BDK_OT_convert_to_terrain_doodad,
@@ -1049,6 +1082,7 @@ classes = (
     BDK_OT_terrain_doodad_paint_layer_add,
     BDK_OT_terrain_doodad_paint_layer_remove,
     BDK_OT_terrain_doodad_paint_layer_duplicate,
+    BDK_OT_terrain_doodad_paint_layer_move,
 
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add,
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove,

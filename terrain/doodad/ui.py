@@ -16,7 +16,8 @@ from .operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doo
     BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, BDK_OT_terrain_doodad_demote, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add, BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move, BDK_OT_terrain_doodad_save_preset, \
-    BDK_OT_terrain_doodad_load_preset, BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze
+    BDK_OT_terrain_doodad_load_preset, BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze, \
+    BDK_OT_terrain_doodad_paint_layer_move
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -148,6 +149,11 @@ class BDK_PT_terrain_doodad_paint_layers(Panel):
         col = row.column(align=True)
         col.operator(BDK_OT_terrain_doodad_paint_layer_add.bl_idname, icon='ADD', text='')
         col.operator(BDK_OT_terrain_doodad_paint_layer_remove.bl_idname, icon='REMOVE', text='')
+        col.separator()
+        operator = col.operator(BDK_OT_terrain_doodad_paint_layer_move.bl_idname, icon='TRIA_UP', text='')
+        operator.direction = 'UP'
+        operator = col.operator(BDK_OT_terrain_doodad_paint_layer_move.bl_idname, icon='TRIA_DOWN', text='')
+        operator.direction = 'DOWN'
         col.separator()
         col.operator(BDK_OT_terrain_doodad_paint_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
