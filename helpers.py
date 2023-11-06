@@ -120,7 +120,7 @@ def load_bdk_material(reference: str):
         return None
 
     if reference.package_name == 'myLevel':
-        return bpy.data.materials[reference.object_name]
+        return bpy.data.materials.get(reference.object_name, None)
 
     blend_file = get_blend_file_for_package(reference.package_name)
 
