@@ -160,6 +160,9 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
     actors = []
 
     for scatter_layer in terrain_doodad.scatter_layers:
+        if scatter_layer.mute:
+            continue
+
         # Get evaluated mesh data for the seed object.
         mesh_data = scatter_layer.seed_object.evaluated_get(depsgraph).data
         vertex_count = len(mesh_data.vertices)
