@@ -17,13 +17,13 @@ from .context import get_selected_terrain_paint_layer_node
 from .layers import add_terrain_deco_layer
 from .kernel import ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
     create_terrain_paint_layer_node_convert_to_paint_layer_node_tree
-from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_deco_layers, write_terrain_t3d
+from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_terrain_deco_layers, write_terrain_t3d
 from .layers import add_terrain_paint_layer
 from .doodad.builder import ensure_terrain_info_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte_color_attribute_data, \
     invert_byte_color_attribute_data, accumulate_byte_color_attribute_data, copy_simple_property_group, \
-    ensure_name_unique, padded_roll
+    ensure_name_unique, padded_roll, sanitize_name_for_unreal
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_xy_coordinates
 from .properties import node_type_items, node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, \
@@ -289,12 +289,14 @@ class BDK_OT_terrain_info_export(Operator, ExportHelper):
         # Get the depsgraph.
         depsgraph = context.evaluated_depsgraph_get()
 
-        with open(os.path.join(self.directory, f'{context.active_object.name}.t3d'), 'w') as fp:
+        file_name = f'{sanitize_name_for_unreal(context.active_object.name)}.t3d'
+        t3d_path = os.path.join(self.directory, file_name)
+        with open(t3d_path, 'w') as fp:
             write_terrain_t3d(context.active_object, depsgraph, fp)
 
         export_terrain_heightmap(context.active_object, depsgraph, directory=self.directory)
         export_terrain_paint_layers(context.active_object, depsgraph, directory=self.directory)
-        export_deco_layers(context.active_object, depsgraph, directory=self.directory)
+        export_terrain_deco_layers(context.active_object, depsgraph, directory=self.directory)
 
         self.report({'INFO'}, 'Exported TerrainInfo')
 

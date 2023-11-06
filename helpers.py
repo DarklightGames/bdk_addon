@@ -21,6 +21,16 @@ def ensure_name_unique(name, names: Iterable[str]):
     return name
 
 
+def sanitize_name_for_unreal(name: str) -> str:
+    # Remove trailing and leading whitespace.
+    name = name.strip()
+    # Replace spaces with underscores.
+    name = name.replace(' ', '_')
+    # Replace periods with underscores.
+    name = name.replace('.', '_')
+    return name
+
+
 def is_bdk_material(material: Material) -> bool:
     # TOD: don't use custom properties for this, use a property group instead.
     return material.bdk.package_reference != ''

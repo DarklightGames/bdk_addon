@@ -11,7 +11,7 @@ from mathutils import Vector, Matrix, Euler
 
 from ..t3d.data import T3DObject
 from ..t3d.writer import T3DWriter
-from ..helpers import get_terrain_info
+from ..helpers import get_terrain_info, sanitize_name_for_unreal
 from ..g16.g16 import write_bmp_g16
 
 
@@ -27,7 +27,7 @@ def get_instance_offset(asset_instance: Object) -> Matrix:  # TODO: move to gene
 def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, Euler, Vector):
     """
     Converts a Blender world matrix to units suitable for exporting to Unreal Engine.
-    This also corrects for the offset that occurs when pasting an brush_object into the Unreal Editor.
+    This also corrects for the offset that occurs when pasting a brush object into the Unreal Editor.
     :param matrix: The Blender world matrix.
     :return: The location, rotation and scale.
     """
@@ -74,9 +74,11 @@ def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optiona
 def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
     terrain_info = get_terrain_info(terrain_info_object)
 
+    terrain_info_name = sanitize_name_for_unreal(terrain_info_object.name)
+
     actor = T3DObject('Actor')
     actor.properties['Class'] = 'TerrainInfo'
-    actor.properties['Name'] = 'TerrainInfo0'  # TODO: just use object name?
+    actor.properties['Name'] = terrain_info_name
 
     # Paint Layers
     layers = []
@@ -84,7 +86,7 @@ def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
         texture = paint_layer.material.bdk.package_reference if paint_layer.material else None
         layers.append({
             'Texture': texture,
-            'AlphaMap': f'Texture\'myLevel.{paint_layer.name}\'',
+            'AlphaMap': f'Texture\'myLevel.{sanitize_name_for_unreal(paint_layer.name)}\'',
             'UScale': paint_layer.u_scale,
             'VScale': paint_layer.v_scale,
             'TextureRotation': paint_layer.texture_rotation,
@@ -95,7 +97,7 @@ def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
     for deco_layer in terrain_info.deco_layers:
         deco_layers.append({
             'ShowOnTerrain': int(deco_layer.show_on_terrain),
-            'DensityMap': f'Texture\'myLevel.{deco_layer.name}\'',
+            'DensityMap': f'Texture\'myLevel.{sanitize_name_for_unreal(deco_layer.name)}\'',
             'StaticMesh': deco_layer.static_mesh.data.name if deco_layer.static_mesh else None,
             'ScaleMultiplier': {
                 'X': {
@@ -168,7 +170,7 @@ def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
             bitmap_index += 1
         bitmap_index += 1
 
-    actor.properties['TerrainMap'] = f'Texture\'myLevel.{terrain_info_object.name}\''
+    actor.properties['TerrainMap'] = f'Texture\'myLevel.{terrain_info_name}\''
     actor.properties['Layers'] = layers
     actor.properties['DecoLayers'] = deco_layers
     actor.properties['EdgeTurnBitmap'] = edge_turn_bitmap.tolist()
@@ -187,7 +189,7 @@ def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
     return actor
 
 
-def export_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
+def export_terrain_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
@@ -196,7 +198,8 @@ def export_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, direct
     for deco_layer in terrain_info.deco_layers:
         image = create_image_from_attribute(terrain_info_object, depsgraph, deco_layer.id)
         # Write the image out to a file.
-        image.save(filepath=os.path.join(directory, f'{deco_layer.name}.tga'))
+        file_name = f'{sanitize_name_for_unreal(deco_layer.name)}.tga'
+        image.save(filepath=os.path.join(directory, file_name))
         # Now remove the image data block.
         bpy.data.images.remove(image)
 
@@ -210,7 +213,8 @@ def export_terrain_paint_layers(terrain_info_object: Object, depsgraph: Depsgrap
     for paint_layer in terrain_info.paint_layers:
         image = create_image_from_attribute(terrain_info_object, depsgraph, paint_layer.id)
         # Write the image out to a file.
-        image.save(filepath=os.path.join(directory, f'{paint_layer.name}.tga'))
+        file_name = f'{sanitize_name_for_unreal(paint_layer.name)}.tga'
+        image.save(filepath=os.path.join(directory, file_name))
         # Now remove the image data block.
         bpy.data.images.remove(image)
 
@@ -246,6 +250,7 @@ def create_image_from_attribute(terrain_info_object: Object, depsgraph: Depsgrap
     data[:] = (0.5, 0.5, 0.5, 1.0)
 
     if attribute.data_type in {'FLOAT_COLOR', 'BYTE_COLOR'}:
+        # TODO: this whole thing is undesirable, we want all of our attributes to be floats.
         rgb_colors = np.ndarray(shape=(pixel_count, 3), dtype=float)
         rgb_colors[:] = [datum.color[:3] for datum in attribute.data]
 
@@ -269,7 +274,15 @@ def create_image_from_attribute(terrain_info_object: Object, depsgraph: Depsgrap
         luma_coefficients = (0.2126, 0.7152, 0.0722)
         data[:, 3] = np.dot(rgb_colors, luma_coefficients)
     else:
-        data[:, 3] = [datum.value for datum in attribute.data]
+        # Reshape this to a 2D array based on the terrain size.
+        attribute_data = np.array([x.value for x in attribute.data], dtype=float)
+        attribute_data.resize((terrain_info.y_size, terrain_info.x_size))
+        attribute_data = np.flip(attribute_data, axis=0)
+
+        # Reshape this to a 2D array based on the terrain size.
+        # data = data.reshape((terrain_info.y_size, terrain_info.x_size, 4))
+
+        data[:, 3] = attribute_data.flatten()
 
     # Assign the image pixels.
     image.pixels[:] = data.flatten()
@@ -294,7 +307,8 @@ def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph) -> 
 
 def export_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
     heightmap = get_terrain_heightmap(terrain_info_object, depsgraph)
-    path = os.path.join(directory, f'{terrain_info_object.name}.bmp')
+    file_name = f'{sanitize_name_for_unreal(terrain_info_object.name)}.bmp'
+    path = os.path.join(directory, file_name)
     write_bmp_g16(path, pixels=heightmap)
 
 
