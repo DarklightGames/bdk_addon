@@ -313,7 +313,6 @@ def export_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph, 
 
 
 def write_terrain_t3d(terrain_info_object: Object, depsgraph: Depsgraph, fp: io.TextIOBase):
-    heightmap = get_terrain_heightmap(terrain_info_object, depsgraph)
     t3d = T3DObject('Map')
     t3d.children.append(create_terrain_info_actor(terrain_info_object))
     T3DWriter(fp).write(t3d)
