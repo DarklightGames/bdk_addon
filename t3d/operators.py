@@ -221,6 +221,23 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
 
 
 # TODO: Copying from the outliner
+def fluid_surface_to_t3d_object(context, obj):
+    fluid_surface = obj.bdk.fluid_surface
+    actor = T3DObject(type_name='Actor')
+    add_movement_properties_to_actor(actor, obj, do_scale=False)
+    actor.properties['Class'] = 'FluidSurfaceInfo'
+    actor.properties['FluidXSize'] = fluid_surface.fluid_x_size
+    actor.properties['FluidYSize'] = fluid_surface.fluid_y_size
+    actor.properties['FluidGridSpacing'] = fluid_surface.fluid_grid_spacing
+    actor.properties['UOffset'] = fluid_surface.u_offset
+    actor.properties['VOffset'] = fluid_surface.v_offset
+    actor.properties['UTiles'] = fluid_surface.u_tiles
+    actor.properties['VTiles'] = fluid_surface.v_tiles
+    if fluid_surface.material is not None:
+        actor.properties['Skins'] = [fluid_surface.material.bdk.package_reference]
+    return actor
+
+
 class BDK_OT_t3d_copy_to_clipboard(Operator):
     bl_idname = 'bdk.t3d_copy_objects_to_clipboard'
     bl_description = 'Copy to clipboard as Unreal T3DMap doodad'
@@ -249,8 +266,9 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         for obj in context.selected_objects:
             if obj.bdk.type == 'TERRAIN_DOODAD':
                 copy_actors += terrain_doodad_to_t3d_objects(context, obj)
+            elif obj.bdk.type == 'FLUID_SURFACE':
+                copy_actors.append(fluid_surface_to_t3d_object(context, obj))
             elif obj.bdk.type == 'TERRAIN_INFO':
-                heightmap = get_terrain_heightmap(obj, depsgraph)
                 copy_actors.append(create_terrain_info_actor(obj))
             # TODO: add handlers for other object types (outside of this function)
             elif obj.type == 'CAMERA':
