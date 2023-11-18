@@ -1079,3 +1079,39 @@ def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_ter
         else:
             modifier = sprout_object.modifiers[scatter_layer.id]
         modifier.node_group = ensure_scatter_layer_sprout_node_tree(scatter_layer)
+
+
+def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
+    """
+    Creates a node tree that will shrinkwrap a curve to the terrain geometry.
+    """
+    inputs = {
+        ('INPUT', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Curve')
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        terrain_sample_node = node_tree.nodes.new(type='GeometryNodeBDKTerrainSample')
+        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+        curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
+        curve_to_points_node.mode = 'EVALUATED'
+        points_to_curves_node = node_tree.nodes.new(type='GeometryNodePointsToCurves')
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+        # Input
+        node_tree.links.new(input_node.outputs[0], curve_to_points_node.inputs[0])  # Geometry -> Curve
+        node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
+
+        # Internal
+        node_tree.links.new(curve_to_points_node.outputs[0], set_position_node.inputs[0])  # Points -> Geometry
+        node_tree.links.new(terrain_sample_node.outputs[2], set_position_node.inputs[2])  # Position -> Position
+        node_tree.links.new(set_position_node.outputs[0], points_to_curves_node.inputs[0])  # Geometry -> Points
+        node_tree.links.new(position_node.outputs['Position'], terrain_sample_node.inputs['Source Position'])
+
+        # Output
+        node_tree.links.new(points_to_curves_node.outputs['Curves'], output_node.inputs['Curve'])
+
+    return ensure_geometry_node_tree('BDK Shrinkwrap Curve To Terrain', inputs, build_function)
