@@ -803,16 +803,19 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
         distribute_points_on_faces_poisson_node = node_tree.nodes.new(type='GeometryNodeDistributePointsOnFaces')
         distribute_points_on_faces_poisson_node.distribute_method = 'POISSON'
 
+        mesh_to_points_node = node_tree.nodes.new(type='GeometryNodeMeshToPoints')
+
+        node_tree.links.new(input_node.outputs['Mesh'], mesh_to_points_node.inputs['Mesh'])
         node_tree.links.new(input_node.outputs['Mesh'], distribute_points_on_faces_random_node.inputs['Mesh'])
         node_tree.links.new(input_node.outputs['Mesh'], distribute_points_on_faces_poisson_node.inputs['Mesh'])
-        node_tree.links.new(seed_socket, distribute_points_on_faces_random_node.inputs['Seed'])
-        node_tree.links.new(seed_socket, distribute_points_on_faces_poisson_node.inputs['Seed'])
         node_tree.links.new(input_node.outputs['Face Distribute Random Density'], distribute_points_on_faces_random_node.inputs['Density'])
         node_tree.links.new(input_node.outputs['Face Distribute Poisson Distance Min'], distribute_points_on_faces_poisson_node.inputs['Distance Min'])
         node_tree.links.new(input_node.outputs['Face Distribute Poisson Density Max'], distribute_points_on_faces_poisson_node.inputs['Density Max'])
         node_tree.links.new(input_node.outputs['Face Distribute Poisson Density Factor'], distribute_points_on_faces_poisson_node.inputs['Density Factor'])
+        node_tree.links.new(seed_socket, distribute_points_on_faces_random_node.inputs['Seed'])
+        node_tree.links.new(seed_socket, distribute_points_on_faces_poisson_node.inputs['Seed'])
 
-        points_socket = add_geometry_node_switch_nodes(
+        face_distributed_points_socket = add_geometry_node_switch_nodes(
             node_tree,
             input_node.outputs['Face Distribute Method'],
             [distribute_points_on_faces_random_node.outputs['Points'],
@@ -820,7 +823,14 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
             input_type='GEOMETRY'
         )
 
-        node_tree.links.new(points_socket, output_node.inputs['Points'])
+        element_mode_switch_socket = add_geometry_node_switch_nodes(
+            node_tree,
+            input_node.outputs['Element Mode'],
+            [face_distributed_points_socket, mesh_to_points_node.outputs['Points']],
+            input_type='GEOMETRY'
+        )
+
+        node_tree.links.new(element_mode_switch_socket, output_node.inputs['Points'])
 
     return ensure_geometry_node_tree('BDK Scatter Layer Mesh To Points', inputs, build_function)
 
@@ -932,6 +942,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Poisson Density Factor'], 'mesh_face_distribute_poisson_density_factor')
             add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Seed'], 'mesh_face_distribute_seed')
             add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Global Seed'], 'global_seed')
+            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Element Mode'], 'mesh_element_mode')
 
             node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], mesh_to_points_node_group_node.inputs['Mesh'])
 

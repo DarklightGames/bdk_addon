@@ -66,7 +66,7 @@ def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optiona
         if material_slot.link == 'OBJECT' \
                 and material_slot.material is not None \
                 and material_slot.material.bdk.package_reference:
-            actor[f'Skins({material_index})'] = material_slot.material.bdk.package_reference
+            actor.properties[f'Skins({material_index})'] = material_slot.material.bdk.package_reference
 
     return actor
 

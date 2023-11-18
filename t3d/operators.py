@@ -116,7 +116,7 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
     poly_list = T3DObject('PolyList')
 
     bm = bmesh.new()
-    bm.from_mesh(bsp_brush_object.data)
+    bm.from_object(bsp_brush_object, context.evaluated_depsgraph_get())
     uv_layer = bm.loops.layers.uv.verify()
 
     bdk_poly_flags_layer = bm.faces.layers.int.get('bdk.poly_flags', None)

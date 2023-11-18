@@ -81,7 +81,7 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
         flow.use_property_decorate = False
 
         row = flow.row()
-        row.prop(paint_layer, 'layer_type', expand=True)
+        row.prop(paint_layer, 'layer_type')
 
         if paint_layer.layer_type == 'PAINT':
             flow.prop(paint_layer, 'paint_layer_name')
@@ -113,10 +113,10 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
         if paint_layer.use_distance_noise:
             col = flow.column(align=True)
             col.prop(paint_layer, 'noise_type', icon='MOD_NOISE')
-            col.prop(paint_layer, 'distance_noise_offset')
-            col.prop(paint_layer, 'distance_noise_factor')
+            col.prop(paint_layer, 'distance_noise_offset', text='Offset')
+            col.prop(paint_layer, 'distance_noise_factor', text='Factor')
             if paint_layer.noise_type == 'PERLIN':
-                col.prop(paint_layer, 'distance_noise_distortion')
+                col.prop(paint_layer, 'distance_noise_distortion', 'Distortion')
 
 
 class BDK_PT_terrain_doodad_paint_layers(Panel):
