@@ -253,59 +253,75 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
     def execute(self, context: Context):
         copy_actors: list[T3DObject] = []
-        t3d = T3DObject('Map')
+
+        map_object = T3DObject('Map')
 
         def can_copy(bpy_object: Object) -> bool:
             # TODO: SpectatorCam, Projector, FluidSurface etc.
             return bpy_object.type == 'MESH' and bpy_object.data is not None
 
-        depsgraph = context.evaluated_depsgraph_get()
-
         bsp_brush_objects = []
 
-        for obj in context.selected_objects:
-            if obj.bdk.type == 'TERRAIN_DOODAD':
-                copy_actors += terrain_doodad_to_t3d_objects(context, obj)
-            elif obj.bdk.type == 'FLUID_SURFACE':
-                copy_actors.append(fluid_surface_to_t3d_object(context, obj))
-            elif obj.bdk.type == 'TERRAIN_INFO':
-                copy_actors.append(create_terrain_info_actor(obj))
-            # TODO: add handlers for other object types (outside of this function)
-            elif obj.type == 'CAMERA':
-                # Create a SpectatorCam brush_object
-                actor = T3DObject('Actor')
-                actor['Class'] = 'SpectatorCam'
-                actor['Name'] = obj.name
-                add_movement_properties_to_actor(actor, obj)
-                rotation_euler = actor['Rotation']
-                # TODO: make corrective matrix a constant
-                # Correct the rotation here since the blender cameras point down -Z with +X up by default.
-                rotation_euler.z += math.pi / 2
-                rotation_euler.x -= math.pi / 2
-                # Adjust the camera's rotation to match the Unreal coordinate system.
-                t3d.children.append(actor)
-            elif obj.bdk.type == 'BSP_BRUSH':
-                # Add the brush to the list of brushes to copy, we have to sort them by sort order.
-                bsp_brush_objects.append(obj)
-            else:
-                if obj.instance_collection:
-                    copy_actors += [create_static_mesh_actor(o, obj)
-                                    for o in obj.instance_collection.all_objects
-                                    if can_copy(o)]
-                elif can_copy(obj):
-                    copy_actors.append(create_static_mesh_actor(obj))
+        # Start a progress bar.
+        wm = context.window_manager
+        wm.progress_begin(0, len(context.selected_objects))
 
+        #
+        for obj_index, obj in enumerate(context.selected_objects):
+            match obj.bdk.type:
+                case 'BSP_BRUSH':
+                    # Add the brush to the list of brushes to copy, we have to sort them by sort order.
+                    bsp_brush_objects.append(obj)
+                case 'TERRAIN_DOODAD':
+                    copy_actors += terrain_doodad_to_t3d_objects(context, obj)
+                case 'FLUID_SURFACE':
+                    copy_actors.append(fluid_surface_to_t3d_object(context, obj))
+                case 'TERRAIN_INFO':
+                    copy_actors.append(create_terrain_info_actor(obj))
+                case _:
+                    # TODO: add handlers for other object types (outside of this function)
+                    if obj.type == 'CAMERA':
+                        # Create a SpectatorCam brush_object
+                        camera_actor = T3DObject('Actor')
+                        camera_actor.properties['Class'] = 'SpectatorCam'
+                        camera_actor.properties['Name'] = obj.name
+                        add_movement_properties_to_actor(camera_actor, obj)
+                        rotation_euler = camera_actor['Rotation']
+                        # TODO: make corrective matrix a constant
+                        # Correct the rotation here since the blender cameras point down -Z with +X up by default.
+                        rotation_euler.z += math.pi / 2
+                        rotation_euler.x -= math.pi / 2
+                        # Adjust the camera's rotation to match the Unreal coordinate system.
+                        map_object.children.append(camera_actor)
+                    else:
+                        if obj.instance_collection:
+                            copy_actors += [create_static_mesh_actor(o, obj)
+                                            for o in obj.instance_collection.all_objects
+                                            if can_copy(o)]
+                        elif can_copy(obj):
+                            copy_actors.append(create_static_mesh_actor(obj))
+
+            wm.progress_update(obj_index)
+
+        # TODO: we need a tie breaker for sort order.
         for bsp_brush_object in sorted(bsp_brush_objects, key=lambda obj: obj.bdk.bsp_brush.sort_order):
             copy_actors.append(bsp_brush_to_actor(context, bsp_brush_object))
 
         for actor in copy_actors:
-            t3d.children.append(actor)
+            map_object.children.append(actor)
 
+        # Write the map object to a string.
         string_io = StringIO()
-        T3DWriter(string_io).write(t3d)
+        T3DWriter(string_io).write(map_object)
+        size = string_io.tell()
         string_io.seek(0)
 
+        # Copy the string to the clipboard.
         bpy.context.window_manager.clipboard = string_io.read()
+
+        wm.progress_end()
+
+        self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({size} bytes)')
 
         return {'FINISHED'}
 

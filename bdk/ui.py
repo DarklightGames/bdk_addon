@@ -41,6 +41,7 @@ class BDK_PT_node_tree(Panel):
         layout.use_property_decorate = False
         layout.prop(node_tree.bdk, 'build_hash', text='Build Hash', icon='KEYINGSET', emboss=False)
 
+
 classes = (
     BDK_MT_object_add_menu,
     BDK_PT_node_tree

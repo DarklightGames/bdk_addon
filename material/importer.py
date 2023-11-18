@@ -4,11 +4,10 @@ import json
 import os
 from typing import Dict, cast, Tuple, Callable, Any
 
-import bpy.types
+import bpy
 from bpy.props import StringProperty
-from bpy.types import ShaderNodeTexImage, NodeTree, NodeSocket
+from bpy.types import ShaderNodeTexImage, NodeTree, NodeSocket, Context, Node, Operator
 from bpy_extras.io_utils import ImportHelper
-from bpy_types import Operator
 from pathlib import Path
 
 from .data import *
@@ -77,20 +76,20 @@ class MaterialCache:
 
 
 class MaterialSocketOutputs:
-    color_socket: bpy.types.NodeSocket = None
-    alpha_socket: bpy.types.NodeSocket = None
+    color_socket: NodeSocket = None
+    alpha_socket: NodeSocket = None
     blend_method: str = 'OPAQUE'
     use_backface_culling: bool = False
     size: Tuple[int, int] = (1, 1)
 
 
 class MaterialSocketInputs:
-    uv_source_socket: bpy.types.NodeSocket = None
-    uv_socket: bpy.types.NodeSocket = None
+    uv_source_socket: NodeSocket = None
+    uv_socket: NodeSocket = None
 
 
 class MaterialBuilder:
-    def __init__(self, material_caches: List[MaterialCache], node_tree: bpy.types.NodeTree):
+    def __init__(self, material_caches: List[MaterialCache], node_tree: NodeTree):
         self._material_caches = material_caches
         self._node_tree = node_tree
         self._material_type_importers: Dict[
@@ -178,7 +177,7 @@ class MaterialBuilder:
         material2_outputs = self._import_material(material2, copy.copy(inputs))
         mask_outputs = self._import_material(mask_material, copy.copy(inputs))
 
-        def create_color_combiner_mix_node(blend_type: str) -> bpy.types.Node:
+        def create_color_combiner_mix_node(blend_type: str) -> Node:
             mix_node = self._node_tree.nodes.new('ShaderNodeMixRGB')
             mix_node.blend_type = blend_type
             mix_node.inputs['Fac'].default_value = 1.0
@@ -391,7 +390,7 @@ class MaterialBuilder:
         return outputs
 
     def _import_detail_material(self, detail_material: UMaterial, detail_scale: float,
-                                color_socket: bpy.types.NodeSocket, uv_source_socket: Optional[bpy.types.NodeSocket]) -> bpy.types.NodeSocket:
+                                color_socket: NodeSocket, uv_source_socket: Optional[NodeSocket]) -> NodeSocket:
         # Create UV scaling sockets.
         scale_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         scale_node.operation = 'SCALE'
@@ -887,7 +886,7 @@ class MaterialBuilder:
             raise NotImplementedError(f'No importer registered for type "{type(material)}"')
         return material_import_function(material, inputs)
 
-    def build(self, material: UMaterial, uv_source_socket: Optional[bpy.types.NodeSocket]) -> Optional[MaterialSocketOutputs]:
+    def build(self, material: UMaterial, uv_source_socket: Optional[NodeSocket]) -> Optional[MaterialSocketOutputs]:
         inputs = MaterialSocketInputs()
         inputs.uv_source_socket = uv_source_socket
         return self._import_material(material, inputs=inputs)
@@ -921,7 +920,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
         maxlen=1024,
         default='')
 
-    def execute(self, context: bpy.types.Context):
+    def execute(self, context: Context):
         bdk_build_paths = getattr(context.preferences.addons['bdk_addon'].preferences, 'build_paths')
         bdk_build_paths = [x.path for x in bdk_build_paths if not x.mute]
 

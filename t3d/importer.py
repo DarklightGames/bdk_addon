@@ -213,7 +213,6 @@ class FluidSurfaceInfoImporter(ActorImporter):
         fluid_surface.u_offset = t3d_actor.properties.get('UOffset', 0.0)
         fluid_surface.v_tiles = t3d_actor.properties.get('VTiles', 1)
         fluid_surface.v_offset = t3d_actor.properties.get('VOffset', 0.0)
-        fluid_surface.material = load_bdk_material(t3d_actor.properties.get('Texture', r"Texture'Engine.S_FluidSurf'"))
 
 
 class ProjectorImporter(ActorImporter):
