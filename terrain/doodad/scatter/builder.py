@@ -43,30 +43,29 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
 
     seed_and_sprout_collection = ensure_scatter_layer_seed_and_sprout_collection(bpy.context)
 
+    def create_scatter_layer_seed_object() -> Object:
+        name = uuid.uuid4().hex
+        obj = bpy.data.objects.new(name=name, object_data=bpy.data.meshes.new(name))
+        obj.hide_select = True
+        obj.lock_location = (True, True, True)
+        obj.lock_rotation = (True, True, True)
+        obj.lock_scale = (True, True, True)
+        return obj
+
+    # The places the "seeds" in the preliminary spots, before they are placed
+    if scatter_layer.planter_object is None:
+        scatter_layer.planter_object = create_scatter_layer_seed_object()
+        seed_and_sprout_collection.objects.link(scatter_layer.planter_object)
+
     # Create the seed object. This is the object that will have vertices with instance attributes scattered on it.
     # This will be used by the sprout object, but also by the T3D exporter.
     if scatter_layer.seed_object is None:
-        name = uuid.uuid4().hex
-        seed_object = bpy.data.objects.new(name=name, object_data=bpy.data.meshes.new(name))
-        seed_object.hide_select = True
-        seed_object.lock_location = (True, True, True)
-        seed_object.lock_rotation = (True, True, True)
-        seed_object.lock_scale = (True, True, True)
-        scatter_layer.seed_object = seed_object
-        # We need to add this to a collection that the user isn't going to interact with.
-        # We can't just parent it to the terrain doodad object because it screws up
-        # the ability of the modifiers to snap the objects to the terrain.
+        scatter_layer.seed_object = create_scatter_layer_seed_object()
         seed_and_sprout_collection.objects.link(scatter_layer.seed_object)
 
     # Create the sprout object. This is the object that will create the instances from the seed object.
     if scatter_layer.sprout_object is None:
-        name = uuid.uuid4().hex
-        sprout_object = bpy.data.objects.new(name=name, object_data=bpy.data.meshes.new(name))
-        sprout_object.hide_select = True
-        sprout_object.lock_location = (True, True, True)
-        sprout_object.lock_rotation = (True, True, True)
-        sprout_object.lock_scale = (True, True, True)
-        scatter_layer.sprout_object = sprout_object
+        scatter_layer.sprout_object = create_scatter_layer_seed_object()
         seed_and_sprout_collection.objects.link(scatter_layer.sprout_object)
 
 
@@ -839,25 +838,12 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Scatter Layer Mesh To Points', inputs, build_function)
 
 
-def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
+def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
     terrain_doodad_object = scatter_layer.terrain_doodad_object
-    terrain_info_object = scatter_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object
 
     items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
 
     def build_function(node_tree: NodeTree):
-        def add_scatter_layer_object_driver(struct: bpy_struct, data_path: str, index: int = -1,
-                                            path: str = 'default_value'):
-            _add_scatter_layer_object_driver_ex(
-                struct,
-                terrain_doodad_object,
-                data_path,
-                index,
-                path,
-                scatter_layer_index=scatter_layer.index,
-                scatter_layer_object_index=scatter_layer_object_index
-            )
-
         def add_scatter_layer_driver(struct: bpy_struct, data_path: str, index: int = -1, path: str = 'default_value'):
             _add_scatter_layer_driver_ex(
                 struct,
@@ -974,8 +960,36 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
                                                 scatter_layer_object_index=i)
 
         node_tree.links.new(points_socket, select_object_index_node_group_node.inputs['Geometry'])
+        node_tree.links.new(select_object_index_node_group_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
-        points_socket = select_object_index_node_group_node.outputs['Geometry']
+
+    return ensure_geometry_node_tree(scatter_layer.planter_object.name, items, build_function, should_force_build=True)
+
+def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
+    terrain_doodad_object = scatter_layer.terrain_doodad_object
+    terrain_info_object = scatter_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object
+
+    items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
+
+    def build_function(node_tree: NodeTree):
+        def add_scatter_layer_object_driver(struct: bpy_struct, data_path: str, index: int = -1,
+                                            path: str = 'default_value'):
+            _add_scatter_layer_object_driver_ex(
+                struct, terrain_doodad_object, data_path, index, path,
+                scatter_layer_index=scatter_layer.index,
+                scatter_layer_object_index=scatter_layer_object_index
+            )
+
+        def add_scatter_layer_driver(struct: bpy_struct, data_path: str, index: int = -1, path: str = 'default_value'):
+            _add_scatter_layer_driver_ex(
+                struct, terrain_doodad_object, data_path, index, path, scatter_layer_index=scatter_layer.index
+            )
+
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        planter_object_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+        planter_object_node.transform_space = 'RELATIVE'
+        planter_object_node.inputs['Object'].default_value = scatter_layer.planter_object
 
         terrain_info_object_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
         terrain_info_object_node.transform_space = 'RELATIVE'
@@ -1022,7 +1036,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             add_scatter_layer_object_driver(inputs['Random Rotation Max'], 'random_rotation_max', 2)
             add_scatter_layer_object_driver(inputs['Random Rotation Seed'], 'random_rotation_max_seed')
 
-            node_tree.links.new(points_socket, scatter_layer_object_node_group_node.inputs['Points'])
+            node_tree.links.new(planter_object_node.outputs['Geometry'], scatter_layer_object_node_group_node.inputs['Points'])
             node_tree.links.new(terrain_info_object_node.outputs['Geometry'],
                                 scatter_layer_object_node_group_node.inputs['Terrain Geometry'])
             node_tree.links.new(scatter_layer_object_node_group_node.outputs['Points'],
@@ -1063,6 +1077,14 @@ def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_ter
 
         # Ensure that the seed & sprout objects exist and have the correct modifiers.
         ensure_scatter_layer(scatter_layer)
+
+        # Planter object
+        planter_object = scatter_layer.planter_object
+        if scatter_layer.id not in planter_object.modifiers.keys():
+            modifier = planter_object.modifiers.new(name=scatter_layer.id, type='NODES')
+        else:
+            modifier = planter_object.modifiers[scatter_layer.id]
+        modifier.node_group = ensure_scatter_layer_planter_node_tree(scatter_layer)
 
         # Seed object
         seed_object = scatter_layer.seed_object

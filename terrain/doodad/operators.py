@@ -557,6 +557,8 @@ def delete_terrain_doodad(context: Context, terrain_doodad_object: Object):
 
     # Delete the scatter layers objects.
     for scatter_layer in terrain_doodad.scatter_layers:
+        if scatter_layer.planter_object:
+            bpy.data.objects.remove(scatter_layer.seed_object)
         if scatter_layer.seed_object:
             bpy.data.objects.remove(scatter_layer.seed_object)
         if scatter_layer.sprout_object:
@@ -679,19 +681,18 @@ class BDK_OT_terrain_doodad_scatter_layer_remove(Operator):
 
         scatter_layer = terrain_doodad.scatter_layers[scatter_layers_index]
 
-        if scatter_layer.seed_object is not None:
+        def delete_scatter_layer_seed_object(obj: Object):
+            if obj is None:
+                return
             # Delete the node trees for all modifiers.
-            for modifier in scatter_layer.seed_object.modifiers:
+            for modifier in obj.modifiers:
                 if modifier.type == 'NODES':
                     bpy.data.node_groups.remove(modifier.node_group)
-            bpy.data.meshes.remove(scatter_layer.seed_object.data)
+                bpy.data.meshes.remove(obj.data)
 
-        if scatter_layer.sprout_object is not None:
-            # Delete the node trees for all modifiers.
-            for modifier in scatter_layer.sprout_object.modifiers:
-                if modifier.type == 'NODES':
-                    bpy.data.node_groups.remove(modifier.node_group)
-            bpy.data.meshes.remove(scatter_layer.sprout_object.data)
+        delete_scatter_layer_seed_object(scatter_layer.planter_object)
+        delete_scatter_layer_seed_object(scatter_layer.seed_object)
+        delete_scatter_layer_seed_object(scatter_layer.sprout_object)
 
         scatter_layer_id = scatter_layer.id
 
@@ -785,7 +786,7 @@ class BDK_OT_terrain_doodad_scatter_layer_duplicate(Operator):
         terrain_doodad = get_terrain_doodad(context.active_object)
         scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
         scatter_layer_copy = add_terrain_doodad_scatter_layer(terrain_doodad, scatter_layer.name)
-        copy_simple_property_group(scatter_layer, scatter_layer_copy, {'id', 'name', 'seed_object', 'sprout_object', 'mask_attribute_id'})
+        copy_simple_property_group(scatter_layer, scatter_layer_copy, {'id', 'name', 'planter_object', 'seed_object', 'sprout_object', 'mask_attribute_id'})
 
         # Copy the scatter layer objects.
         for scatter_layer_object in scatter_layer.objects:
