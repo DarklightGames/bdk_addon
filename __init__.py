@@ -19,6 +19,8 @@ if 'bpy' in locals():
     importlib.reload(property_group_helpers)
     importlib.reload(node_helpers)
 
+    importlib.reload(actor_properties)
+
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
@@ -52,6 +54,7 @@ if 'bpy' in locals():
 
     # Terrain Doodad
     importlib.reload(terrain_doodad_scatter_builder)
+    importlib.reload(terrain_doodad_scatter_properties)
     importlib.reload(terrain_doodad_sculpt_builder)
     importlib.reload(terrain_doodad_sculpt_properties)
     importlib.reload(terrain_doodad_sculpt_operators)
@@ -76,11 +79,13 @@ if 'bpy' in locals():
         importlib.reload(bsp_operators)
         importlib.reload(bsp_ui)
 
-    importlib.reload(asset_browser_operators)
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
 else:
     from . import helpers as bdk_helpers
+
+    from .actor import properties as actor_properties
+
     from .bdk import operators as bdk_operators
     from .bdk import properties as bdk_properties
     from .bdk import ui as bdk_ui
@@ -122,6 +127,7 @@ else:
 
     # Terrain Doodad Scatter Layers
     from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
+    from .terrain.doodad.scatter import properties as terrain_doodad_scatter_properties
 
     # Terrain Doodad
     from .terrain.doodad import data as terrain_doodad_data
@@ -144,13 +150,11 @@ else:
         from .bsp import operators as bsp_operators
         from .bsp import ui as bsp_ui
 
-    from .asset_browser import operators as asset_browser_operators
-
 
 import bpy
 
-
-classes = material_importer.classes + \
+classes = actor_properties.classes + \
+          material_importer.classes + \
           material_operators.classes + \
           material_ui.classes + \
           projector_operators.classes + \
@@ -162,10 +166,10 @@ classes = material_importer.classes + \
           terrain_ui.classes + \
           terrain_doodad_sculpt_properties.classes + \
           terrain_doodad_sculpt_operators.classes + \
+          terrain_doodad_scatter_properties.classes + \
           terrain_doodad_operators.classes + \
           terrain_doodad_properties.classes + \
           terrain_doodad_ui.classes + \
-          asset_browser_operators.classes + \
           bdk_preferences.classes + \
           bdk_operators.classes + \
           bdk_ui.classes
@@ -206,7 +210,7 @@ def bdk_t3d_copy_func(self, _context: bpy.types.Context):
 
 def bdk_asset_browser_import_data_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(asset_browser_operators.BDK_OT_asset_import_data_linked.bl_idname, icon='LINKED')
+    self.layout.operator(bdk_operators.BDK_OT_asset_import_data_linked.bl_idname, icon='LINKED')
 
 
 def bdk_terrain_export_func(self, _context: bpy.types.Context):

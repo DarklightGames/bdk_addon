@@ -1,9 +1,5 @@
-import ctypes
+from ctypes import c_uint32, c_uint16, c_char, LittleEndianStructure, sizeof
 from pathlib import Path
-
-import numpy
-from ctypes import c_uint32, c_uint16, c_char, LittleEndianStructure
-
 import numpy as np
 
 
@@ -33,16 +29,16 @@ class BitmapCoreHeader(LittleEndianStructure):
     ]
 
 
-def write_bmp_g16(path: str, pixels: numpy.ndarray):
+def write_bmp_g16(path: str, pixels: np.ndarray):
     with open(path, 'wb') as fp:
         header = BitmapHeader()
         header.magic = b'BM'
-        header.size = ctypes.sizeof(BitmapHeader) + ctypes.sizeof(BitmapCoreHeader) + 2 * pixels.size
+        header.size = sizeof(BitmapHeader) + sizeof(BitmapCoreHeader) + 2 * pixels.size
         header.reserved = (0, 0)
-        header.data_offset = ctypes.sizeof(BitmapHeader) + ctypes.sizeof(BitmapCoreHeader)
+        header.data_offset = sizeof(BitmapHeader) + sizeof(BitmapCoreHeader)
 
         core_header = BitmapCoreHeader()
-        core_header.size = ctypes.sizeof(BitmapCoreHeader)
+        core_header.size = sizeof(BitmapCoreHeader)
         core_header.width = pixels.shape[0]
         core_header.height = pixels.shape[1]
         core_header.planes = 1
@@ -71,12 +67,12 @@ def read_bmp_g16(path: str) -> np.ndarray:
     header = BitmapHeader.from_buffer_copy(buffer, offset)
     if header.magic != b'BM':
         raise IOError('Invalid file format')
-    offset += ctypes.sizeof(BitmapHeader)
+    offset += sizeof(BitmapHeader)
 
     # Core Header
     core_header = BitmapCoreHeader.from_buffer_copy(buffer, offset)
-    offset += ctypes.sizeof(BitmapCoreHeader)
-    if core_header.size != ctypes.sizeof(BitmapCoreHeader):
+    offset += sizeof(BitmapCoreHeader)
+    if core_header.size != sizeof(BitmapCoreHeader):
         raise IOError('Invalid file format')
 
     # Bits-per-pixel
@@ -91,8 +87,3 @@ def read_bmp_g16(path: str) -> np.ndarray:
 
     buffer = buffer[header.data_offset:header.data_offset+core_header.data_size]
     return np.frombuffer(buffer, dtype=np.uint16).reshape((core_header.width, core_header.height))
-
-
-if __name__ == '__main__':
-    g16 = read_bmp_g16(r'C:\Users\Owner\Desktop\terrain\TerrainInfo.bmp')
-    print(g16)
