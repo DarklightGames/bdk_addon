@@ -7,17 +7,16 @@ from .sculpt.operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_ter
     BDK_OT_terrain_doodad_sculpt_layer_duplicate, BDK_OT_terrain_doodad_sculpt_layer_move
 from ..ui import draw_terrain_layer_node_list, draw_terrain_layer_node_settings, draw_terrain_layer_node_item
 from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad, is_active_object_terrain_doodad
-from .operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doodad_paint_layer_remove, \
-    BDK_OT_terrain_doodad_paint_layer_duplicate, \
-    BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
-    BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
+from .paint.operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doodad_paint_layer_remove, \
+    BDK_OT_terrain_doodad_paint_layer_duplicate, BDK_OT_terrain_doodad_paint_layer_move
+from .operators import BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
+    BDK_OT_terrain_doodad_demote, BDK_OT_terrain_doodad_save_preset, BDK_OT_terrain_doodad_load_preset, \
+    BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze
+from .scatter.operators import BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_duplicate, \
-    BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, BDK_OT_terrain_doodad_demote, \
+    BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, \
     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add, BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move, BDK_OT_terrain_doodad_save_preset, \
-    BDK_OT_terrain_doodad_load_preset, BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze, \
-    BDK_OT_terrain_doodad_paint_layer_move
+    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -411,10 +410,17 @@ class BDK_PT_terrain_doodad_scatter_layer_debug(Panel):
         flow.prop(scatter_layer, 'id', emboss=False)
 
         depsgraph = context.evaluated_depsgraph_get()
+
+        if scatter_layer.planter_object:
+            planter_object_evaluated = scatter_layer.planter_object.evaluated_get(depsgraph)
+            for modifier in planter_object_evaluated.modifiers:
+                flow.prop(modifier, 'execution_time', emboss=False)
+
         if scatter_layer.seed_object:
             seed_object_evaluated = scatter_layer.seed_object.evaluated_get(depsgraph)
             for modifier in seed_object_evaluated.modifiers:
                 flow.prop(modifier, 'execution_time', emboss=False)
+
         if scatter_layer.sprout_object:
             sprout_object_evaluated = scatter_layer.sprout_object.evaluated_get(depsgraph)
             for modifier in sprout_object_evaluated.modifiers:

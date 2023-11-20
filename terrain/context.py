@@ -19,7 +19,6 @@ def has_terrain_paint_layer_selected(context: Context) -> bool:
     return terrain_info and 0 <= terrain_info.paint_layers_index < len(terrain_info.paint_layers)
 
 
-# TODO: replace this with a context property (i.e. context.terrain_layer)
 def get_selected_terrain_paint_layer(context: Context) -> BDK_PG_terrain_paint_layer:
     terrain_info = get_terrain_info(context.active_object)
     return terrain_info.paint_layers[terrain_info.paint_layers_index]

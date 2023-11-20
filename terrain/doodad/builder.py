@@ -782,6 +782,7 @@ def terrain_doodad_scatter_layer_mask_node_data_path_get(dataptr_name: str, data
 
 
 def _add_terrain_doodad_scatter_layer_mask_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket, scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeSocket:
+    # TODO: clearly this will not work
     density_socket = add_density_from_terrain_layer_nodes(
         node_tree,
         scatter_layer.terrain_doodad_object,
@@ -889,6 +890,7 @@ def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_info: 'B
 
         geometry_socket = input_node.outputs['Geometry']
 
+        # Paint Layers
         paint_layers = list(filter(lambda x: x.layer_type == 'PAINT', chain.from_iterable(map(lambda x: x.paint_layers, terrain_doodads))))
         paint_layer_ids = set(map(lambda x: x.paint_layer_id, paint_layers))
 
@@ -898,18 +900,6 @@ def _ensure_terrain_doodad_paint_modifier_node_group(name: str, terrain_info: 'B
             named_attribute_node.inputs['Name'].default_value = paint_layer_id
 
             value_socket = named_attribute_node.outputs['Attribute']
-
-            # TODO: somehow incorporate this into the node tree (was moved from inner fn)
-            # if attribute_override is not None:
-            #     paint_node.inputs['Attribute'].default_value = attribute_override
-            # else:
-            #     # These attributes are not pre-calculated anymore, so we need to do it here.
-            #     if terrain_doodad_paint_layer.layer_type == 'PAINT':
-            #         paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.paint_layer_id
-            #     elif terrain_doodad_paint_layer.layer_type == 'DECO':
-            #         paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.deco_layer_id
-            #     elif terrain_doodad_paint_layer.layer_type == 'ATTRIBUTE':
-            #         paint_node.inputs['Attribute'].default_value = terrain_doodad_paint_layer.attribute_layer_id
 
             for paint_layer in filter(lambda x: x.paint_layer_id == paint_layer_id, paint_layers):
                 value_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, paint_layer, value_socket)
@@ -948,13 +938,47 @@ def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_info: 'BD
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
+        mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        mute_switch_node.input_type = 'GEOMETRY'
+
         geometry_socket = input_node.outputs['Geometry']
 
-        for terrain_doodad in terrain_doodads:
-            for paint_layer in filter(lambda x: x.layer_type == 'DECO', terrain_doodad.paint_layers):
-                geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
+        # Paint Layers
+        deco_layers = list(filter(lambda x: x.layer_type == 'DECO', chain.from_iterable(map(lambda x: x.paint_layers, terrain_doodads))))
+        deco_layer_ids = set(map(lambda x: x.deco_layer_id, deco_layers))
 
-        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+        for deco_layer_id in deco_layer_ids:
+            named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+            named_attribute_node.data_type = 'FLOAT'
+            named_attribute_node.inputs['Name'].default_value = deco_layer_id
+
+            value_socket = named_attribute_node.outputs['Attribute']
+
+            for paint_layer in filter(lambda x: x.deco_layer_id == deco_layer_id, deco_layers):
+                value_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, paint_layer, value_socket)
+
+            store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_named_attribute_node.data_type = 'FLOAT'
+            store_named_attribute_node.domain = 'POINT'
+            store_named_attribute_node.inputs['Name'].default_value = deco_layer_id
+
+            node_tree.links.new(value_socket, store_named_attribute_node.inputs['Value'])
+            node_tree.links.new(geometry_socket, store_named_attribute_node.inputs['Geometry'])
+
+            geometry_socket = store_named_attribute_node.outputs['Geometry']
+
+        # Drivers
+        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_deco_modifier_muted')
+
+        # Inputs
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+
+        # Internal
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+
+        # Outputs
+        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
+
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 

@@ -52,13 +52,20 @@ if 'bpy' in locals():
     importlib.reload(terrain_operators)
     importlib.reload(terrain_ui)
 
-    # Terrain Doodad
+    # Terrain Doodad Paint
+    importlib.reload(terrain_doodad_paint_properties)
+    importlib.reload(terrain_doodad_paint_operators)
+
+    # Terrain Doodad Scatter
     importlib.reload(terrain_doodad_scatter_builder)
     importlib.reload(terrain_doodad_scatter_properties)
+
+    # Terrain Doodad Sculpt
     importlib.reload(terrain_doodad_sculpt_builder)
     importlib.reload(terrain_doodad_sculpt_properties)
     importlib.reload(terrain_doodad_sculpt_operators)
 
+    # Terrain Doodad
     importlib.reload(terrain_doodad_data)
     importlib.reload(terrain_doodad_builder)
     importlib.reload(terrain_doodad_properties)
@@ -120,6 +127,10 @@ else:
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
 
+    # Terrain Doodad Paint LAyers
+    from .terrain.doodad.paint import properties as terrain_doodad_paint_properties
+    from .terrain.doodad.paint import operators as terrain_doodad_paint_operators
+
     # Terrain Doodad Sculpt Layers
     from .terrain.doodad.sculpt import builder as terrain_doodad_sculpt_builder
     from .terrain.doodad.sculpt import properties as terrain_doodad_sculpt_properties
@@ -128,6 +139,7 @@ else:
     # Terrain Doodad Scatter Layers
     from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
     from .terrain.doodad.scatter import properties as terrain_doodad_scatter_properties
+    from .terrain.doodad.scatter import operators as terrain_doodad_scatter_operators
 
     # Terrain Doodad
     from .terrain.doodad import data as terrain_doodad_data
@@ -164,9 +176,12 @@ classes = actor_properties.classes + \
           terrain_properties.classes + \
           terrain_operators.classes + \
           terrain_ui.classes + \
+          terrain_doodad_paint_properties.classes + \
+          terrain_doodad_paint_operators.classes + \
           terrain_doodad_sculpt_properties.classes + \
           terrain_doodad_sculpt_operators.classes + \
           terrain_doodad_scatter_properties.classes + \
+          terrain_doodad_scatter_operators.classes + \
           terrain_doodad_operators.classes + \
           terrain_doodad_properties.classes + \
           terrain_doodad_ui.classes + \

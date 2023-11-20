@@ -1,8 +1,9 @@
 import uuid
 
-from .sculpt.properties import BDK_PG_terrain_doodad_sculpt_layer
 from ...helpers import ensure_name_unique
-from .properties import BDK_PG_terrain_doodad, BDK_PG_terrain_doodad_paint_layer
+from .paint.properties import BDK_PG_terrain_doodad_paint_layer
+from .properties import BDK_PG_terrain_doodad
+from .sculpt.properties import BDK_PG_terrain_doodad_sculpt_layer
 
 
 def ensure_terrain_doodad_layer_indices(terrain_doodad):
