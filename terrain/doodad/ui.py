@@ -184,7 +184,6 @@ class BDK_PT_terrain_doodad_operators(Panel):
         self.layout.operator(BDK_OT_terrain_doodad_load_preset.bl_idname, icon='FILE_FOLDER', text='Load Preset')
 
 
-
 class BDK_PT_terrain_doodad_debug(Panel):
     bl_idname = 'BDK_PT_terrain_doodad_debug'
     bl_label = 'Debug'
@@ -511,6 +510,7 @@ def poll_has_terrain_doodad_scatter_layer_selected(cls, context: Context):
     terrain_doodad = get_terrain_doodad(context.active_object)
     return len(terrain_doodad.scatter_layers) > 0 and terrain_doodad.scatter_layers_index >= 0
 
+
 def get_selected_terrain_doodad_scatter_layer_mask_node(context: Context):
     terrain_doodad = get_terrain_doodad(context.active_object)
     scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
@@ -657,7 +657,6 @@ class BDK_PT_terrain_doodad_scatter_layer_object_snap_to_terrain(Panel):
         flow.prop(scatter_layer_object, 'terrain_normal_offset_seed', text='Seed')
 
 
-
 class BDK_PT_terrain_doodad_scatter_layer_object_rotation(Panel):
     bl_label = 'Rotation'
     bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_object_rotation'
@@ -776,7 +775,8 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
         col.operator(BDK_OT_terrain_doodad_scatter_layer_objects_duplicate.bl_idname, icon='DUPLICATE', text='')
 
-        scatter_layer_object = scatter_layer.objects[scatter_layer.objects_index] if len(scatter_layer.objects) else None
+        scatter_layer_object = scatter_layer.objects[scatter_layer.objects_index] if len(scatter_layer.objects) else \
+            None
 
         if scatter_layer_object:
             flow = layout.grid_flow(align=True, columns=1)
@@ -839,6 +839,8 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         flow.separator()
         flow.prop(scatter_layer, 'density')
         flow.prop(scatter_layer, 'density_seed')
+        flow.separator()
+        flow.prop(scatter_layer, 'snap_to_vertex_factor', text='Snap to Vertex')
 
 
 class BDK_PT_terrain_doodad_paint_layer_debug(Panel):

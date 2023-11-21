@@ -27,6 +27,9 @@ axis_signed_enum_items = [
     ('-Z', '-Z', ''),
 ]
 
+empty_set = set()
+
+
 def terrain_doodad_scatter_layer_object_object_poll_cb(_self, bpy_object: Object):
     # Only allow objects that are static meshes.
     return bpy_object.type == 'MESH' and bpy_object.get('Class', None) == 'StaticMeshActor'
@@ -35,6 +38,14 @@ def terrain_doodad_scatter_layer_object_object_poll_cb(_self, bpy_object: Object
 def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer_object', context: Context):
     terrain_doodad = get_terrain_doodad(self.terrain_doodad_object)
     ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+
+class BDK_PG_terrain_doodad_scatter_layer_sculpt_layer(PropertyGroup):
+    pass
+
+
+class BDK_PG_terrain_doodad_scatter_layer_paint_layer(PropertyGroup):
+    pass
 
 
 class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
@@ -102,8 +113,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     # Object Selection
     object_select_mode: EnumProperty(name='Object Select Mode', items=(
         ('RANDOM', 'Random', 'Select a random object from the list', '', 0),
-        ('CYCLIC', 'Cyclic', 'Select from the list in the order that they appear', '', 1),
-        ('WEIGHTED_RANDOM', 'Weighted Random', 'Select a random object from the list based on the relative probability weight', '', 2)
+        ('CYCLIC', 'Cyclic', 'Select an object in the order that they appear in the list', '', 1),
+        ('WEIGHTED_RANDOM', 'Weighted Random', 'Select an object based on the relative probability weight', '', 2)
     ), default='RANDOM')
     object_select_random_seed: IntProperty(name='Object Select Random Seed', default=0, min=0)
     object_select_cyclic_offset: IntProperty(name='Object Select Cyclic Offset', default=0, min=0)
@@ -112,9 +123,12 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     seed_object: PointerProperty(type=Object, name='Seed Object', options={'HIDDEN'})
     sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
 
-    global_seed: IntProperty(name='Global Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
-    density: FloatProperty(name='Density', default=1.0, min=0.0, max=1.0, subtype='FACTOR', description='The probability that the object will be scattered')
-    density_seed: IntProperty(name='Density Seed', default=0, min=0, description='Used to randomize the scatter without changing the seed of each option')
+    global_seed: IntProperty(name='Global Seed', default=0, min=0,
+                             description='Used to randomize the scatter without changing the seed of each option')
+    density: FloatProperty(name='Density', default=1.0, min=0.0, max=1.0, subtype='FACTOR',
+                           description='The probability that the object will be scattered')
+    density_seed: IntProperty(name='Density Seed', default=0, min=0,
+                              description='Used to randomize the scatter without changing the seed of each option')
 
     # Curve Settings
     curve_spacing_method: EnumProperty(name='Spacing Method', items=(
@@ -138,28 +152,48 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     ), default='FACE')
     mesh_face_distribute_method: EnumProperty(name='Distribution Method', items=(
         ('RANDOM', 'Random', 'Points will be distributed randomly'),
-        ('POISSON_DISK', 'Poisson Disk', 'Poisson-disc sampling produces points that are tightly-packed, but no closer to each other than a specified minimum distance, resulting in a more natural pattern'),
+        ('POISSON_DISK', 'Poisson Disk', 'Poisson-disc sampling produces points that are tightly-packed, but no closer '
+         'to each other than a specified minimum distance, resulting in a more natural pattern'),
     ), default='POISSON_DISK')
     mesh_face_distribute_random_density: FloatProperty(name='Density', default=0.001, min=0.0, soft_max=0.1)
-    mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(2.0), min=0.0, subtype='DISTANCE')
-    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)  # We could make this a more sensible unit. IIRC, the current unit is the number of points per square unit, which is bonkers.
-    mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+    mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(2.0),
+                                                             min=0.0, subtype='DISTANCE')
+    # TODO:  We could make this a more sensible unit. IIRC, the current unit is the number of points per square meter.
+    #  This causes issues when the object is scaled, causing the program to freeze even with small increases to this
+    #  number.
+    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)
+    mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, max=1.0,
+                                                               subtype='FACTOR')
     mesh_face_distribute_seed: IntProperty(name='Distribution Seed', default=0, min=0)
 
     # Snap to Vertex
-    snap_to_vertex_factor: FloatProperty(name='Snap to Vertex Factor', default=0.0, min=0.0, max=1.0, subtype='FACTOR')
+    snap_to_vertex_factor: FloatProperty(name='Snap to Vertex Factor', default=0.0, min=0.0, max=1.0, subtype='FACTOR',
+                                         options=empty_set,
+                                         description='Bias the objects towards the nearest vertex on the terrain along the X and Y axes.\n\nThis is useful when you want each object to make full sculpt or paint contributions to nearest vertex')
 
     # Mask Settings
-    use_mask_nodes: BoolProperty(name='Use Mask Nodes', default=False, options=set())
-    mask_nodes: CollectionProperty(name='Mask Nodes', type=BDK_PG_terrain_layer_node)
+    use_mask_nodes: BoolProperty(name='Use Mask Nodes', default=False, options=empty_set)
+    mask_nodes: CollectionProperty(name='Mask Nodes', type=BDK_PG_terrain_layer_node, options=empty_set)
     mask_nodes_index: IntProperty(options={'HIDDEN'})
     mask_attribute_id: StringProperty(name='Mask Attribute ID', default='', options={'HIDDEN'})
+
+    # Paint Layers
+    paint_layers: CollectionProperty(name='Paint Layers', type=BDK_PG_terrain_doodad_scatter_layer_paint_layer,
+                                     options={'HIDDEN'})
+    paint_layers_index: IntProperty(options={'HIDDEN'})
+
+    # Sculpt Layers
+    sculpt_layers: CollectionProperty(name='Sculpt Layers', type=BDK_PG_terrain_doodad_scatter_layer_sculpt_layer,
+                                      options={'HIDDEN'})
+    sculpt_layers_index: IntProperty(options={'HIDDEN'})
 
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 
 
 classes = (
+    BDK_PG_terrain_doodad_scatter_layer_paint_layer,
+    BDK_PG_terrain_doodad_scatter_layer_sculpt_layer,
     BDK_PG_terrain_doodad_scatter_layer_object,
     BDK_PG_terrain_doodad_scatter_layer,
 )

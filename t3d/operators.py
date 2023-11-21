@@ -1,20 +1,20 @@
 import math
 from io import StringIO
-from typing import List, cast
+from typing import List
 
 import bmesh
 import bpy
 import numpy
 from mathutils import Euler, Matrix
-from bpy.types import Operator, Context, Object, Mesh
+from bpy.types import Operator, Context, Object
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
 from ..data import UReference
 from ..bsp.properties import __poly_flag_keys_to_values__
 from ..bsp.builder import create_bsp_brush_polygon
-from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, get_terrain_heightmap, \
-    create_terrain_info_actor, convert_blender_matrix_to_unreal_movement_units
+from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, create_terrain_info_actor, \
+    convert_blender_matrix_to_unreal_movement_units
 from .data import T3DObject
 from pathlib import Path
 from .importer import import_t3d

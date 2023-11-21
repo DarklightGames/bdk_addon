@@ -4,7 +4,7 @@ from typing import Set, OrderedDict as OrderedDictType
 
 import bpy
 from bpy.types import Operator, Context, Node, Event
-from bpy.props import BoolProperty
+from bpy.props import BoolProperty, StringProperty
 
 import subprocess
 import sys
@@ -273,7 +273,7 @@ class BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier(Opera
     bl_description = 'Assign all vertices to a vertex group'
     bl_options = {'REGISTER', 'UNDO'}
 
-    vertex_group_name: bpy.props.StringProperty(name='Vertex Group Name', search=vertex_group_name_search_cb)
+    vertex_group_name: StringProperty(name='Vertex Group Name', search=vertex_group_name_search_cb)
 
     @classmethod
     def poll(cls, context):
@@ -445,7 +445,6 @@ class BDK_OT_asset_import_data_linked(Operator):
         self.report({'INFO'}, f'Linked {linked_count} | Skipped {skipped_count}')
 
         return {'FINISHED'}
-
 
 
 classes = (

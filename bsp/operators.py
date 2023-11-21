@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Set, cast
 
 import bpy
-from bpy.props import FloatProperty, EnumProperty
+from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
 from bpy.types import Operator, Object, Context, Depsgraph, Mesh
 import bmesh
 
@@ -70,7 +70,7 @@ class BDK_OT_bsp_brush_set_sort_order(Operator):
     bl_description = 'Set the sort order of selected BSP brushes'
     bl_options = {'REGISTER', 'UNDO'}
 
-    sort_order: bpy.props.IntProperty(
+    sort_order: IntProperty(
         name='Sort Order',
         default=0,
         min=0,
@@ -147,7 +147,7 @@ class BDK_OT_bsp_brush_select_similar(Operator):
     bl_description = 'Select all BSP brushes with similar properties'
     bl_options = {'REGISTER', 'UNDO'}
 
-    property: bpy.props.EnumProperty(
+    property: EnumProperty(
         name='Property',
         items=(
             ('CSG_OPERATION', 'CSG Operation', 'The CSG operation of the brush'),
@@ -213,7 +213,7 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
     bl_description = 'Check the selected BSP brush for errors'
     bl_options = {'REGISTER', 'UNDO'}
 
-    select: bpy.props.BoolProperty(
+    select: BoolProperty(
         name='Selected',
         description='Select the object if it has errors',
         default=True,
@@ -289,24 +289,24 @@ class BDK_OT_select_brushes_inside(Operator):
     bl_description = 'Select all BSP brushes that are inside the active BSP brush'
     bl_options = {'REGISTER', 'UNDO'}
 
-    deselect_active: bpy.props.BoolProperty(
+    deselect_active: BoolProperty(
         name='Deselect Active',
         description='Deselect the active brush',
         default=True,
     )
-    visible_only: bpy.props.BoolProperty(
+    visible_only: BoolProperty(
         name='Visible Only',
         description='Only select brushes that are visible',
         default=True,
     )
-    point_on_plane_threshold: bpy.props.FloatProperty(
+    point_on_plane_threshold: FloatProperty(
         name='Planar Threshold',
         description='Threshold for determining if a point is on a plane',
         default=0.1,
         min=0.0,
         step=0.1,
     )
-    filter: bpy.props.EnumProperty(
+    filter: EnumProperty(
         name='Filter',
         items=(
                 ('INSIDE', 'Inside', 'Select brushes that are inside the active brush'),

@@ -4,7 +4,7 @@ from typing import cast
 import bpy
 import mathutils
 from bpy.types import Operator, Context, Collection, Event, Object, Mesh
-from bpy.props import EnumProperty, StringProperty
+from bpy.props import EnumProperty, StringProperty, BoolProperty
 
 from .kernel import add_terrain_doodad_sculpt_layer, add_terrain_doodad_paint_layer
 from .properties import ensure_terrain_info_modifiers, BDK_PG_terrain_doodad_scatter_layer
@@ -259,13 +259,13 @@ class BDK_OT_terrain_doodad_bake(Operator):
     bl_options = {'REGISTER', 'UNDO'}
     bl_description = 'Bake the terrain doodad to the terrain'
 
-    should_delete_terrain_doodad: bpy.props.BoolProperty(
+    should_delete_terrain_doodad: BoolProperty(
         name='Delete Terrain Doodad',
         description='Delete the terrain doodad after baking',
         default=True
     )
     # Create an enum flag property for the bake options.
-    layers: bpy.props.EnumProperty(
+    layers: EnumProperty(
         name='Bake Options',
         description='Bake options',
         items=(
@@ -276,14 +276,14 @@ class BDK_OT_terrain_doodad_bake(Operator):
         default={'SCULPT', 'PAINT', 'SCATTER'},
         options={'ENUM_FLAG'}
     )
-    should_merge_down_nodes: bpy.props.BoolProperty(
+    should_merge_down_nodes: BoolProperty(
         name='Merge Down Nodes',
         description='Merge down paint and deco nodes after baking when possible.\n\nBaked paint layers will be added '
                     'to the top of the stack, and merged with the node below if it has the same operation',
         default=True
     )
 
-    should_add_scatter_objects_to_collection: bpy.props.BoolProperty(
+    should_add_scatter_objects_to_collection: BoolProperty(
         name='Add Scatter Objects to Collection',
         description='Add the scatter objects to a collection with the name of the terrain doodad',
         default=True

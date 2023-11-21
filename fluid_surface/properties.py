@@ -21,14 +21,15 @@ class BDK_PG_fluid_surface(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     object: PointerProperty(name='Object', type=Object, options={'HIDDEN'})
     fluid_grid_type: EnumProperty(name='Grid Type', items=fluid_grid_type_items, default='FGT_Hexagonal')
-    fluid_x_size: IntProperty(name='X Size', default=48, min=0) # Set this to 1 after we fix the crashing
+    fluid_x_size: IntProperty(name='X Size', default=48, min=0)  # Set this to 1 after we fix the crashing
     fluid_y_size: IntProperty(name='Y Size', default=48, min=0)
     fluid_grid_spacing: FloatProperty(name='Grid Spacing', default=24.0, min=0.0, subtype='DISTANCE')
     u_offset: FloatProperty(name='U Offset', default=0.0, min=0.0, max=1.0)
     v_offset: FloatProperty(name='V Offset', default=0.0, min=0.0, max=1.0)
     u_tiles: FloatProperty(name='U Tiles', default=1.0, min=0.0)
     v_tiles: FloatProperty(name='V Tiles', default=1.0, min=0.0)
-    material: PointerProperty(name='Material', type=Material, update=fluid_surface_material_update_cb, poll=fluid_surface_material_poll)
+    material: PointerProperty(name='Material', type=Material, update=fluid_surface_material_update_cb,
+                              poll=fluid_surface_material_poll)
 
 
 classes = (

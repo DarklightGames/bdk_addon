@@ -272,7 +272,7 @@ class BDK_OT_terrain_info_export(Operator, ExportHelper):
 
     directory: StringProperty(name='Directory')
     filename_ext: StringProperty(default='.', options={'HIDDEN'})
-    filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
+    filter_folder: BoolProperty(default=True, options={"HIDDEN"})
 
     @classmethod
     def poll(cls, context: Context):

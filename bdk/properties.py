@@ -1,8 +1,6 @@
 from bpy.types import PropertyGroup
-from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty, CollectionProperty, BoolProperty, \
-    FloatProperty
+from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty, CollectionProperty
 
-from ..units import meters_to_unreal
 from ..fluid_surface.properties import BDK_PG_fluid_surface
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.doodad.properties import BDK_PG_terrain_doodad

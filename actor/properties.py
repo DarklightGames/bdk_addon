@@ -11,6 +11,7 @@ collision_flags_enum_items = (
     ('COLLIDE_ACTORS', 'Collide Actors', 'Collides with other actors'),
 )
 
+
 class BDK_PG_actor_properties(PropertyGroup):
     class_name: StringProperty(name='Class Name', default='StaticMeshActor')
     should_use_cull_distance: BoolProperty(name='Use Culling', default=True)

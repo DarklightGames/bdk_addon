@@ -2,13 +2,13 @@
 # In the future, clean this up so that it's more clear what is going on.
 from typing import Iterable, Optional
 
+from math import isnan
 import mathutils
+import numpy as np
+
 from bmesh.types import BMFace
 from bpy.types import Material
-
 from ..t3d.data import Polygon
-import numpy as np
-from math import isnan
 
 
 def get_uvs_for_vertices(polygon: Polygon, material: Material, vertices: Iterable[mathutils.Vector]):

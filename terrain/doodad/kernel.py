@@ -32,6 +32,7 @@ def add_terrain_doodad_sculpt_layer(terrain_doodad: BDK_PG_terrain_doodad, name:
     sculpt_layer.name = ensure_name_unique(name, [layer.name for layer in terrain_doodad.sculpt_layers])
     return sculpt_layer
 
+
 def add_terrain_doodad_paint_layer(terrain_doodad: BDK_PG_terrain_doodad, name: str = 'Paint Layer') -> BDK_PG_terrain_doodad_paint_layer:
     paint_layer = terrain_doodad.paint_layers.add()
     paint_layer.id = uuid.uuid4().hex

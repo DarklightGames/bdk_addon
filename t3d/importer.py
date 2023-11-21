@@ -224,12 +224,9 @@ class ProjectorImporter(ActorImporter):
 
     @classmethod
     def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
-        # Create a new geometry node tree.
-        node_tree = build_projector_node_tree()
-
         # Add geometry node modifier to projector_object.
         geometry_node_modifier = bpy_object.modifiers.new(name="Projector", type="NODES")
-        geometry_node_modifier.node_group = node_tree
+        geometry_node_modifier.node_group = build_projector_node_tree()  # TODO: replace
 
         # T3D STUFF BELOW:
 

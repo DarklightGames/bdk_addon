@@ -28,6 +28,7 @@ def _terrain_layer_node_data_path_get(dataptr_name: str, dataptr_index: int, nod
 
 NodeDataPathFunctionType = Callable[[str, int, int, str, Optional[int]], str]
 
+
 def add_terrain_layer_node_driver(
         dataptr_name: str,
         dataptr_index: int,
@@ -285,11 +286,15 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, target_id: ID, dat
         node_tree.links.new(density_socket, terrain_layer_node_density_node_group_node.inputs['Value'])
 
         def add_terrain_layer_density_driver(struct: bpy_struct, property_name: str, invert: bool = False):
-            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, struct, 'default_value', property_name, data_path_function, invert=invert)
+            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, struct,
+                                          'default_value', property_name, data_path_function, invert=invert)
 
-        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Map Range From Min'], 'map_range_from_min')
-        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Map Range From Max'], 'map_range_from_max')
-        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Use Map Range'], 'use_map_range')
+        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Map Range From Min'],
+                                         'map_range_from_min')
+        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Map Range From Max'],
+                                         'map_range_from_max')
+        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Use Map Range'],
+                                         'use_map_range')
         add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Factor'], 'factor')
 
         density_socket = terrain_layer_node_density_node_group_node.outputs['Value']
@@ -329,9 +334,13 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
 
     def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
         terrain_info = get_terrain_info(terrain_info_object)
+        # TODO: don't we store the index in the deco layer itself?
         deco_layer_index = list(terrain_info.deco_layers).index(deco_layer)
 
+        # Nodes
         terrain_doodad_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
         terrain_doodad_info_node.inputs[0].default_value = terrain_info_object
 
@@ -340,6 +349,23 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         deco_layer_node.inputs['Heightmap Y'].default_value = terrain_info.y_size
         deco_layer_node.inputs['Density Map'].default_value = 0.0
 
+        realize_instances_node = node_tree.nodes.new('GeometryNodeRealizeInstances')
+
+        static_mesh_object_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
+        static_mesh_object_info_node.inputs[0].default_value = deco_layer.static_mesh
+
+        named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+        named_attribute_node.inputs['Name'].default_value = deco_layer.id
+        named_attribute_node.data_type = 'FLOAT'
+
+        capture_attribute_node = node_tree.nodes.new('GeometryNodeCaptureAttribute')
+        capture_attribute_node.name = 'Density'
+        capture_attribute_node.data_type = 'FLOAT'
+        capture_attribute_node.domain = 'POINT'
+
+        instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
+
+        # Drivers
         def get_deco_layer_target_data_path(property_name: str, index: Optional[int] = None) -> str:
             target_data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}'
             if index is not None:
@@ -353,7 +379,8 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
             return target_data_path
 
         # TODO: move this to a helper file that can be used elsewhere (this pattern is very common!)
-        def add_driver_ex(struct: bpy_struct, target_id: ID, target_data_path: str, path: str = 'default_value', index: Optional[int] = None):
+        def add_driver_ex(struct: bpy_struct, target_id: ID, target_data_path: str, path: str = 'default_value',
+                          index: Optional[int] = None):
             fcurve = struct.driver_add(path, index) if index is not None else struct.driver_add(path)
             fcurve.driver.type = 'AVERAGE'
             variable = fcurve.driver.variables.new()
@@ -363,20 +390,22 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
             target.id = target_id
             target.data_path = target_data_path
 
-        def add_deco_layer_driver_ex(struct: bpy_struct, target_id: ID, property_name: str, path: str = 'default_value', index: Optional[int] = None):
+        def add_deco_layer_driver_ex(struct: bpy_struct, target_id: ID, property_name: str, path: str = 'default_value',
+                                     index: Optional[int] = None):
             add_driver_ex(struct, target_id, get_deco_layer_target_data_path(property_name, index), path, index)
 
-        def add_terrain_info_driver_ex(struct: bpy_struct, property_name: str, path: str = 'default_value', index: Optional[int] = None):
+        def add_terrain_info_driver_ex(struct: bpy_struct, property_name: str, path: str = 'default_value',
+                                       index: Optional[int] = None):
             add_driver_ex(struct, terrain_info_object, get_terrain_info_target_data_path(property_name, index), path, index)
 
         def add_deco_layer_driver(input_name: str, property_name: str, index: Optional[int] = None):
-            add_deco_layer_driver_ex(deco_layer_node.inputs[input_name], target_id=terrain_info_object, property_name=property_name, index=index)
+            add_deco_layer_driver_ex(deco_layer_node.inputs[input_name], target_id=terrain_info_object,
+                                     property_name=property_name, index=index)
 
         def add_terrain_info_driver(input_name: str, property_name: str, index: Optional[int] = None):
             add_terrain_info_driver_ex(deco_layer_node.inputs[input_name], property_name, index=index)
 
         add_terrain_info_driver('Offset', 'deco_layer_offset')
-        # add_terrain_info_driver('Inverted', 'inverted')
 
         add_deco_layer_driver('Max Per Quad', 'max_per_quad')
         add_deco_layer_driver('Seed', 'seed')
@@ -393,40 +422,18 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 1)
         add_deco_layer_driver('Scale Multiplier Max', 'scale_multiplier_max', 2)
 
-        static_mesh_object_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
-        static_mesh_object_info_node.inputs[0].default_value = deco_layer.static_mesh
-
-        # Add a named attribute node.
-        named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-        named_attribute_node.inputs['Name'].default_value = deco_layer.id
-        named_attribute_node.data_type = 'FLOAT'
-
-        # Add a capture attribute node to capture the density from the geometry.
-        capture_attribute_node = node_tree.nodes.new('GeometryNodeCaptureAttribute')
-        capture_attribute_node.name = 'Density'
-        capture_attribute_node.data_type = 'FLOAT'
-        capture_attribute_node.domain = 'POINT'
-
-        # Link the attribute output of the named attribute node to the capture attribute node.
-        node_tree.links.new(named_attribute_node.outputs[1], capture_attribute_node.inputs[2])
-
-        node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
-        node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
-
-        node_tree.links.new(capture_attribute_node.outputs[2], deco_layer_node.inputs['Density Map'])
-
-        # Instance on Points
-        instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
+        # Internal
         node_tree.links.new(instance_on_points_node.inputs['Instance'], static_mesh_object_info_node.outputs['Geometry'])
         node_tree.links.new(instance_on_points_node.inputs['Points'], deco_layer_node.outputs['Points'])
         node_tree.links.new(instance_on_points_node.inputs['Rotation'], deco_layer_node.outputs['Rotation'])
         node_tree.links.new(instance_on_points_node.inputs['Scale'], deco_layer_node.outputs['Scale'])
+        node_tree.links.new(capture_attribute_node.inputs[2], named_attribute_node.outputs[1])
+        node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
+        node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
+        node_tree.links.new(deco_layer_node.inputs['Density Map'], capture_attribute_node.outputs[2])
+        node_tree.links.new(realize_instances_node.inputs['Geometry'], instance_on_points_node.outputs['Instances'])
 
-        # Realize Instances
-        realize_instances_node = node_tree.nodes.new('GeometryNodeRealizeInstances')
-        node_tree.links.new(instance_on_points_node.outputs['Instances'], realize_instances_node.inputs['Geometry'])
-
-        output_node = node_tree.nodes.new('NodeGroupOutput')
+        # Output
         node_tree.links.new(output_node.inputs['Geometry'], realize_instances_node.outputs['Geometry'])
 
     return ensure_geometry_node_tree(deco_layer.id, items, build_function, should_force_build=True)

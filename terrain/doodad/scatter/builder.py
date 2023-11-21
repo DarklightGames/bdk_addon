@@ -1,9 +1,8 @@
 import uuid
 
 import bpy
-from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, Node
+from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 
-from ...kernel import add_density_from_terrain_layer_nodes
 from ....helpers import ensure_name_unique
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes
@@ -18,6 +17,7 @@ def add_terrain_doodad_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad', na
 
     return scatter_layer
 
+
 def ensure_scatter_layer_seed_and_sprout_collection(context: Context) -> bpy.types.Collection:
     """
     Ensures that the scatter layer seed and sprout collection exists and returns it.
@@ -31,7 +31,6 @@ def ensure_scatter_layer_seed_and_sprout_collection(context: Context) -> bpy.typ
         collection.hide_select = True
         context.scene.collection.children.link(collection)
     return collection
-
 
 
 def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
@@ -840,6 +839,7 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
 
 def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
     terrain_doodad_object = scatter_layer.terrain_doodad_object
+    terrain_info = terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
 
     items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
 
@@ -940,6 +940,18 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
         else:
             raise RuntimeError('Unsupported terrain doodad object type: ' + scatter_layer.terrain_doodad_object.type)
 
+        # Snap to Terrain Vertices
+        snap_to_terrain_vertices_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        snap_to_terrain_vertices_node.node_tree = ensure_snap_to_terrain_vertex_node_tree()
+
+        snap_to_terrain_vertices_node.inputs['Quad Size'].default_value = terrain_info.terrain_scale
+        snap_to_terrain_vertices_node.inputs['Resolution'].default_value = terrain_info.x_size
+
+        add_scatter_layer_driver(snap_to_terrain_vertices_node.inputs['Factor'], 'snap_to_vertex_factor')
+
+        node_tree.links.new(points_socket, snap_to_terrain_vertices_node.inputs['Points'])
+        points_socket = snap_to_terrain_vertices_node.outputs['Points']
+
         # Select Object Index
         select_object_index_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         select_object_index_node_group_node.node_tree = ensure_select_object_index_node_tree()
@@ -962,8 +974,8 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
         node_tree.links.new(points_socket, select_object_index_node_group_node.inputs['Geometry'])
         node_tree.links.new(select_object_index_node_group_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
-
     return ensure_geometry_node_tree(scatter_layer.planter_object.name, items, build_function, should_force_build=True)
+
 
 def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
     terrain_doodad_object = scatter_layer.terrain_doodad_object
@@ -1101,6 +1113,112 @@ def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_ter
         else:
             modifier = sprout_object.modifiers[scatter_layer.id]
         modifier.node_group = ensure_scatter_layer_sprout_node_tree(scatter_layer)
+
+
+def ensure_round_to_interval_node_tree() -> NodeTree:
+    inputs = {
+        ('INPUT', 'NodeSocketFloat', 'Value'),
+        ('INPUT', 'NodeSocketFloat', 'Interval'),
+        ('OUTPUT', 'NodeSocketFloat', 'Value')
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        divide_node = node_tree.nodes.new(type='ShaderNodeMath')
+        divide_node.label = 'Divide'
+        divide_node.operation = 'DIVIDE'
+
+        float_to_integer_node = node_tree.nodes.new(type='FunctionNodeFloatToInt')
+
+        multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+        multiply_node.label = 'Multiply'
+        multiply_node.operation = 'MULTIPLY'
+
+        # Internal Links
+        node_tree.links.new(divide_node.outputs[0], float_to_integer_node.inputs[0])  # Value -> Float
+        node_tree.links.new(input_node.outputs[0], multiply_node.inputs[1])  # Interval -> Value
+        node_tree.links.new(input_node.outputs[1], divide_node.inputs[0])  # Value -> Value
+        node_tree.links.new(multiply_node.outputs[0], output_node.inputs[0])  # Value -> Value
+        node_tree.links.new(float_to_integer_node.outputs[0], multiply_node.inputs[0])  # Integer -> Value
+        node_tree.links.new(input_node.outputs[0], divide_node.inputs[1])  # Interval -> Value
+
+    return ensure_geometry_node_tree('BDK Round To Interval', inputs, build_function)
+
+
+def ensure_snap_to_terrain_vertex_node_tree() -> NodeTree:
+    inputs = {
+        ('INPUT', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketFloat', 'Quad Size'),
+        ('INPUT', 'NodeSocketInt', 'Resolution'),
+        ('INPUT', 'NodeSocketFloat', 'Factor'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Points')
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+        terrain_size_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+        terrain_size_multiply_node.operation = 'MULTIPLY'
+        terrain_size_multiply_node.label = 'Terrain Size'
+
+        terrain_half_size_multiply_node = node_tree.nodes.new(type='ShaderNodeMath')
+        terrain_half_size_multiply_node.operation = 'MULTIPLY'
+        terrain_half_size_multiply_node.inputs[1].default_value = 0.5
+
+        half_size_socket = terrain_half_size_multiply_node.outputs['Value']
+
+        node_tree.links.new(separate_xyz_node.inputs['Vector'], position_node.outputs['Position'])
+        node_tree.links.new(terrain_size_multiply_node.inputs[0], input_node.outputs['Quad Size'])
+        node_tree.links.new(terrain_size_multiply_node.inputs[1], input_node.outputs['Resolution'])
+        node_tree.links.new(terrain_half_size_multiply_node.inputs[0], terrain_size_multiply_node.outputs['Value'])
+
+        def add_snap_value_nodes(value_socket: NodeSocket) -> NodeSocket:
+            round_to_interval_node = node_tree.nodes.new(type='GeometryNodeGroup')
+            round_to_interval_node.node_tree = ensure_round_to_interval_node_tree()
+
+            subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+            subtract_node.operation = 'SUBTRACT'
+
+            add_node = node_tree.nodes.new(type='ShaderNodeMath')
+            add_node.operation = 'ADD'
+
+            node_tree.links.new(subtract_node.inputs[0], value_socket)
+            node_tree.links.new(subtract_node.inputs[1], half_size_socket)
+            node_tree.links.new(round_to_interval_node.inputs['Value'], subtract_node.outputs['Value'])
+            node_tree.links.new(round_to_interval_node.inputs['Interval'], input_node.outputs['Quad Size'])
+            node_tree.links.new(add_node.inputs[0], round_to_interval_node.outputs['Value'])
+            node_tree.links.new(add_node.inputs[1], half_size_socket)
+
+            return add_node.outputs['Value']
+
+        x_socket = add_snap_value_nodes(separate_xyz_node.outputs['X'])
+        y_socket = add_snap_value_nodes(separate_xyz_node.outputs['Y'])
+
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        node_tree.links.new(combine_xyz_node.inputs['X'], x_socket)
+        node_tree.links.new(combine_xyz_node.inputs['Y'], y_socket)
+        node_tree.links.new(combine_xyz_node.inputs['Z'], separate_xyz_node.outputs['Z'])
+
+        vector_mix_node = node_tree.nodes.new(type='ShaderNodeMix')
+        vector_mix_node.data_type = 'VECTOR'
+
+        node_tree.links.new(vector_mix_node.inputs['Factor'], input_node.outputs['Factor'])
+        node_tree.links.new(vector_mix_node.inputs['B'], combine_xyz_node.outputs['Vector'])
+        node_tree.links.new(vector_mix_node.inputs['A'], position_node.outputs['Position'])
+
+        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+
+        node_tree.links.new(set_position_node.inputs['Geometry'], input_node.outputs['Points'])
+        node_tree.links.new(set_position_node.inputs['Position'], vector_mix_node.outputs['Result'])
+
+        node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Points'])
+
+    return ensure_geometry_node_tree('BDK Snap To Terrain Vertex', inputs, build_function)
 
 
 def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
