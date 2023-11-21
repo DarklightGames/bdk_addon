@@ -465,7 +465,7 @@ def delete_terrain_doodad(context: Context, terrain_doodad_object: Object):
     # Delete the scatter layers objects.
     for scatter_layer in terrain_doodad.scatter_layers:
         if scatter_layer.planter_object:
-            bpy.data.objects.remove(scatter_layer.seed_object)
+            bpy.data.objects.remove(scatter_layer.planter_object)
         if scatter_layer.seed_object:
             bpy.data.objects.remove(scatter_layer.seed_object)
         if scatter_layer.sprout_object:
