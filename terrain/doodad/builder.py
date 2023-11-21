@@ -1024,9 +1024,12 @@ def _ensure_terrain_doodad_attribute_modifier_node_group(name: str, terrain_info
 
         geometry_socket = input_node.outputs['Geometry']
 
+        # TODO: DOESN'T WORK
+
         for terrain_doodad in terrain_doodads:
             for paint_layer in filter(lambda x: x.layer_type == 'ATTRIBUTE', terrain_doodad.paint_layers):
-                geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
+                # geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
+                pass
 
         # Drivers
         _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_attribute_modifier_muted')
