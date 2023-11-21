@@ -1090,7 +1090,7 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
                 store_named_attribute_node.inputs['Name'].default_value = attribute_map[doodad_paint_layer.id]
 
                 value_socket = _add_terrain_doodad_paint_layer_to_node_tree(
-                    node_tree, geometry_socket, doodad_paint_layer, operation_override='ADD'
+                    node_tree, doodad_paint_layer, operation_override='ADD'
                 )
 
                 node_tree.links.new(store_named_attribute_node.inputs['Value'], value_socket)
