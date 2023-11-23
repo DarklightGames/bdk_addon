@@ -77,6 +77,15 @@ class BDK_OT_terrain_doodad_scatter_layer_remove(Operator):
 
         scatter_layer_id = scatter_layer.id
 
+        # TODO: delete references to this scatter layer in the paint & sculpt layers
+        for sculpt_layer in terrain_doodad.sculpt_layers:
+            if sculpt_layer.scatter_layer_id == scatter_layer_id:
+                sculpt_layer.scatter_layer_id = ''
+
+        for paint_layer in terrain_doodad.paint_layers:
+            if paint_layer.scatter_layer_id == scatter_layer_id:
+                paint_layer.scatter_layer_id = ''
+
         terrain_doodad.scatter_layers.remove(scatter_layers_index)
         terrain_doodad.scatter_layers_index = min(len(terrain_doodad.scatter_layers) - 1, scatter_layers_index)
 

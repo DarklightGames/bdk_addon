@@ -1,17 +1,42 @@
 from bpy.props import StringProperty, PointerProperty, IntProperty, FloatProperty, BoolProperty, EnumProperty
-from bpy.types import PropertyGroup, Object
+from bpy.types import PropertyGroup, Object, Context
 
 from ....constants import RADIUS_EPSILON
 from ....data import map_range_interpolation_type_items
 from ....property_group_helpers import add_curve_modifier_properties
 from ....units import meters_to_unreal
-from ..data import terrain_doodad_noise_type_items
+from ..data import terrain_doodad_noise_type_items, terrain_doodad_geometry_source_items
+from ..builder import ensure_terrain_info_modifiers
 
 terrain_doodad_sculpt_layer_operation_items = (
     ('ADD', 'Add', '', 0),
     ('SET', 'Set', '', 1),
 )
 
+
+def terrain_doodad_sculpt_layer_geometry_source_update_cb(self, context):
+    terrain_info = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
+    ensure_terrain_info_modifiers(context, terrain_info)
+
+
+def terrain_doodad_sculpt_layer_scatter_layer_id_update_cb(self, context):
+    terrain_info = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
+    ensure_terrain_info_modifiers(context, terrain_info)
+
+
+def terrain_doodad_sculpt_layer_scatter_layer_name_update_cb(self, context):
+    scatter_layers = self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers
+    for scatter_layer in scatter_layers:
+        if scatter_layer.name == self.scatter_layer_name:
+            self.scatter_layer_id = scatter_layer.id
+            return
+    self.scatter_layer_id = ''
+
+
+def terrain_doodad_scatter_layer_name_search_cb(self, context: Context, edit_text: str):
+    return [scatter_layer.name for scatter_layer in self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers]
+
+# TODO: make sure that when a scatter layer is deleted, the sculpt layer is updated to reflect that
 
 class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     id: StringProperty(name='ID', default='')
@@ -37,6 +62,16 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     perlin_noise_detail: FloatProperty(name='Noise Detail', default=8.0, min=0.0)
     interpolation_type: EnumProperty(name='Interpolation Type', items=map_range_interpolation_type_items,
                                      default='LINEAR')
+
+    geometry_source: EnumProperty(name='Geometry Source', items=terrain_doodad_geometry_source_items,
+                                  update=terrain_doodad_sculpt_layer_geometry_source_update_cb)
+
+    scatter_layer_id: StringProperty(name='Scatter Layer ID', default='', options={'HIDDEN'},
+                                     update=terrain_doodad_sculpt_layer_scatter_layer_id_update_cb)
+    scatter_layer_name: StringProperty(name='Scatter Layer Name', default='', options={'HIDDEN'},
+                                       update=terrain_doodad_sculpt_layer_scatter_layer_name_update_cb,
+                                       search=terrain_doodad_scatter_layer_name_search_cb)
+
     frozen_attribute_id: StringProperty(name='Frozen Attribute ID', default='')
 
 

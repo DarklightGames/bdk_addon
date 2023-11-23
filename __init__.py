@@ -127,7 +127,11 @@ else:
     from .terrain import operators as terrain_operators
     from .terrain import ui as terrain_ui
 
-    # Terrain Doodad Paint LAyers
+    # Terrain Doodad Common (these are used by paint, sculpt, scatter, doodad)
+    from .terrain.doodad import data as terrain_doodad_data
+    from .terrain.doodad import builder as terrain_doodad_builder
+
+    # Terrain Doodad Paint Layers
     from .terrain.doodad.paint import properties as terrain_doodad_paint_properties
     from .terrain.doodad.paint import operators as terrain_doodad_paint_operators
 
@@ -142,8 +146,6 @@ else:
     from .terrain.doodad.scatter import operators as terrain_doodad_scatter_operators
 
     # Terrain Doodad
-    from .terrain.doodad import data as terrain_doodad_data
-    from .terrain.doodad import builder as terrain_doodad_builder
     from .terrain.doodad import properties as terrain_doodad_properties
     from .terrain.doodad import operators as terrain_doodad_operators
     from .terrain.doodad import ui as terrain_doodad_ui

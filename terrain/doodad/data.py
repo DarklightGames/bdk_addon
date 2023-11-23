@@ -13,3 +13,8 @@ terrain_doodad_type_items = [
     ('MESH', 'Mesh', '', 'MESH_DATA', 1),
     ('EMPTY', 'Empty', '', 'EMPTY_DATA', 2),
 ]
+
+terrain_doodad_geometry_source_items = (
+    ('DOODAD', 'Doodad', ''),
+    ('SCATTER_LAYER', 'Scatter Layer', '')
+)

@@ -7,61 +7,14 @@ from uuid import uuid4
 from bpy.types import NodeTree, Context, Object, NodeSocket, bpy_struct, Node
 from itertools import chain
 
-from .sculpt.builder import ensure_sculpt_value_node_group
-from ..kernel import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
+from ...units import meters_to_unreal
 from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, \
     add_geometry_node_switch_nodes, ensure_curve_modifier_node_tree
+from ..kernel import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
+from .kernel import get_terrain_doodad_scatter_layer_by_id
+from .sculpt.builder import ensure_sculpt_value_node_group
 from .data import terrain_doodad_operation_items
-from ...units import meters_to_unreal
-
-
-distance_to_mesh_node_group_id = 'BDK Distance to Mesh'
-distance_to_empty_node_group_id = 'BDK Distance to Empty'
-distance_to_curve_node_group_id = 'BDK Distance to Curve'
-
-
-def ensure_distance_to_curve_node_group() -> NodeTree:
-    items = {
-        ('INPUT', 'NodeSocketGeometry', 'Curve'),
-        ('INPUT', 'NodeSocketBool', 'Is 3D'),
-        ('OUTPUT', 'NodeSocketFloat', 'Distance'),
-    }
-
-    def build_function(node_tree: NodeTree):
-        input_node, output_node = ensure_input_and_output_nodes(node_tree)
-
-        curve_to_mesh_node = node_tree.nodes.new(type='GeometryNodeCurveToMesh')
-
-        geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
-        geometry_proximity_node.target_element = 'EDGES'
-
-        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'FLOAT'
-
-        combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-
-        # Input
-        node_tree.links.new(input_node.outputs['Curve'], curve_to_mesh_node.inputs['Curve'])
-        node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
-
-        # Internal
-        node_tree.links.new(curve_to_mesh_node.outputs['Mesh'], geometry_proximity_node.inputs['Target'])
-        node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
-        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_node.inputs['True'])
-        node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node_2.inputs['X'])
-        node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node_2.inputs['Y'])
-        node_tree.links.new(switch_node.outputs['Output'], combine_xyz_node_2.inputs['Z'])
-        node_tree.links.new(combine_xyz_node_2.outputs['Vector'], geometry_proximity_node.inputs['Source Position'])
-
-        # Output
-        node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
-
-    return ensure_geometry_node_tree(distance_to_curve_node_group_id, items, build_function)
-
 
 def ensure_distance_noise_node_group() -> NodeTree:
     items = {
@@ -212,6 +165,91 @@ def ensure_terrain_doodad_paint_node_group() -> NodeTree:
     return ensure_geometry_node_tree('BDK Doodad Paint', items, build_function)
 
 
+def ensure_distance_to_curve_node_group() -> NodeTree:
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketBool', 'Is 3D'),
+        ('OUTPUT', 'NodeSocketFloat', 'Distance'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        curve_to_mesh_node = node_tree.nodes.new(type='GeometryNodeCurveToMesh')
+
+        geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
+        geometry_proximity_node.target_element = 'EDGES'
+
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'FLOAT'
+
+        combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        # Input
+        node_tree.links.new(input_node.outputs['Curve'], curve_to_mesh_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
+
+        # Internal
+        node_tree.links.new(curve_to_mesh_node.outputs['Mesh'], geometry_proximity_node.inputs['Target'])
+        node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_node.inputs['True'])
+        node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node_2.inputs['X'])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node_2.inputs['Y'])
+        node_tree.links.new(switch_node.outputs['Output'], combine_xyz_node_2.inputs['Z'])
+        node_tree.links.new(combine_xyz_node_2.outputs['Vector'], geometry_proximity_node.inputs['Source Position'])
+
+        # Output
+        node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+
+    return ensure_geometry_node_tree('BDK Distance to Curve', items, build_function)
+
+
+def ensure_distance_to_points_node_group() -> NodeTree:
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketBool', 'Is 3D'),   # TODO
+        ('OUTPUT', 'NodeSocketFloat', 'Distance'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+        geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
+        geometry_proximity_node.target_element = 'POINTS'
+
+        # TODO: transform geometry might be slower, might be better to use a set position node and strip out the Z.
+        transform_geometry_node = node_tree.nodes.new(type='GeometryNodeTransform')
+        transform_geometry_node.inputs['Scale'].default_value = (1.0, 1.0, 0.0)
+
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'VECTOR'
+
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        # Input
+        node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Points'], transform_geometry_node.inputs['Geometry'])
+
+        # Internal
+        node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs[8])
+        node_tree.links.new(position_node.outputs['Position'], switch_node.inputs[9])
+        node_tree.links.new(switch_node.outputs[3], geometry_proximity_node.inputs['Source Position'])
+        node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+        node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
+
+        # Output
+        node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+
+    return ensure_geometry_node_tree('BDK Distance to Points', items, build_function)
+
+
 def ensure_distance_to_mesh_node_group() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -223,12 +261,9 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
-
         separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-
         geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
         geometry_proximity_node.target_element = 'FACES'
-
         transform_geometry_node = node_tree.nodes.new(type='GeometryNodeTransform')
         transform_geometry_node.inputs['Scale'].default_value = (1.0, 1.0, 0.0)
 
@@ -253,7 +288,7 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
         # Output
         node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
 
-    return ensure_geometry_node_tree(distance_to_mesh_node_group_id, items, build_function)
+    return ensure_geometry_node_tree('BDK Distance to Mesh', items, build_function)
 
 
 def ensure_distance_to_empty_node_group() -> NodeTree:
@@ -296,7 +331,7 @@ def ensure_distance_to_empty_node_group() -> NodeTree:
         # Output
         node_tree.links.new(vector_length_node.outputs['Value'], output_node.inputs['Distance'])
 
-    return ensure_geometry_node_tree(distance_to_empty_node_group_id, items, build_function)
+    return ensure_geometry_node_tree('BDK Distance to Empty', items, build_function)
 
 
 def create_terrain_doodad_object(context: Context, terrain_info_object: Object, object_type: str = 'CURVE') -> Object:
@@ -386,6 +421,9 @@ def get_terrain_doodads_for_terrain_info_object(context: Context, terrain_info_o
 
 
 def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrain_info'):
+
+    print('ensure_terrain_info_modifiers')
+
     terrain_info_object: Object = terrain_info.terrain_info_object
 
     # Ensure that the modifier IDs have been generated.
@@ -520,6 +558,16 @@ def _add_terrain_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terra
     var.targets[0].data_path = f"bdk.terrain_doodad.{data_path}"
 
 
+# TODO: combine the two functions below into something more unified.
+def add_distance_to_points_nodes(node_tree: NodeTree, object_info_node: Node) -> NodeSocket:
+    distance_to_points_node = node_tree.nodes.new(type='GeometryNodeGroup')
+    distance_to_points_node.node_tree = ensure_distance_to_points_node_group()
+
+    node_tree.links.new(object_info_node.outputs['Geometry'], distance_to_points_node.inputs['Points'])
+
+    return distance_to_points_node.outputs['Distance']
+
+
 def add_distance_to_doodad_layer_nodes(node_tree: NodeTree, layer, layer_type: str,
                                        terrain_doodad_object_info_node: Node) -> NodeSocket:
 
@@ -652,16 +700,44 @@ def ensure_sculpt_operation_node_group() -> NodeTree:
     return ensure_geometry_node_tree('BDK Sculpt Operation', items, build_function)
 
 
-def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree, sculpt_layer: 'BDK_PG_terrain_doodad_sculpt_layer') -> NodeSocket:
+def get_terrain_doodad_layer_geometry_object(terrain_doodad_layer):
+    match terrain_doodad_layer.geometry_source:
+        case 'DOODAD':
+            return terrain_doodad_layer.terrain_doodad_object
+        case 'SCATTER_LAYER':
+            terrain_doodad = terrain_doodad_layer.terrain_doodad_object.bdk.terrain_doodad
+            scatter_layer = get_terrain_doodad_scatter_layer_by_id(terrain_doodad, terrain_doodad_layer.scatter_layer_id)
+            if scatter_layer is None:
+                return None
+            return scatter_layer.planter_object
+        case _:
+            raise Exception(f"Unknown geometry source: {terrain_doodad_layer.geometry_source}")
+
+
+def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree, sculpt_layer: 'BDK_PG_terrain_doodad_sculpt_layer') -> Optional[NodeSocket]:
+
+    geometry_object = get_terrain_doodad_layer_geometry_object(sculpt_layer)
+
+    if geometry_object is None:
+        return None
+
+    geometry_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+    geometry_object_info_node.transform_space = 'RELATIVE'
+    geometry_object_info_node.inputs[0].default_value = geometry_object
+
     sculpt_value_node = node_tree.nodes.new(type='GeometryNodeGroup')
     sculpt_value_node.node_tree = ensure_sculpt_value_node_group()
 
-    terrain_doodad_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-    terrain_doodad_object_info_node.inputs[0].default_value = sculpt_layer.terrain_doodad_object
-    terrain_doodad_object_info_node.transform_space = 'RELATIVE'
-
-    # Add the distance to the doodad layer nodes.
-    distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT', terrain_doodad_object_info_node)
+    # TODO: this is re-stated in the paint layer code, we should probably refactor this so that it's a common function.
+    # Depending on the geometry source, we either use the doodad's geometry or the point cloud of a scatter layer
+    # planter object.
+    match sculpt_layer.geometry_source:
+        case 'DOODAD':
+            distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT', geometry_object_info_node)
+        case 'SCATTER_LAYER':
+            distance_socket = add_distance_to_points_nodes(node_tree, geometry_object_info_node)
+        case _:
+            raise Exception(f"Unknown geometry source: {sculpt_layer.geometry_source}")
 
     def add_sculpt_value_node_driver(input_name: str, path: str):
         add_doodad_sculpt_layer_driver(sculpt_value_node.inputs[input_name], sculpt_layer, path)
@@ -695,6 +771,11 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: Optional[Node
     """
     # Now chain the node components together.
     for sculpt_layer in terrain_doodad.sculpt_layers:
+        value_socket = add_terrain_doodad_sculpt_layer_value_nodes(node_tree, sculpt_layer)
+
+        if value_socket is None:
+            continue
+
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         mute_switch_node.input_type = 'FLOAT'
 
@@ -704,15 +785,13 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: Optional[Node
         is_frozen_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         is_frozen_switch_node.input_type = 'FLOAT'
 
-        # TODO: combine this into a single node group.
-        value_socket = add_terrain_doodad_sculpt_layer_value_nodes(node_tree, sculpt_layer)
-
         sculpt_operation_node = node_tree.nodes.new(type='GeometryNodeGroup')
         sculpt_operation_node.node_tree = ensure_sculpt_operation_node_group()
 
         # Drivers
-        add_doodad_sculpt_layer_driver(mute_switch_node.inputs[0], sculpt_layer, 'mute')
         _add_terrain_doodad_driver(is_frozen_switch_node.inputs['Switch'], terrain_doodad, 'is_frozen')
+
+        add_doodad_sculpt_layer_driver(mute_switch_node.inputs[0], sculpt_layer, 'mute')
         add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Operation'], sculpt_layer, 'operation')
         add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Depth'], sculpt_layer, 'depth')
 
@@ -803,12 +882,23 @@ def add_paint_layer_driver(struct: bpy_struct, paint_layer: 'BDK_PG_terrain_dood
     var.targets[0].data_path = f"bdk.terrain_doodad.paint_layers[{paint_layer.index}].{data_path}"
 
 
-def _add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree, paint_layer: 'BDK_PG_terrain_doodad_paint_layer') -> NodeSocket:
-    doodad_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-    doodad_object_info_node.inputs[0].default_value = paint_layer.terrain_doodad_object
-    doodad_object_info_node.transform_space = 'RELATIVE'
+def _add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree, paint_layer: 'BDK_PG_terrain_doodad_paint_layer') -> Optional[NodeSocket]:
+    geometry_object = get_terrain_doodad_layer_geometry_object(paint_layer)
 
-    distance_socket = add_distance_to_doodad_layer_nodes(node_tree, paint_layer, 'PAINT', doodad_object_info_node)
+    if geometry_object is None:
+        return None
+
+    geometry_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+    geometry_object_info_node.transform_space = 'RELATIVE'
+    geometry_object_info_node.inputs[0].default_value = geometry_object
+
+    match paint_layer.geometry_source:
+        case 'DOODAD':
+            distance_socket = add_distance_to_doodad_layer_nodes(node_tree, paint_layer, 'PAINT', geometry_object_info_node)
+        case 'SCATTER_LAYER':
+            distance_socket = add_distance_to_points_nodes(node_tree, geometry_object_info_node)
+        case _:
+            raise Exception(f"Unknown geometry source: {paint_layer.geometry_source}")
 
     paint_node = node_tree.nodes.new(type='GeometryNodeGroup')
     paint_node.node_tree = ensure_terrain_doodad_paint_node_group()
@@ -833,6 +923,11 @@ def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree,
                                                  operand_value_socket: Optional[NodeSocket] = None,
                                                  operation_override: Optional[str] = None) -> NodeSocket:
 
+    paint_value_socket = _add_terrain_doodad_paint_layer_value_nodes(node_tree, terrain_doodad_paint_layer)
+
+    if paint_value_socket is None:
+        return operand_value_socket
+
     terrain_doodad = terrain_doodad_paint_layer.terrain_doodad_object.bdk.terrain_doodad
 
     frozen_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
@@ -845,8 +940,6 @@ def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree,
     mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
     mute_switch_node.input_type = 'FLOAT'
     mute_switch_node.label = 'Mute'
-
-    paint_value_socket = _add_terrain_doodad_paint_layer_value_nodes(node_tree, terrain_doodad_paint_layer)
 
     paint_operation_node = node_tree.nodes.new(type='GeometryNodeGroup')
     paint_operation_node.node_tree = ensure_terrain_doodad_paint_operation_node_group()

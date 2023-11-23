@@ -75,11 +75,20 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
         layout = self.layout
         terrain_doodad = context.active_object.bdk.terrain_doodad
         paint_layer = terrain_doodad.paint_layers[terrain_doodad.paint_layers_index]
+
         flow = layout.grid_flow(columns=1)
         flow.use_property_split = True
         flow.use_property_decorate = False
 
+        flow.separator()
+
+        flow.prop(paint_layer, 'geometry_source')
+
+        if paint_layer.geometry_source == 'SCATTER_LAYER':
+            flow.prop(paint_layer, 'scatter_layer_name')
+
         row = flow.row()
+
         row.prop(paint_layer, 'layer_type')
 
         if paint_layer.layer_type == 'PAINT':
@@ -255,9 +264,17 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
     def draw(self, context: 'Context'):
         layout = self.layout
         sculpt_layer = get_terrain_doodad_selected_sculpt_layer(context)
+
         flow = layout.grid_flow(columns=1)
         flow.use_property_split = True
         flow.use_property_decorate = False
+
+        flow.prop(sculpt_layer, 'geometry_source')
+
+        if sculpt_layer.geometry_source == 'SCATTER_LAYER':
+            flow.prop(sculpt_layer, 'scatter_layer_name')
+
+        flow.separator()
 
         flow.prop(sculpt_layer, 'depth')
 

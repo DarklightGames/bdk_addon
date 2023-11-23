@@ -3,10 +3,10 @@ from bpy.types import PropertyGroup, Object, NodeTree, Context
 
 from ...constants import RADIUS_EPSILON
 from ...helpers import get_terrain_info
+from .builder import ensure_terrain_info_modifiers
 from .scatter.properties import BDK_PG_terrain_doodad_scatter_layer
 from .sculpt.properties import BDK_PG_terrain_doodad_sculpt_layer
 from .paint.properties import BDK_PG_terrain_doodad_paint_layer
-from .builder import ensure_terrain_info_modifiers
 
 empty_set = set()
 

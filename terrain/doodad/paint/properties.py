@@ -8,7 +8,7 @@ from ....data import map_range_interpolation_type_items
 from ....property_group_helpers import add_curve_modifier_properties
 from ....units import meters_to_unreal
 from ..builder import ensure_terrain_info_modifiers
-from ..data import terrain_doodad_noise_type_items, terrain_doodad_operation_items
+from ..data import terrain_doodad_noise_type_items, terrain_doodad_operation_items, terrain_doodad_geometry_source_items
 
 
 def terrain_doodad_paint_layer_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context: Context,
@@ -60,6 +60,29 @@ def terrain_doodad_paint_layer_deco_layer_name_update_cb(self: 'BDK_PG_terrain_d
     ensure_terrain_info_modifiers(context, terrain_info)
 
 
+def terrain_doodad_paint_layer_geometry_source_update_cb(self, context):
+    terrain_info = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
+    ensure_terrain_info_modifiers(context, terrain_info)
+
+
+def terrain_doodad_paint_layer_scatter_layer_id_update_cb(self, context):
+    terrain_info = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
+    ensure_terrain_info_modifiers(context, terrain_info)
+
+
+def terrain_doodad_paint_layer_scatter_layer_name_update_cb(self, context):
+    scatter_layers = self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers
+    for scatter_layer in scatter_layers:
+        if scatter_layer.name == self.scatter_layer_name:
+            self.scatter_layer_id = scatter_layer.id
+            return
+    self.scatter_layer_id = ''
+
+
+def terrain_doodad_scatter_layer_name_search_cb(self, context: Context, edit_text: str):
+    return [scatter_layer.name for scatter_layer in self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers]
+
+
 class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer')
@@ -101,6 +124,15 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
         name='Distance Noise Factor', default=meters_to_unreal(0.5), subtype='DISTANCE', min=0.0)
     distance_noise_distortion: FloatProperty(name='Distance Noise Distortion', default=1.0, min=0.0)
     distance_noise_offset: FloatProperty(name='Distance Noise Offset', default=0.5, min=0.0, max=1.0, subtype='FACTOR')
+
+    # Geometry Source
+    geometry_source: EnumProperty(name='Geometry Source', items=terrain_doodad_geometry_source_items,
+                                  update=terrain_doodad_paint_layer_geometry_source_update_cb)
+    scatter_layer_id: StringProperty(name='Scatter Layer ID', default='', options={'HIDDEN'},
+                                     update=terrain_doodad_paint_layer_scatter_layer_id_update_cb)
+    scatter_layer_name: StringProperty(name='Scatter Layer Name', default='', options={'HIDDEN'},
+                                       update=terrain_doodad_paint_layer_scatter_layer_name_update_cb,
+                                       search=terrain_doodad_scatter_layer_name_search_cb)
 
     frozen_attribute_id: StringProperty(name='Frozen Attribute ID', default='', options={'HIDDEN'})
 

@@ -1,9 +1,7 @@
 import uuid
+from typing import Optional
 
 from ...helpers import ensure_name_unique
-from .paint.properties import BDK_PG_terrain_doodad_paint_layer
-from .properties import BDK_PG_terrain_doodad
-from .sculpt.properties import BDK_PG_terrain_doodad_sculpt_layer
 
 
 def ensure_terrain_doodad_layer_indices(terrain_doodad):
@@ -24,7 +22,7 @@ def ensure_terrain_doodad_layer_indices(terrain_doodad):
         scatter_layer.index = i
 
 
-def add_terrain_doodad_sculpt_layer(terrain_doodad: BDK_PG_terrain_doodad, name: str = 'Sculpt Layer') -> BDK_PG_terrain_doodad_sculpt_layer:
+def add_terrain_doodad_sculpt_layer(terrain_doodad: 'BDK_PG_terrain_doodad', name: str = 'Sculpt Layer') -> 'BDK_PG_terrain_doodad_sculpt_layer':
     sculpt_layer = terrain_doodad.sculpt_layers.add()
     sculpt_layer.id = uuid.uuid4().hex
     sculpt_layer.frozen_attribute_id = uuid.uuid4().hex
@@ -33,10 +31,17 @@ def add_terrain_doodad_sculpt_layer(terrain_doodad: BDK_PG_terrain_doodad, name:
     return sculpt_layer
 
 
-def add_terrain_doodad_paint_layer(terrain_doodad: BDK_PG_terrain_doodad, name: str = 'Paint Layer') -> BDK_PG_terrain_doodad_paint_layer:
+def add_terrain_doodad_paint_layer(terrain_doodad: 'BDK_PG_terrain_doodad', name: str = 'Paint Layer') -> 'BDK_PG_terrain_doodad_paint_layer':
     paint_layer = terrain_doodad.paint_layers.add()
     paint_layer.id = uuid.uuid4().hex
     paint_layer.frozen_attribute_id = uuid.uuid4().hex
     paint_layer.terrain_doodad_object = terrain_doodad.object
     paint_layer.name = ensure_name_unique(name, [layer.name for layer in terrain_doodad.paint_layers])
     return paint_layer
+
+
+def get_terrain_doodad_scatter_layer_by_id(terrain_doodad: 'BDK_PG_terrain_doodad', scatter_layer_id: str) -> Optional['BDK_PG_terrain_doodad_scatter_layer']:
+    for scatter_layer in terrain_doodad.scatter_layers:
+        if scatter_layer.id == scatter_layer_id:
+            return scatter_layer
+    return None
