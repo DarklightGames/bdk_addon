@@ -150,6 +150,12 @@ else:
     from .terrain.doodad import operators as terrain_doodad_operators
     from .terrain.doodad import ui as terrain_doodad_ui
 
+    # BSP
+    from .bsp import builder as bsp_builder
+    from .bsp import properties as bsp_properties
+    from .bsp import operators as bsp_operators
+    from .bsp import ui as bsp_ui
+
     if bdk_helpers.are_bdk_dependencies_installed():
         # T3D
         from .t3d import data as t3d_data
@@ -157,12 +163,6 @@ else:
         from .t3d import operators as t3d_operators
         from .t3d import importer as t3d_importer
         from .t3d import writer as t3d_writer
-
-        # BSP
-        from .bsp import builder as bsp_builder
-        from .bsp import properties as bsp_properties
-        from .bsp import operators as bsp_operators
-        from .bsp import ui as bsp_ui
 
 
 import bpy
