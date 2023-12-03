@@ -72,6 +72,12 @@ if 'bpy' in locals():
     importlib.reload(terrain_doodad_operators)
     importlib.reload(terrain_doodad_ui)
 
+    # BSP
+    importlib.reload(bsp_builder)
+    importlib.reload(bsp_properties)
+    importlib.reload(bsp_operators)
+    importlib.reload(bsp_ui)
+
     if bdk_helpers.are_bdk_dependencies_installed():
         # T3D
         importlib.reload(t3d_data)
@@ -79,12 +85,6 @@ if 'bpy' in locals():
         importlib.reload(t3d_importer)
         importlib.reload(t3d_writer)
         importlib.reload(t3d_ui)
-
-        # BSP
-        importlib.reload(bsp_builder)
-        importlib.reload(bsp_properties)
-        importlib.reload(bsp_operators)
-        importlib.reload(bsp_ui)
 
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
@@ -189,14 +189,14 @@ classes = actor_properties.classes + \
           terrain_doodad_ui.classes + \
           bdk_preferences.classes + \
           bdk_operators.classes + \
-          bdk_ui.classes
+          bdk_ui.classes + \
+          bsp_properties.classes + \
+          bsp_operators.classes + \
+          bsp_ui.classes
 
 if bdk_helpers.are_bdk_dependencies_installed():
     classes += t3d_ui.classes + \
-               t3d_operators.classes + \
-               bsp_properties.classes + \
-               bsp_operators.classes + \
-               bsp_ui.classes
+               t3d_operators.classes
 
 classes += bdk_properties.classes
 
