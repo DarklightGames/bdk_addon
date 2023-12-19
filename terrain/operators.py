@@ -418,9 +418,10 @@ class BDK_OT_terrain_paint_layers_hide(Operator):
 
 
 def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
+    node_name = ensure_name_unique(node_type_item_names[type], [n.name for n in nodes])
     node = nodes.add()
     node.id = uuid.uuid4().hex
-    node.name = node_type_item_names[type]
+    node.name = node_name
     node.terrain_info_object = terrain_info_object
     node.type = type
 
