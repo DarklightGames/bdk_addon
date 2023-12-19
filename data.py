@@ -46,6 +46,7 @@ class UReference:
         values = re.findall(reference_pattern, object_path)
         package_name = values[0]
         object_name = values[-1]
+
         return UReference(package_name, object_name, type_name=type_name, group_name=group_name)
 
     @staticmethod

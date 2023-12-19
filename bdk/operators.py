@@ -321,7 +321,7 @@ class BDK_OT_node_join_group_input_nodes(Operator):
 
     @classmethod
     def poll(cls, context):
-        if context.active_node is None:
+        if not hasattr(context, 'active_node') or context.active_node is None:
             cls.poll_message_set('A node must be active')
             return False
         if context.active_node.bl_idname != 'NodeGroupInput':
@@ -364,7 +364,7 @@ class BDK_OT_node_split_group_input_nodes(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        if context.active_node is None:
+        if not hasattr(context, 'active_node') or context.active_node is None:
             cls.poll_message_set('A node must be active')
             return False
         if context.active_node.bl_idname != 'NodeGroupInput':

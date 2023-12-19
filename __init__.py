@@ -256,7 +256,6 @@ def register():
 
     bpy.types.VIEW3D_MT_select_object.append(bdk_select_menu_func)
 
-
     if bdk_helpers.are_bdk_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)
         bpy.types.VIEW3D_MT_object_context_menu.append(bdk_t3d_copy_func)

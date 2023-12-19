@@ -84,7 +84,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
         if density_socket is not None:
             node_tree.links.new(density_socket, add_node.inputs[1])
 
-        node_tree.links.new(named_attribute_node.outputs[2], add_node.inputs[0])
+        node_tree.links.new(named_attribute_node.outputs['Attribute'], add_node.inputs[0])
 
         store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
         store_named_attribute_node.data_type = 'FLOAT'
@@ -98,7 +98,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
         clamp_node.inputs['Max'].default_value = 1.0
 
         node_tree.links.new(add_node.outputs['Value'], clamp_node.inputs['Value'])
-        node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs[4])
+        node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs['Value'])
 
         node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
         node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
@@ -133,9 +133,9 @@ def ensure_noise_node_group() -> NodeTree:
         compare_node = node_tree.nodes.new('FunctionNodeCompare')
         compare_node.data_type = 'INT'
         compare_node.operation = 'EQUAL'
-        compare_node.inputs[3].default_value = 0
+        compare_node.inputs['B'].default_value = 0
 
-        node_tree.links.new(input_node.outputs['Noise Type'], compare_node.inputs[2])
+        node_tree.links.new(input_node.outputs['Noise Type'], compare_node.inputs['A'])
         node_tree.links.new(input_node.outputs['Perlin Noise Scale'], perlin_noise_node.inputs['Scale'])
         node_tree.links.new(input_node.outputs['Perlin Noise Detail'], perlin_noise_node.inputs['Detail'])
         node_tree.links.new(input_node.outputs['Perlin Noise Roughness'], perlin_noise_node.inputs['Roughness'])
@@ -143,8 +143,8 @@ def ensure_noise_node_group() -> NodeTree:
         node_tree.links.new(input_node.outputs['Perlin Noise Distortion'], perlin_noise_node.inputs['Distortion'])
 
         node_tree.links.new(compare_node.outputs['Result'], noise_type_switch_node.inputs['Switch'])
-        node_tree.links.new(white_noise_node.outputs['Value'], noise_type_switch_node.inputs[3])  # True
-        node_tree.links.new(perlin_noise_node.outputs['Fac'], noise_type_switch_node.inputs[2])   # False
+        node_tree.links.new(white_noise_node.outputs['Value'], noise_type_switch_node.inputs['True'])
+        node_tree.links.new(perlin_noise_node.outputs['Fac'], noise_type_switch_node.inputs['False'])
 
         node_tree.links.new(noise_type_switch_node.outputs['Output'], output_node.inputs['Value'])
 
@@ -167,7 +167,7 @@ def add_density_from_terrain_layer_node(
         paint_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
         paint_named_attribute_node.data_type = 'FLOAT'
         paint_named_attribute_node.inputs['Name'].default_value = node.id
-        return paint_named_attribute_node.outputs[1]
+        return paint_named_attribute_node.outputs['Attribute']
     elif node.type == 'PAINT_LAYER':
         layer_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
         layer_named_attribute_node.data_type = 'FLOAT'
@@ -182,16 +182,15 @@ def add_density_from_terrain_layer_node(
         blur_attribute_node.data_type = 'FLOAT'
         _add_terrain_layer_node_driver(blur_attribute_node.inputs['Iterations'], 'blur_iterations')
 
-        node_tree.links.new(layer_named_attribute_node.outputs[1], blur_attribute_node.inputs[0])
+        node_tree.links.new(layer_named_attribute_node.outputs['Attribute'], blur_attribute_node.inputs['Value'])
+        node_tree.links.new(layer_named_attribute_node.outputs['Attribute'], blur_switch_node.inputs['False'])
+        node_tree.links.new(blur_attribute_node.outputs['Value'], blur_switch_node.inputs['True'])
 
-        node_tree.links.new(layer_named_attribute_node.outputs[1], blur_switch_node.inputs[2])
-        node_tree.links.new(blur_attribute_node.outputs[0], blur_switch_node.inputs[3])
-
-        return blur_switch_node.outputs[0]
+        return blur_switch_node.outputs['Output']
     elif node.type == 'CONSTANT':
         value_node = node_tree.nodes.new('ShaderNodeValue')
-        value_node.outputs[0].default_value = 1.0
-        return value_node.outputs[0]
+        value_node.outputs['Value'].default_value = 1.0
+        return value_node.outputs['Value']
     elif node.type == 'GROUP':
         if len(node.children) == 0:
             # Group is empty, skip it.
@@ -255,13 +254,13 @@ def ensure_terrain_layer_node_density_node_group() -> NodeTree:
         factor_multiply_node.operation = 'MULTIPLY'
 
         node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs['Value'])
-        node_tree.links.new(input_node.outputs['Value'], map_range_switch_node.inputs[2])  # False
-        node_tree.links.new(map_range_node.outputs['Result'], map_range_switch_node.inputs[3])  # True
+        node_tree.links.new(input_node.outputs['Value'], map_range_switch_node.inputs['False'])
+        node_tree.links.new(map_range_node.outputs['Result'], map_range_switch_node.inputs['True'])
 
         node_tree.links.new(input_node.outputs['Map Range From Min'], map_range_node.inputs['From Min'])
         node_tree.links.new(input_node.outputs['Map Range From Max'], map_range_node.inputs['From Max'])
 
-        node_tree.links.new(input_node.outputs['Use Map Range'], map_range_switch_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Use Map Range'], map_range_switch_node.inputs['Switch'])
 
         node_tree.links.new(input_node.outputs['Factor'], factor_multiply_node.inputs[0])
         node_tree.links.new(map_range_switch_node.outputs['Output'], factor_multiply_node.inputs[1])
@@ -318,9 +317,9 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, target_id: ID, dat
 
         # Link the previous switch output to the false input of the new switch.
         if last_density_socket:
-            node_tree.links.new(last_density_socket, switch_node.inputs[2])
+            node_tree.links.new(last_density_socket, switch_node.inputs['False'])
 
-        node_tree.links.new(density_socket, switch_node.inputs[3])  # True input.
+        node_tree.links.new(density_socket, switch_node.inputs['True'])
 
         # Attach the mute property as a driver for the switch node's switch input.
         add_terrain_layer_density_driver(switch_node.inputs['Switch'], 'mute', True)
@@ -427,10 +426,10 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         node_tree.links.new(instance_on_points_node.inputs['Points'], deco_layer_node.outputs['Points'])
         node_tree.links.new(instance_on_points_node.inputs['Rotation'], deco_layer_node.outputs['Rotation'])
         node_tree.links.new(instance_on_points_node.inputs['Scale'], deco_layer_node.outputs['Scale'])
-        node_tree.links.new(capture_attribute_node.inputs[2], named_attribute_node.outputs[1])
+        node_tree.links.new(capture_attribute_node.inputs['Value'], named_attribute_node.outputs['Attribute'])
         node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
         node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
-        node_tree.links.new(deco_layer_node.inputs['Density Map'], capture_attribute_node.outputs[2])
+        node_tree.links.new(deco_layer_node.inputs['Density Map'], capture_attribute_node.outputs['Attribute'])
         node_tree.links.new(realize_instances_node.inputs['Geometry'], instance_on_points_node.outputs['Instances'])
 
         # Output

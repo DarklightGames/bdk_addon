@@ -60,17 +60,17 @@ def ensure_distance_noise_node_group() -> NodeTree:
         node_tree.links.new(input_node.outputs['Distance'], add_distance_noise_node.inputs[0])
         node_tree.links.new(input_node.outputs['Offset'], distance_noise_offset_subtract_node.inputs[1])
         node_tree.links.new(input_node.outputs['Factor'], distance_noise_factor_multiply_node.inputs[1])
-        node_tree.links.new(input_node.outputs['Use Noise'], use_noise_switch_node.inputs[0])
-        node_tree.links.new(input_node.outputs['Distance'], use_noise_switch_node.inputs[2])
+        node_tree.links.new(input_node.outputs['Use Noise'], use_noise_switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Distance'], use_noise_switch_node.inputs['False'])
 
         # Internal
         node_tree.links.new(noise_value_socket, distance_noise_offset_subtract_node.inputs[0])
         node_tree.links.new(distance_noise_offset_subtract_node.outputs['Value'], distance_noise_factor_multiply_node.inputs[0])
         node_tree.links.new(distance_noise_factor_multiply_node.outputs['Value'], add_distance_noise_node.inputs[1])
-        node_tree.links.new(add_distance_noise_node.outputs['Value'], use_noise_switch_node.inputs[3])
+        node_tree.links.new(add_distance_noise_node.outputs['Value'], use_noise_switch_node.inputs['True'])
 
         # Output
-        node_tree.links.new(use_noise_switch_node.outputs[0], output_node.inputs['Distance'])
+        node_tree.links.new(use_noise_switch_node.outputs['Output'], output_node.inputs['Distance'])
 
     return ensure_geometry_node_tree('BDK Distance Noise', items, build_function)
 
@@ -238,9 +238,9 @@ def ensure_distance_to_points_node_group() -> NodeTree:
         # Internal
         node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
         node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
-        node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs[8])
-        node_tree.links.new(position_node.outputs['Position'], switch_node.inputs[9])
-        node_tree.links.new(switch_node.outputs[3], geometry_proximity_node.inputs['Source Position'])
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs['False'])
+        node_tree.links.new(position_node.outputs['Position'], switch_node.inputs['True'])
+        node_tree.links.new(switch_node.outputs['Output'], geometry_proximity_node.inputs['Source Position'])
         node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
         node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
 
@@ -279,9 +279,9 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
         # Internal
         node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
         node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
-        node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs[8])
-        node_tree.links.new(position_node.outputs['Position'], switch_node.inputs[9])
-        node_tree.links.new(switch_node.outputs[3], geometry_proximity_node.inputs['Source Position'])
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs['False'])
+        node_tree.links.new(position_node.outputs['Position'], switch_node.inputs['True'])
+        node_tree.links.new(switch_node.outputs['Output'], geometry_proximity_node.inputs['Source Position'])
         node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
         node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
 
@@ -791,20 +791,20 @@ def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: Optional[Node
         # Drivers
         _add_terrain_doodad_driver(is_frozen_switch_node.inputs['Switch'], terrain_doodad, 'is_frozen')
 
-        add_doodad_sculpt_layer_driver(mute_switch_node.inputs[0], sculpt_layer, 'mute')
+        add_doodad_sculpt_layer_driver(mute_switch_node.inputs['Switch'], sculpt_layer, 'mute')
         add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Operation'], sculpt_layer, 'operation')
         add_doodad_sculpt_layer_driver(sculpt_operation_node.inputs['Depth'], sculpt_layer, 'depth')
 
         # Links
-        node_tree.links.new(sculpt_operation_node.outputs['Output'], mute_switch_node.inputs[2])
-        node_tree.links.new(value_socket, is_frozen_switch_node.inputs[2])  # False
-        node_tree.links.new(frozen_named_attribute_node.outputs[1], is_frozen_switch_node.inputs[3])  # True
+        node_tree.links.new(sculpt_operation_node.outputs['Output'], mute_switch_node.inputs['False'])
+        node_tree.links.new(value_socket, is_frozen_switch_node.inputs['False'])
+        node_tree.links.new(frozen_named_attribute_node.outputs['Attribute'], is_frozen_switch_node.inputs['True'])
 
         if z_socket:
-            node_tree.links.new(z_socket, mute_switch_node.inputs[3])
+            node_tree.links.new(z_socket, mute_switch_node.inputs['True'])
             node_tree.links.new(z_socket, sculpt_operation_node.inputs['Value 1'])
 
-        node_tree.links.new(is_frozen_switch_node.outputs[0], sculpt_operation_node.inputs['Value 2'])
+        node_tree.links.new(is_frozen_switch_node.outputs['Output'], sculpt_operation_node.inputs['Value 2'])
 
         z_socket = mute_switch_node.outputs['Output']
 
@@ -836,18 +836,18 @@ def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: '
             z_socket = _add_sculpt_layers_to_node_tree(node_tree, z_socket, terrain_doodad)
 
         # Drivers
-        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_sculpt_modifier_muted')
+        _add_terrain_info_driver(mute_switch_node.inputs['Switch'], terrain_info, 'is_sculpt_modifier_muted')
 
         # Links
-        node_tree.links.new(mute_switch_node.inputs[14], set_position_node.outputs['Geometry'])  # False (not muted)
-        node_tree.links.new(mute_switch_node.inputs[15], input_node.outputs['Geometry'])  # True (muted)
+        node_tree.links.new(mute_switch_node.inputs['False'], set_position_node.outputs['Geometry'])
+        node_tree.links.new(mute_switch_node.inputs['True'], input_node.outputs['Geometry'])
         node_tree.links.new(separate_xyz_node.inputs['Vector'], position_node.outputs['Position'])
         node_tree.links.new(set_position_node.inputs['Position'], combine_xyz_node.outputs['Vector'])
         node_tree.links.new(set_position_node.inputs['Geometry'], input_node.outputs['Geometry'])
         node_tree.links.new(combine_xyz_node.inputs['X'], separate_xyz_node.outputs['X'])
         node_tree.links.new(combine_xyz_node.inputs['Y'], separate_xyz_node.outputs['Y'])
         node_tree.links.new(combine_xyz_node.inputs['Z'], z_socket)
-        node_tree.links.new(output_node.inputs['Geometry'], mute_switch_node.outputs[6])
+        node_tree.links.new(output_node.inputs['Geometry'], mute_switch_node.outputs['Output'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
@@ -946,9 +946,9 @@ def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree,
 
     if operand_value_socket is not None:
         node_tree.links.new(operand_value_socket, paint_operation_node.inputs['Value 1'])
-        node_tree.links.new(operand_value_socket, mute_switch_node.inputs[3])  # True
+        node_tree.links.new(operand_value_socket, mute_switch_node.inputs['True'])
 
-    node_tree.links.new(paint_operation_node.outputs['Output'], mute_switch_node.inputs[2])  # False
+    node_tree.links.new(paint_operation_node.outputs['Output'], mute_switch_node.inputs['False'])
 
     if operation_override is not None:
         # Handle operation override. This is used when baking.
@@ -958,15 +958,15 @@ def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree,
         add_paint_layer_driver(paint_operation_node.inputs['Operation'], terrain_doodad_paint_layer, 'operation')
 
     # Drivers
-    _add_terrain_doodad_driver(frozen_switch_node.inputs[0], terrain_doodad, 'is_frozen')  # Switch
-    add_paint_layer_driver(mute_switch_node.inputs[0], terrain_doodad_paint_layer, 'mute')
+    _add_terrain_doodad_driver(frozen_switch_node.inputs['Switch'], terrain_doodad, 'is_frozen')
+    add_paint_layer_driver(mute_switch_node.inputs['Switch'], terrain_doodad_paint_layer, 'mute')
 
     # Links
-    node_tree.links.new(paint_value_socket, frozen_switch_node.inputs[2])  # False
-    node_tree.links.new(frozen_named_attribute_node.outputs[1], frozen_switch_node.inputs[3])  # True
-    node_tree.links.new(frozen_switch_node.outputs[0], paint_operation_node.inputs['Value 2'])  # False
+    node_tree.links.new(paint_value_socket, frozen_switch_node.inputs['False'])
+    node_tree.links.new(frozen_named_attribute_node.outputs['Attribute'], frozen_switch_node.inputs['True'])
+    node_tree.links.new(frozen_switch_node.outputs['Output'], paint_operation_node.inputs['Value 2'])
 
-    return mute_switch_node.outputs[0]
+    return mute_switch_node.outputs['Output']
 
 
 # TODO: this thing can probably made generic for any layer type
@@ -1010,16 +1010,16 @@ def _ensure_terrain_doodad_paint_modifier_node_group(
             geometry_socket = store_named_attribute_node.outputs['Geometry']
 
         # Drivers
-        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_paint_modifier_muted')
+        _add_terrain_info_driver(mute_switch_node.inputs['Switch'], terrain_info, 'is_paint_modifier_muted')
 
         # Inputs
-        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs['False'])
 
         # Internal
-        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs['False'])
 
         # Outputs
-        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
+        node_tree.links.new(mute_switch_node.outputs['Output'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
@@ -1063,16 +1063,16 @@ def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_info: 'BD
             geometry_socket = store_named_attribute_node.outputs['Geometry']
 
         # Drivers
-        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_deco_modifier_muted')
+        _add_terrain_info_driver(mute_switch_node.inputs['Switch'], terrain_info, 'is_deco_modifier_muted')
 
         # Inputs
-        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs['True'])
 
         # Internal
-        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs['False'])
 
         # Outputs
-        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
+        node_tree.links.new(mute_switch_node.outputs['Output'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
@@ -1125,16 +1125,16 @@ def _ensure_terrain_doodad_attribute_modifier_node_group(name: str, terrain_info
                 pass
 
         # Drivers
-        _add_terrain_info_driver(mute_switch_node.inputs[1], terrain_info, 'is_attribute_modifier_muted')
+        _add_terrain_info_driver(mute_switch_node.inputs['Switch'], terrain_info, 'is_attribute_modifier_muted')
 
         # Inputs
-        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True (muted)
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs['True'])
 
         # Internal
-        node_tree.links.new(geometry_socket, mute_switch_node.inputs[14])  # False (not muted)
+        node_tree.links.new(geometry_socket, mute_switch_node.inputs['False'])
 
         # Outputs
-        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
+        node_tree.links.new(mute_switch_node.outputs['Output'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 

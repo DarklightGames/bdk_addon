@@ -51,20 +51,15 @@ def add_operation_switch_nodes(
         operations: Iterable[str]
 ) -> NodeSocket:
 
-    last_output_node_socket: Optional[NodeSocket] = None
+    index_switch_node = node_tree.nodes.new(type='GeometryNodeIndexSwitch')
+    index_switch_node.data_type = 'FLOAT'
+
+    node_tree.links.new(operation_socket, index_switch_node.inputs['Index'])
+
+    while len(index_switch_node.index_switch_items) < len(operations):
+        index_switch_node.index_switch_items.new()
 
     for index, operation in enumerate(operations):
-        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-        compare_node.data_type = 'INT'
-        compare_node.operation = 'EQUAL'
-        compare_node.inputs[3].default_value = index
-        node_tree.links.new(operation_socket, compare_node.inputs[2])
-
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'FLOAT'
-
-        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
-
         math_node = node_tree.nodes.new(type='ShaderNodeMath')
         math_node.operation = operation
         math_node.inputs[0].default_value = 0.0
@@ -76,14 +71,10 @@ def add_operation_switch_nodes(
         if value_2_socket:
             node_tree.links.new(value_2_socket, math_node.inputs[1])
 
-        node_tree.links.new(math_node.outputs['Value'], switch_node.inputs['True'])
+        # TODO: how do we add another input socket to the index switch node?
+        node_tree.links.new(math_node.outputs['Value'], index_switch_node.inputs[f'{index}'])
 
-        if last_output_node_socket:
-            node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
-
-        last_output_node_socket = switch_node.outputs[0]  # Output
-
-    return last_output_node_socket
+    return index_switch_node.outputs['Output']
 
 
 def ensure_interpolation_node_tree() -> NodeTree:
@@ -112,17 +103,17 @@ def ensure_interpolation_node_tree() -> NodeTree:
 
             map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
             map_range_node.data_type = 'FLOAT'
-            map_range_node.interpolation_type = interpolation_type[0]
-            map_range_node.inputs[3].default_value = 1.0  # To Min
-            map_range_node.inputs[4].default_value = 0.0  # To Max
+            map_range_node.interpolation_type = interpolation_type
+            map_range_node.inputs['To Min'].default_value = 1.0
+            map_range_node.inputs['To Max'].default_value = 0.0
 
-            node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs[0])
-            node_tree.links.new(map_range_node.outputs[0], switch_node.inputs['True'])
+            node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs['Value'])
+            node_tree.links.new(map_range_node.outputs['Result'], switch_node.inputs['True'])
 
             if last_output_node_socket:
                 node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
 
-            last_output_node_socket = switch_node.outputs[0]  # Output
+            last_output_node_socket = switch_node.outputs['Output']
 
         if last_output_node_socket:
             node_tree.links.new(last_output_node_socket, output_node.inputs['Value'])
@@ -150,22 +141,15 @@ def add_noise_type_switch_nodes(
 
     noise_types = ['PERLIN', 'WHITE']
 
-    last_output_node_socket: Optional[NodeSocket] = None
+    index_switch_node = node_tree.nodes.new(type='GeometryNodeIndexSwitch')
+    index_switch_node.data_type = 'FLOAT'
+
+    node_tree.links.new(noise_type_socket, index_switch_node.inputs['Index'])
+
+    while len(index_switch_node.index_switch_items) < len(noise_types):
+        index_switch_node.index_switch_items.new()
 
     for index, noise_type in enumerate(noise_types):
-        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-        compare_node.data_type = 'INT'
-        compare_node.operation = 'EQUAL'
-        compare_node.inputs[3].default_value = index
-        node_tree.links.new(noise_type_socket, compare_node.inputs[2])
-
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = 'FLOAT'
-
-        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
-
-        noise_value_socket = None
-
         if noise_type == 'PERLIN':
             noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
             noise_node.noise_dimensions = '2D'
@@ -185,15 +169,12 @@ def add_noise_type_switch_nodes(
             noise_node = node_tree.nodes.new(type='ShaderNodeTexWhiteNoise')
             noise_node.noise_dimensions = '2D'
             noise_value_socket = noise_node.outputs['Value']
+        else:
+            raise ValueError(f'Unknown noise type {noise_type}')
 
-        node_tree.links.new(noise_value_socket, switch_node.inputs['True'])
+        node_tree.links.new(noise_value_socket, index_switch_node.inputs[f'{index}'])
 
-        if last_output_node_socket:
-            node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
-
-        last_output_node_socket = switch_node.outputs[0]  # Output
-
-    return last_output_node_socket
+    return index_switch_node.outputs['Output']
 
 
 def ensure_geometry_node_tree(name: str, items: AbstractSet[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
@@ -324,8 +305,8 @@ def ensure_curve_modifier_node_tree() -> NodeTree:
 
         # Input
         node_tree.links.new(input_node.outputs['Normal Offset'], curve_normal_offset_group_node.inputs['Normal Offset'])
-        node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs[1])
-        node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs[14])  # False
+        node_tree.links.new(input_node.outputs['Is Curve Reversed'], reverse_curve_switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Curve'], reverse_curve_switch_node.inputs['False'])
         node_tree.links.new(input_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
         node_tree.links.new(input_node.outputs['Trim Mode'], trim_curve_group_node.inputs['Mode'])
         node_tree.links.new(input_node.outputs['Trim Factor Start'], trim_curve_group_node.inputs['Factor Start'])
@@ -334,9 +315,8 @@ def ensure_curve_modifier_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Trim Length End'], trim_curve_group_node.inputs['Length End'])
 
         # Internal
-        node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
-        node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.outputs['Curve'])
-        node_tree.links.new(reverse_curve_switch_node.outputs[6], trim_curve_group_node.inputs['Curve'])
+        node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs['True'])
+        node_tree.links.new(reverse_curve_switch_node.outputs['Output'], trim_curve_group_node.inputs['Curve'])
         node_tree.links.new(trim_curve_group_node.outputs['Curve'], curve_normal_offset_group_node.inputs['Curve'])
 
         # Output
@@ -377,20 +357,20 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
         compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
         compare_node.operation = 'EQUAL'
 
-        node_tree.links.new(input_node.outputs['Normal Offset'], compare_node.inputs[0])  # A
-        node_tree.links.new(input_node.outputs['Normal Offset'], vector_scale_node.inputs[3])  # Scale
+        node_tree.links.new(input_node.outputs['Normal Offset'], compare_node.inputs['A'])
+        node_tree.links.new(input_node.outputs['Normal Offset'], vector_scale_node.inputs['Scale'])
         node_tree.links.new(input_node.outputs['Curve'], resample_curve_node.inputs['Curve'])
         node_tree.links.new(resample_curve_node.outputs['Curve'], set_position_node.inputs['Geometry'])
 
         node_tree.links.new(input_normal_node.outputs['Normal'], vector_scale_node.inputs[0])
         node_tree.links.new(input_node.outputs['Normal Offset'], vector_scale_node.inputs[1])
 
-        node_tree.links.new(input_node.outputs['Curve'], switch_node.inputs[15])  # True
-        node_tree.links.new(set_position_node.outputs['Geometry'], switch_node.inputs[14])  # False
-        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs[1])  # Switch
+        node_tree.links.new(input_node.outputs['Curve'], switch_node.inputs['True'])
+        node_tree.links.new(set_position_node.outputs['Geometry'], switch_node.inputs['False'])
+        node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
 
         node_tree.links.new(vector_scale_node.outputs['Vector'], set_position_node.inputs['Offset'])
-        node_tree.links.new(switch_node.outputs[6], output_node.inputs['Curve'])
+        node_tree.links.new(switch_node.outputs['Output'], output_node.inputs['Curve'])
 
     return ensure_geometry_node_tree('BDK Offset Curve Normal', node_tree_items, build_function)
 
@@ -460,60 +440,22 @@ def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: L
 
 
 def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: NodeSocket, output_value_sockets: Iterable[NodeSocket], input_type: str = 'INT') -> Optional[NodeSocket]:
-    previous_switch_output_socket = None
-    output_socket = None
-
     valid_input_types = {'INT', 'GEOMETRY', 'VECTOR', 'FLOAT'}
     if input_type not in valid_input_types:
         raise ValueError(f'input_type must be {valid_input_types}, got {input_type}')
 
+    index_switch_node = node_tree.nodes.new(type='GeometryNodeIndexSwitch')
+    index_switch_node.data_type = input_type
+
+    node_tree.links.new(switch_value_socket, index_switch_node.inputs['Index'])
+
+    while len(index_switch_node.index_switch_items) < len(output_value_sockets):
+        index_switch_node.index_switch_items.new()
+
     for value_index, output_value_socket in enumerate(output_value_sockets):
-        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        switch_node.input_type = input_type
+        node_tree.links.new(output_value_socket, index_switch_node.inputs[f'{value_index}'])
 
-        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-        compare_node.operation = 'EQUAL'
-        compare_node.data_type = 'INT'
-
-        compare_node.inputs[3].default_value = value_index  # B
-        switch_node.inputs[4].default_value = 0
-
-        node_tree.links.new(switch_value_socket, compare_node.inputs[2])  # True
-
-        match input_type:
-            case 'INT':
-                switch_switch_input_socket = switch_node.inputs[0]
-                switch_false_input_socket = switch_node.inputs[4]
-                switch_true_input_socket = switch_node.inputs[5]
-                switch_output_socket = switch_node.outputs[1]
-            case 'GEOMETRY':
-                switch_switch_input_socket = switch_node.inputs[1]
-                switch_false_input_socket = switch_node.inputs[14]
-                switch_true_input_socket = switch_node.inputs[15]
-                switch_output_socket = switch_node.outputs[6]
-            case 'VECTOR':
-                switch_switch_input_socket = switch_node.inputs[0]
-                switch_false_input_socket = switch_node.inputs[8]
-                switch_true_input_socket = switch_node.inputs[9]
-                switch_output_socket = switch_node.outputs[3]
-            case 'FLOAT':
-                switch_switch_input_socket = switch_node.inputs[0]
-                switch_false_input_socket = switch_node.inputs[2]
-                switch_true_input_socket = switch_node.inputs[3]
-                switch_output_socket = switch_node.outputs[0]
-            case _:
-                raise ValueError(f'input_type must be {valid_input_types}, got {input_type}')
-
-        node_tree.links.new(compare_node.outputs[0], switch_switch_input_socket)  # Result -> Switch
-        node_tree.links.new(output_value_socket, switch_true_input_socket)  # True
-        output_socket = switch_output_socket
-
-        if previous_switch_output_socket is not None:
-            node_tree.links.new(previous_switch_output_socket, switch_false_input_socket)  # Output -> False
-
-        previous_switch_output_socket = output_socket
-
-    return output_socket
+    return index_switch_node.outputs['Output']
 
 
 def ensure_weighted_index_node_tree() -> NodeTree:
@@ -563,23 +505,22 @@ def ensure_weighted_index_node_tree() -> NodeTree:
             switch_node.input_type = 'INT'
 
             node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
-            switch_node.inputs[5].default_value = weight_index
-
+            switch_node.inputs['True'].default_value = weight_index
 
             last_sum_socket = sum_node.outputs[0]
 
             if first_switch_output_socket is None:
-                first_switch_output_socket = switch_node.outputs[1]
+                first_switch_output_socket = switch_node.outputs['Output']
 
             if last_switch_false_socket is not None:
-                node_tree.links.new(switch_node.outputs[1], last_switch_false_socket)
+                node_tree.links.new(switch_node.outputs['Output'], last_switch_false_socket)
 
-            last_switch_false_socket = switch_node.inputs[4]
+            last_switch_false_socket = switch_node.inputs['False']
 
-            node_tree.links.new(random_node.outputs[1], compare_node.inputs[0])  # A
-            node_tree.links.new(sum_node.outputs[0], compare_node.inputs[1])  # B
+            node_tree.links.new(random_node.outputs['Value'], compare_node.inputs['A'])
+            node_tree.links.new(sum_node.outputs[0], compare_node.inputs['B'])
 
-        node_tree.links.new(last_sum_socket, random_node.inputs[3])  # Sum of all weight used as the Max value of the random node.
+        node_tree.links.new(last_sum_socket, random_node.inputs['Max'])  # Sum of all weight used as the Max value of the random node.
         node_tree.links.new(first_switch_output_socket, output_node.inputs['Index'])
 
     return ensure_geometry_node_tree('BDK Weighted Index', inputs, build_function)

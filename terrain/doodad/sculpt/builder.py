@@ -102,8 +102,8 @@ def ensure_curve_modifier_node_group():
 
         node_tree.links.new(input_node.outputs['Terrain Doodad Object'], object_info_node.inputs['Object'])
         node_tree.links.new(object_info_node.outputs['Curve'], reverse_curve_node.inputs['Curve'])
-        node_tree.links.new(object_info_node.outputs['Curve'], curve_trim_node_group_node.inputs[14])  # False
-        node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs[15])  # True
+        node_tree.links.new(object_info_node.outputs['Curve'], curve_trim_node_group_node.inputs['False'])
+        node_tree.links.new(reverse_curve_node.outputs['Curve'], reverse_curve_switch_node.inputs['True'])
         node_tree.links.new(reverse_curve_switch_node.outputs['Output'], curve_trim_node_group_node.inputs['Curve'])
         node_tree.links.new(curve_trim_node_group_node.outputs['Curve'], offset_curve_normal_node_group_node.inputs['Curve'])
         node_tree.links.new(input_node.outputs['Reverse Curve'], reverse_curve_switch_node.inputs['Switch'])

@@ -358,7 +358,7 @@ def on_terrain_info_paint_layers_index_update(self: 'BDK_PG_terrain_info', _: Co
     if not self.terrain_info_object or self.terrain_info_object.type != 'MESH':
         return
     mesh_data: Mesh = self.terrain_info_object.data
-    paint_layer: BDK_PG_terrain_paint_layer = self.paint_layers[self.paint_layers_index]
+    paint_layer: BDK_PG_terrain_paint_layer = self.paint_layers[self.paint_layers_index] if self.paint_layers_index >= 0 else None
     color_attribute_index = -1
     for i, color_attribute in enumerate(mesh_data.color_attributes):
         if color_attribute.name == paint_layer.id:

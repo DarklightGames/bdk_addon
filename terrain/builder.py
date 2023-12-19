@@ -85,32 +85,33 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
     material_caches = [MaterialCache(bdk_build_path.path) for bdk_build_path in bdk_build_paths]
     material_builder = MaterialBuilder(material_caches, node_tree)
 
+    def add_paint_layer_input_driver(node, input_prop: Union[str | int], paint_layer_prop: str):
+        fcurve = node.inputs[input_prop].driver_add('default_value')
+        fcurve.driver.type = 'AVERAGE'
+        variable = fcurve.driver.variables.new()
+        variable.type = 'SINGLE_PROP'
+        target = variable.targets[0]
+        target.id_type = 'OBJECT'
+        target.id = terrain_info_object
+        target.data_path = f'bdk.terrain_info.paint_layers[{paint_layer_index}].{paint_layer_prop}'
+
     for paint_layer_index, paint_layer in enumerate(paint_layers):
-        paint_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
-        paint_layer_uv_node.node_tree = _ensure_terrain_paint_layer_uv_group_node()
-
-        def add_paint_layer_input_driver(node, input_prop: Union[str | int], paint_layer_prop: str):
-            fcurve = node.inputs[input_prop].driver_add('default_value')
-            fcurve.driver.type = 'AVERAGE'
-            variable = fcurve.driver.variables.new()
-            variable.type = 'SINGLE_PROP'
-            target = variable.targets[0]
-            target.id_type = 'OBJECT'
-            target.id = terrain_info_object
-            target.data_path = f'bdk.terrain_info.paint_layers[{paint_layer_index}].{paint_layer_prop}'
-
-        add_paint_layer_input_driver(paint_layer_uv_node, 'UScale', 'u_scale')
-        add_paint_layer_input_driver(paint_layer_uv_node, 'VScale', 'v_scale')
-        add_paint_layer_input_driver(paint_layer_uv_node, 'TextureRotation', 'texture_rotation')
-
-        paint_layer_uv_node.inputs['TerrainScale'].default_value = terrain_info.terrain_scale
-
         material = paint_layer.material
         material_outputs = None
 
         if material and material.bdk.package_reference:
+            paint_layer_uv_node = node_tree.nodes.new('ShaderNodeGroup')
+            paint_layer_uv_node.node_tree = _ensure_terrain_paint_layer_uv_group_node()
+
+            add_paint_layer_input_driver(paint_layer_uv_node, 'UScale', 'u_scale')
+            add_paint_layer_input_driver(paint_layer_uv_node, 'VScale', 'v_scale')
+            add_paint_layer_input_driver(paint_layer_uv_node, 'TextureRotation', 'texture_rotation')
+
+            paint_layer_uv_node.inputs['TerrainScale'].default_value = terrain_info.terrain_scale
+
             reference = UReference.from_string(material.bdk.package_reference)
             unreal_material = material_builder.load_material(reference)
+
             material_outputs = material_builder.build(unreal_material, paint_layer_uv_node.outputs['UV'])
 
         color_attribute_node = node_tree.nodes.new('ShaderNodeVertexColor')

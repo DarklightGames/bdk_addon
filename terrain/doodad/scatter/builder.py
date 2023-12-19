@@ -214,19 +214,19 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Geometry'], store_rotation_attribute_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], negate_random_rotation_node.inputs[0])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], random_rotation_node.inputs[1])
-        node_tree.links.new(input_node.outputs['Rotation Offset'], rotation_offset_rotate_euler_node.inputs[1])  # Rotate By
+        node_tree.links.new(input_node.outputs['Rotation Offset'], rotation_offset_rotate_euler_node.inputs['Rotate By'])
 
         # Internal
-        node_tree.links.new(terrain_normal_mix_node.outputs[1], vector_math_node.inputs[0])  # Result -> Vector
-        node_tree.links.new(terrain_normal_attribute_node.outputs[0], terrain_normal_mix_node.inputs[5])  # Attribute -> B
-        node_tree.links.new(curve_tangent_attribute_node.outputs[0], align_x_node.inputs[2])  # Attribute -> Vector
-        node_tree.links.new(align_z_node.outputs[0], rotation_offset_rotate_euler_node.inputs[0])  # Rotation -> Rotation
-        node_tree.links.new(rotation_offset_rotate_euler_node.outputs[0], random_rotation_rotate_euler_node.inputs[0])  # Rotation -> Rotation
-        node_tree.links.new(random_rotation_node.outputs[0], random_rotation_rotate_euler_node.inputs[1])  # Value -> Rotate By
+        node_tree.links.new(terrain_normal_mix_node.outputs['Result'], vector_math_node.inputs['Vector'])
+        node_tree.links.new(terrain_normal_attribute_node.outputs['Attribute'], terrain_normal_mix_node.inputs['B'])
+        node_tree.links.new(curve_tangent_attribute_node.outputs['Attribute'], align_x_node.inputs['Vector'])
+        node_tree.links.new(align_z_node.outputs['Rotation'], rotation_offset_rotate_euler_node.inputs['Rotation'])
+        node_tree.links.new(rotation_offset_rotate_euler_node.outputs['Rotation'], random_rotation_rotate_euler_node.inputs['Rotation'])
+        node_tree.links.new(random_rotation_node.outputs['Value'], random_rotation_rotate_euler_node.inputs['Rotate By'])
         node_tree.links.new(rotation_offset_rotate_euler_node.outputs['Rotation'], random_rotation_rotate_euler_node.inputs[0])
-        node_tree.links.new(random_rotation_rotate_euler_node.outputs['Rotation'], store_rotation_attribute_node.inputs[3])  # Rotation -> Value
-        node_tree.links.new(align_x_node.outputs[0], align_z_node.inputs[0])  # Rotation -> Rotation
-        node_tree.links.new(vector_math_node.outputs[0], align_z_node.inputs[2])  # Vector -> Vector
+        node_tree.links.new(random_rotation_rotate_euler_node.outputs['Rotation'], store_rotation_attribute_node.inputs['Value'])
+        node_tree.links.new(align_x_node.outputs['Rotation'], align_z_node.inputs['Rotation'])
+        node_tree.links.new(vector_math_node.outputs['Vector'], align_z_node.inputs['Vector'])
         node_tree.links.new(up_vector_node.outputs[0], terrain_normal_mix_node.inputs[4])  # Vector -> A
         node_tree.links.new(negate_random_rotation_node.outputs[0], random_rotation_node.inputs[0])  # Vector -> Min
         node_tree.links.new(seed_socket, random_rotation_node.inputs[8])
@@ -262,16 +262,16 @@ def ensure_snap_to_terrain_node_tree() -> NodeTree:
         mute_switch_node.label = 'Mute'
 
         # Input
-        node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs['Switch'])
         node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
         node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
 
         # Internal
         node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
-        node_tree.links.new(mute_switch_node.outputs[6], store_terrain_normal_attribute_node.inputs['Geometry'])  # Output -> Geometry
-        node_tree.links.new(terrain_sample_node.outputs['Normal'], store_terrain_normal_attribute_node.inputs[3])  # Value
-        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs[14])  # Geometry -> False
-        node_tree.links.new(set_position_node.outputs['Geometry'], mute_switch_node.inputs[15])  # True
+        node_tree.links.new(mute_switch_node.outputs['Output'], store_terrain_normal_attribute_node.inputs['Geometry'])
+        node_tree.links.new(terrain_sample_node.outputs['Normal'], store_terrain_normal_attribute_node.inputs['Value'])
+        node_tree.links.new(input_node.outputs['Geometry'], mute_switch_node.inputs['False'])
+        node_tree.links.new(set_position_node.outputs['Geometry'], mute_switch_node.inputs['True'])
 
         # Output
         node_tree.links.new(store_terrain_normal_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])  # Geometry -> Geometry
@@ -315,9 +315,9 @@ def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_
         object_index_attribute_node.inputs['Name'].default_value = 'object_index'
 
         # Internal
-        node_tree.links.new(object_index_attribute_node.outputs[4], instance_on_points_node.inputs[4])
-        node_tree.links.new(rotation_attribute_node.outputs[0], instance_on_points_node.inputs['Rotation'])
-        node_tree.links.new(scale_attribute_node.outputs[0], instance_on_points_node.inputs['Scale'])
+        node_tree.links.new(object_index_attribute_node.outputs['Attribute'], instance_on_points_node.inputs['Instance Index'])
+        node_tree.links.new(rotation_attribute_node.outputs['Attribute'], instance_on_points_node.inputs['Rotation'])
+        node_tree.links.new(scale_attribute_node.outputs['Attribute'], instance_on_points_node.inputs['Scale'])
         node_tree.links.new(join_geometry_node.outputs['Geometry'], instance_on_points_node.inputs['Instance'])
         node_tree.links.new(seed_object_info_node.outputs['Geometry'], instance_on_points_node.inputs['Points'])
 
@@ -357,6 +357,8 @@ def ensure_geometry_size_node_tree() -> NodeTree:
 
 
 def ensure_vector_component_node_tree() -> NodeTree:
+    # TODO: this probably has bugs after the int->str refactor
+
     items = {
         ('INPUT', 'NodeSocketVector', 'Vector'),
         ('INPUT','NodeSocketInt', 'Index'),
@@ -379,29 +381,28 @@ def ensure_vector_component_node_tree() -> NodeTree:
         compare_index_y_node = node_tree.nodes.new(type='FunctionNodeCompare')
         compare_index_y_node.data_type = 'INT'
         compare_index_y_node.operation = 'EQUAL'
-        compare_index_y_node.inputs[3].default_value = 1
+        compare_index_y_node.inputs[3].default_value = 1  # TODO: not sure what this was/is
 
         switch_yz_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         switch_yz_node.input_type = 'FLOAT'
         switch_yz_node.label = 'Switch Y/Z'
 
         # Input
-        node_tree.links.new(input_node.outputs['Index'], compare_index_y_node.inputs[2])  # A
+        node_tree.links.new(input_node.outputs['Index'], compare_index_y_node.inputs['A'])
         node_tree.links.new(input_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
-        node_tree.links.new(input_node.outputs['Index'], compare_index_x_node.inputs[2])  # A
+        node_tree.links.new(input_node.outputs['Index'], compare_index_x_node.inputs['A'])
 
         # Internal
-        node_tree.links.new(compare_index_x_node.outputs['Result'], switch_x_yz_node.inputs[0])  # Result -> Switch
-        node_tree.links.new(separate_xyz_node.outputs['X'], switch_x_yz_node.inputs[3])  # True
-        node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[2])  # False
-        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[2])  # False
-        node_tree.links.new(compare_index_y_node.outputs['Result'], switch_yz_node.inputs[0])  # Result -> Switch
-        node_tree.links.new(separate_xyz_node.outputs['Y'], switch_yz_node.inputs[3])  # True
-        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs[4])  # False
-        node_tree.links.new(switch_yz_node.outputs[0], switch_x_yz_node.inputs[4])  # False
+        node_tree.links.new(compare_index_x_node.outputs['Result'], switch_x_yz_node.inputs['Switch'])
+        node_tree.links.new(switch_yz_node.outputs['Output'], switch_x_yz_node.inputs['False'])
+        node_tree.links.new(separate_xyz_node.outputs['X'], switch_x_yz_node.inputs['True'])
+        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs['False'])
+        node_tree.links.new(compare_index_y_node.outputs['Result'], switch_yz_node.inputs['Switch'])
+        node_tree.links.new(separate_xyz_node.outputs['Z'], switch_yz_node.inputs['False'])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], switch_yz_node.inputs['True'])
 
         # Output
-        node_tree.links.new(switch_x_yz_node.outputs[0], output_node.inputs['Value'])
+        node_tree.links.new(switch_x_yz_node.outputs['Output'], output_node.inputs['Value'])
 
     return ensure_geometry_node_tree('BDK Vector Component', items, build_function)
 
@@ -595,8 +596,8 @@ def ensure_select_object_index_node_tree() -> NodeTree:
 
         # Internal
         node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
-        node_tree.links.new(subtract_node.outputs['Value'], random_value_node.inputs[5])
-        node_tree.links.new(object_index_socket, store_named_attribute_node.inputs[7])
+        node_tree.links.new(subtract_node.outputs['Value'], random_value_node.inputs['Max'])
+        node_tree.links.new(object_index_socket, store_named_attribute_node.inputs['Value'])
         node_tree.links.new(index_node.outputs['Index'], object_index_offset_node.inputs[0])
         node_tree.links.new(object_index_offset_node.outputs['Value'], math_node.inputs[0])
 
@@ -755,23 +756,21 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
 
         # Internal
         node_tree.links.new(scale_seed_socket, scale_random_value_node.inputs['Seed'])
-        node_tree.links.new(object_index_attribute_node.outputs[4], compare_node.inputs[2])
+        node_tree.links.new(object_index_attribute_node.outputs['Attribute'], compare_node.inputs['A'])
         node_tree.links.new(compare_node.outputs['Result'], separate_geometry_node.inputs['Selection'])
-        node_tree.links.new(scale_output_socket, store_scale_attribute_node.inputs[3])  # Result -> Value
+        node_tree.links.new(scale_output_socket, store_scale_attribute_node.inputs['Value'])
         node_tree.links.new(snap_to_terrain_group_node.outputs['Geometry'], align_to_terrain_node_group_node.inputs['Geometry'])
         node_tree.links.new(align_to_terrain_node_group_node.outputs['Geometry'], terrain_normal_offset_node_group_node.inputs['Geometry'])
         node_tree.links.new(terrain_normal_offset_node_group_node.outputs['Geometry'], store_scale_attribute_node.inputs['Geometry'])
-        node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs[14])  # False
+        node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs['False'])
         node_tree.links.new(scale_random_value_node.outputs[1], scale_mix_node.inputs['Factor'])
         node_tree.links.new(scale_random_value_node.outputs[1], scale_uniform_mix_node.inputs['Factor'])
         node_tree.links.new(separate_geometry_node.outputs['Selection'], snap_to_terrain_group_node.inputs['Geometry'])
-        node_tree.links.new(scale_uniform_mix_node.outputs[0], scale_uniform_multiply_node.inputs[0])
-        node_tree.links.new(scale_mix_node.outputs[0], scale_multiply_node.inputs[0])
-        node_tree.links.new(scale_uniform_mix_node.outputs[1], scale_uniform_multiply_node.inputs[0])
-        node_tree.links.new(scale_mix_node.outputs[1], scale_multiply_node.inputs[0])  # Result -> Vector
+        node_tree.links.new(scale_uniform_mix_node.outputs['Result'], scale_uniform_multiply_node.inputs[0])
+        node_tree.links.new(scale_mix_node.outputs['Result'], scale_multiply_node.inputs[0])
 
         # Output
-        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Points'])
+        node_tree.links.new(mute_switch_node.outputs['Output'], output_node.inputs['Points'])
 
     return ensure_geometry_node_tree('BDK Scatter Layer Object', items, build_function)
 
@@ -875,7 +874,7 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
             spacing_mode_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
             spacing_mode_switch_node.input_type = 'FLOAT'
             add_scatter_layer_driver(spacing_mode_switch_node.inputs['Switch'], 'curve_spacing_method')
-            add_scatter_layer_driver(spacing_mode_switch_node.inputs[3], 'curve_spacing_absolute')  # False
+            add_scatter_layer_driver(spacing_mode_switch_node.inputs['True'], 'curve_spacing_absolute')
 
             spacing_relative_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
             spacing_relative_factor_node.operation = 'MULTIPLY'
@@ -885,9 +884,9 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
 
             add_scatter_layer_driver(spacing_relative_factor_node.inputs[1], 'curve_spacing_relative_factor')
 
-            node_tree.links.new(spacing_relative_factor_node.outputs['Value'], spacing_mode_switch_node.inputs[2])
+            node_tree.links.new(spacing_relative_factor_node.outputs['Value'], spacing_mode_switch_node.inputs['False'])
 
-            spacing_length_socket = spacing_mode_switch_node.outputs[0]
+            spacing_length_socket = spacing_mode_switch_node.outputs['Output']
 
             curve_modifier_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
             curve_modifier_group_node.node_tree = ensure_curve_modifier_node_tree()
@@ -1075,10 +1074,10 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         mute_switch_node.input_type = 'GEOMETRY'
         mute_switch_node.label = 'Mute'
 
-        node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mute_switch_node.inputs[14])  # False
-        add_scatter_layer_driver(mute_switch_node.inputs[1], 'mute')
+        node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mute_switch_node.inputs['False'])
+        add_scatter_layer_driver(mute_switch_node.inputs['Switch'], 'mute')
 
-        node_tree.links.new(mute_switch_node.outputs[6], output_node.inputs['Geometry'])
+        node_tree.links.new(mute_switch_node.outputs['Output'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(scatter_layer.seed_object.name, items, build_function, should_force_build=True)
 
