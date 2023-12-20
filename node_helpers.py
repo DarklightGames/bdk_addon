@@ -87,36 +87,25 @@ def ensure_interpolation_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        last_output_node_socket: Optional[NodeSocket] = None
+        index_switch_node = node_tree.nodes.new(type='GeometryNodeIndexSwitch')
+        index_switch_node.data_type = 'FLOAT'
+
+        node_tree.links.new(input_node.outputs['Interpolation Type'], index_switch_node.inputs['Index'])
+
+        while len(index_switch_node.index_switch_items) < len(map_range_interpolation_type_items):
+            index_switch_node.index_switch_items.new()
 
         for index, interpolation_type in enumerate(map_range_interpolation_type_items):
-            compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
-            compare_node.data_type = 'INT'
-            compare_node.operation = 'EQUAL'
-            compare_node.inputs[3].default_value = index
-            node_tree.links.new(input_node.outputs['Interpolation Type'], compare_node.inputs[2])
-
-            switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-            switch_node.input_type = 'FLOAT'
-
-            node_tree.links.new(compare_node.outputs['Result'], switch_node.inputs['Switch'])
-
             map_range_node = node_tree.nodes.new(type='ShaderNodeMapRange')
             map_range_node.data_type = 'FLOAT'
-            map_range_node.interpolation_type = interpolation_type
+            map_range_node.interpolation_type = interpolation_type[0]
             map_range_node.inputs['To Min'].default_value = 1.0
             map_range_node.inputs['To Max'].default_value = 0.0
 
             node_tree.links.new(input_node.outputs['Value'], map_range_node.inputs['Value'])
-            node_tree.links.new(map_range_node.outputs['Result'], switch_node.inputs['True'])
+            node_tree.links.new(map_range_node.outputs['Result'], index_switch_node.inputs[f'{index}'])
 
-            if last_output_node_socket:
-                node_tree.links.new(last_output_node_socket, switch_node.inputs['False'])
-
-            last_output_node_socket = switch_node.outputs['Output']
-
-        if last_output_node_socket:
-            node_tree.links.new(last_output_node_socket, output_node.inputs['Value'])
+        node_tree.links.new(index_switch_node.outputs['Output'], output_node.inputs['Value'])
 
     return ensure_geometry_node_tree('BDK Interpolation', items, build_function)
 

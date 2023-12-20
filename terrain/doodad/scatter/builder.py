@@ -495,27 +495,27 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Normal Offset Max'], normal_offset_negate_node.inputs[0])
         node_tree.links.new(input_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
         node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
-        node_tree.links.new(input_node.outputs['Normal Offset Max'], normal_offset_random_value_node.inputs[3]) # Max
+        node_tree.links.new(input_node.outputs['Normal Offset Max'], normal_offset_random_value_node.inputs['Max'])
         node_tree.links.new(input_node.outputs['Tangent Offset Max'], tangent_offset_negate_node.inputs[0])
-        node_tree.links.new(input_node.outputs['Tangent Offset Max'], tangent_offset_random_value_node.inputs[3]) # Max
+        node_tree.links.new(input_node.outputs['Tangent Offset Max'], tangent_offset_random_value_node.inputs['Max'])
 
         # Internal
-        node_tree.links.new(normal_scale_node.outputs['Vector'], add_offsets_node.inputs[0])  # Result -> Vector
-        node_tree.links.new(tangent_scale_node.outputs['Vector'], add_offsets_node.inputs[1])  # Result -> Vector
-        node_tree.links.new(add_offsets_node.outputs['Vector'], set_position_node.inputs['Offset'])  # Vector -> Offset
-        node_tree.links.new(normal_offset_random_value_node.outputs[1], normal_scale_node.inputs[3])  # Result -> Scale
+        node_tree.links.new(normal_scale_node.outputs['Vector'], add_offsets_node.inputs[0])
+        node_tree.links.new(tangent_scale_node.outputs['Vector'], add_offsets_node.inputs[1])
+        node_tree.links.new(add_offsets_node.outputs['Vector'], set_position_node.inputs['Offset'])
+        node_tree.links.new(normal_offset_random_value_node.outputs['Value'], normal_scale_node.inputs['Scale'])
         node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
         node_tree.links.new(set_position_node.outputs['Geometry'], store_curve_tangent_attribute_node.inputs['Geometry'])
-        node_tree.links.new(curve_to_points_node.outputs['Normal'], store_curve_normal_attribute_node.inputs[3])  # Normal -> Value
-        node_tree.links.new(curve_to_points_node.outputs['Tangent'], store_curve_tangent_attribute_node.inputs[3])  # Tangent -> Value
+        node_tree.links.new(curve_to_points_node.outputs['Normal'], store_curve_normal_attribute_node.inputs['Value'])
+        node_tree.links.new(curve_to_points_node.outputs['Tangent'], store_curve_tangent_attribute_node.inputs['Value'])
         node_tree.links.new(store_curve_tangent_attribute_node.outputs['Geometry'], store_curve_normal_attribute_node.inputs['Geometry'])
         node_tree.links.new(normal_offset_seed_socket, normal_offset_random_value_node.inputs['Seed'])
         node_tree.links.new(curve_to_points_node.outputs['Normal'], normal_scale_node.inputs[0]) # Normal -> Vector
-        node_tree.links.new(normal_offset_negate_node.outputs[0], normal_offset_random_value_node.inputs[2]) # Min
+        node_tree.links.new(normal_offset_negate_node.outputs['Value'], normal_offset_random_value_node.inputs['Min'])
         node_tree.links.new(normal_offset_random_value_node.outputs[1], normal_scale_node.inputs['Scale'])
         node_tree.links.new(curve_to_points_node.outputs['Tangent'], tangent_scale_node.inputs[0]) # Tangent -> Vector
-        node_tree.links.new(tangent_offset_negate_node.outputs[0], tangent_offset_random_value_node.inputs[2]) # Min
-        node_tree.links.new(tangent_offset_random_value_node.outputs[1], tangent_scale_node.inputs['Scale'])
+        node_tree.links.new(tangent_offset_negate_node.outputs['Value'], tangent_offset_random_value_node.inputs['Min'])
+        node_tree.links.new(tangent_offset_random_value_node.outputs['Value'], tangent_scale_node.inputs['Scale'])
         node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
 
         # Output
@@ -1241,13 +1241,13 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
         position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
         # Input
-        node_tree.links.new(input_node.outputs[0], curve_to_points_node.inputs[0])  # Geometry -> Curve
+        node_tree.links.new(input_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
         node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
 
         # Internal
-        node_tree.links.new(curve_to_points_node.outputs[0], set_position_node.inputs[0])  # Points -> Geometry
-        node_tree.links.new(terrain_sample_node.outputs[2], set_position_node.inputs[2])  # Position -> Position
-        node_tree.links.new(set_position_node.outputs[0], points_to_curves_node.inputs[0])  # Geometry -> Points
+        node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
+        node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
+        node_tree.links.new(set_position_node.outputs['Geometry'], points_to_curves_node.inputs['Points'])
         node_tree.links.new(position_node.outputs['Position'], terrain_sample_node.inputs['Source Position'])
 
         # Output
