@@ -498,7 +498,7 @@ def _create_convert_node_to_paint_node_node_tree(node, target_id: ID, dataptr_na
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
-        store_named_attribute_node.data_type = 'FLOAT'
+        store_named_attribute_node.data_type = 'BYTE_COLOR'
         store_named_attribute_node.domain = 'POINT'
         store_named_attribute_node.inputs['Name'].default_value = node.id
 
@@ -506,7 +506,7 @@ def _create_convert_node_to_paint_node_node_tree(node, target_id: ID, dataptr_na
         density_socket = add_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
 
         if density_socket is not None:
-            node_tree.links.new(density_socket, store_named_attribute_node.inputs[4])
+            node_tree.links.new(density_socket, store_named_attribute_node.inputs['Value'])
 
         node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
