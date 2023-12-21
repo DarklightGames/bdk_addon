@@ -395,7 +395,10 @@ class BDK_OT_terrain_doodad_bake(Operator):
 
                 if self.should_merge_down_nodes:
                     # If the node below us has the same operation, merge it down.
-                    if len(nodes) > 1 and nodes[1].operation == node.operation and nodes[1].type == 'PAINT':  # TODO: make this a "can merge down" function
+                    def can_merge_down_nodes(a: BDK_PG_terrain_layer_node, b: BDK_PG_terrain_layer_node):
+                        return a.operation == b.operation and a.type == 'PAINT' and b.type == 'PAINT'
+
+                    if len(nodes) > 1 and can_merge_down_nodes(nodes[0], nodes[1]):
                         merge_down_terrain_layer_node_data(terrain_info_object, nodes, 0)
 
         # Delete the bake node tree.
