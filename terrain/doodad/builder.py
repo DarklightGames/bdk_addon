@@ -253,6 +253,7 @@ def ensure_distance_to_points_node_group() -> NodeTree:
 def ensure_distance_to_mesh_node_group() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketInt', 'Element Mode'),
         ('INPUT', 'NodeSocketBool', 'Is 3D'),
         ('OUTPUT', 'NodeSocketFloat', 'Distance')
     }
@@ -262,8 +263,7 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
 
         position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
         separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-        geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
-        geometry_proximity_node.target_element = 'FACES'
+
         transform_geometry_node = node_tree.nodes.new(type='GeometryNodeTransform')
         transform_geometry_node.inputs['Scale'].default_value = (1.0, 1.0, 0.0)
 
@@ -271,6 +271,20 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
         switch_node.input_type = 'VECTOR'
 
         combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        target_elements = ['POINTS', 'EDGES', 'FACES']
+        distance_sockets = []
+
+        for target_element in target_elements:
+            geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
+            geometry_proximity_node.target_element = target_element
+
+            node_tree.links.new(switch_node.outputs['Output'], geometry_proximity_node.inputs['Source Position'])
+            node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
+
+            distance_sockets.append(geometry_proximity_node.outputs['Distance'])
+
+        geometry_distance_socket = add_geometry_node_switch_nodes(node_tree, input_node.outputs['Element Mode'], distance_sockets, 'FLOAT')
 
         # Input
         node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
@@ -281,12 +295,10 @@ def ensure_distance_to_mesh_node_group() -> NodeTree:
         node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
         node_tree.links.new(combine_xyz_node.outputs['Vector'], switch_node.inputs['False'])
         node_tree.links.new(position_node.outputs['Position'], switch_node.inputs['True'])
-        node_tree.links.new(switch_node.outputs['Output'], geometry_proximity_node.inputs['Source Position'])
         node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
-        node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
 
         # Output
-        node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+        node_tree.links.new(geometry_distance_socket, output_node.inputs['Distance'])
 
     return ensure_geometry_node_tree('BDK Distance to Mesh', items, build_function)
 
@@ -569,12 +581,13 @@ def add_distance_to_points_nodes(node_tree: NodeTree, object_info_node: Node) ->
 
 
 def add_distance_to_doodad_layer_nodes(node_tree: NodeTree, layer, layer_type: str,
-                                       terrain_doodad_object_info_node: Node) -> NodeSocket:
+                                       terrain_doodad_object_info_node: Node,
+                                       element_mode_socket: NodeSocket,
+                                       ) -> NodeSocket:
 
     terrain_doodad = layer.terrain_doodad_object.bdk.terrain_doodad
 
     if terrain_doodad.object.type == 'CURVE':
-
         curve_modifier_node = node_tree.nodes.new(type='GeometryNodeGroup')
         curve_modifier_node.node_tree = ensure_curve_modifier_node_tree()
 
@@ -606,6 +619,7 @@ def add_distance_to_doodad_layer_nodes(node_tree: NodeTree, layer, layer_type: s
         distance_to_mesh_node = node_tree.nodes.new(type='GeometryNodeGroup')
         distance_to_mesh_node.node_tree = distance_to_mesh_node_group
 
+        node_tree.links.new(element_mode_socket, distance_to_mesh_node.inputs['Element Mode'])
         node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], distance_to_mesh_node.inputs['Geometry'])
 
         return distance_to_mesh_node.outputs['Distance']
@@ -725,6 +739,12 @@ def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree, sculpt_laye
     geometry_object_info_node.transform_space = 'RELATIVE'
     geometry_object_info_node.inputs[0].default_value = geometry_object
 
+    element_mode_integer_node = node_tree.nodes.new(type='FunctionNodeInputInt')
+    element_mode_integer_node.label = 'Element Mode'
+    add_doodad_sculpt_layer_driver(element_mode_integer_node, sculpt_layer, 'element_mode', 'integer')
+
+    element_mode_socket = element_mode_integer_node.outputs['Integer']
+
     sculpt_value_node = node_tree.nodes.new(type='GeometryNodeGroup')
     sculpt_value_node.node_tree = ensure_sculpt_value_node_group()
 
@@ -733,7 +753,7 @@ def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree, sculpt_laye
     # planter object.
     match sculpt_layer.geometry_source:
         case 'DOODAD':
-            distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT', geometry_object_info_node)
+            distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT', geometry_object_info_node, element_mode_socket)
         case 'SCATTER_LAYER':
             distance_socket = add_distance_to_points_nodes(node_tree, geometry_object_info_node)
         case _:
@@ -892,9 +912,14 @@ def _add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree, paint_layer
     geometry_object_info_node.transform_space = 'RELATIVE'
     geometry_object_info_node.inputs[0].default_value = geometry_object
 
+    element_mode_integer_node = node_tree.nodes.new(type='FunctionNodeInputInt')
+    element_mode_integer_node.label = 'Element Mode'
+    add_doodad_sculpt_layer_driver(element_mode_integer_node, paint_layer, 'element_mode', 'integer')
+    element_mode_socket = element_mode_integer_node.outputs['Integer']
+
     match paint_layer.geometry_source:
         case 'DOODAD':
-            distance_socket = add_distance_to_doodad_layer_nodes(node_tree, paint_layer, 'PAINT', geometry_object_info_node)
+            distance_socket = add_distance_to_doodad_layer_nodes(node_tree, paint_layer, 'PAINT', geometry_object_info_node, element_mode_socket)
         case 'SCATTER_LAYER':
             distance_socket = add_distance_to_points_nodes(node_tree, geometry_object_info_node)
         case _:

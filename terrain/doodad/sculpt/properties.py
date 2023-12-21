@@ -36,6 +36,7 @@ def terrain_doodad_sculpt_layer_scatter_layer_name_update_cb(self, context):
 def terrain_doodad_scatter_layer_name_search_cb(self, context: Context, edit_text: str):
     return [scatter_layer.name for scatter_layer in self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers]
 
+
 # TODO: make sure that when a scatter layer is deleted, the sculpt layer is updated to reflect that
 
 class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
@@ -65,6 +66,12 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
 
     geometry_source: EnumProperty(name='Geometry Source', items=terrain_doodad_geometry_source_items,
                                   update=terrain_doodad_sculpt_layer_geometry_source_update_cb)
+
+    element_mode: EnumProperty(name='Element Mode', items=(
+        ('VERTEX', 'Vertex', '', 'VERTEXSEL', 0),
+        ('EDGE', 'Edge', '', 'EDGESEL', 1),
+        ('FACE', 'Face', '', 'FACESEL', 2)), default='FACE',
+                               description='The element of geometry that will be used to determine the area of effect.')
 
     scatter_layer_id: StringProperty(name='Scatter Layer ID', default='', options={'HIDDEN'},
                                      update=terrain_doodad_sculpt_layer_scatter_layer_id_update_cb)

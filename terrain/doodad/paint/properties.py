@@ -128,6 +128,11 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
     # Geometry Source
     geometry_source: EnumProperty(name='Geometry Source', items=terrain_doodad_geometry_source_items,
                                   update=terrain_doodad_paint_layer_geometry_source_update_cb)
+    element_mode: EnumProperty(name='Element Mode', items=(
+        ('VERTEX', 'Vertex', '', 'VERTEXSEL', 0),
+        ('EDGE', 'Edge', '', 'EDGESEL', 1),
+        ('FACE', 'Face', '', 'FACESEL', 2)), default='FACE',
+                               description='The element of geometry that will be used to determine the area of effect.')
     scatter_layer_id: StringProperty(name='Scatter Layer ID', default='', options={'HIDDEN'},
                                      update=terrain_doodad_paint_layer_scatter_layer_id_update_cb)
     scatter_layer_name: StringProperty(name='Scatter Layer Name', default='', options={'HIDDEN'},

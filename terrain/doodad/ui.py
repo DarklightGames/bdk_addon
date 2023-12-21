@@ -84,8 +84,11 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
 
         flow.prop(paint_layer, 'geometry_source')
 
-        if paint_layer.geometry_source == 'SCATTER_LAYER':
-            flow.prop(paint_layer, 'scatter_layer_name')
+        match paint_layer.geometry_source:
+            case 'SCATTER_LAYER':
+                flow.prop(paint_layer, 'scatter_layer_name')
+            case 'DOODAD':
+                flow.prop(paint_layer, 'element_mode')
 
         row = flow.row()
 
@@ -263,8 +266,11 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
 
         flow.prop(sculpt_layer, 'geometry_source')
 
-        if sculpt_layer.geometry_source == 'SCATTER_LAYER':
-            flow.prop(sculpt_layer, 'scatter_layer_name')
+        match sculpt_layer.geometry_source:
+            case 'SCATTER_LAYER':
+                flow.prop(sculpt_layer, 'scatter_layer_name')
+            case 'DOODAD':
+                flow.prop(sculpt_layer, 'element_mode')
 
         flow.separator()
 
