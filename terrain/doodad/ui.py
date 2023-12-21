@@ -177,20 +177,12 @@ class BDK_PT_terrain_doodad_operators(Panel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context: 'Context'):
-        terrain_doodad = get_terrain_doodad(context.active_object)
-
         self.layout.operator(BDK_OT_terrain_doodad_bake.bl_idname, icon='RENDER_RESULT', text='Bake')
-
-        if terrain_doodad.is_frozen:
-            self.layout.operator(BDK_OT_terrain_doodad_unfreeze.bl_idname, icon='LIGHT_SUN', text='Unfreeze')
-        else:
-            self.layout.operator(BDK_OT_terrain_doodad_freeze.bl_idname, icon='FREEZE', text='Freeze')
-
         self.layout.operator(BDK_OT_terrain_doodad_duplicate.bl_idname, icon='DUPLICATE', text='Duplicate')
         self.layout.operator(BDK_OT_terrain_doodad_delete.bl_idname, icon='X', text='Delete')
         self.layout.operator(BDK_OT_terrain_doodad_demote.bl_idname, icon='TRIA_DOWN', text='Demote')
-        self.layout.operator(BDK_OT_terrain_doodad_save_preset.bl_idname, icon='FILE_TICK', text='Save Preset')
-        self.layout.operator(BDK_OT_terrain_doodad_load_preset.bl_idname, icon='FILE_FOLDER', text='Load Preset')
+        # self.layout.operator(BDK_OT_terrain_doodad_save_preset.bl_idname, icon='FILE_TICK', text='Save Preset')
+        # self.layout.operator(BDK_OT_terrain_doodad_load_preset.bl_idname, icon='FILE_FOLDER', text='Load Preset')
 
 
 class BDK_PT_terrain_doodad_debug(Panel):
@@ -399,7 +391,12 @@ class BDK_PT_terrain_doodad(Panel):
         return context.active_object and context.active_object.bdk.type == 'TERRAIN_DOODAD'
 
     def draw(self, context: 'Context'):
-        pass
+        layout = self.layout
+        terrain_doodad = cast(BDK_PG_terrain_doodad, context.active_object.bdk.terrain_doodad)
+        if terrain_doodad.is_frozen:
+            layout.operator(BDK_OT_terrain_doodad_unfreeze.bl_idname, text='Unfreeze', icon='FREEZE')
+        else:
+            layout.operator(BDK_OT_terrain_doodad_freeze.bl_idname, text='Freeze', icon='LIGHT_SUN')
 
 
 class BDK_PT_terrain_doodad_scatter_layer_debug(Panel):

@@ -482,6 +482,8 @@ class BDK_OT_terrain_doodad_delete(Operator):
     bl_idname = 'bdk.terrain_doodad_delete'
     bl_label = 'Delete Terrain Doodad'
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Delete the terrain doodad.\n\nUse this instead of the native delete operator, since it will '\
+                        'also clean up the terrain info modifiers'
 
     @classmethod
     def poll(cls, context: Context):
@@ -569,6 +571,7 @@ class BDK_OT_terrain_doodad_demote(Operator):
     bl_idname = 'bdk.terrain_doodad_demote'
     bl_label = 'Demote Terrain Doodad'
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = 'Demote the terrain doodad to a regular object'
 
     @classmethod
     def poll(cls, context: Context):
