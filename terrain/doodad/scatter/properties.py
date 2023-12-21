@@ -171,6 +171,12 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
                                          options=empty_set,
                                          description='Bias the objects towards the nearest vertex on the terrain along the X and Y axes.\n\nThis is useful when you want each object to make full sculpt or paint contributions to nearest vertex')
 
+    # Position Deviation
+    use_position_deviation: BoolProperty(name='Use Position Deviation', default=False, options=empty_set, description='Randomly offset the position of the scatter object in a circle around the scatter point')
+    position_deviation_min: FloatProperty(name='Position Deviation Min', subtype='DISTANCE')
+    position_deviation_max: FloatProperty(name='Position Deviation Max', subtype='DISTANCE')
+    position_deviation_seed: IntProperty(name='Position Offset Seed', default=0, min=0)
+
     # Mask Settings
     use_mask_nodes: BoolProperty(name='Use Mask Nodes', default=False, options=empty_set)
     mask_nodes: CollectionProperty(name='Mask Nodes', type=BDK_PG_terrain_layer_node, options=empty_set)

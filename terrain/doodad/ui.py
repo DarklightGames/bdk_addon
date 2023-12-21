@@ -855,6 +855,14 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         flow.prop(scatter_layer, 'density_seed')
         flow.separator()
         flow.prop(scatter_layer, 'snap_to_vertex_factor', text='Snap to Vertex')
+        flow.separator()
+        flow.prop(scatter_layer, 'use_position_deviation')
+
+        if scatter_layer.use_position_deviation:
+            flow.prop(scatter_layer, 'position_deviation_min', text='Min')
+            flow.prop(scatter_layer, 'position_deviation_max', text='Max')
+            flow.separator()
+            flow.prop(scatter_layer, 'position_deviation_seed')
 
 
 class BDK_PT_terrain_doodad_paint_layer_debug(Panel):

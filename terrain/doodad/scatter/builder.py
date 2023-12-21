@@ -836,6 +836,58 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Scatter Layer Mesh To Points', inputs, build_function)
 
 
+def ensure_scatter_layer_position_deviation_node_tree() -> NodeTree:
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketFloat', 'Deviation Min'),
+        ('INPUT', 'NodeSocketFloat', 'Deviation Max'),
+        ('INPUT', 'NodeSocketInt', 'Seed'),
+        ('INPUT', 'NodeSocketInt', 'Global Seed'),
+        ('INPUT', 'NodeSocketBool', 'Selection'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+        rotate_vector_node = node_tree.nodes.new(type='FunctionNodeRotateVector')
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+        euler_to_rotation_node = node_tree.nodes.new(type='FunctionNodeEulerToRotation')
+        combine_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        random_direction_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        random_direction_node.label = 'Random Direction'
+        random_direction_node.inputs['Max'].default_value = 360.0
+
+        random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+        math_node = node_tree.nodes.new(type='ShaderNodeMath')
+        math_node.operation = 'ADD'
+
+        # Input
+        node_tree.links.new(input_node.outputs['Points'], set_position_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Seed'], math_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Global Seed'], math_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Deviation Min'], random_value_node.inputs['Min'])
+        node_tree.links.new(input_node.outputs['Deviation Max'], random_value_node.inputs['Max'])
+        node_tree.links.new(input_node.outputs['Selection'], set_position_node.inputs['Selection'])
+
+        # Internal
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], euler_to_rotation_node.inputs['Euler'])
+        node_tree.links.new(math_node.outputs['Value'], random_value_node.inputs['Seed'])
+        node_tree.links.new(rotate_vector_node.outputs['Vector'], set_position_node.inputs['Offset'])
+        node_tree.links.new(math_node.outputs['Value'], random_direction_node.inputs['Seed'])
+        node_tree.links.new(random_direction_node.outputs['Value'], combine_xyz_node.inputs['Z'])
+        node_tree.links.new(euler_to_rotation_node.outputs['Rotation'], rotate_vector_node.inputs['Rotation'])
+        node_tree.links.new(combine_xyz_node_2.outputs['Vector'], rotate_vector_node.inputs['Vector'])
+        node_tree.links.new(random_value_node.outputs['Value'], combine_xyz_node_2.inputs['X'])
+
+        # Output
+        node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Points'])
+
+    return ensure_geometry_node_tree('BDK Scatter Layer Deviation', items, build_function)
+
+
 def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
     terrain_doodad_object = scatter_layer.terrain_doodad_object
     terrain_info = terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
@@ -938,6 +990,25 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
             points_socket = mesh_to_points_node_group_node.outputs['Points']
         else:
             raise RuntimeError('Unsupported terrain doodad object type: ' + scatter_layer.terrain_doodad_object.type)
+
+        # Position Deviation
+        use_deviation_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        use_deviation_switch_node.input_type = 'GEOMETRY'
+        add_scatter_layer_driver(use_deviation_switch_node.inputs['Switch'], 'use_position_deviation')
+
+        deviation_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        deviation_node.node_tree = ensure_scatter_layer_position_deviation_node_tree()
+
+        add_scatter_layer_driver(deviation_node.inputs['Deviation Min'], 'position_deviation_min')
+        add_scatter_layer_driver(deviation_node.inputs['Deviation Max'], 'position_deviation_max')
+        add_scatter_layer_driver(deviation_node.inputs['Seed'], 'position_deviation_seed')
+        add_scatter_layer_driver(deviation_node.inputs['Global Seed'], 'global_seed')
+
+        node_tree.links.new(points_socket, use_deviation_switch_node.inputs['False'])
+        node_tree.links.new(points_socket, deviation_node.inputs['Points'])
+        node_tree.links.new(deviation_node.outputs['Points'], use_deviation_switch_node.inputs['True'])
+
+        points_socket = use_deviation_switch_node.outputs['Output']
 
         # Snap to Terrain Vertices
         snap_to_terrain_vertices_node = node_tree.nodes.new(type='GeometryNodeGroup')
