@@ -1160,15 +1160,22 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
 
         if 'SCULPT' in layers:
             # Add sculpt layers for the doodad.
-            z_socket = _add_sculpt_layers_to_node_tree(node_tree, None, terrain_doodad)
+            position_node = node_tree.nodes.new('GeometryNodeInputPosition')
+            separate_xyz_node = node_tree.nodes.new('ShaderNodeSeparateXYZ')
+
+            node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
+
+            z_socket = _add_sculpt_layers_to_node_tree(node_tree, separate_xyz_node.outputs['Z'], terrain_doodad)
 
             if z_socket is not None:
                 set_position_node = node_tree.nodes.new('GeometryNodeSetPosition')
                 combine_xyz_node = node_tree.nodes.new('ShaderNodeCombineXYZ')
 
+                node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
+                node_tree.links.new(separate_xyz_node.outputs['Y'], combine_xyz_node.inputs['Y'])
                 node_tree.links.new(combine_xyz_node.inputs['Z'], z_socket)
                 node_tree.links.new(set_position_node.inputs['Geometry'], geometry_socket)
-                node_tree.links.new(set_position_node.inputs['Offset'], combine_xyz_node.outputs['Vector'])
+                node_tree.links.new(set_position_node.inputs['Position'], combine_xyz_node.outputs['Vector'])
 
                 geometry_socket = set_position_node.outputs['Geometry']
 
