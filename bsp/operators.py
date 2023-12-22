@@ -166,17 +166,20 @@ class BDK_OT_bsp_brush_select_similar(Operator):
         active_object = context.object
         bsp_brush = active_object.bdk.bsp_brush
 
+        def is_bsp_brush(obj: Object):
+            return obj.bdk.type == 'BSP_BRUSH'
+
         if self.property == 'CSG_OPERATION':
             def filter_csg_operation(obj: Object):
-                return obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
+                return is_bsp_brush(obj) and obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
             filter_function = filter_csg_operation
         elif self.property == 'POLY_FLAGS':
             def filter_poly_flags(obj: Object):
-                return obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
+                return is_bsp_brush(obj) and obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
             filter_function = filter_poly_flags
         elif self.property == 'SORT_ORDER':
             def filter_sort_order(obj: Object):
-                return obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
+                return is_bsp_brush(obj) and obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
             filter_function = filter_sort_order
         else:
             self.report({'ERROR'}, f'Invalid property: {self.property}')
