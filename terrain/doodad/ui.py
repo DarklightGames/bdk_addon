@@ -88,7 +88,8 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
             case 'SCATTER_LAYER':
                 flow.prop(paint_layer, 'scatter_layer_name')
             case 'DOODAD':
-                flow.prop(paint_layer, 'element_mode')
+                if terrain_doodad.object.type == 'MESH':
+                    flow.prop(paint_layer, 'element_mode')
 
         row = flow.row()
 
@@ -270,7 +271,8 @@ class BDK_PT_terrain_doodad_sculpt_layer_settings(Panel):
             case 'SCATTER_LAYER':
                 flow.prop(sculpt_layer, 'scatter_layer_name')
             case 'DOODAD':
-                flow.prop(sculpt_layer, 'element_mode')
+                if sculpt_layer.terrain_doodad_object.type == 'MESH':
+                    flow.prop(sculpt_layer, 'element_mode')
 
         flow.separator()
 
@@ -606,18 +608,21 @@ class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
         flow.use_property_split = True
         flow.use_property_decorate = False
 
+        flow.prop(scatter_layer, 'fence_mode')
+        flow.separator()
+
         # Curve settings
         draw_curve_modifier_settings(flow, scatter_layer, curve_data=terrain_doodad.object.data)
 
         flow.separator()
-
         flow.prop(scatter_layer, 'curve_spacing_method')
 
-        if scatter_layer.curve_spacing_method == 'RELATIVE':
-            flow.prop(scatter_layer, 'curve_spacing_relative_axis', text='Axis')
-            flow.prop(scatter_layer, 'curve_spacing_relative_factor', text='Factor')
-        elif scatter_layer.curve_spacing_method == 'ABSOLUTE':
-            flow.prop(scatter_layer, 'curve_spacing_absolute', text='Distance')
+        match scatter_layer.curve_spacing_method:
+            case'RELATIVE':
+                flow.prop(scatter_layer, 'curve_spacing_relative_axis', text='Axis')
+                flow.prop(scatter_layer, 'curve_spacing_relative_factor', text='Factor')
+            case 'ABSOLUTE':
+                flow.prop(scatter_layer, 'curve_spacing_absolute', text='Distance')
 
         flow.separator()
 

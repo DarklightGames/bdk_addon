@@ -145,6 +145,9 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     curve_tangent_offset_max: FloatProperty(name='Tangent Offset Max', default=0.0, subtype='DISTANCE')
     curve_tangent_offset_seed: IntProperty(name='Tangent Offset Seed', default=0, min=0)
 
+    fence_mode: BoolProperty(name='Fence Mode', default=False, options=empty_set,
+                             description='Adjacent objects will always be the same distance apart and will face towards the next object.\n\nUse this when creating fences or walls')
+
     # Mesh Settings
     mesh_element_mode: EnumProperty(name='Element Mode', items=(
         ('FACE', 'Face', '', 'FACESEL', 0),
