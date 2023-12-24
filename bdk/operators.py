@@ -219,7 +219,7 @@ class BDK_OT_generate_node_code(Operator):
                         from_variable_name = variable_name
                         break
                 # Get the index of the "from" socket.
-                from_socket_index = get_socket_index(from_node.outputs, link.from_socket)
+                from_socket_index = link.from_socket.identifier
 
             if to_node and to_node in selected_nodes:
                 for variable_name, node in nodes.items():
@@ -227,7 +227,7 @@ class BDK_OT_generate_node_code(Operator):
                         to_variable_name = variable_name
                         break
                 # Get the index of the "to" socket.
-                to_socket_index = get_socket_index(to_node.inputs, link.to_socket)
+                to_socket_index = link.to_socket.identifier
 
             if from_variable_name and from_socket_index is not None and to_variable_name and to_socket_index is not None:
                 internal_links.append((link, from_variable_name, from_socket_index, to_variable_name, to_socket_index))
@@ -240,19 +240,19 @@ class BDK_OT_generate_node_code(Operator):
             lines.append('')
             lines.append('# Internal Links')
             for (link, from_variable_name, from_socket_index, to_variable_name, to_socket_index) in internal_links:
-                lines.append(f'node_tree.links.new({from_variable_name}.outputs[{from_socket_index}], {to_variable_name}.inputs[{to_socket_index}])  # {link.from_socket.name} -> {link.to_socket.name}')
+                lines.append(f'node_tree.links.new({from_variable_name}.outputs[\'{from_socket_index}\'], {to_variable_name}.inputs[\'{to_socket_index}\'])  # {link.from_socket.name} -> {link.to_socket.name}')
 
         if incoming_links:
             lines.append('')
             lines.append('# Incoming Links')
             for (link, to_variable_name, to_socket_index) in incoming_links:
-                lines.append(f'# {to_variable_name}.inputs[{to_socket_index}]  # {link.to_socket.name}')
+                lines.append(f'# {to_variable_name}.inputs[\'{to_socket_index}\']  # {link.to_socket.name}')
 
         if outgoing_links:
             lines.append('')
             lines.append('# Outgoing Links')
             for (link, from_variable_name, from_socket_index) in outgoing_links:
-                lines.append(f'# {from_variable_name}.outputs[{from_socket_index}]  # {link.from_socket.name}')
+                lines.append(f'# {from_variable_name}.outputs[\'{from_socket_index}\']  # {link.from_socket.name}')
 
 
         # Copy the lines to the clipboard.
