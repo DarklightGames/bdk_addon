@@ -651,6 +651,29 @@ def poll_has_selected_scatter_layer_object(cls, context: Context) -> bool:
     return get_selected_terrain_doodad_scatter_layer_object(context) is not None
 
 
+class BDK_PT_terrain_doodad_scatter_layer_object_position(Panel):
+    bl_label = 'Position'
+    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_object_position'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layer_objects'
+    bl_order = 0
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_selected_scatter_layer_object(cls, context)
+
+    def draw(self, context: Context):
+        scatter_layer_object = get_selected_terrain_doodad_scatter_layer_object(context)
+
+        flow = self.layout.grid_flow(align=True, columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        flow.prop(scatter_layer_object, 'origin_offset')
+
+
 class BDK_PT_terrain_doodad_scatter_layer_object_snap_to_terrain(Panel):
     bl_label = 'Snap to Terrain'
     bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_object_snap_to_terrain'
@@ -997,6 +1020,7 @@ classes = (
     BDK_PT_terrain_doodad_paint_layer_debug,
     BDK_PT_terrain_doodad_scatter_layers,
     BDK_PT_terrain_doodad_scatter_layer_objects,
+    BDK_PT_terrain_doodad_scatter_layer_object_position,
     BDK_PT_terrain_doodad_scatter_layer_object_scale,
     BDK_PT_terrain_doodad_scatter_layer_object_rotation,
     BDK_PT_terrain_doodad_scatter_layer_object_snap_to_terrain,

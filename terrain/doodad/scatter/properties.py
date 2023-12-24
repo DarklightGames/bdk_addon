@@ -91,6 +91,9 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     terrain_normal_offset_max: FloatProperty(name='Terrain Normal Offset Max', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_seed: IntProperty(name='Terrain Normal Offset Seed', default=0, min=0)
 
+    # Origin Offset
+    origin_offset: FloatVectorProperty(name='Origin Offset', subtype='TRANSLATION', default=(0.0, 0.0, 0.0))
+
     # Actor Properties
     actor_properties: PointerProperty(type=BDK_PG_actor_properties, name='Actor Properties', options={'HIDDEN'})
 

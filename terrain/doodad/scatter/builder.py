@@ -479,7 +479,6 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
         store_radius_attribute_node.label = 'Store Radius Attribute'
         store_radius_attribute_node.inputs["Selection"].default_value = True
         store_radius_attribute_node.inputs["Name"].default_value = 'radius'
-        store_radius_attribute_node.inputs["Value"].default_value = 0.10000000149011612
 
         remove_tilt_attribute_node = node_tree.nodes.new(type='GeometryNodeRemoveAttribute')
         remove_tilt_attribute_node.label = 'Remove Tilt Attribute'
@@ -491,9 +490,9 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
 
         position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
-        evaluate_position_at_last_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
-        evaluate_position_at_last_index_node.label = 'Evaluate Position At Last Index'
-        evaluate_position_at_last_index_node.data_type = 'FLOAT_VECTOR'
+        evaluate_position_at_next_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_position_at_next_index_node.label = 'Evaluate Position At Last Index'
+        evaluate_position_at_next_index_node.data_type = 'FLOAT_VECTOR'
 
         subtract_vector_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         subtract_vector_node.operation = 'SUBTRACT'
@@ -504,10 +503,10 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
 
         index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
 
-        subtract_index_node = node_tree.nodes.new(type='ShaderNodeMath')
-        subtract_index_node.label = 'Subtract Index'
-        subtract_index_node.operation = 'SUBTRACT'
-        subtract_index_node.inputs[1].default_value = 1.0
+        add_index_node = node_tree.nodes.new(type='ShaderNodeMath')
+        add_index_node.label = 'Add Index'
+        add_index_node.operation = 'ADD'
+        add_index_node.inputs[1].default_value = 1.0
 
         up_vector_node = node_tree.nodes.new(type='FunctionNodeInputVector')
         up_vector_node.label = 'Up Vector'
@@ -523,11 +522,11 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
         links.new(position_node.outputs['Position'], evaluate_position_at_index_node.inputs['Value'])  # Position -> Value
         links.new(normalize_tangent_node.outputs['Vector'], cross_product_node.inputs['Vector'])  # Vector -> Vector
         links.new(evaluate_position_at_index_node.outputs['Value'], subtract_vector_node.inputs[0])  # Value -> Vector
-        links.new(evaluate_position_at_last_index_node.outputs['Value'], subtract_vector_node.inputs[1])  # Value -> Vector
-        links.new(subtract_index_node.outputs['Value'], evaluate_position_at_last_index_node.inputs['Index'])  # Value -> Index
-        links.new(position_node.outputs['Position'], evaluate_position_at_last_index_node.inputs['Value'])  # Position -> Value
+        links.new(evaluate_position_at_next_index_node.outputs['Value'], subtract_vector_node.inputs[1])  # Value -> Vector
+        links.new(add_index_node.outputs['Value'], evaluate_position_at_next_index_node.inputs['Index'])  # Value -> Index
+        links.new(position_node.outputs['Position'], evaluate_position_at_next_index_node.inputs['Value'])  # Position -> Value
         links.new(subtract_vector_node.outputs['Vector'], normalize_tangent_node.inputs['Vector'])  # Vector -> Vector
-        links.new(index_node.outputs['Index'], subtract_index_node.inputs['Value'])  # Index -> Value
+        links.new(index_node.outputs['Index'], add_index_node.inputs['Value'])  # Index -> Value
         links.new(index_node.outputs['Index'], evaluate_position_at_index_node.inputs['Index'])  # Index -> Index
         links.new(up_vector_node.outputs['Vector'], cross_product_node.inputs['Vector_001'])  # Vector -> Vector
         links.new(curve_to_points_node.outputs['Points'], store_radius_attribute_node.inputs['Geometry'])  # Points -> Geometry
@@ -599,6 +598,88 @@ def ensure_curve_to_points_node_tree() -> NodeTree:
             node_tree.links.new(*link)
 
     return ensure_geometry_node_tree('BDK Curve To Points', inputs, build_function)
+
+
+def ensure_scatter_layer_origin_offset_node_tree() -> NodeTree:
+    inputs = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketVector', 'Origin Offset'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
+        set_position_node.inputs["Selection"].default_value = True
+
+        tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        tangent_attribute_node.label = 'Tangent Attribute'
+        tangent_attribute_node.data_type = 'FLOAT_VECTOR'
+        tangent_attribute_node.inputs["Name"].default_value = 'curve_tangent'
+
+        scale_tangent_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        scale_tangent_node.label = 'Scale Tangent'
+        scale_tangent_node.operation = 'SCALE'
+
+        add_scale_and_tangent_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        add_scale_and_tangent_node.label = 'Add Scale And Tangent'
+
+        normal_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        normal_attribute_node.label = 'Normal Attribute'
+        normal_attribute_node.data_type = 'FLOAT_VECTOR'
+        normal_attribute_node.inputs["Name"].default_value = 'curve_normal'
+
+        scale_normal_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        scale_normal_node.label = 'Scale Normal'
+        scale_normal_node.operation = 'SCALE'
+
+        final_add_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        final_add_node.label = 'Final Add'
+
+        up_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        up_attribute_node.label = 'Up Attribute'
+        up_attribute_node.data_type = 'FLOAT_VECTOR'
+        up_attribute_node.inputs["Name"].default_value = 'terrain_normal'
+
+        scale_up_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        scale_up_node.label = 'Scale Up'
+        scale_up_node.operation = 'SCALE'
+
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+        scale_multiply_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        scale_multiply_node.label = 'Scale Multiply'
+        scale_multiply_node.operation = 'MULTIPLY'
+
+        scale_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        scale_attribute_node.label = 'Scale Attribute'
+        scale_attribute_node.data_type = 'FLOAT_VECTOR'
+        scale_attribute_node.inputs["Name"].default_value = 'scale'
+
+        # Internal Links
+        node_tree.links.new(separate_xyz_node.outputs['X'], scale_tangent_node.inputs['Scale'])  # X -> Scale
+        node_tree.links.new(add_scale_and_tangent_node.outputs['Vector'], final_add_node.inputs[0])  # Vector -> Vector
+        node_tree.links.new(input_node.outputs['Origin Offset'], separate_xyz_node.inputs['Vector'])  # Vector -> Vector
+        node_tree.links.new(up_attribute_node.outputs['Attribute'], scale_up_node.inputs['Vector'])  # Attribute -> Vector
+        node_tree.links.new(separate_xyz_node.outputs['Z'], scale_up_node.inputs['Scale'])  # Z -> Scale
+        node_tree.links.new(scale_normal_node.outputs['Vector'], add_scale_and_tangent_node.inputs[1])  # Vector -> Vector
+        node_tree.links.new(scale_up_node.outputs['Vector'], final_add_node.inputs[1])  # Vector -> Vector
+        node_tree.links.new(normal_attribute_node.outputs['Attribute'], scale_normal_node.inputs['Vector'])  # Attribute -> Vector
+        node_tree.links.new(separate_xyz_node.outputs['Y'], scale_normal_node.inputs['Scale'])  # Y -> Scale
+        node_tree.links.new(tangent_attribute_node.outputs['Attribute'], scale_tangent_node.inputs['Vector'])  # Attribute -> Vector
+        node_tree.links.new(scale_tangent_node.outputs['Vector'], add_scale_and_tangent_node.inputs[0])  # Vector -> Vector
+        node_tree.links.new(final_add_node.outputs['Vector'], scale_multiply_node.inputs[0])  # Vector -> Vector
+        node_tree.links.new(scale_attribute_node.outputs['Attribute'], scale_multiply_node.inputs[1])  # Attribute -> Vector
+        node_tree.links.new(scale_multiply_node.outputs['Vector'], set_position_node.inputs['Offset'])  # Vector -> Offset
+
+        # Incoming Links
+        node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
+
+        # Outgoing Links
+        node_tree.links.new(set_position_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree('BDK Scatter Layer Object Origin Offset', inputs, build_function)
 
 
 def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
@@ -842,6 +923,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
         ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
         ('INPUT', 'NodeSocketBool', 'Fence Mode'),
+        ('INPUT', 'NodeSocketVector', 'Origin Offset'),
         ('OUTPUT', 'NodeSocketGeometry', 'Points'),
     }
 
@@ -901,6 +983,9 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         scale_output_socket = add_geometry_node_switch_nodes(node_tree, input_node.outputs['Scale Mode'],
                                                             [scale_uniform_multiply_node.outputs[0], scale_multiply_node.outputs[0]], input_type='VECTOR')
 
+        origin_offset_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        origin_offset_node.node_tree = ensure_scatter_layer_origin_offset_node_tree()
+
         # Input
         node_tree.links.new(input_node.outputs['Scale Min'], scale_mix_node.inputs[4])
         node_tree.links.new(input_node.outputs['Scale Max'], scale_mix_node.inputs[5])
@@ -923,6 +1008,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Scale Uniform Max'], scale_uniform_mix_node.inputs[5])
         node_tree.links.new(input_node.outputs['Scale'], scale_multiply_node.inputs[1])  # Scale -> Vector
         node_tree.links.new(input_node.outputs['Fence Mode'], align_to_terrain_node_group_node.inputs['Fence Mode'])
+        node_tree.links.new(input_node.outputs['Origin Offset'], origin_offset_node.inputs['Origin Offset'])
 
         # Internal
         node_tree.links.new(scale_seed_socket, scale_random_value_node.inputs['Seed'])
@@ -932,7 +1018,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         node_tree.links.new(snap_to_terrain_group_node.outputs['Geometry'], align_to_terrain_node_group_node.inputs['Geometry'])
         node_tree.links.new(align_to_terrain_node_group_node.outputs['Geometry'], terrain_normal_offset_node_group_node.inputs['Geometry'])
         node_tree.links.new(terrain_normal_offset_node_group_node.outputs['Geometry'], store_scale_attribute_node.inputs['Geometry'])
-        node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], mute_switch_node.inputs['False'])
+        node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], origin_offset_node.inputs['Geometry'])
+        node_tree.links.new(origin_offset_node.outputs['Geometry'], mute_switch_node.inputs['False'])
         node_tree.links.new(scale_random_value_node.outputs[1], scale_mix_node.inputs['Factor'])
         node_tree.links.new(scale_random_value_node.outputs[1], scale_uniform_mix_node.inputs['Factor'])
         node_tree.links.new(separate_geometry_node.outputs['Selection'], snap_to_terrain_group_node.inputs['Geometry'])
@@ -1308,6 +1395,9 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             add_scatter_layer_object_driver(inputs['Random Rotation Max'], 'random_rotation_max', 1)
             add_scatter_layer_object_driver(inputs['Random Rotation Max'], 'random_rotation_max', 2)
             add_scatter_layer_object_driver(inputs['Random Rotation Seed'], 'random_rotation_max_seed')
+            add_scatter_layer_object_driver(inputs['Origin Offset'], 'origin_offset', 0)
+            add_scatter_layer_object_driver(inputs['Origin Offset'], 'origin_offset', 1)
+            add_scatter_layer_object_driver(inputs['Origin Offset'], 'origin_offset', 2)
             add_scatter_layer_driver(inputs['Fence Mode'], 'fence_mode')
 
             node_tree.links.new(planter_object_node.outputs['Geometry'], scatter_layer_object_node_group_node.inputs['Points'])
