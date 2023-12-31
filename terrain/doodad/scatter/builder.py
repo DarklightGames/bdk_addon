@@ -675,7 +675,7 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
             node_tree.links.new(check_is_cap_node.outputs['Result'], store_is_cap_attribute_node.inputs['Selection'])
             node_tree.links.new(index_node.outputs['Index'], check_is_cap_node.inputs['A'])
             node_tree.links.new(point_count_subtract_node.outputs['Value'], check_is_cap_node.inputs['B'])
-            node_tree.links.new(loop_sockets.spline_geometry_socket, domain_size_node.inputs['Geometry'])
+            node_tree.links.new(curve_to_points_node.outputs['Points'], domain_size_node.inputs['Geometry'])
             node_tree.links.new(domain_size_node.outputs['Point Count'], point_count_subtract_node.inputs[0])
             node_tree.links.new(loop_sockets.spline_geometry_socket, curve_to_points_node.inputs['Curve'])
             node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
@@ -950,6 +950,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
 def ensure_select_object_index_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketBool', 'Selection'),
         ('INPUT', 'NodeSocketInt', 'Object Count'),
         ('INPUT', 'NodeSocketInt', 'Object Select Mode'),
         ('INPUT', 'NodeSocketInt', 'Object Index Offset'),
@@ -1016,6 +1017,7 @@ def ensure_select_object_index_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Random Weight 6'], weighted_index_node_group_node.inputs['Weight 6'])
         node_tree.links.new(input_node.outputs['Random Weight 7'], weighted_index_node_group_node.inputs['Weight 7'])
         node_tree.links.new(seed_socket, weighted_index_node_group_node.inputs['Seed'])
+        node_tree.links.new(input_node.outputs['Selection'], store_named_attribute_node.inputs['Selection'])
 
         # Internal
         node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
@@ -1474,19 +1476,21 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
         node_tree.links.new(points_socket, snap_to_terrain_vertices_node.inputs['Points'])
         points_socket = snap_to_terrain_vertices_node.outputs['Points']
 
+        # Count the number of non-cap objects.
+        # TODO: make sure that the cap object is always the last object in the list.
+        non_cap_object_count = sum(1 for scatter_layer_object in scatter_layer.objects if not scatter_layer_object.is_cap)
+
         # Select Object Index
         select_object_index_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         select_object_index_node_group_node.node_tree = ensure_select_object_index_node_tree()
-        select_object_index_node_group_node.inputs['Object Count'].default_value = len(scatter_layer.objects)
+        select_object_index_node_group_node.inputs['Object Count'].default_value = non_cap_object_count
 
         add_scatter_layer_driver(select_object_index_node_group_node.inputs['Object Select Mode'], 'object_select_mode')
-        add_scatter_layer_driver(select_object_index_node_group_node.inputs['Object Index Offset'],
-                                 'object_select_cyclic_offset')
-        add_scatter_layer_driver(select_object_index_node_group_node.inputs['Object Select Seed'],
-                                 'object_select_random_seed')
+        add_scatter_layer_driver(select_object_index_node_group_node.inputs['Object Index Offset'], 'object_select_cyclic_offset')
+        add_scatter_layer_driver(select_object_index_node_group_node.inputs['Object Select Seed'], 'object_select_random_seed')
         add_scatter_layer_driver(select_object_index_node_group_node.inputs['Global Seed'], 'global_seed')
 
-        for i in range(len(scatter_layer.objects)):
+        for i in range(non_cap_object_count):
             _add_scatter_layer_object_driver_ex(select_object_index_node_group_node.inputs['Random Weight ' + str(i)],
                                                 terrain_doodad_object,
                                                 'random_weight',
@@ -1494,7 +1498,40 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
                                                 scatter_layer_object_index=i)
 
         node_tree.links.new(points_socket, select_object_index_node_group_node.inputs['Geometry'])
-        node_tree.links.new(select_object_index_node_group_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+        is_cap_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        is_cap_attribute_node.data_type = 'BOOLEAN'
+        is_cap_attribute_node.inputs['Name'].default_value = 'is_cap'
+
+        is_not_cap_node = node_tree.nodes.new(type='FunctionNodeBooleanMath')
+        is_not_cap_node.operation = 'NOT'
+
+        node_tree.links.new(is_cap_attribute_node.outputs['Attribute'], is_not_cap_node.inputs['Boolean'])
+        node_tree.links.new(is_not_cap_node.outputs['Boolean'], select_object_index_node_group_node.inputs['Selection'])
+
+        geometry_socket = select_object_index_node_group_node.outputs['Geometry']
+
+        # Get the index of the cap object, if any.
+        cap_object_index = None
+        for scatter_layer_object_index, scatter_layer_object in enumerate(scatter_layer.objects):
+            if scatter_layer_object.is_cap:
+                cap_object_index = scatter_layer_object_index
+                break
+
+        if cap_object_index is not None:
+            cap_store_object_index_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            cap_store_object_index_node.inputs['Name'].default_value = 'object_index'
+            cap_store_object_index_node.domain = 'POINT'
+            cap_store_object_index_node.data_type = 'INT'
+            cap_store_object_index_node.inputs['Value'].default_value = cap_object_index
+
+            node_tree.links.new(geometry_socket, cap_store_object_index_node.inputs['Geometry'])
+            node_tree.links.new(is_cap_attribute_node.outputs['Attribute'], cap_store_object_index_node.inputs['Selection'])
+
+            geometry_socket = cap_store_object_index_node.outputs['Geometry']
+
+        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
+
 
     return ensure_geometry_node_tree(scatter_layer.planter_object.name, items, build_function, should_force_build=True)
 
