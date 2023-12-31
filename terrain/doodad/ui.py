@@ -843,6 +843,9 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = None):
     layout.prop(data, 'is_curve_reversed')
     layout.prop(data, 'curve_normal_offset')
+
+    layout.separator()
+
     layout.prop(data, 'curve_trim_mode')
 
     if data.curve_trim_mode == 'FACTOR':
@@ -855,9 +858,6 @@ def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = Non
         col = layout.column(align=True)
         col.prop(data, 'curve_trim_length_start', text='Trim Start')
         col.prop(data, 'curve_trim_length_end', text='End')
-
-        if curve_data is not None and len(curve_data.splines) > 1:
-            layout.label(text='Distance trim not supported for multiple splines', icon='ERROR')
 
 
 class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):

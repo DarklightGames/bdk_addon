@@ -378,39 +378,45 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
-        trim_curve_factor_node.mode = 'FACTOR'
+        def trim_inner_function(node_tree: NodeTree, loop_sockets: CurveSplineLoopSockets):
+            trim_curve_factor_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
+            trim_curve_factor_node.mode = 'FACTOR'
 
-        trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
-        trim_curve_length_node.mode = 'LENGTH'
+            trim_curve_length_node = node_tree.nodes.new(type='GeometryNodeTrimCurve')
+            trim_curve_length_node.mode = 'LENGTH'
 
-        curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
+            curve_length_node = node_tree.nodes.new(type='GeometryNodeCurveLength')
 
-        subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
-        subtract_node.operation = 'SUBTRACT'
+            subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+            subtract_node.operation = 'SUBTRACT'
 
-        trim_curve_output_socket = add_geometry_node_switch_nodes(
-            node_tree,
-            input_node.outputs['Mode'],
-            [input_node.outputs['Curve'], trim_curve_factor_node.outputs['Curve'], trim_curve_length_node.outputs['Curve']],
-            'GEOMETRY')
+            trim_curve_output_socket = add_geometry_node_switch_nodes(
+                node_tree,
+                input_node.outputs['Mode'],
+                [input_node.outputs['Curve'], trim_curve_factor_node.outputs['Curve'],
+                 trim_curve_length_node.outputs['Curve']],
+                'GEOMETRY')
 
-        # Inputs
-        node_tree.links.new(input_node.outputs['Curve'], trim_curve_factor_node.inputs['Curve'])
-        node_tree.links.new(input_node.outputs['Curve'], trim_curve_length_node.inputs['Curve'])
-        node_tree.links.new(input_node.outputs['Curve'], curve_length_node.inputs['Curve'])
-        node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
-        node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
-        node_tree.links.new(input_node.outputs['Length End'], subtract_node.inputs[1])
-        node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs[4])
+            # Inputs
+            node_tree.links.new(loop_sockets.spline_geometry_socket, trim_curve_factor_node.inputs['Curve'])
+            node_tree.links.new(loop_sockets.spline_geometry_socket, trim_curve_length_node.inputs['Curve'])
+            node_tree.links.new(loop_sockets.spline_geometry_socket, curve_length_node.inputs['Curve'])
+            node_tree.links.new(input_node.outputs['Factor Start'], trim_curve_factor_node.inputs['Start'])
+            node_tree.links.new(input_node.outputs['Factor End'], trim_curve_factor_node.inputs['End'])
+            node_tree.links.new(input_node.outputs['Length End'], subtract_node.inputs[1])
+            node_tree.links.new(input_node.outputs['Length Start'], trim_curve_length_node.inputs[4])
 
-        # Internal
-        node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
-        node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
-        node_tree.links.new(trim_curve_output_socket, output_node.inputs['Curve'])
+            # Internal
+            node_tree.links.new(curve_length_node.outputs['Length'], subtract_node.inputs[0])
+            node_tree.links.new(subtract_node.outputs[0], trim_curve_length_node.inputs[5])
+            node_tree.links.new(subtract_node.outputs['Value'], trim_curve_length_node.inputs[5])
 
-        # Outputs
-        node_tree.links.new(subtract_node.outputs['Value'], trim_curve_length_node.inputs[5])
+            # Outputs
+            node_tree.links.new(trim_curve_output_socket, loop_sockets.join_geometry_input_socket)
+
+        geometry_socket = add_curve_spline_loop_nodes(node_tree, input_node.outputs['Curve'], trim_inner_function)
+
+        node_tree.links.new(geometry_socket, output_node.inputs['Curve'])
 
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
@@ -559,6 +565,64 @@ def add_comparison_nodes(node_tree: NodeTree, data_type: str, operation: str, a:
         compare_node.inputs['B'].default_value = b
 
     return compare_node.outputs['Result']
+
+
+class CurveSplineLoopSockets:
+    def __init__(self, spline_index_socket: NodeSocket, spline_geometry_socket: NodeSocket, join_geometry_input_socket: NodeSocket):
+        self.spline_index_socket = spline_index_socket
+        self.spline_geometry_socket = spline_geometry_socket
+        self.join_geometry_input_socket = join_geometry_input_socket
+
+
+def add_curve_spline_loop_nodes(node_tree: NodeTree, curve_socket: NodeSocket, inner_loop_nodes_function: Callable[[NodeTree, CurveSplineLoopSockets], None]) -> NodeSocket:
+    """
+    Adds a set of nodes to the node tree that will loop over the splines from the given curve.
+    :param node_tree: The node tree to add the nodes to.
+    :param curve_socket: The socket that contains the curve geometry.
+    :return: A CurveSplineLoopSockets object containing the sockets for the spline index, join geometry input, and geometry output.
+    """
+    repeat_input_node, repeat_output_node = add_repeat_zone_nodes(node_tree, (('INT', 'Spline Index'),))
+
+    spline_index_socket = repeat_input_node.outputs['Spline Index']
+
+    domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
+    domain_size_node.component = 'CURVE'
+
+    add_spline_index_node = node_tree.nodes.new(type='ShaderNodeMath')
+    add_spline_index_node.operation = 'ADD'
+    add_spline_index_node.inputs[1].default_value = 1.0
+
+    join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
+
+    separate_geometry_node = node_tree.nodes.new(type='GeometryNodeSeparateGeometry')
+    separate_geometry_node.domain = 'CURVE'
+
+    index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
+
+    spline_index_equal_node = node_tree.nodes.new(type='FunctionNodeCompare')
+    spline_index_equal_node.operation = 'EQUAL'
+    spline_index_equal_node.data_type = 'INT'
+
+    node_tree.links.new(curve_socket, separate_geometry_node.inputs['Geometry'])
+    node_tree.links.new(spline_index_socket, spline_index_equal_node.inputs['A'])
+    node_tree.links.new(index_node.outputs['Index'], spline_index_equal_node.inputs['B'])
+    node_tree.links.new(spline_index_equal_node.outputs['Result'], separate_geometry_node.inputs['Selection'])
+    node_tree.links.new(curve_socket, domain_size_node.inputs['Geometry'])
+    node_tree.links.new(domain_size_node.outputs['Spline Count'], repeat_input_node.inputs['Iterations'])
+    node_tree.links.new(repeat_input_node.outputs['Spline Index'], add_spline_index_node.inputs[0])
+    node_tree.links.new(add_spline_index_node.outputs['Value'], repeat_output_node.inputs['Spline Index'])
+    node_tree.links.new(repeat_input_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
+    node_tree.links.new(join_geometry_node.outputs['Geometry'], repeat_output_node.inputs['Geometry'])
+
+    sockets = CurveSplineLoopSockets(
+        spline_index_socket,
+        separate_geometry_node.outputs['Selection'],
+        join_geometry_node.inputs['Geometry']
+    )
+
+    inner_loop_nodes_function(node_tree, sockets)
+
+    return repeat_output_node.outputs['Geometry']
 
 
 

@@ -7,7 +7,7 @@ from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 from ....helpers import ensure_name_unique
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
-    add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes
+    add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes
 
 
 def add_terrain_doodad_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad', name: str = 'Scatter Layer') -> 'BDK_PG_terrain_doodad_scatter_layer':
@@ -460,64 +460,6 @@ def ensure_select_random_node_tree() -> NodeTree:
         node_tree.links.new(random_value_node.outputs[3], output_node.inputs['Selection'])
 
     return ensure_geometry_node_tree('BDK Select Random Points', inputs, build_function)
-
-
-class CurveSplineLoopSockets:
-    def __init__(self, spline_index_socket: NodeSocket, spline_geometry_socket: NodeSocket, join_geometry_input_socket: NodeSocket):
-        self.spline_index_socket = spline_index_socket
-        self.spline_geometry_socket = spline_geometry_socket
-        self.join_geometry_input_socket = join_geometry_input_socket
-
-
-def add_curve_spline_loop_nodes(node_tree: NodeTree, curve_socket: NodeSocket, inner_loop_nodes_function: Callable[[NodeTree, CurveSplineLoopSockets], None]) -> NodeSocket:
-    """
-    Adds a set of nodes to the node tree that will loop over the splines from the given curve.
-    :param node_tree: The node tree to add the nodes to.
-    :param curve_socket: The socket that contains the curve geometry.
-    :return: A CurveSplineLoopSockets object containing the sockets for the spline index, join geometry input, and geometry output.
-    """
-    repeat_input_node, repeat_output_node = add_repeat_zone_nodes(node_tree, (('INT', 'Spline Index'),))
-
-    spline_index_socket = repeat_input_node.outputs['Spline Index']
-
-    domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
-    domain_size_node.component = 'CURVE'
-
-    add_spline_index_node = node_tree.nodes.new(type='ShaderNodeMath')
-    add_spline_index_node.operation = 'ADD'
-    add_spline_index_node.inputs[1].default_value = 1.0
-
-    join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
-
-    separate_geometry_node = node_tree.nodes.new(type='GeometryNodeSeparateGeometry')
-    separate_geometry_node.domain = 'CURVE'
-
-    index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
-
-    spline_index_equal_node = node_tree.nodes.new(type='FunctionNodeCompare')
-    spline_index_equal_node.operation = 'EQUAL'
-    spline_index_equal_node.data_type = 'INT'
-
-    node_tree.links.new(curve_socket, separate_geometry_node.inputs['Geometry'])
-    node_tree.links.new(spline_index_socket, spline_index_equal_node.inputs['A'])
-    node_tree.links.new(index_node.outputs['Index'], spline_index_equal_node.inputs['B'])
-    node_tree.links.new(spline_index_equal_node.outputs['Result'], separate_geometry_node.inputs['Selection'])
-    node_tree.links.new(curve_socket, domain_size_node.inputs['Geometry'])
-    node_tree.links.new(domain_size_node.outputs['Spline Count'], repeat_input_node.inputs['Iterations'])
-    node_tree.links.new(repeat_input_node.outputs['Spline Index'], add_spline_index_node.inputs[0])
-    node_tree.links.new(add_spline_index_node.outputs['Value'], repeat_output_node.inputs['Spline Index'])
-    node_tree.links.new(repeat_input_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
-    node_tree.links.new(join_geometry_node.outputs['Geometry'], repeat_output_node.inputs['Geometry'])
-
-    sockets = CurveSplineLoopSockets(
-        spline_index_socket,
-        separate_geometry_node.outputs['Selection'],
-        join_geometry_node.inputs['Geometry']
-    )
-
-    inner_loop_nodes_function(node_tree, sockets)
-
-    return repeat_output_node.outputs['Geometry']
 
 
 def ensure_get_tangent_node_tree() -> NodeTree:
