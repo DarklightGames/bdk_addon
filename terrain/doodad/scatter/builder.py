@@ -1,11 +1,13 @@
 import uuid
+from typing import Callable
 
 import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 
 from ....helpers import ensure_name_unique
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
-    ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes
+    ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
+    add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes
 
 
 def add_terrain_doodad_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad', name: str = 'Scatter Layer') -> 'BDK_PG_terrain_doodad_scatter_layer':
@@ -460,6 +462,163 @@ def ensure_select_random_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Select Random Points', inputs, build_function)
 
 
+class CurveSplineLoopSockets:
+    def __init__(self, spline_index_socket: NodeSocket, spline_geometry_socket: NodeSocket, join_geometry_input_socket: NodeSocket):
+        self.spline_index_socket = spline_index_socket
+        self.spline_geometry_socket = spline_geometry_socket
+        self.join_geometry_input_socket = join_geometry_input_socket
+
+
+def add_curve_spline_loop_nodes(node_tree: NodeTree, curve_socket: NodeSocket, inner_loop_nodes_function: Callable[[NodeTree, CurveSplineLoopSockets], None]) -> NodeSocket:
+    """
+    Adds a set of nodes to the node tree that will loop over the splines from the given curve.
+    :param node_tree: The node tree to add the nodes to.
+    :param curve_socket: The socket that contains the curve geometry.
+    :return: A CurveSplineLoopSockets object containing the sockets for the spline index, join geometry input, and geometry output.
+    """
+    repeat_input_node, repeat_output_node = add_repeat_zone_nodes(node_tree, (('INT', 'Spline Index'),))
+
+    spline_index_socket = repeat_input_node.outputs['Spline Index']
+
+    domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
+    domain_size_node.component = 'CURVE'
+
+    add_spline_index_node = node_tree.nodes.new(type='ShaderNodeMath')
+    add_spline_index_node.operation = 'ADD'
+    add_spline_index_node.inputs[1].default_value = 1.0
+
+    join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
+
+    separate_geometry_node = node_tree.nodes.new(type='GeometryNodeSeparateGeometry')
+    separate_geometry_node.domain = 'CURVE'
+
+    index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
+
+    spline_index_equal_node = node_tree.nodes.new(type='FunctionNodeCompare')
+    spline_index_equal_node.operation = 'EQUAL'
+    spline_index_equal_node.data_type = 'INT'
+
+    node_tree.links.new(curve_socket, separate_geometry_node.inputs['Geometry'])
+    node_tree.links.new(spline_index_socket, spline_index_equal_node.inputs['A'])
+    node_tree.links.new(index_node.outputs['Index'], spline_index_equal_node.inputs['B'])
+    node_tree.links.new(spline_index_equal_node.outputs['Result'], separate_geometry_node.inputs['Selection'])
+    node_tree.links.new(curve_socket, domain_size_node.inputs['Geometry'])
+    node_tree.links.new(domain_size_node.outputs['Spline Count'], repeat_input_node.inputs['Iterations'])
+    node_tree.links.new(repeat_input_node.outputs['Spline Index'], add_spline_index_node.inputs[0])
+    node_tree.links.new(add_spline_index_node.outputs['Value'], repeat_output_node.inputs['Spline Index'])
+    node_tree.links.new(repeat_input_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
+    node_tree.links.new(join_geometry_node.outputs['Geometry'], repeat_output_node.inputs['Geometry'])
+
+    sockets = CurveSplineLoopSockets(
+        spline_index_socket,
+        separate_geometry_node.outputs['Selection'],
+        join_geometry_node.inputs['Geometry']
+    )
+
+    inner_loop_nodes_function(node_tree, sockets)
+
+    return repeat_output_node.outputs['Geometry']
+
+
+def ensure_get_tangent_node_tree() -> NodeTree:
+    inputs = {
+        ('INPUT', 'NodeSocketInt', 'Index'),
+        ('OUTPUT', 'NodeSocketVector', 'Tangent'),
+    }
+
+    def build_function(node_tree: NodeTree):
+
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        normalize_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        normalize_node.operation = 'NORMALIZE'
+
+        vector_subtract_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        vector_subtract_node.operation = 'SUBTRACT'
+
+        evaluate_position_at_index_node_1 = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_position_at_index_node_1.data_type = 'FLOAT_VECTOR'
+        evaluate_position_at_index_node_1.domain = 'POINT'
+
+        evaluate_position_at_index_node_2 = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_position_at_index_node_2.data_type = 'FLOAT_VECTOR'
+        evaluate_position_at_index_node_2.domain = 'POINT'
+
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+        node_tree.links.new(
+            add_math_operation_nodes(node_tree, 'ADD', (input_node.outputs['Index'], 1.0)),
+            evaluate_position_at_index_node_2.inputs['Index']
+        )
+
+        node_tree.links.new(position_node.outputs['Position'], evaluate_position_at_index_node_1.inputs['Value'])
+        node_tree.links.new(position_node.outputs['Position'], evaluate_position_at_index_node_2.inputs['Value'])
+        node_tree.links.new(input_node.outputs['Index'], evaluate_position_at_index_node_1.inputs['Index'])
+
+        node_tree.links.new(evaluate_position_at_index_node_1.outputs['Value'], vector_subtract_node.inputs[0])
+        node_tree.links.new(evaluate_position_at_index_node_2.outputs['Value'], vector_subtract_node.inputs[1])
+
+        node_tree.links.new(vector_subtract_node.outputs['Vector'], normalize_node.inputs['Vector'])
+        node_tree.links.new(normalize_node.outputs['Vector'], output_node.inputs['Tangent'])
+
+
+    return ensure_geometry_node_tree('BDK Get Tangent', inputs, build_function)
+
+
+def ensure_fence_point_tangent_and_normal_node_tree() -> NodeTree:
+    inputs = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketVector', 'Normal'),
+        ('OUTPUT', 'NodeSocketVector', 'Tangent'),
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
+        domain_size_node.component = 'POINTCLOUD'
+
+        tangent_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        tangent_switch_node.input_type = 'VECTOR'
+        tangent_switch_node.label = 'Tangent Switch'
+
+        node_tree.links.new(
+            add_comparison_nodes(node_tree, 'INT', 'EQUAL',
+                                 a=node_tree.nodes.new('GeometryNodeInputIndex').outputs['Index'],
+                                 b=add_math_operation_nodes(node_tree, 'SUBTRACT', (domain_size_node.outputs['Point Count'], 1.0))),
+            tangent_switch_node.inputs['Switch']
+        )
+
+        node_tree.links.new(input_node.outputs['Geometry'], domain_size_node.inputs['Geometry'])
+
+        non_cap_tangent_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        non_cap_tangent_node.node_tree = ensure_get_tangent_node_tree()
+
+        cap_tangent_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        cap_tangent_node.node_tree = ensure_get_tangent_node_tree()
+
+        node_tree.links.new(node_tree.nodes.new(type='GeometryNodeInputIndex').outputs['Index'], non_cap_tangent_node.inputs['Index'])
+        node_tree.links.new(add_math_operation_nodes(node_tree, 'SUBTRACT', (domain_size_node.outputs['Point Count'], 2.0)), cap_tangent_node.inputs['Index'])
+
+        node_tree.links.new(non_cap_tangent_node.outputs['Tangent'], tangent_switch_node.inputs['False'])
+        node_tree.links.new(cap_tangent_node.outputs['Tangent'], tangent_switch_node.inputs['True'])
+
+        cross_product_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        cross_product_node.operation = 'CROSS_PRODUCT'
+
+        up_vector_node = node_tree.nodes.new(type='FunctionNodeInputVector')
+        up_vector_node.label = 'Up Vector'
+        up_vector_node.vector = (0, 0, 1)
+
+        node_tree.links.new(tangent_switch_node.outputs['Output'], cross_product_node.inputs[0])
+        node_tree.links.new(up_vector_node.outputs['Vector'], cross_product_node.inputs[1])
+
+        node_tree.links.new(tangent_switch_node.outputs['Output'], output_node.inputs['Tangent'])
+        node_tree.links.new(cross_product_node.outputs['Vector'], output_node.inputs['Normal'])
+
+    return ensure_geometry_node_tree('BDK Fence Point Tangent and Normal', inputs, build_function)
+
+
 def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
@@ -472,72 +631,87 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
-        curve_to_points_node.mode = 'EQUIDISTANT'
+        def add_fence_mode_spline_loop_nodes(node_tree: NodeTree, loop_sockets: CurveSplineLoopSockets):
+            curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
+            curve_to_points_node.mode = 'EQUIDISTANT'
 
-        store_radius_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
-        store_radius_attribute_node.label = 'Store Radius Attribute'
-        store_radius_attribute_node.inputs["Selection"].default_value = True
-        store_radius_attribute_node.inputs["Name"].default_value = 'radius'
+            domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
+            domain_size_node.component = 'POINTCLOUD'
 
-        remove_tilt_attribute_node = node_tree.nodes.new(type='GeometryNodeRemoveAttribute')
-        remove_tilt_attribute_node.label = 'Remove Tilt Attribute'
-        remove_tilt_attribute_node.inputs["Name"].default_value = 'tilt'
+            store_curve_tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_curve_tangent_attribute_node.label = 'Store Curve Tangent Attribute'
+            store_curve_tangent_attribute_node.data_type = 'FLOAT_VECTOR'
+            store_curve_tangent_attribute_node.inputs['Name'].default_value = 'curve_tangent'
 
-        evaluate_position_at_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
-        evaluate_position_at_index_node.label = 'Evaluate Position At Index'
-        evaluate_position_at_index_node.data_type = 'FLOAT_VECTOR'
+            store_curve_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_curve_normal_attribute_node.data_type = 'FLOAT_VECTOR'
+            store_curve_normal_attribute_node.inputs['Name'].default_value = 'curve_normal'
 
-        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+            store_spline_index_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_spline_index_attribute_node.data_type = 'INT'
+            store_spline_index_attribute_node.inputs['Name'].default_value = 'spline_index'
 
-        evaluate_position_at_next_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
-        evaluate_position_at_next_index_node.label = 'Evaluate Position At Last Index'
-        evaluate_position_at_next_index_node.data_type = 'FLOAT_VECTOR'
+            store_is_cap_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_is_cap_attribute_node.data_type = 'BOOLEAN'
+            store_is_cap_attribute_node.inputs['Name'].default_value = 'is_cap'
+            store_is_cap_attribute_node.inputs['Value'].default_value = True
 
-        subtract_vector_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        subtract_vector_node.operation = 'SUBTRACT'
+            check_is_cap_node = node_tree.nodes.new(type='FunctionNodeCompare')
+            check_is_cap_node.data_type = 'INT'
+            check_is_cap_node.operation = 'EQUAL'
 
-        normalize_tangent_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        normalize_tangent_node.label = 'Normalize Tangent'
-        normalize_tangent_node.operation = 'NORMALIZE'
+            index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
 
-        index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
+            point_count_subtract_node = node_tree.nodes.new(type='ShaderNodeMath')
+            point_count_subtract_node.operation = 'SUBTRACT'
+            point_count_subtract_node.inputs[1].default_value = 1.0
 
-        add_index_node = node_tree.nodes.new(type='ShaderNodeMath')
-        add_index_node.label = 'Add Index'
-        add_index_node.operation = 'ADD'
-        add_index_node.inputs[1].default_value = 1.0
+            fence_point_tangent_and_normals_node = node_tree.nodes.new(type='GeometryNodeGroup')
+            fence_point_tangent_and_normals_node.node_tree = ensure_fence_point_tangent_and_normal_node_tree()
 
-        up_vector_node = node_tree.nodes.new(type='FunctionNodeInputVector')
-        up_vector_node.label = 'Up Vector'
-        up_vector_node.vector = (0, 0, 1)
+            node_tree.links.new(curve_to_points_node.outputs['Points'], fence_point_tangent_and_normals_node.inputs['Geometry'])
+            node_tree.links.new(fence_point_tangent_and_normals_node.outputs['Normal'], store_curve_normal_attribute_node.inputs['Value'])
+            node_tree.links.new(fence_point_tangent_and_normals_node.outputs['Tangent'], store_curve_tangent_attribute_node.inputs['Value'])
+            node_tree.links.new(check_is_cap_node.outputs['Result'], store_is_cap_attribute_node.inputs['Selection'])
+            node_tree.links.new(index_node.outputs['Index'], check_is_cap_node.inputs['A'])
+            node_tree.links.new(point_count_subtract_node.outputs['Value'], check_is_cap_node.inputs['B'])
+            node_tree.links.new(loop_sockets.spline_geometry_socket, domain_size_node.inputs['Geometry'])
+            node_tree.links.new(domain_size_node.outputs['Point Count'], point_count_subtract_node.inputs[0])
+            node_tree.links.new(loop_sockets.spline_geometry_socket, curve_to_points_node.inputs['Curve'])
+            node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
+            node_tree.links.new(store_is_cap_attribute_node.outputs['Geometry'], loop_sockets.join_geometry_input_socket)
+            node_tree.links.new(curve_to_points_node.outputs['Points'], store_curve_tangent_attribute_node.inputs['Geometry'])
+            node_tree.links.new(store_curve_tangent_attribute_node.outputs['Geometry'], store_curve_normal_attribute_node.inputs['Geometry'])
+            node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], store_spline_index_attribute_node.inputs['Geometry'])
+            node_tree.links.new(store_spline_index_attribute_node.outputs['Geometry'], store_is_cap_attribute_node.inputs['Geometry'])
+            node_tree.links.new(loop_sockets.spline_index_socket, store_spline_index_attribute_node.inputs['Value'])
 
-        cross_product_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        cross_product_node.label = 'Cross Product'
-        cross_product_node.operation = 'CROSS_PRODUCT'
+        geometry_socket = add_curve_spline_loop_nodes(node_tree, input_node.outputs['Curve'], add_fence_mode_spline_loop_nodes)
+        node_tree.links.new(geometry_socket, output_node.inputs['Points'])
 
-        links = node_tree.links
+        # Curve Normal
+        evaluate_curve_normal_at_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_curve_normal_at_index_node.data_type = 'FLOAT_VECTOR'
 
-        # Internal Links
-        links.new(position_node.outputs['Position'], evaluate_position_at_index_node.inputs['Value'])  # Position -> Value
-        links.new(normalize_tangent_node.outputs['Vector'], cross_product_node.inputs['Vector'])  # Vector -> Vector
-        links.new(evaluate_position_at_index_node.outputs['Value'], subtract_vector_node.inputs[0])  # Value -> Vector
-        links.new(evaluate_position_at_next_index_node.outputs['Value'], subtract_vector_node.inputs[1])  # Value -> Vector
-        links.new(add_index_node.outputs['Value'], evaluate_position_at_next_index_node.inputs['Index'])  # Value -> Index
-        links.new(position_node.outputs['Position'], evaluate_position_at_next_index_node.inputs['Value'])  # Position -> Value
-        links.new(subtract_vector_node.outputs['Vector'], normalize_tangent_node.inputs['Vector'])  # Vector -> Vector
-        links.new(index_node.outputs['Index'], add_index_node.inputs['Value'])  # Index -> Value
-        links.new(index_node.outputs['Index'], evaluate_position_at_index_node.inputs['Index'])  # Index -> Index
-        links.new(up_vector_node.outputs['Vector'], cross_product_node.inputs['Vector_001'])  # Vector -> Vector
-        links.new(curve_to_points_node.outputs['Points'], store_radius_attribute_node.inputs['Geometry'])  # Points -> Geometry
-        links.new(store_radius_attribute_node.outputs['Geometry'], remove_tilt_attribute_node.inputs['Geometry'])  # Geometry -> Geometry
-        links.new(input_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])  # Geometry -> Curve
-        links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])  # Spacing Length -> Length
+        curve_normal_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        curve_normal_named_attribute_node.data_type = 'FLOAT_VECTOR'
+        curve_normal_named_attribute_node.inputs['Name'].default_value = 'curve_normal'
 
-        # Output
-        links.new(remove_tilt_attribute_node.outputs['Geometry'], output_node.inputs['Points'])  # Geometry -> Points
-        links.new(cross_product_node.outputs['Vector'], output_node.inputs['Normal'])  # Vector -> Normal
-        links.new(normalize_tangent_node.outputs['Vector'], output_node.inputs['Tangent'])  # Vector -> Tangent
+        node_tree.links.new(curve_normal_named_attribute_node.outputs['Attribute'], evaluate_curve_normal_at_index_node.inputs['Value'])
+        node_tree.links.new(node_tree.nodes.new(type='GeometryNodeInputIndex').outputs['Index'], evaluate_curve_normal_at_index_node.inputs['Index'])
+        node_tree.links.new(evaluate_curve_normal_at_index_node.outputs['Value'], output_node.inputs['Normal'])
+
+        # Curve Tangent
+        evaluate_curve_tangent_at_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_curve_tangent_at_index_node.data_type = 'FLOAT_VECTOR'
+
+        curve_tangent_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        curve_tangent_named_attribute_node.data_type = 'FLOAT_VECTOR'
+        curve_tangent_named_attribute_node.inputs['Name'].default_value = 'curve_tangent'
+
+        node_tree.links.new(curve_tangent_named_attribute_node.outputs['Attribute'], evaluate_curve_tangent_at_index_node.inputs['Value'])
+        node_tree.links.new(node_tree.nodes.new(type='GeometryNodeInputIndex').outputs['Index'], evaluate_curve_tangent_at_index_node.inputs['Index'])
+        node_tree.links.new(evaluate_curve_tangent_at_index_node.outputs['Value'], output_node.inputs['Tangent'])
 
     return ensure_geometry_node_tree('BDK Curve To Equidistant Points', items, build_function)
 
@@ -1593,17 +1767,48 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
         points_to_curves_node = node_tree.nodes.new(type='GeometryNodePointsToCurves')
         position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
 
+        domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
+        domain_size_node.component = 'CURVE'
+
+        repeat_input_node, repeat_output_node = add_repeat_zone_nodes(node_tree, (('INT', 'Spline Index'),))
+
+        separate_geometry_node = node_tree.nodes.new(type='GeometryNodeSeparateGeometry')
+        separate_geometry_node.domain = 'CURVE'
+
+        spline_index_compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        spline_index_compare_node.data_type = 'INT'
+        spline_index_compare_node.operation = 'EQUAL'
+
+        spline_index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
+
+        join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
+
+        increment_spline_index_node = node_tree.nodes.new(type='ShaderNodeMath')
+        increment_spline_index_node.operation = 'ADD'
+        increment_spline_index_node.inputs[1].default_value = 1
+
         # Input
-        node_tree.links.new(input_node.outputs['Curve'], curve_to_points_node.inputs['Curve'])
+        node_tree.links.new(input_node.outputs['Curve'], separate_geometry_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Curve'], domain_size_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
 
         # Internal
+        node_tree.links.new(separate_geometry_node.outputs['Selection'], curve_to_points_node.inputs['Curve'])
         node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
         node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
         node_tree.links.new(set_position_node.outputs['Geometry'], points_to_curves_node.inputs['Points'])
         node_tree.links.new(position_node.outputs['Position'], terrain_sample_node.inputs['Source Position'])
+        node_tree.links.new(repeat_input_node.outputs['Spline Index'], increment_spline_index_node.inputs[0])
+        node_tree.links.new(increment_spline_index_node.outputs['Value'], repeat_output_node.inputs['Spline Index'])
+        node_tree.links.new(repeat_input_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
+        node_tree.links.new(points_to_curves_node.outputs['Curves'], join_geometry_node.inputs['Geometry'])
+        node_tree.links.new(join_geometry_node.outputs['Geometry'], repeat_output_node.inputs['Geometry'])
+        node_tree.links.new(repeat_input_node.outputs['Spline Index'], spline_index_compare_node.inputs['A'])
+        node_tree.links.new(spline_index_node.outputs['Index'], spline_index_compare_node.inputs['B'])
+        node_tree.links.new(spline_index_compare_node.outputs['Result'], separate_geometry_node.inputs['Selection'])
+        node_tree.links.new(domain_size_node.outputs['Spline Count'], repeat_input_node.inputs['Iterations'])
 
         # Output
-        node_tree.links.new(points_to_curves_node.outputs['Curves'], output_node.inputs['Curve'])
+        node_tree.links.new(repeat_output_node.outputs['Geometry'], output_node.inputs['Curve'])
 
     return ensure_geometry_node_tree('BDK Shrinkwrap Curve To Terrain', inputs, build_function)

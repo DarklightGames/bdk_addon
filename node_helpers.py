@@ -1,8 +1,8 @@
 import os.path
-from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable
+from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable, cast, Union
 
 import bpy
-from bpy.types import NodeTree, NodeSocket, Node
+from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNode, GeometryNodeRepeatOutput
 
 from .data import map_range_interpolation_type_items
 
@@ -513,6 +513,53 @@ def ensure_weighted_index_node_tree() -> NodeTree:
         node_tree.links.new(first_switch_output_socket, output_node.inputs['Index'])
 
     return ensure_geometry_node_tree('BDK Weighted Index', inputs, build_function)
+
+
+def add_repeat_zone_nodes(node_tree: NodeTree, repeat_items: Iterable[Tuple[str, str]]):
+    input_node = cast(GeometryNodeRepeatInput, node_tree.nodes.new(type='GeometryNodeRepeatInput'))
+    output_node = cast(GeometryNodeRepeatOutput, node_tree.nodes.new(type='GeometryNodeRepeatOutput'))
+    input_node.pair_with_output(output_node)
+
+    for socket_type, name in repeat_items:
+        output_node.repeat_items.new(socket_type, name)
+
+    return input_node, output_node
+
+
+def add_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, NodeSocket]]) -> NodeSocket:
+    math_node = node_tree.nodes.new(type='ShaderNodeMath')
+    math_node.operation = operation
+    math_node.inputs[0].default_value = 0
+    math_node.inputs[1].default_value = 0
+
+    for index, input in enumerate(inputs):
+        if isinstance(input, NodeSocket):
+            node_tree.links.new(input, math_node.inputs[index])
+        else:
+            math_node.inputs[index].default_value = input
+
+    return math_node.outputs['Value']
+
+
+def add_comparison_nodes(node_tree: NodeTree, data_type: str, operation: str, a: Union[int, float, NodeSocket], b: Union[int, float, NodeSocket]) -> NodeSocket:
+    compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+    compare_node.operation = operation
+    compare_node.data_type = data_type
+    compare_node.inputs['A'].default_value = 0
+    compare_node.inputs['B'].default_value = 0
+
+    if isinstance(a, NodeSocket):
+        node_tree.links.new(a, compare_node.inputs['A'])
+    else:
+        compare_node.inputs['A'].default_value = a
+
+    if isinstance(b, NodeSocket):
+        node_tree.links.new(b, compare_node.inputs['B'])
+    else:
+        compare_node.inputs['B'].default_value = b
+
+    return compare_node.outputs['Result']
+
 
 
 # def ensure_curve_extend_node_tree() -> NodeTree:

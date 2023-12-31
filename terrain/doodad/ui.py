@@ -23,7 +23,7 @@ from .properties import BDK_PG_terrain_doodad
 class BDK_UL_terrain_doodad_scatter_layer_objects(UIList):
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
         layout.label(text=item.object.name if item.object is not None else '<no object selected>', icon='OBJECT_DATA')
-        # layout.prop(item, 'random_weight', emboss=False, text='')
+        layout.prop(item, 'is_cap', text='', icon='GP_SELECT_POINTS' if item.is_cap else 'SNAP_MIDPOINT', emboss=False)
         layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
 
@@ -832,7 +832,6 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
             flow.use_property_decorate = False
 
             flow.prop(scatter_layer_object, 'object', text='Object')
-
             flow.separator()
 
             # If the object mode is weighted random, show the weight slider.
