@@ -6,7 +6,7 @@ from bpy.types import Operator, Context, Material, Object
 from bpy.props import StringProperty, FloatProperty
 from typing import Union, Set, Optional
 
-from .builder import build_projector_node_tree
+from .builder import ensure_projector_node_tree
 
 
 class BDK_OT_projector_add(Operator):
@@ -58,7 +58,7 @@ class BDK_OT_projector_add(Operator):
         bpy_object['DrawScale'] = 1.0
 
         modifier = bpy_object.modifiers.new(name='Projector', type='NODES')
-        modifier.node_group = build_projector_node_tree()
+        modifier.node_group = ensure_projector_node_tree()
 
         # TODO: lookup the keys for named inputs.
         modifier["Input_0"] = target

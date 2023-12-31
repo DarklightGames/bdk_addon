@@ -14,7 +14,7 @@ from typing import List, Optional, Dict, Any, cast, Type
 from ..fluid_surface.operators import create_fluid_surface_object
 from ..bsp.properties import get_poly_flags_keys_from_value
 from ..terrain.operators import add_terrain_layer_node
-from ..projector.builder import build_projector_node_tree
+from ..projector.builder import ensure_projector_node_tree
 from ..terrain.builder import create_terrain_info_object
 from ..terrain.layers import add_terrain_paint_layer, add_terrain_deco_layer
 from ..terrain.kernel import ensure_paint_layers, ensure_deco_layers
@@ -226,7 +226,7 @@ class ProjectorImporter(ActorImporter):
     def on_properties_hydrated(cls, t3d_actor: t3dpy.T3dObject, bpy_object: Object, context: Context):
         # Add geometry node modifier to projector_object.
         geometry_node_modifier = bpy_object.modifiers.new(name="Projector", type="NODES")
-        geometry_node_modifier.node_group = build_projector_node_tree()  # TODO: replace
+        geometry_node_modifier.node_group = ensure_projector_node_tree()  # TODO: replace
 
         # T3D STUFF BELOW:
 
