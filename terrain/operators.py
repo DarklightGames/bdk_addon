@@ -27,7 +27,7 @@ from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte
 from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_xy_coordinates
 from .properties import node_type_items, node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, \
-    BDK_PG_terrain_layer_node, BDK_PG_terrain_deco_layer
+    BDK_PG_terrain_layer_node, BDK_PG_terrain_deco_layer, get_terrain_info_paint_layer_by_id
 
 
 class BDK_OT_terrain_paint_layer_remove(Operator):
@@ -415,6 +415,12 @@ class BDK_OT_terrain_paint_layers_hide(Operator):
             region.tag_redraw()
 
         return {'FINISHED'}
+
+
+def move_node_between_node_lists(source_nodes, source_nodes_index: int, target_nodes):
+    new_node = target_nodes.add()
+    copy_simple_property_group(source_nodes[source_nodes_index], new_node)
+    source_nodes.remove(source_nodes_index)
 
 
 def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
@@ -1188,6 +1194,51 @@ class BDK_OT_terrain_info_heightmap_import(Operator):
         return {'FINISHED'}
 
 
+def terrain_layer_items_cb(self, context):
+    terrain_info = get_terrain_info(context.active_object)
+    return [(layer.id, layer.name, '') for layer in terrain_info.paint_layers]
+
+
+class BDK_OT_terrain_paint_layer_node_transfer(Operator):
+    bl_idname = 'bdk.terrain_paint_layer_node_transfer'
+    bl_label = 'Transfer Node to Paint Layer'
+    bl_description = 'Move the selected node to another terrain paint layer'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    layer_id: EnumProperty(name='Terrain Layer', items=terrain_layer_items_cb)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return poll_has_selected_terrain_layer_node(cls, context)
+
+    def invoke(self, context: Context, event: Event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context: Context):
+        layout = self.layout
+        layout.prop(self, 'layer_id')
+
+    def execute(self, context: Context):
+        terrain_info_object = context.active_object
+        terrain_info = get_terrain_info(terrain_info_object)
+
+        # Get the source and target paint layers.
+        source_paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
+        target_paint_layer = get_terrain_info_paint_layer_by_id(terrain_info, self.layer_id)
+
+        if target_paint_layer is None:
+            self.report({'ERROR'}, f'Terrain layer {self.layer_id} does not exist')
+            return {'CANCELLED'}
+
+        # TODO: when we have groups, we'll need to move the whole hierarchy of nodes.
+
+        move_node_between_node_lists(source_paint_layer.nodes, source_paint_layer.nodes_index, target_paint_layer.nodes)
+
+        ensure_paint_layers(terrain_info_object)
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_terrain_info_add,
     BDK_OT_terrain_info_export,
@@ -1208,6 +1259,7 @@ classes = (
 
     BDK_OT_terrain_layer_node_merge_down,
     BDK_OT_terrain_layer_node_convert_to_paint_node,
+    BDK_OT_terrain_paint_layer_node_transfer,
     BDK_OT_terrain_layer_paint_node_move_to_group,
 
     # TODO: these node operators below should be renamed (they are not specific to "paint" layers)

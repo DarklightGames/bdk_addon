@@ -201,6 +201,7 @@ class BDK_MT_terrain_layer_nodes_context_menu(Menu):
         layout.operator(BDK_OT_terrain_layer_node_merge_down.bl_idname, text='Merge Down', icon='TRIA_DOWN_BAR')
         layout.operator(BDK_OT_terrain_layer_node_convert_to_paint_node.bl_idname, text='Convert to Paint Node', icon='BRUSH_DATA')
         layout.operator(BDK_OT_terrain_layer_paint_node_move_to_group.bl_idname, text='Move to Group', icon='FOLDER_REDIRECT')
+        layout.operator(BDK_OT_terrain_paint_layer_node_transfer.bl_idname, text='Move to Terrain Layer', icon='MODIFIER')
         layout.separator()
         layout.operator(BDK_OT_terrain_paint_layer_node_fill.bl_idname, text='Fill', icon='BRUSH_DATA')
         layout.operator(BDK_OT_terrain_paint_layer_node_invert.bl_idname, text='Invert', icon='BRUSH_DATA')
