@@ -199,6 +199,12 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
             actor = T3DObject(type_name='Actor')
             actor.properties['Name'] = static_mesh_object.name
             actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
+
+            # Skin Overrides
+            for material_slot_index, material_slot in enumerate(static_mesh_object.material_slots):
+                if material_slot.link == 'OBJECT':
+                    actor.properties[f'Skins({material_slot_index})'] = material_slot.material.bdk.package_reference
+
             location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
             actor.properties['Location'] = location
             actor.properties['Rotation'] = rotation
