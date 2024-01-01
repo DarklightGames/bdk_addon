@@ -192,17 +192,19 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
         object_indices = numpy.array(object_index_data)
 
         for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
-            # TODO: The order of operations here is probably wrong.
             matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
             scatter_layer_object = scatter_layer.objects[object_index]
             static_mesh_object = scatter_layer.objects[object_index].object
+
             actor = T3DObject(type_name='Actor')
             actor.properties['Name'] = static_mesh_object.name
             actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
 
             # Skin Overrides
             for material_slot_index, material_slot in enumerate(static_mesh_object.material_slots):
-                if material_slot.link == 'OBJECT':
+                if material_slot.link == 'OBJECT' \
+                        and material_slot.material is not None \
+                        and material_slot.material.bdk.package_reference is not None:
                     actor.properties[f'Skins({material_slot_index})'] = material_slot.material.bdk.package_reference
 
             location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
@@ -212,9 +214,10 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
 
             actor_properties = scatter_layer_object.actor_properties
             actor.properties['Class'] = actor_properties.class_name
-            collision_flags = actor_properties.collision_flags
             if actor_properties.should_use_cull_distance:
                 actor.properties['CullDistance'] = actor_properties.cull_distance
+
+            collision_flags = actor_properties.collision_flags
             actor.properties['bBlockActors'] = 'BLOCK_ACTORS' in collision_flags
             actor.properties['bBlockKarma'] = 'BLOCK_KARMA' in collision_flags
             actor.properties['bBlockNonZeroExtentTraces'] = 'BLOCK_NON_ZERO_EXTENT_TRACES' in collision_flags
