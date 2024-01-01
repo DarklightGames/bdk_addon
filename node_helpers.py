@@ -393,8 +393,7 @@ def ensure_trim_curve_node_tree() -> NodeTree:
             trim_curve_output_socket = add_geometry_node_switch_nodes(
                 node_tree,
                 input_node.outputs['Mode'],
-                [input_node.outputs['Curve'], trim_curve_factor_node.outputs['Curve'],
-                 trim_curve_length_node.outputs['Curve']],
+                [None, trim_curve_factor_node.outputs['Curve'], trim_curve_length_node.outputs['Curve']],
                 'GEOMETRY')
 
             # Inputs
@@ -414,9 +413,19 @@ def ensure_trim_curve_node_tree() -> NodeTree:
             # Outputs
             node_tree.links.new(trim_curve_output_socket, loop_sockets.join_geometry_input_socket)
 
-        geometry_socket = add_curve_spline_loop_nodes(node_tree, input_node.outputs['Curve'], trim_inner_function)
+        switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        switch_node.input_type = 'GEOMETRY'
 
-        node_tree.links.new(geometry_socket, output_node.inputs['Curve'])
+        node_tree.links.new(
+            add_comparison_nodes(node_tree, 'INT', 'EQUAL', input_node.outputs['Mode'], 0),
+            switch_node.inputs['Switch']
+        )
+
+        loop_geometry_socket = add_curve_spline_loop_nodes(node_tree, input_node.outputs['Curve'], trim_inner_function)
+
+        node_tree.links.new(loop_geometry_socket, switch_node.inputs['False'])
+        node_tree.links.new(input_node.outputs['Curve'], switch_node.inputs['True'])
+        node_tree.links.new(switch_node.outputs['Output'], output_node.inputs['Curve'])
 
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
@@ -448,7 +457,8 @@ def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: Nod
         index_switch_node.index_switch_items.new()
 
     for value_index, output_value_socket in enumerate(output_value_sockets):
-        node_tree.links.new(output_value_socket, index_switch_node.inputs[f'{value_index}'])
+        if output_value_socket is not None:
+            node_tree.links.new(output_value_socket, index_switch_node.inputs[f'{value_index}'])
 
     return index_switch_node.outputs['Output']
 

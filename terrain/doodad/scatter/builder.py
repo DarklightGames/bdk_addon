@@ -1,5 +1,4 @@
 import uuid
-from typing import Callable
 
 import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
@@ -7,7 +6,8 @@ from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 from ....helpers import ensure_name_unique
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
-    add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes
+    add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes, \
+    CurveSplineLoopSockets
 
 
 def add_terrain_doodad_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad', name: str = 'Scatter Layer') -> 'BDK_PG_terrain_doodad_scatter_layer':
