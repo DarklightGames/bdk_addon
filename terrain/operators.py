@@ -286,17 +286,40 @@ class BDK_OT_terrain_info_export(Operator, ExportHelper):
         return {'RUNNING_MODAL'}
 
     def execute(self, context: Context):
-        # Get the depsgraph.
-        depsgraph = context.evaluated_depsgraph_get()
+        terrain_info = get_terrain_info(context.active_object)
+
+        current_progress = 0
+        progress_max = 2 + len(terrain_info.paint_layers) + len(terrain_info.deco_layers)
+
+        wm = context.window_manager
+        wm.progress_begin(0, progress_max)
 
         file_name = f'{sanitize_name_for_unreal(context.active_object.name)}.t3d'
         t3d_path = os.path.join(self.directory, file_name)
+
+        def progress_increment():
+            nonlocal current_progress
+            current_progress += 1
+            wm.progress_update(current_progress)
+
+        # Get the depsgraph.
+        depsgraph = context.evaluated_depsgraph_get()
+
         with open(t3d_path, 'w') as fp:
             write_terrain_t3d(context.active_object, depsgraph, fp)
+            progress_increment()
 
+        # Export the heightmap and paint layers.
         export_terrain_heightmap(context.active_object, depsgraph, directory=self.directory)
-        export_terrain_paint_layers(context.active_object, depsgraph, directory=self.directory)
-        export_terrain_deco_layers(context.active_object, depsgraph, directory=self.directory)
+        progress_increment()
+
+        def progress_cb(current: int, max: int):
+            progress_increment()
+
+        export_terrain_paint_layers(context.active_object, depsgraph, directory=self.directory, progress_cb=progress_cb)
+        export_terrain_deco_layers(context.active_object, depsgraph, directory=self.directory, progress_cb=progress_cb)
+
+        wm.progress_end()
 
         self.report({'INFO'}, 'Exported TerrainInfo')
 

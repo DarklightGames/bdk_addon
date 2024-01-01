@@ -5,7 +5,7 @@ import bmesh
 import bpy
 import numpy as np
 from bpy.types import Object, Mesh, Image, Depsgraph
-from typing import cast, Optional
+from typing import cast, Optional, Callable
 
 from mathutils import Vector, Matrix, Euler
 
@@ -189,13 +189,13 @@ def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
     return actor
 
 
-def export_terrain_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
+def export_terrain_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str, progress_cb: Callable[[int, int], None] = None):
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
         raise RuntimeError('Invalid object')
 
-    for deco_layer in terrain_info.deco_layers:
+    for deco_layer_index, deco_layer in enumerate(terrain_info.deco_layers):
         image = create_image_from_attribute(terrain_info_object, depsgraph, deco_layer.id)
         # Write the image out to a file.
         file_name = f'{sanitize_name_for_unreal(deco_layer.name)}.tga'
@@ -203,20 +203,26 @@ def export_terrain_deco_layers(terrain_info_object: Object, depsgraph: Depsgraph
         # Now remove the image data block.
         bpy.data.images.remove(image)
 
+        if progress_cb:
+            progress_cb(deco_layer_index, len(terrain_info.deco_layers))
 
-def export_terrain_paint_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str):
+
+def export_terrain_paint_layers(terrain_info_object: Object, depsgraph: Depsgraph, directory: str, progress_cb: Callable[[int, int], None] = None):
     terrain_info = get_terrain_info(terrain_info_object)
 
     if terrain_info is None:
         raise RuntimeError('Invalid object')
 
-    for paint_layer in terrain_info.paint_layers:
+    for paint_layer_index, paint_layer in enumerate(terrain_info.paint_layers):
         image = create_image_from_attribute(terrain_info_object, depsgraph, paint_layer.id)
         # Write the image out to a file.
         file_name = f'{sanitize_name_for_unreal(paint_layer.name)}.tga'
         image.save(filepath=os.path.join(directory, file_name))
         # Now remove the image data block.
         bpy.data.images.remove(image)
+
+        if progress_cb:
+            progress_cb(paint_layer_index, len(terrain_info.paint_layers))
 
 
 def create_image_from_attribute(terrain_info_object: Object, depsgraph: Depsgraph, attribute_name: str) -> Image:
