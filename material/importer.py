@@ -621,7 +621,7 @@ class MaterialBuilder:
     def _import_tex_panner(self, tex_panner: UTexPanner, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
-        vector_rotate_node.inputs['Rotation'].default_value = tex_panner.PanDirection.get_radians()
+        vector_rotate_node.inputs['Angle'].default_value = tex_panner.PanDirection.get_radians()
 
         vector_add_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         vector_add_node.operation = 'ADD'
@@ -662,11 +662,11 @@ class MaterialBuilder:
         rotation_radians = tex_rotator.Rotation.get_radians()
 
         def add_driver_to_vector_rotate_rotation_input(expression: str, index: int):
-            fcurve = vector_rotate_node.inputs['Rotation'].driver_add('default_value', index)
+            fcurve = vector_rotate_node.inputs['Angle'].driver_add('default_value', index)
             fcurve.driver.expression = expression
 
         if tex_rotator.TexRotationType == ETexRotationType.TR_FixedRotation:
-            vector_rotate_node.inputs['Rotation'].default_value = rotation_radians
+            vector_rotate_node.inputs['Angle'].default_value = rotation_radians
         elif tex_rotator.TexRotationType == ETexRotationType.TR_OscillatingRotation:
             amplitude_radians = tex_rotator.OscillationAmplitude.get_radians()
             rate_radians = tex_rotator.OscillationRate.get_radians()
@@ -826,7 +826,7 @@ class MaterialBuilder:
                                     socket_inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
-        vector_rotate_node.inputs['Rotation'].default_value = variable_tex_panner.PanDirection.get_radians()
+        vector_rotate_node.inputs['Angle'].default_value = variable_tex_panner.PanDirection.get_radians()
 
         combine_xyz_node = self._node_tree.nodes.new('ShaderNodeCombineXYZ')
 
