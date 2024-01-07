@@ -826,7 +826,7 @@ class MaterialBuilder:
                                     socket_inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
-        vector_rotate_node.inputs['Angle'].default_value = variable_tex_panner.PanDirection.get_radians()
+        vector_rotate_node.inputs['Rotation'].default_value = variable_tex_panner.PanDirection.get_radians()
 
         combine_xyz_node = self._node_tree.nodes.new('ShaderNodeCombineXYZ')
 
