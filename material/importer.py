@@ -645,7 +645,6 @@ class MaterialBuilder:
     def _import_tex_rotator(self, tex_rotator: UTexRotator,
                             socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
-        vector_rotate_node.rotation_type = 'EULER_XYZ'
 
         socket_inputs.uv_socket = vector_rotate_node.outputs['Vector']
 
