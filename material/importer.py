@@ -621,7 +621,7 @@ class MaterialBuilder:
     def _import_tex_panner(self, tex_panner: UTexPanner, socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
-        vector_rotate_node.inputs['Angle'].default_value = tex_panner.PanDirection.get_radians()
+        vector_rotate_node.inputs['Rotation'].default_value = tex_panner.PanDirection.get_radians()
 
         vector_add_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         vector_add_node.operation = 'ADD'
