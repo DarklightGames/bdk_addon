@@ -31,9 +31,6 @@ class UReference:
         pattern = r'(\w+)\'([\w\.\d\-\_]+)\''
         match = re.match(pattern, string)
 
-        print('UReference.from_string')
-        print(string)
-
         if match is not None:
             # Type-qualified reference match succeeded.
             type_name = match.group(1)
