@@ -645,6 +645,7 @@ class MaterialBuilder:
     def _import_tex_rotator(self, tex_rotator: UTexRotator,
                             socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
+        vector_rotate_node.rotation_type = 'EULER_XYZ'
 
         socket_inputs.uv_socket = vector_rotate_node.outputs['Vector']
 
@@ -657,16 +658,15 @@ class MaterialBuilder:
         u = tex_rotator.UOffset / material_outputs.size[0]
         v = tex_rotator.VOffset / material_outputs.size[1]
         vector_rotate_node.inputs['Center'].default_value = (u, v, 0.0)
-        vector_rotate_node.inputs['Axis'].default_value = (0.0, 0.0, -1.0)
 
         rotation_radians = tex_rotator.Rotation.get_radians()
 
         def add_driver_to_vector_rotate_rotation_input(expression: str, index: int):
-            fcurve = vector_rotate_node.inputs['Angle'].driver_add('default_value', index)
+            fcurve = vector_rotate_node.inputs['Rotation'].driver_add('default_value', index)
             fcurve.driver.expression = expression
 
         if tex_rotator.TexRotationType == ETexRotationType.TR_FixedRotation:
-            vector_rotate_node.inputs['Angle'].default_value = rotation_radians
+            vector_rotate_node.inputs['Rotation'].default_value = rotation_radians
         elif tex_rotator.TexRotationType == ETexRotationType.TR_OscillatingRotation:
             amplitude_radians = tex_rotator.OscillationAmplitude.get_radians()
             rate_radians = tex_rotator.OscillationRate.get_radians()
