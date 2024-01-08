@@ -47,7 +47,9 @@ class BDK_PT_bsp_brush_poly_flags(Panel):
         flow = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
+
         brush = context.object.bdk.bsp_brush
+
         flow.prop(brush, 'poly_flags')
 
 

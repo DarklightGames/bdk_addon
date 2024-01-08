@@ -914,7 +914,7 @@ def _add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree, paint_layer
 
     element_mode_integer_node = node_tree.nodes.new(type='FunctionNodeInputInt')
     element_mode_integer_node.label = 'Element Mode'
-    add_doodad_sculpt_layer_driver(element_mode_integer_node, paint_layer, 'element_mode', 'integer')
+    add_doodad_paint_layer_driver(element_mode_integer_node, paint_layer, 'element_mode', 'integer')
     element_mode_socket = element_mode_integer_node.outputs['Integer']
 
     match paint_layer.geometry_source:
