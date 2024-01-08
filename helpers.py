@@ -128,6 +128,8 @@ def load_bdk_material(reference: str):
         print('Failed to find blend file for package reference: ' + reference.package_name)
         return None
 
+    print(f'Loading material {reference} from blend file: {blend_file}')
+
     with bpy.data.libraries.load(blend_file, link=True, relative=False, assets_only=True) as (data_in, data_out):
         if reference.object_name in data_in.materials:
             data_out.materials = [reference.object_name]
