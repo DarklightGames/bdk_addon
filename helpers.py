@@ -120,7 +120,9 @@ def load_bdk_material(reference: str):
         return None
 
     if reference.package_name == 'myLevel':
-        return bpy.data.materials.get(reference.object_name, None)
+        # The second argument is a library, which we pass as None to get the local material.
+        # https://blender.stackexchange.com/questions/238342/how-to-recognize-local-and-linked-material-with-python
+        return bpy.data.materials.get((reference.object_name, None), None)
 
     blend_file = get_blend_file_for_package(reference.package_name)
 
