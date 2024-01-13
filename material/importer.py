@@ -126,7 +126,9 @@ class MaterialBuilder:
             for extension in extensions:
                 file_path = image_path.replace('.props.txt', extension)
                 if os.path.isfile(file_path):
-                    return bpy.data.images.load(str(file_path), check_existing=True)
+                    image = bpy.data.images.load(str(file_path), check_existing=True)
+                    image.alpha_mode = 'CHANNEL_PACKED'
+                    return image
         raise RuntimeError(f'Could not find file for reference {reference}')
 
     def load_material(self, reference: Optional[UReference]):
