@@ -48,7 +48,8 @@ node_type_icons = {
     'PAINT_LAYER': 'TEXTURE',
     'CONSTANT': 'IMAGE_ALPHA',
     'NORMAL': 'DRIVER_ROTATIONAL_DIFFERENCE',
-    'PLANE_DISTANCE': 'GRADIENT'
+    'PLANE_DISTANCE': 'GRADIENT',
+    'FIELD': 'IMAGE_ALPHA',
 }
 
 node_type_items = (
@@ -60,6 +61,7 @@ node_type_items = (
     ('NORMAL', 'Normal', 'Value will be equal to the dot product of the vertex normal and the up vector',
      node_type_icons['NORMAL'], 5),
     ('PLANE_DISTANCE', 'Plane Distance', 'Plane Distance', node_type_icons['PLANE_DISTANCE'], 6),
+    ('FIELD', 'Field', 'A straight float field', node_type_icons['FIELD'], 7),
 )
 
 node_type_item_names = {item[0]: item[1] for item in node_type_items}

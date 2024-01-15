@@ -163,7 +163,7 @@ def add_density_from_terrain_layer_node(
     def _add_terrain_layer_node_driver(struct: bpy_struct, property_name: str):
         add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, target_id, struct, 'default_value', property_name, data_path_function)
 
-    if node.type == 'PAINT':
+    if node.type in ['PAINT', 'FIELD']:
         paint_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
         paint_named_attribute_node.data_type = 'FLOAT'
         paint_named_attribute_node.inputs['Name'].default_value = node.id

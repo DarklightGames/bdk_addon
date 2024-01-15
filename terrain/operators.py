@@ -463,6 +463,9 @@ def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
         color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
         color_data[:] = (0.0, 0.0, 0.0, 0.0)
         attribute.data.foreach_set('color', color_data.flatten())
+    elif type == 'FIELD':
+        mesh_data = cast(Mesh, terrain_info_object.data)
+        mesh_data.attributes.new(node.id, 'FLOAT', domain='POINT')
 
     # Move the node to the top of the list.
     nodes.move(len(nodes) - 1, 0)
@@ -905,7 +908,7 @@ class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
         if node.type == 'PAINT':
             cls.poll_message_set('Selected node is already a paint node')
             return False
-        convertible_types = {'CONSTANT', 'NOISE', 'NORMAL'}
+        convertible_types = {'CONSTANT', 'NOISE', 'NORMAL', 'FIELD'}
         if node.type not in convertible_types:
             cls.poll_message_set(f'Cannot convert node of type {node.type} to a paint node')
             return False

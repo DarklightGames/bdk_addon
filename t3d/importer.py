@@ -336,21 +336,22 @@ class TerrainInfoImporter(ActorImporter):
 
             if alpha_map_reference:
                 # Add the node group and rebuild the node tree.
-                paint_node = add_terrain_layer_node(terrain_info_object, paint_layer.nodes, type='PAINT')
+                field_node = add_terrain_layer_node(terrain_info_object, paint_layer.nodes, type='FIELD')
 
                 # Alpha Map
                 alpha_map_image_name = f'{paint_layer_name}.tga'
-                alpha_map_image = bpy.data.images[alpha_map_image_name]
+                alpha_map_image = bpy.data.images.get((alpha_map_image_name, None), None)
+
                 if alpha_map_image:
-                    if terrain_map_image.size != alpha_map_image.size:
+                    if tuple(terrain_map_image.size) != tuple(alpha_map_image.size):
                         # Print out a warning if the alpha map image is not the same size as the terrain map image.
                         print(f'Warning: Alpha map image {alpha_map_image_name} is not the same size as the terrain map '
                               f'image {terrain_map_image_name}. The alpha map image will be resized to match the terrain '
-                              f'map image.')
+                              f'map image. {tuple(alpha_map_image.size)} -> {tuple(terrain_map_image.size)}')
                         # Resize the alpha map image to match the terrain map image.
                         alpha_map_image.scale(terrain_map_image.size[0], terrain_map_image.size[1])
-                    alpha_map_attribute = mesh_data.attributes[paint_node.id]
-                    alpha_map_attribute.data.foreach_set('color', density_map_data_from_image(alpha_map_image))
+                    alpha_map_attribute = mesh_data.attributes[field_node.id]
+                    alpha_map_attribute.data.foreach_set('value', get_alpha_data_from_image(alpha_map_image))
 
             # Texture
             texture_reference = layer.get('Texture', None)
@@ -422,7 +423,7 @@ class TerrainInfoImporter(ActorImporter):
                 if density_map_image:
                     print(f'Density map image found for deco layer {density_map_image}')
                     # Create the paint node for the deco layer.
-                    paint_node = add_terrain_layer_node(terrain_info_object, deco_layer.nodes, type='PAINT')
+                    paint_node = add_terrain_layer_node(terrain_info_object, deco_layer.nodes, type='FIELD')
                     if terrain_map_image.size != density_map_image.size:
                         # Print out a warning if the alpha map image is not the same size as the terrain map image.
                         print(
@@ -433,7 +434,7 @@ class TerrainInfoImporter(ActorImporter):
                         density_map_image.scale(terrain_map_image.size[0], terrain_map_image.size[1])
 
                     density_map_attribute = mesh_data.attributes[paint_node.id]
-                    density_map_attribute.data.foreach_set('color', density_map_data_from_image(density_map_image))
+                    density_map_attribute.data.foreach_set('value', get_alpha_data_from_image(density_map_image))
                     deco_density_maps[density_map_image_name] = density_map_attribute
                 else:
                     print(f'Could not find density map image: {density_map_image_name}')
@@ -520,26 +521,10 @@ def height_map_data_from_image(image: Image) -> np.array:
     return np.array(h, dtype=float)
 
 
-def density_map_data_from_image(image: Image) -> np.array:
-    """
-    Converts the alpha channel of an image to RGBA data used for density maps. [THIS IS TECHNICALLY WRONG, WE NEED TO FIGURE OUT HOW TO DO THE LUMA CALCULATION CORRECTLY]
-    :param image:
-    :return:
-    """
+def get_alpha_data_from_image(image: Image) -> np.array:
     if image.channels != 4:
         raise RuntimeError('image does not have an alpha channel!')
-    alpha_data = np.array(list(image.pixels)[3::4], dtype=float)
-    color_data = np.ones(len(alpha_data) * 4, dtype=float)
-    luma_coefficients = np.array((0.2126, 0.7152, 0.0722))
-    for index, datum in enumerate(alpha_data):
-        # Sets the first three values to the alpha value.
-        start = index * 4
-        stop = start + 3
-        color_data[start:stop] = datum
-    color_data[:] = tuple(color_data)
-    # Multiply every value by 255 and change the type to int.
-    color_data *= 255
-    return color_data.astype(int)
+    return np.array(list(image.pixels)[3::4], dtype=float)
 
 
 def import_t3d(contents: str, context: Context):
