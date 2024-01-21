@@ -226,7 +226,8 @@ class BDK_OT_terrain_info_add(Operator):
     bl_label = 'Add Terrain Info'
     bl_options = {'REGISTER', 'UNDO'}
 
-    resolution: IntProperty(name='Resolution', default=512, min=2, max=512, description='The number of quads')
+    resolution: IntProperty(name='Resolution', default=512, min=2, soft_max=512, max=1024,
+                            description='The number of quads')
     size: FloatProperty(name='Size', default=500 * 60.352, subtype='DISTANCE',
                         description='The length and width of the terrain')
     quad_size: FloatProperty(name='Quad Size', get=quad_size_get, set=None, subtype='DISTANCE')
