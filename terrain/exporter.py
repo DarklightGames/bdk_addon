@@ -23,7 +23,6 @@ def get_instance_offset(asset_instance: Object) -> Matrix:  # TODO: move to gene
         return Matrix()
 
 
-# TODO: just make a conversion matrix?
 def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, Euler, Vector):
     """
     Converts a Blender world matrix to units suitable for exporting to Unreal Engine.
@@ -31,8 +30,7 @@ def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, 
     :param matrix: The Blender world matrix.
     :return: The location, rotation and scale.
     """
-    # Location is corrected by 32 units as it gets offset when brush_object is pasted into the Unreal Editor.
-    loc: Vector = matrix.to_translation() - Vector((32.0, -32.0, 32.0))
+    loc: Vector = matrix.to_translation()
     # Y-Axis is inverted in Unreal Engine.
     loc.y = -loc.y
     return loc, matrix.to_euler('XYZ'), matrix.to_scale()
