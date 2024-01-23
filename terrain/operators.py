@@ -1057,7 +1057,7 @@ class BDK_OT_terrain_info_shift(Operator):
                     continue
                 if self.selected and not obj.select_get():
                     continue
-                if obj != terrain_info_object:
+                if obj.bdk.type != 'TERRAIN_INFO':
                     obj.location += translation
 
         # Convert the z-values of the terrain info vertices to a numpy array.
