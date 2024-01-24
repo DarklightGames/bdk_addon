@@ -14,9 +14,7 @@ from .operators import BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplica
     BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze
 from .scatter.operators import BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_scatter_layer_objects_duplicate, \
-    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add, BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove, \
-    BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move
+    BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_scatter_layer_objects_duplicate
 from .properties import BDK_PG_terrain_doodad
 
 
@@ -533,53 +531,6 @@ def poll_has_terrain_doodad_scatter_layer_selected(cls, context: Context):
     return len(terrain_doodad.scatter_layers) > 0 and terrain_doodad.scatter_layers_index >= 0
 
 
-def get_selected_terrain_doodad_scatter_layer_mask_node(context: Context):
-    terrain_doodad = get_terrain_doodad(context.active_object)
-    scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
-    if len(scatter_layer.mask_nodes) == 0:
-        return None
-    return scatter_layer.mask_nodes[scatter_layer.mask_nodes_index]
-
-
-class BDK_PT_terrain_doodad_scatter_layer_mask(Panel):
-    bl_label = 'Mask'
-    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_mask'
-    bl_category = 'BDK'
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
-    bl_order = 20
-
-    @classmethod
-    def poll(cls, context: 'Context'):
-        # TODO: revive this later.
-        return False
-        # return poll_has_terrain_doodad_scatter_layer_selected(cls, context)
-
-    def draw_header(self, context: 'Context'):
-        layout = self.layout
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
-        layout.prop(scatter_layer, 'use_mask_nodes', text='')
-
-    def draw(self, context: 'Context'):
-        layout = self.layout
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
-
-        # TODO: add the whole UI setup for editing a node tree.
-        draw_terrain_layer_node_list(layout, 'BDK_UL_terrain_doodad_scatter_layer_nodes',
-                                     scatter_layer, 'mask_nodes', 'mask_nodes_index',
-                                     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_add.bl_idname,
-                                     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_remove.bl_idname,
-                                     BDK_OT_terrain_doodad_scatter_layer_mask_nodes_move.bl_idname)
-
-        # TODO: draw the node settings
-        node = get_selected_terrain_doodad_scatter_layer_mask_node(context)
-        if node is not None:
-            draw_terrain_layer_node_settings(layout, node)
-
-
 class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
     bl_label = 'Curve Settings'
     bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_curve_settings'
@@ -787,8 +738,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
 
     @classmethod
     def poll(cls, context: 'Context'):
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        return len(terrain_doodad.scatter_layers) > 0
+        return poll_has_terrain_doodad_scatter_layer_selected(cls, context)
 
     def draw(self, context: 'Context'):
         layout = self.layout
@@ -838,6 +788,54 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
             if scatter_layer.object_select_mode == 'WEIGHTED_RANDOM':
                 flow.prop(scatter_layer_object, 'random_weight')
                 flow.separator()
+
+
+class BDK_PT_terrain_doodad_scatter_layer_mask(Panel):
+    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_mask'
+    bl_label = 'Mask'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_order = 30
+    bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        return poll_has_terrain_doodad_scatter_layer_selected(cls, context)
+
+    def draw_header(self, context):
+        layout = self.layout
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        layout.prop(scatter_layer, 'use_mask', text='')
+
+    def draw(self, context):
+        layout = self.layout
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        flow = layout.grid_flow(align=True, columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        flow.prop(scatter_layer, 'mask_type', text='Type')
+
+        if not scatter_layer.use_mask:
+            layout.active = False
+
+        match scatter_layer.mask_type:
+            case 'ATTRIBUTE':
+                flow.prop(scatter_layer, 'mask_attribute_name', text='Attribute')
+            case 'PAINT_LAYER':
+                flow.prop(scatter_layer, 'mask_paint_layer_name', text='Paint Layer')
+
+        flow.prop(scatter_layer, 'mask_threshold', text='Threshold')
+        flow.prop(scatter_layer, 'mask_invert', text='Invert')
+
+        flow.separator()
+
+        flow.prop(scatter_layer, 'mask_attribute_id', emboss=False)
 
 
 def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = None):

@@ -430,7 +430,7 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
 
-def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
+def add_chained_math_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
     if not value_sockets:
         return None
     output_socket = value_sockets[0]
@@ -633,25 +633,3 @@ def add_curve_spline_loop_nodes(node_tree: NodeTree, curve_socket: NodeSocket, i
     inner_loop_nodes_function(node_tree, sockets)
 
     return repeat_output_node.outputs['Geometry']
-
-
-
-# def ensure_curve_extend_node_tree() -> NodeTree:
-#     inputs = {('NodeSocketGeometry', 'Geometry'), ('NodeSocketFloat', 'Root Length'), ('NodeSocketFloat', 'Tip Length')}
-#     outputs = {('NodeSocketGeometry', 'Geometry')}
-#     node_tree = ensure_geometry_node_tree('BDK Extend Curve', inputs, outputs)
-#     input_node, output_node = ensure_input_and_output_nodes(node_tree)
-#
-#     # Add Mesh to Curve node.
-#     mesh_to_curve_node = node_tree.nodes.new(type='GeometryNodeMeshToCurve')
-#     node_tree.links.new(mesh_to_curve_node.outputs['Curve'], output_node.inputs['Geometry'])
-#
-#     # Create a Curve tip and Curve root node group. (don't reuse the assets since they can change underfoot)
-#
-#     # Add Set Position nodes.
-#     tip_set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
-#     root_set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
-#
-#     # Add Curve Tip node group node.
-#     curve_tip_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-#     curve_tip_node_group_node.node_tree = bpy.data.

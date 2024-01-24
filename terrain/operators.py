@@ -1073,14 +1073,23 @@ class BDK_OT_terrain_info_shift(Operator):
 
         if 'PAINT_LAYERS' in self.data_types:
             for attribute in mesh_data.attributes:
-                if attribute.data_type == 'BYTE_COLOR':
-                    # Convert the attribute values to a numpy array.
-                    shape = (terrain_info.x_size, terrain_info.y_size, 4)
-                    count = terrain_info.x_size * terrain_info.y_size
-                    attribute_values = numpy.fromiter(map(lambda v: v.color, attribute.data), dtype=(float, 4), count=count).reshape(shape)
-                    attribute_values = numpy.roll(attribute_values, (self.x, self.y), axis=(1, 0))
-                    # Reassign the attribute values.
-                    attribute.data.foreach_set('color', attribute_values.flatten())
+                match attribute.data_type:
+                    case 'BYTE_COLOR':
+                        # Convert the attribute values to a numpy array.
+                        shape = (terrain_info.x_size, terrain_info.y_size, 4)
+                        count = terrain_info.x_size * terrain_info.y_size
+                        attribute_values = numpy.fromiter(map(lambda v: v.color, attribute.data), dtype=(float, 4), count=count).reshape(shape)
+                        attribute_values = numpy.roll(attribute_values, (self.x, self.y), axis=(1, 0))
+                        # Reassign the attribute values.
+                        attribute.data.foreach_set('color', attribute_values.flatten())
+                    case 'FLOAT':
+                        shape = terrain_info.x_size, terrain_info.y_size
+                        count = terrain_info.x_size * terrain_info.y_size
+                        attribute_values = numpy.fromiter(map(lambda v: v.value, attribute.data), dtype=float,
+                                                          count=count).reshape(shape)
+                        attribute_values = numpy.roll(attribute_values, (self.x, self.y), axis=(1, 0))
+                        # Reassign the attribute values.
+                        attribute.data.foreach_set('value', attribute_values.flatten())
 
         # Shift the quad tesselation.
         if 'QUAD_TESSELATION' in self.data_types:

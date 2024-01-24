@@ -8,7 +8,7 @@ from ....actor.properties import BDK_PG_actor_properties
 from ....helpers import get_terrain_doodad
 from ....property_group_helpers import add_curve_modifier_properties
 from ....units import meters_to_unreal
-from ...properties import BDK_PG_terrain_layer_node
+from ...properties import BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_name
 from .builder import ensure_scatter_layer_modifiers
 
 
@@ -101,6 +101,46 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     actor_properties: PointerProperty(type=BDK_PG_actor_properties, name='Actor Properties', options={'HIDDEN'})
 
 
+def terrain_doodad_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context, edit_text: str):
+    paint_layers = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info.paint_layers
+    return [paint_layer.name for paint_layer in paint_layers]
+
+def terrain_doodad_scatter_layer_mask_attribute_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
+    if self.mask_type != 'ATTRIBUTE':
+        return
+    # TODO: update this when we have named attribute layers
+    self.mask_attribute_id = self.mask_attribute_name
+
+    terrain_doodad = self.terrain_doodad_object.bdk.terrain_doodad
+    ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+def terrain_doodad_mask_paint_layer_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
+    if self.mask_type != 'PAINT_LAYER':
+        return
+
+    terrain_info = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
+    paint_layer = get_terrain_info_paint_layer_by_name(terrain_info, self.mask_paint_layer_name)
+    self.mask_attribute_id = paint_layer.id if paint_layer else ''
+
+    terrain_doodad = self.terrain_doodad_object.bdk.terrain_doodad
+    ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+
+def terrain_doodad_scatter_layer_mask_type_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
+    terrain_info = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
+    match self.mask_type:
+        case 'PAINT_LAYER':
+            paint_layer = get_terrain_info_paint_layer_by_name(terrain_info, self.mask_paint_layer_name)
+            self.mask_attribute_id = paint_layer.id if paint_layer else ''
+        case 'ATTRIBUTE':
+            self.mask_attribute_id = self.mask_attribute_name
+        case _:
+            raise ValueError(f'Invalid mask type: {self.mask_type}')
+
+    terrain_doodad = self.terrain_doodad_object.bdk.terrain_doodad
+    ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
@@ -187,10 +227,22 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     position_deviation_seed: IntProperty(name='Position Offset Seed', default=0, min=0)
 
     # Mask Settings
-    use_mask_nodes: BoolProperty(name='Use Mask Nodes', default=False, options=empty_set)
-    mask_nodes: CollectionProperty(name='Mask Nodes', type=BDK_PG_terrain_layer_node, options=empty_set)
-    mask_nodes_index: IntProperty(options={'HIDDEN'})
+    use_mask: BoolProperty(name='Use Mask', default=False, options=empty_set,
+                           description='Use a layer or attribute mask to control where the scatter objects will be placed')
+    mask_type: EnumProperty(name='Mask Type', items=(
+        ('ATTRIBUTE', 'Attribute', ''),
+        ('PAINT_LAYER', 'Paint Layer', ''),
+    ), default='ATTRIBUTE', update=terrain_doodad_scatter_layer_mask_type_update_cb)
+    mask_attribute_name: StringProperty(name='Mask Attribute Name', default='', options={'HIDDEN'},
+                                        update=terrain_doodad_scatter_layer_mask_attribute_name_update_cb)
+    mask_paint_layer_name: StringProperty(name='Mask Paint Layer Name', default='', options={'HIDDEN'},
+                                          search=terrain_doodad_paint_layer_name_search_cb,
+                                          update=terrain_doodad_mask_paint_layer_name_update_cb)
     mask_attribute_id: StringProperty(name='Mask Attribute ID', default='', options={'HIDDEN'})
+    mask_threshold: FloatProperty(name='Mask Threshold', default=0.5, min=0.0, max=1.0, subtype='FACTOR',
+                                  description='The value at which the mask will be applied')
+    mask_invert: BoolProperty(name='Invert', default=False, options=empty_set,
+                                description='Invert the mask')
 
     # Paint Layers
     paint_layers: CollectionProperty(name='Paint Layers', type=BDK_PG_terrain_doodad_scatter_layer_paint_layer,

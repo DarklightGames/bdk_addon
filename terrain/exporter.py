@@ -57,6 +57,7 @@ def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optiona
     actor.properties['Class'] = 'StaticMeshActor'
     actor.properties['Name'] = static_mesh_object.name
     actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
+
     add_movement_properties_to_actor(actor, static_mesh_object, asset_instance)
 
     # Skin Overrides

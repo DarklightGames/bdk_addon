@@ -423,6 +423,18 @@ def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', laye
             return paint_layer
     return None
 
+def get_terrain_info_paint_layer_by_name(terrain_info: 'BDK_PG_terrain_info', layer_name: str) -> Optional[BDK_PG_terrain_paint_layer]:
+    """
+    Gets the paint layer with the given name, or None if no such layer exists.
+    :param terrain_info:
+    :param layer_name:
+    :return:
+    """
+    for paint_layer in terrain_info.paint_layers:
+        if paint_layer.name == layer_name:
+            return paint_layer
+    return None
+
 
 def get_terrain_info_deco_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> Optional[BDK_PG_terrain_deco_layer]:
     """

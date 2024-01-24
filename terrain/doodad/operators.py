@@ -589,15 +589,6 @@ class BDK_OT_terrain_doodad_demote(Operator):
 
         return {'FINISHED'}
 
-# TODO: this should be generic for all node trees.
-def add_scatter_layer_mask_node(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer', node_type: str):
-    node = scatter_layer.mask_nodes.add()
-    node.terrain_info_object = scatter_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object
-    node.type = node_type
-    node.id = uuid.uuid4().hex
-    node.name = ensure_name_unique(node_type_item_names[node_type], [n.name for n in scatter_layer.mask_nodes])
-    return node
-
 
 class BDK_OT_terrain_doodad_save_preset(Operator):
     bl_idname = 'bdk.terrain_doodad_save_preset'

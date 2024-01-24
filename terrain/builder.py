@@ -110,7 +110,11 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
             paint_layer_uv_node.inputs['TerrainScale'].default_value = terrain_info.terrain_scale
 
             reference = UReference.from_string(material.bdk.package_reference)
+
             unreal_material = material_builder.load_material(reference)
+
+            if unreal_material is None:
+                print(f'WARNING: Could not load material ({reference}) for paint layer {paint_layer_index}')
 
             material_outputs = material_builder.build(unreal_material, paint_layer_uv_node.outputs['UV'])
 

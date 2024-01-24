@@ -477,7 +477,6 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
     modifiers[terrain_info.doodad_attribute_modifier_name].node_group = _ensure_terrain_doodad_attribute_modifier_node_group(terrain_info.doodad_attribute_modifier_name, terrain_info, terrain_doodads)
     modifiers[terrain_info.doodad_paint_modifier_name].node_group = _ensure_terrain_doodad_paint_modifier_node_group(terrain_info.doodad_paint_modifier_name, terrain_info, terrain_doodads)
     modifiers[terrain_info.doodad_deco_modifier_name].node_group = _ensure_terrain_doodad_deco_modifier_node_group(terrain_info.doodad_deco_modifier_name, terrain_info, terrain_doodads)
-    modifiers[terrain_info.doodad_mask_modifier_name].node_group = _ensure_terrain_doodad_scatter_layer_mask_modifier_node_group(terrain_info.doodad_mask_modifier_name, terrain_info, terrain_doodads)
 
     # Rebuild the modifier node trees for the paint and deco layers.
     ensure_paint_layers(terrain_info_object)
@@ -872,25 +871,6 @@ def _ensure_terrain_doodad_sculpt_modifier_node_group(name: str, terrain_info: '
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
-def terrain_doodad_scatter_layer_mask_node_data_path_get(dataptr_name: str, dataptr_index: int, node_index: int,
-                                                         property_name: str, index: Optional[int] = None) -> str:
-    if index is not None:
-        return f'bdk.terrain_doodad.{dataptr_name}[{dataptr_index}].mask_nodes[{node_index}].{property_name}[{index}]'
-    else:
-        return f'bdk.terrain_doodad.{dataptr_name}[{dataptr_index}].mask_nodes[{node_index}].{property_name}'
-
-
-def _add_terrain_doodad_scatter_layer_mask_to_node_tree(node_tree: NodeTree, geometry_socket: NodeSocket, scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeSocket:
-    # TODO: clearly this will not work
-    density_socket = add_density_from_terrain_layer_nodes(
-        node_tree,
-        scatter_layer.terrain_doodad_object,
-        'scatter_layers', scatter_layer.index, scatter_layer.mask_nodes,
-        terrain_doodad_scatter_layer_mask_node_data_path_get)
-
-    return geometry_socket
-
-
 def add_paint_layer_driver(struct: bpy_struct, paint_layer: 'BDK_PG_terrain_doodad_paint_layer', data_path: str,
                            path: str = 'default_value'):
     driver = struct.driver_add(path).driver
@@ -1102,37 +1082,11 @@ def _ensure_terrain_doodad_deco_modifier_node_group(name: str, terrain_info: 'BD
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
-def _ensure_terrain_doodad_scatter_layer_mask_modifier_node_group(
-        name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
-
-    items = {
-        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
-    }
-
-    # TODO: this shit doesn't work, rewrite it
-
-    def build_function(node_tree: NodeTree):
-        input_node, output_node = ensure_input_and_output_nodes(node_tree)
-
-        geometry_socket = input_node.outputs['Geometry']
-
-        for terrain_doodad in terrain_doodads:
-            for scatter_layer in terrain_doodad.scatter_layers:
-                geometry_socket = _add_terrain_doodad_scatter_layer_mask_to_node_tree(node_tree, geometry_socket, scatter_layer)
-
-        node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
-
-    return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
-
-
 def _ensure_terrain_doodad_attribute_modifier_node_group(name: str, terrain_info: 'BDK_PG_terrain_info', terrain_doodads: Iterable['BDK_PG_terrain_doodad']) -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
-
-    # TODO: this shit doesn't work, rewrite it
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1142,12 +1096,30 @@ def _ensure_terrain_doodad_attribute_modifier_node_group(name: str, terrain_info
 
         geometry_socket = input_node.outputs['Geometry']
 
-        # TODO: DOESN'T WORK
+        # Paint Layers
+        attribute_layers = list(filter(lambda x: x.layer_type == 'ATTRIBUTE',
+                                  chain.from_iterable(map(lambda x: x.paint_layers, terrain_doodads))))
+        attribute_layer_ids = set(map(lambda x: x.attribute_layer_id, attribute_layers))
 
-        for terrain_doodad in terrain_doodads:
-            for paint_layer in filter(lambda x: x.layer_type == 'ATTRIBUTE', terrain_doodad.paint_layers):
-                # geometry_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, geometry_socket, paint_layer)
-                pass
+        for attribute_layer_id in attribute_layer_ids:
+            named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+            named_attribute_node.data_type = 'FLOAT'
+            named_attribute_node.inputs['Name'].default_value = attribute_layer_id
+
+            value_socket = named_attribute_node.outputs['Attribute']
+
+            for paint_layer in filter(lambda x: x.attribute_layer_id == attribute_layer_id, attribute_layers):
+                value_socket = _add_terrain_doodad_paint_layer_to_node_tree(node_tree, paint_layer, value_socket)
+
+            store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_named_attribute_node.data_type = 'FLOAT'
+            store_named_attribute_node.domain = 'POINT'
+            store_named_attribute_node.inputs['Name'].default_value = attribute_layer_id
+
+            node_tree.links.new(value_socket, store_named_attribute_node.inputs['Value'])
+            node_tree.links.new(geometry_socket, store_named_attribute_node.inputs['Geometry'])
+
+            geometry_socket = store_named_attribute_node.outputs['Geometry']
 
         # Drivers
         _add_terrain_info_driver(mute_switch_node.inputs['Switch'], terrain_info, 'is_attribute_modifier_muted')

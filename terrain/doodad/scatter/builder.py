@@ -4,7 +4,7 @@ import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 
 from ....helpers import ensure_name_unique
-from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
+from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_operation_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
     add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes, \
     CurveSplineLoopSockets
@@ -192,8 +192,8 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         align_z_node.axis = 'Z'
         align_z_node.inputs["Factor"].default_value = 1.0
 
-        seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Random Rotation Seed'],
-                                                                input_node.outputs['Global Seed']])
+        seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Random Rotation Seed'],
+                                                                          input_node.outputs['Global Seed']])
 
         negate_random_rotation_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         negate_random_rotation_node.label = 'Negate Random Rotation'
@@ -448,7 +448,7 @@ def ensure_select_random_node_tree() -> NodeTree:
         random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
         random_value_node.data_type = 'BOOLEAN'
 
-        seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
+        seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
 
         # Input
         node_tree.links.new(input_node.outputs['Factor'], random_value_node.inputs[6]) # Probability
@@ -839,8 +839,8 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         normal_offset_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
         tangent_offset_random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
 
-        normal_offset_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Normal Offset Seed'], input_node.outputs['Global Seed']])
-        tangent_offset_seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Tangent Offset Seed'], input_node.outputs['Global Seed']])
+        normal_offset_seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Normal Offset Seed'], input_node.outputs['Global Seed']])
+        tangent_offset_seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Tangent Offset Seed'], input_node.outputs['Global Seed']])
 
         node_tree.links.new(tangent_offset_seed_socket, tangent_offset_random_value_node.inputs['Seed'])
 
@@ -917,8 +917,8 @@ def ensure_select_object_index_node_tree() -> NodeTree:
         store_named_attribute_node.domain = 'POINT'
         store_named_attribute_node.inputs['Name'].default_value = 'object_index'
 
-        seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Object Select Seed'],
-                                                                input_node.outputs['Global Seed']])
+        seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Object Select Seed'],
+                                                                          input_node.outputs['Global Seed']])
 
         math_node = node_tree.nodes.new(type='ShaderNodeMath')
         math_node.operation = 'FLOORED_MODULO'
@@ -987,7 +987,7 @@ def ensure_terrain_normal_offset_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
+        seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
 
         vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         vector_math_node.operation = 'SCALE'
@@ -1089,8 +1089,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         store_scale_attribute_node.data_type = 'FLOAT_VECTOR'
         store_scale_attribute_node.label = 'Store Scale Attribute'
 
-        scale_seed_socket = add_chained_math_nodes(node_tree, 'ADD',
-                                                   [input_node.outputs['Scale Seed'], input_node.outputs['Global Seed']])
+        scale_seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Scale Seed'], input_node.outputs['Global Seed']])
 
         scale_multiply_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         scale_multiply_node.operation = 'MULTIPLY'
@@ -1167,7 +1166,7 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        seed_socket = add_chained_math_nodes(node_tree, 'ADD', [input_node.outputs['Face Distribute Seed'], input_node.outputs['Global Seed']])
+        seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Face Distribute Seed'], input_node.outputs['Global Seed']])
 
         distribute_points_on_faces_random_node = node_tree.nodes.new(type='GeometryNodeDistributePointsOnFaces')
         distribute_points_on_faces_random_node.distribute_method = 'RANDOM'
@@ -1296,7 +1295,7 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
                 node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
                 add_scatter_layer_driver(vector_component_group_node.inputs['Index'], 'curve_spacing_relative_axis')
                 length_sockets.append(vector_component_group_node.outputs['Value'])
-            spacing_length_socket = add_chained_math_nodes(node_tree, 'MAXIMUM', length_sockets)
+            spacing_length_socket = add_chained_math_operation_nodes(node_tree, 'MAXIMUM', length_sockets)
 
             spacing_mode_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
             spacing_mode_switch_node.input_type = 'FLOAT'
@@ -1559,9 +1558,20 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             node_tree.links.new(scatter_layer_object_node_group_node.outputs['Points'],
                                 join_geometry_node.inputs['Geometry'])
 
-        # Check if we are using the density mask.
+        # Mask
+        mask_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        mask_node.node_tree = ensure_scatter_layer_mask_node_tree()
+
+        add_scatter_layer_driver(mask_node.inputs['Invert'], 'mask_invert')
+        add_scatter_layer_driver(mask_node.inputs['Threshold'], 'mask_threshold')
+
         mask_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-        add_scatter_layer_driver(mask_switch_node.inputs['Switch'], 'use_mask_nodes')
+        mask_switch_node.label = 'Mask Switch'
+        add_scatter_layer_driver(mask_switch_node.inputs['Switch'], 'use_mask')
+
+        mask_node.inputs['Attribute Name'].default_value = scatter_layer.mask_attribute_id
+
+        node_tree.links.new(mask_node.outputs['Points'], mask_switch_node.inputs['True'])
 
         # Pass through density.
         select_random_points_node = node_tree.nodes.new(type='GeometryNodeGroup')
@@ -1580,7 +1590,11 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         mute_switch_node.input_type = 'GEOMETRY'
         mute_switch_node.label = 'Mute'
 
-        node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mute_switch_node.inputs['False'])
+        node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mask_switch_node.inputs['False'])
+        node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mask_node.inputs['Points'])
+        node_tree.links.new(terrain_info_object_node.outputs['Geometry'], mask_node.inputs['Terrain Geometry'])
+        node_tree.links.new(mask_switch_node.outputs['Output'], mute_switch_node.inputs['False'])
+
         add_scatter_layer_driver(mute_switch_node.inputs['Switch'], 'mute')
 
         node_tree.links.new(mute_switch_node.outputs['Output'], output_node.inputs['Geometry'])
@@ -1791,3 +1805,60 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
         node_tree.links.new(repeat_output_node.outputs['Geometry'], output_node.inputs['Curve'])
 
     return ensure_geometry_node_tree('BDK Shrinkwrap Curve To Terrain', inputs, build_function)
+
+
+def ensure_scatter_layer_mask_node_tree() -> NodeTree:
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Points'),
+        ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
+        ('INPUT', 'NodeSocketString', 'Attribute Name'),
+        ('INPUT', 'NodeSocketFloat', 'Threshold'),
+        ('INPUT', 'NodeSocketBool', 'Invert'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Points')
+    }
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        bdk_terrain_sample_node = node_tree.nodes.new(type='GeometryNodeBDKTerrainSample')
+        delete_geometry_node = node_tree.nodes.new(type='GeometryNodeDeleteGeometry')
+
+        sample_index_node = node_tree.nodes.new(type='GeometryNodeSampleIndex')
+        sample_index_node.data_type = 'FLOAT'
+        sample_index_node.domain = 'POINT'
+
+        named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.operation = 'GREATER_EQUAL'
+
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+        invert_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        invert_switch_node.input_type = 'BOOLEAN'
+
+        boolean_not_node = node_tree.nodes.new(type='FunctionNodeBooleanMath')
+        boolean_not_node.operation = 'NOT'
+
+        # Input
+        node_tree.links.new(input_node.outputs['Points'], delete_geometry_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Terrain Geometry'], bdk_terrain_sample_node.inputs['Terrain'])
+        node_tree.links.new(input_node.outputs['Terrain Geometry'], sample_index_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Threshold'], compare_node.inputs['B'])
+        node_tree.links.new(input_node.outputs['Invert'], invert_switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Attribute Name'], named_attribute_node.inputs['Name'])
+
+        # Internal
+        node_tree.links.new(bdk_terrain_sample_node.outputs['Vertex Index'], sample_index_node.inputs['Index'])
+        node_tree.links.new(named_attribute_node.outputs['Attribute'], sample_index_node.inputs['Value'])
+        node_tree.links.new(position_node.outputs['Position'], bdk_terrain_sample_node.inputs['Source Position'])
+        node_tree.links.new(sample_index_node.outputs['Value'], compare_node.inputs['A'])
+        node_tree.links.new(compare_node.outputs['Result'], boolean_not_node.inputs['Boolean'])
+        node_tree.links.new(compare_node.outputs['Result'], invert_switch_node.inputs['False'])
+        node_tree.links.new(invert_switch_node.outputs['Output'], delete_geometry_node.inputs['Selection'])
+        node_tree.links.new(boolean_not_node.outputs['Boolean'], invert_switch_node.inputs['True'])
+
+        # Output
+        node_tree.links.new(delete_geometry_node.outputs['Geometry'], output_node.inputs['Points'])
+
+    return ensure_geometry_node_tree('BDK Scatter Layer Mask', items, build_function)
