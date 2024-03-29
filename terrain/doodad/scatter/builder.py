@@ -627,18 +627,26 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
             fence_point_tangent_and_normals_node = node_tree.nodes.new(type='GeometryNodeGroup')
             fence_point_tangent_and_normals_node.node_tree = ensure_fence_point_tangent_and_normal_node_tree()
 
-            node_tree.links.new(curve_to_points_node.outputs['Points'], fence_point_tangent_and_normals_node.inputs['Geometry'])
+            store_radius_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+            store_radius_attribute_node.data_type = 'FLOAT'
+            store_radius_attribute_node.inputs['Name'].default_value = 'radius'
+
+            node_tree.links.new(curve_to_points_node.outputs['Points'], store_radius_attribute_node.inputs['Geometry'])
+
+            points_node = store_radius_attribute_node.outputs['Geometry']
+
+            node_tree.links.new(points_node, fence_point_tangent_and_normals_node.inputs['Geometry'])
             node_tree.links.new(fence_point_tangent_and_normals_node.outputs['Normal'], store_curve_normal_attribute_node.inputs['Value'])
             node_tree.links.new(fence_point_tangent_and_normals_node.outputs['Tangent'], store_curve_tangent_attribute_node.inputs['Value'])
             node_tree.links.new(check_is_cap_node.outputs['Result'], store_is_cap_attribute_node.inputs['Selection'])
             node_tree.links.new(index_node.outputs['Index'], check_is_cap_node.inputs['A'])
             node_tree.links.new(point_count_subtract_node.outputs['Value'], check_is_cap_node.inputs['B'])
-            node_tree.links.new(curve_to_points_node.outputs['Points'], domain_size_node.inputs['Geometry'])
+            node_tree.links.new(points_node, domain_size_node.inputs['Geometry'])
             node_tree.links.new(domain_size_node.outputs['Point Count'], point_count_subtract_node.inputs[0])
             node_tree.links.new(loop_sockets.spline_geometry_socket, curve_to_points_node.inputs['Curve'])
             node_tree.links.new(input_node.outputs['Spacing Length'], curve_to_points_node.inputs['Length'])
             node_tree.links.new(store_is_cap_attribute_node.outputs['Geometry'], loop_sockets.join_geometry_input_socket)
-            node_tree.links.new(curve_to_points_node.outputs['Points'], store_curve_tangent_attribute_node.inputs['Geometry'])
+            node_tree.links.new(points_node, store_curve_tangent_attribute_node.inputs['Geometry'])
             node_tree.links.new(store_curve_tangent_attribute_node.outputs['Geometry'], store_curve_normal_attribute_node.inputs['Geometry'])
             node_tree.links.new(store_curve_normal_attribute_node.outputs['Geometry'], store_spline_index_attribute_node.inputs['Geometry'])
             node_tree.links.new(store_spline_index_attribute_node.outputs['Geometry'], store_is_cap_attribute_node.inputs['Geometry'])
