@@ -67,6 +67,8 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     align_axis: EnumProperty(name='Align Axis', items=axis_signed_enum_items, default='Z')
 
     rotation_offset: FloatVectorProperty(name='Rotation Offset', subtype='EULER', default=(0.0, 0.0, 0.0))
+    rotation_offset_saturation: FloatProperty(name='Rotation Offset Saturation', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+    rotation_offset_saturation_seed: IntProperty(name='Rotation Offset Saturation Seed', default=0, min=0)
 
     random_rotation_max: FloatVectorProperty(name='Random Rotation', subtype='EULER', min=0.0, max=math.pi, default=(0.0, 0.0, 0.0))
     random_rotation_max_seed: IntProperty(name='Random Rotation Seed', default=0, min=0)

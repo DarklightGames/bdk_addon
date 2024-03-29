@@ -150,6 +150,8 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
         ('INPUT', 'NodeSocketVector', 'Rotation Offset'),
+        ('INPUT', 'NodeSocketFloat', 'Rotation Offset Saturation'),
+        ('INPUT', 'NodeSocketInt', 'Rotation Offset Saturation Seed'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry')
     }
 
@@ -192,8 +194,22 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         align_z_node.axis = 'Z'
         align_z_node.inputs["Factor"].default_value = 1.0
 
-        seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Random Rotation Seed'],
-                                                                          input_node.outputs['Global Seed']])
+        random_rotation_seed_socket = add_math_operation_nodes(node_tree, 'ADD', [
+            input_node.outputs['Random Rotation Seed'],
+            input_node.outputs['Global Seed']])
+
+        rotation_offset_saturation_seed_socket = add_math_operation_nodes(node_tree, 'ADD', [
+            input_node.outputs['Rotation Offset Saturation Seed'],
+            input_node.outputs['Global Seed']])
+
+        rotation_offset_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        rotation_offset_switch_node.input_type = 'ROTATION'
+
+        random_value_node = node_tree.nodes.new(type='FunctionNodeRandomValue')
+
+        saturation_compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        saturation_compare_node.data_type = 'FLOAT'
+        saturation_compare_node.operation = 'LESS_THAN'
 
         negate_random_rotation_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         negate_random_rotation_node.label = 'Negate Random Rotation'
@@ -204,23 +220,18 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         random_rotation_node.label = 'Random Rotation'
         random_rotation_node.data_type = 'FLOAT_VECTOR'
 
-        random_rotation_rotate_euler_node = node_tree.nodes.new(type='FunctionNodeRotateEuler')
-        random_rotation_rotate_euler_node.space = 'LOCAL'
-        random_rotation_rotate_euler_node.label = 'Random Rotation'
+        random_rotation_rotate_rotation_node = node_tree.nodes.new(type='FunctionNodeRotateRotation')
+        random_rotation_rotate_rotation_node.rotation_space = 'LOCAL'
+        random_rotation_rotate_rotation_node.label = 'Random Rotation'
 
-        rotation_offset_rotate_euler_node = node_tree.nodes.new(type='FunctionNodeRotateEuler')
-        rotation_offset_rotate_euler_node.space = 'LOCAL'
-        rotation_offset_rotate_euler_node.label = 'Rotation Offset'
+        rotation_offset_rotate_rotation_node = node_tree.nodes.new(type='FunctionNodeRotateRotation')
+        rotation_offset_rotate_rotation_node.rotation_space = 'LOCAL'
+        rotation_offset_rotate_rotation_node.label = 'Rotation Offset'
 
         curve_normal_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
         curve_normal_attribute_node.label = 'Curve Normal Attribute'
         curve_normal_attribute_node.data_type = 'FLOAT_VECTOR'
         curve_normal_attribute_node.inputs["Name"].default_value = 'curve_normal'
-
-        curve_tangent_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
-        curve_tangent_attribute_node.label = 'Curve Tangent Attribute'
-        curve_tangent_attribute_node.data_type = 'FLOAT_VECTOR'
-        curve_tangent_attribute_node.inputs["Name"].default_value = 'curve_tangent'
 
         cross_product_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         cross_product_node.operation = 'CROSS_PRODUCT'
@@ -240,23 +251,28 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Geometry'], store_rotation_attribute_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], negate_random_rotation_node.inputs[0])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], random_rotation_node.inputs[1])
-        node_tree.links.new(input_node.outputs['Rotation Offset'], rotation_offset_rotate_euler_node.inputs['Rotate By'])
+        node_tree.links.new(input_node.outputs['Rotation Offset'], rotation_offset_rotate_rotation_node.inputs['Rotate By'])
         node_tree.links.new(input_node.outputs['Fence Mode'], fence_mode_switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Rotation Offset Saturation'], saturation_compare_node.inputs['B'])
 
         # Internal
         node_tree.links.new(fence_mode_switch_node.outputs['Output'], normalize_node.inputs['Vector'])
         node_tree.links.new(terrain_normal_attribute_node.outputs['Attribute'], terrain_normal_mix_node.inputs['B'])
         node_tree.links.new(curve_tangent_attribute_node.outputs['Attribute'], align_x_node.inputs['Vector'])
-        node_tree.links.new(align_z_node.outputs['Rotation'], rotation_offset_rotate_euler_node.inputs['Rotation'])
-        node_tree.links.new(rotation_offset_rotate_euler_node.outputs['Rotation'], random_rotation_rotate_euler_node.inputs['Rotation'])
-        node_tree.links.new(random_rotation_node.outputs['Value'], random_rotation_rotate_euler_node.inputs['Rotate By'])
-        node_tree.links.new(rotation_offset_rotate_euler_node.outputs['Rotation'], random_rotation_rotate_euler_node.inputs[0])
-        node_tree.links.new(random_rotation_rotate_euler_node.outputs['Rotation'], store_rotation_attribute_node.inputs['Value'])
+        node_tree.links.new(align_z_node.outputs['Rotation'], rotation_offset_rotate_rotation_node.inputs['Rotation'])
+        node_tree.links.new(rotation_offset_switch_node.outputs['Output'], random_rotation_rotate_rotation_node.inputs['Rotation'])
+        node_tree.links.new(random_rotation_node.outputs['Value'], random_rotation_rotate_rotation_node.inputs['Rotate By'])
+        node_tree.links.new(random_rotation_rotate_rotation_node.outputs['Rotation'], store_rotation_attribute_node.inputs['Value'])
         node_tree.links.new(align_x_node.outputs['Rotation'], align_z_node.inputs['Rotation'])
         node_tree.links.new(normalize_node.outputs['Vector'], align_z_node.inputs['Vector'])
         node_tree.links.new(up_vector_node.outputs['Vector'], terrain_normal_mix_node.inputs['A'])
-        node_tree.links.new(negate_random_rotation_node.outputs['Vector'], random_rotation_node.inputs['Min'])  # Vector -> Min
-        node_tree.links.new(seed_socket, random_rotation_node.inputs['Seed'])
+        node_tree.links.new(negate_random_rotation_node.outputs['Vector'], random_rotation_node.inputs['Min'])
+        node_tree.links.new(random_rotation_seed_socket, random_rotation_node.inputs['Seed'])
+        node_tree.links.new(rotation_offset_saturation_seed_socket, random_value_node.inputs['Seed'])
+        node_tree.links.new(random_value_node.outputs['Value'], saturation_compare_node.inputs['A'])
+        node_tree.links.new(saturation_compare_node.outputs['Result'], rotation_offset_switch_node.inputs['Switch'])
+        node_tree.links.new(align_z_node.outputs['Rotation'], rotation_offset_switch_node.inputs['False'])
+        node_tree.links.new(rotation_offset_rotate_rotation_node.outputs['Rotation'], rotation_offset_switch_node.inputs['True'])
 
         # Output
         node_tree.links.new(store_rotation_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
@@ -1038,6 +1054,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Max'),
         ('INPUT', 'NodeSocketInt', 'Terrain Normal Offset Seed'),
         ('INPUT', 'NodeSocketVector', 'Rotation Offset'),
+        ('INPUT', 'NodeSocketFloat', 'Rotation Offset Saturation'),
+        ('INPUT', 'NodeSocketInt', 'Rotation Offset Saturation Seed'),
         ('INPUT', 'NodeSocketVector', 'Random Rotation Max'),
         ('INPUT', 'NodeSocketInt', 'Random Rotation Seed'),
         ('INPUT', 'NodeSocketBool', 'Fence Mode'),
@@ -1117,6 +1135,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Terrain Normal Offset Seed'], terrain_normal_offset_node_group_node.inputs['Seed'])
         node_tree.links.new(input_node.outputs['Global Seed'], terrain_normal_offset_node_group_node.inputs['Global Seed'])
         node_tree.links.new(input_node.outputs['Rotation Offset'], align_to_terrain_node_group_node.inputs['Rotation Offset'])
+        node_tree.links.new(input_node.outputs['Rotation Offset Saturation'], align_to_terrain_node_group_node.inputs['Rotation Offset Saturation'])
+        node_tree.links.new(input_node.outputs['Rotation Offset Saturation Seed'], align_to_terrain_node_group_node.inputs['Rotation Offset Saturation Seed'])
         node_tree.links.new(input_node.outputs['Random Rotation Max'], align_to_terrain_node_group_node.inputs['Random Rotation Max'])
         node_tree.links.new(input_node.outputs['Random Rotation Seed'], align_to_terrain_node_group_node.inputs['Random Rotation Seed'])
         node_tree.links.new(input_node.outputs['Global Seed'], align_to_terrain_node_group_node.inputs['Global Seed'])
@@ -1543,6 +1563,8 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             add_scatter_layer_object_driver(inputs['Rotation Offset'], 'rotation_offset', 0)
             add_scatter_layer_object_driver(inputs['Rotation Offset'], 'rotation_offset', 1)
             add_scatter_layer_object_driver(inputs['Rotation Offset'], 'rotation_offset', 2)
+            add_scatter_layer_object_driver(inputs['Rotation Offset Saturation'], 'rotation_offset_saturation')
+            add_scatter_layer_object_driver(inputs['Rotation Offset Saturation Seed'], 'rotation_offset_saturation_seed')
             add_scatter_layer_object_driver(inputs['Random Rotation Max'], 'random_rotation_max', 0)
             add_scatter_layer_object_driver(inputs['Random Rotation Max'], 'random_rotation_max', 1)
             add_scatter_layer_object_driver(inputs['Random Rotation Max'], 'random_rotation_max', 2)

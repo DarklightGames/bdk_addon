@@ -677,6 +677,8 @@ class BDK_PT_terrain_doodad_scatter_layer_object_rotation(Panel):
         flow.use_property_decorate = False
 
         flow.prop(scatter_layer_object, 'rotation_offset')
+        flow.prop(scatter_layer_object, 'rotation_offset_saturation', text='Saturation')
+        flow.prop(scatter_layer_object, 'rotation_offset_saturation_seed', text='Seed')
 
         flow.separator()
 
