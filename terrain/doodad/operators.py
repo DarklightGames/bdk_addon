@@ -163,8 +163,6 @@ class BDK_OT_terrain_doodad_freeze(Operator):
         return True
 
     def execute(self, context: Context):
-        depsgraph = context.evaluated_depsgraph_get()
-
         terrain_doodad_object = context.active_object
         terrain_doodad = get_terrain_doodad(terrain_doodad_object)
         terrain_info_object = terrain_doodad.terrain_info_object
@@ -196,6 +194,17 @@ class BDK_OT_terrain_doodad_freeze(Operator):
 
         # Make the terrain doodad the active object again.
         context.view_layer.objects.active = terrain_doodad_object
+
+        # Try to bake the scatter layers.
+        for scatter_layer in terrain_doodad.scatter_layers:
+            for modifier in scatter_layer.seed_object.modifiers:
+                session_uid = scatter_layer.seed_object.session_uid
+                for bake in modifier.bakes:
+                    bpy.ops.object.geometry_node_bake_single(
+                        session_uid=session_uid,
+                        modifier_name=modifier.name,
+                        bake_id=bake.bake_id
+                    )
 
         self.report({'INFO'}, f'Terrain doodad \'{terrain_doodad_object.name}\' frozen')  # TODO: give stats on how many layers were frozen
 

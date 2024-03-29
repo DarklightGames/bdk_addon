@@ -1512,6 +1512,16 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
     items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
 
     def build_function(node_tree: NodeTree):
+        def _add_terrain_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terrain_doodad', data_path: str,
+                                       path: str = 'default_value'):
+            driver = struct.driver_add(path).driver
+            driver.type = 'AVERAGE'
+            var = driver.variables.new()
+            var.name = data_path
+            var.type = 'SINGLE_PROP'
+            var.targets[0].id = terrain_doodad.object
+            var.targets[0].data_path = f"bdk.terrain_doodad.{data_path}"
+
         def add_scatter_layer_object_driver(struct: bpy_struct, data_path: str, index: int = -1,
                                             path: str = 'default_value'):
             _add_scatter_layer_object_driver_ex(
@@ -1620,10 +1630,24 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         mute_switch_node.input_type = 'GEOMETRY'
         mute_switch_node.label = 'Mute'
 
+        is_frozen_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        is_frozen_switch_node.input_type = 'GEOMETRY'
+        is_frozen_switch_node.label = 'Is Frozen'
+
+        # Add driver to the frozen switch node.
+        _add_terrain_doodad_driver(is_frozen_switch_node.inputs['Switch'],
+                                   scatter_layer.terrain_doodad_object.bdk.terrain_doodad, 'is_frozen')
+
+        bake_node = node_tree.nodes.new(type='GeometryNodeBake')
+
+        node_tree.links.new(mask_switch_node.outputs['Output'], is_frozen_switch_node.inputs['False'])
+        node_tree.links.new(mask_switch_node.outputs['Output'], bake_node.inputs['Geometry'])
+        node_tree.links.new(bake_node.outputs['Geometry'], is_frozen_switch_node.inputs['True'])
+
         node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mask_switch_node.inputs['False'])
         node_tree.links.new(points_to_vertices_node.outputs['Mesh'], mask_node.inputs['Points'])
         node_tree.links.new(terrain_info_object_node.outputs['Geometry'], mask_node.inputs['Terrain Geometry'])
-        node_tree.links.new(mask_switch_node.outputs['Output'], mute_switch_node.inputs['False'])
+        node_tree.links.new(is_frozen_switch_node.outputs['Output'], mute_switch_node.inputs['False'])
 
         add_scatter_layer_driver(mute_switch_node.inputs['Switch'], 'mute')
 

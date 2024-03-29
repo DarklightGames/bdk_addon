@@ -40,14 +40,6 @@ def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_
     ensure_scatter_layer_modifiers(context, terrain_doodad)
 
 
-class BDK_PG_terrain_doodad_scatter_layer_sculpt_layer(PropertyGroup):
-    pass
-
-
-class BDK_PG_terrain_doodad_scatter_layer_paint_layer(PropertyGroup):
-    pass
-
-
 class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Name')
@@ -169,6 +161,7 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
 
     planter_object: PointerProperty(type=Object, name='Planter Object', options={'HIDDEN'})
     seed_object: PointerProperty(type=Object, name='Seed Object', options={'HIDDEN'})
+    seed_bake_id: IntProperty(name='Bake ID', default=0, min=0, options={'HIDDEN'})
     sprout_object: PointerProperty(type=Object, name='Sprout Object', options={'HIDDEN'})
 
     global_seed: IntProperty(name='Global Seed', default=0, min=0,
@@ -243,26 +236,13 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     mask_attribute_id: StringProperty(name='Mask Attribute ID', default='', options={'HIDDEN'})
     mask_threshold: FloatProperty(name='Mask Threshold', default=0.5, min=0.0, max=1.0, subtype='FACTOR',
                                   description='The value at which the mask will be applied')
-    mask_invert: BoolProperty(name='Invert', default=False, options=empty_set,
-                                description='Invert the mask')
-
-    # Paint Layers
-    paint_layers: CollectionProperty(name='Paint Layers', type=BDK_PG_terrain_doodad_scatter_layer_paint_layer,
-                                     options={'HIDDEN'})
-    paint_layers_index: IntProperty(options={'HIDDEN'})
-
-    # Sculpt Layers
-    sculpt_layers: CollectionProperty(name='Sculpt Layers', type=BDK_PG_terrain_doodad_scatter_layer_sculpt_layer,
-                                      options={'HIDDEN'})
-    sculpt_layers_index: IntProperty(options={'HIDDEN'})
+    mask_invert: BoolProperty(name='Invert', default=False, options=empty_set, description='Invert the mask')
 
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 
 
 classes = (
-    BDK_PG_terrain_doodad_scatter_layer_paint_layer,
-    BDK_PG_terrain_doodad_scatter_layer_sculpt_layer,
     BDK_PG_terrain_doodad_scatter_layer_object,
     BDK_PG_terrain_doodad_scatter_layer,
 )
