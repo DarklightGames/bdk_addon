@@ -9,6 +9,7 @@ from bpy.types import Operator, Object, Context, Depsgraph, Mesh
 import bmesh
 
 from .properties import csg_operation_items
+from ..helpers import is_bdk_py_installed
 
 
 class BDK_OT_bsp_brush_add(Operator):
@@ -392,6 +393,86 @@ class BDK_OT_select_brushes_inside(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_bsp_build(Operator):
+    bl_idname = 'bdk.bsp_build'
+    bl_label = 'Build Level'
+    bl_description = 'Build the level'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    bsp_optimization: EnumProperty(
+        name='Optimization',
+        items=(
+            ('LAME', 'Lame', '', 0),
+            ('GOOD', 'Good', '', 1),
+            ('OPTIMAL', 'Optimal', '', 2),
+        ),
+        default='LAME',
+    )
+    bsp_balance: IntProperty(name='Balance', default=15, min=0, max=100, description='Balance of the BSP tree')
+    bsp_portal_bias: IntProperty(name='Portal Bias', default=70, min=0, max=100, description='Portal cutting strength')
+
+    should_do_only_visible: BoolProperty(name='Only Visible', default=False)
+    should_do_geometry: BoolProperty(name='Geometry', default=True)
+    should_do_bsp: BoolProperty(name='BSP', default=True)
+    should_do_lighting: BoolProperty(name='Lighting', default=True)
+    should_dither_lightmaps: BoolProperty(name='Dither', default=True)
+    lightmap_format: EnumProperty(
+        name='Lightmap Format',
+        items=(
+            ('DXT1', 'DXT1', ''),
+            ('DXT3', 'DXT3', ''),
+            ('RGB8', 'RGB8', ''),
+        ),
+        default='RGB8',
+    )
+
+    def draw(self, context):
+        layout = self.layout
+
+        geometry_header, geometry_panel = layout.panel_prop(self, 'should_do_geometry')
+        geometry_header.prop(self, 'should_do_geometry', text='Geometry')
+        if geometry_panel is not None:
+            geometry_panel.use_property_split = True
+            geometry_panel.use_property_decorate = False
+            geometry_panel.prop(self, 'should_do_only_visible')
+
+        bsp_header, bsp_panel = layout.panel_prop(self, 'should_do_bsp')
+        bsp_header.prop(self, 'should_do_bsp', text='BSP')
+        if bsp_panel is not None:
+            bsp_panel.use_property_split = True
+            bsp_panel.use_property_decorate = False
+            bsp_panel.prop(self, 'bsp_optimization')
+            bsp_panel.prop(self, 'bsp_balance')
+            bsp_panel.prop(self, 'bsp_portal_bias')
+
+        lighting_header, lighting_panel = layout.panel_prop(self, 'should_do_lighting')
+        lighting_header.prop(self, 'should_do_lighting', text='Lighting')
+        if lighting_panel is not None:
+            lighting_panel.use_property_split = True
+            lighting_panel.use_property_decorate = False
+            lighting_panel.prop(self, 'lightmap_format')
+            lighting_panel.prop(self, 'should_dither_lightmaps')
+
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        # Make sure that the bdk_py module is available.
+        # TODO: Move this to the poll function once we are done debugging.
+        if not is_bdk_py_installed():
+            self.report({'ERROR'}, 'bdk_py module is not installed')
+            return {'CANCELLED'}
+
+        # Iterate over all the BSP brushes in the scene and create a list of all the brush objects.
+        context.view_layer.update()
+        brush_objects = [obj for obj in context.scene.objects if obj.bdk.type == 'BSP_BRUSH']
+
+
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_bsp_brush_add,
     BDK_OT_convert_to_bsp_brush,
@@ -399,5 +480,6 @@ classes = (
     BDK_OT_bsp_brush_select_similar,
     BDK_OT_bsp_brush_snap_to_grid,
     BDK_OT_bsp_brush_check_for_errors,
-    BDK_OT_select_brushes_inside
+    BDK_OT_select_brushes_inside,
+    BDK_OT_bsp_build,
 )

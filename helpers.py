@@ -4,7 +4,7 @@ import bpy
 from typing import Iterable, Optional, Dict, List, Tuple
 
 import numpy
-from bpy.types import Material, Object, Context, Mesh, Attribute, ByteColorAttribute
+from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, Image
 from pathlib import Path
 from .data import UReference
 
@@ -194,6 +194,13 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
 def are_bdk_dependencies_installed() -> bool:
     try:
         import t3dpy
+    except ModuleNotFoundError:
+        return False
+    return True
+
+def is_bdk_py_installed() -> bool:
+    try:
+        import bdk_py
     except ModuleNotFoundError:
         return False
     return True

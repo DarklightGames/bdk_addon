@@ -194,6 +194,8 @@ classes = actor_properties.classes + \
           bsp_operators.classes + \
           bsp_ui.classes
 
+# TODO: change this so that the operators that require the T3DMap dependency return false from their poll() method
+#  this will help with discoverability of the need to install the dependencies
 if bdk_helpers.are_bdk_dependencies_installed():
     classes += t3d_ui.classes + \
                t3d_operators.classes
@@ -218,6 +220,9 @@ def bdk_select_menu_func(self, _context: bpy.types.Context):
 def bdk_object_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
     self.layout.operator(terrain_doodad_operators.BDK_OT_convert_to_terrain_doodad.bl_idname)
+
+def bdk_header_menu_func(self, _context: bpy.types.Context):
+    self.layout.operator(bsp_operators.BDK_OT_bsp_build.bl_idname)
 
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
@@ -253,6 +258,7 @@ def register():
 
     bpy.types.VIEW3D_MT_add.append(bdk_add_menu_func)
     bpy.types.VIEW3D_MT_object.append(bdk_object_menu_func)
+    bpy.types.VIEW3D_HT_header.append(bdk_header_menu_func)
 
     bpy.types.VIEW3D_MT_select_object.append(bdk_select_menu_func)
 
@@ -278,6 +284,7 @@ def unregister():
 
     bpy.types.VIEW3D_MT_add.remove(bdk_add_menu_func)
     bpy.types.VIEW3D_MT_object.remove(bdk_object_menu_func)
+    bpy.types.VIEW3D_HT_header.remove(bdk_header_menu_func)
     bpy.types.VIEW3D_MT_select_object.remove(bdk_select_menu_func)
 
     # T3DMap Copy (doodad/collections)
