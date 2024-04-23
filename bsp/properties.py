@@ -17,7 +17,7 @@ class BrushColors(Enum):
 
 
 def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, float, float, float]:
-    if csg_operation == 'CSG_Add':
+    if csg_operation == 'ADD':
         if 'PORTAL' in poly_flags:
             return BrushColors.Portal.value
         elif 'NOT_SOLID' in poly_flags:
@@ -26,7 +26,7 @@ def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, fl
             return BrushColors.SemiSolid.value
         else:
             return BrushColors.Add.value
-    elif csg_operation == 'CSG_Subtract':
+    elif csg_operation == 'SUBTRACT':
         return BrushColors.Subtract.value
     else:
         # This should never happen, but it was used for intersect and de-intersect brushes in the original editor.
@@ -34,8 +34,8 @@ def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, fl
 
 
 csg_operation_items = (
-    ('CSG_Add', 'Add', 'Add to world', 1),
-    ('CSG_Subtract', 'Subtract', 'Subtract from world', 2),
+    ('ADD', 'Add', 'Add to world', 1),
+    ('SUBTRACT', 'Subtract', 'Subtract from world', 2),
 )
 
 poly_flags_items = (
@@ -92,7 +92,7 @@ class BDK_PG_bsp_brush(PropertyGroup):
         name='CSG Operation',
         description='The CSG operation to perform when this brush is applied to the world',
         items=csg_operation_items,
-        default='CSG_Add',
+        default='ADD',
         update=bsp_brush_update,
         options=empty_set
     )

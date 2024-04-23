@@ -166,7 +166,14 @@ class BrushImporter(ActorImporter):
 
         bsp_brush = bpy_object.bdk.bsp_brush
         bsp_brush.object = bpy_object
-        bsp_brush.csg_operation = t3d_actor.properties.get('CsgOper', 'CSG_Add')
+
+        csg_operation = t3d_actor.properties.get('CsgOper', 'CSG_Add')
+        match csg_operation:
+            case 'CSG_Add':
+                csg_operation = 'ADD'
+            case 'CSG_Subtract':
+                csg_operation = 'SUBTRACT'
+        bsp_brush.csg_operation = csg_operation
         bsp_brush.poly_flags = get_poly_flags_keys_from_value(t3d_actor.properties.get('PolyFlags', 0))
 
         for key, material in materials.items():

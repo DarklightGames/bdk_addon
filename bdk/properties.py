@@ -1,4 +1,4 @@
-from bpy.types import PropertyGroup
+from bpy.types import PropertyGroup, Object
 from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty, CollectionProperty
 
 from ..fluid_surface.properties import BDK_PG_fluid_surface
@@ -17,7 +17,8 @@ class BDK_PG_object(PropertyGroup):
                            ('TERRAIN_INFO', 'Terrain Info', ''),
                            ('TERRAIN_DOODAD', 'Terrain Doodad', ''),
                            ('BSP_BRUSH', 'BSP Brush', ''),
-                           ('FLUID_SURFACE', 'Fluid Surface', '')
+                           ('FLUID_SURFACE', 'Fluid Surface', ''),
+                           ('LEVEL', 'Level', ''),
                        ),
                        default='NONE')
     terrain_info: PointerProperty(type=BDK_PG_terrain_info)
@@ -44,6 +45,8 @@ class BDK_PG_terrain_doodad_preset(PropertyGroup):
 
 
 class BDK_PG_scene(PropertyGroup):
+    level_object: PointerProperty(type=Object, poll=lambda self, obj: obj.bdk.type == 'LEVEL', name='Level Object',
+                                  description='The mesh object to use for the level geometry')
     terrain_doodad_presets: CollectionProperty(name='Terrain Doodad Presets', type=BDK_PG_terrain_doodad_preset)
     terrain_doodad_presets_index: IntProperty(options={'HIDDEN'})
 

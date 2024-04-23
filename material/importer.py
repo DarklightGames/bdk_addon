@@ -119,6 +119,15 @@ class MaterialBuilder:
         }
 
     def _load_image(self, reference: UReference):
+        # myLevel images are stored within the blend files.
+        if reference.package_name == 'myLevel':
+            print(f'Loading myLevel image from blend file \'{reference.object_name}.tga\'')
+            image = bpy.data.images.get((f'{reference.object_name}.tga', None), None)
+            if image is None:
+                print(f'Could not find image \'{reference.object_name}.tga\' in blend file.')
+            return image
+
+        # TODO: This is fundamentally unstable if the images are not being stored within the packages?
         for material_cache in self._material_caches:
             image_path = material_cache.resolve_path_for_reference(reference)
             image_path = str(image_path)
@@ -950,9 +959,6 @@ class BDK_OT_material_import(Operator, ImportHelper):
 
         node_tree = material_data.node_tree
         node_tree.nodes.clear()
-
-        # Get the Unreal reference from the file path.
-        reference = UReference.from_path(Path(self.filepath))
 
         # Try to load the material from the cache.
         unreal_material = None

@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from pathlib import Path
-from typing import Set, OrderedDict as OrderedDictType
+from typing import Set, Sequence
+from functools import partial
 
 import bpy
 from bpy.types import Operator, Context, Node, Event
@@ -19,26 +20,47 @@ class BDK_OT_install_dependencies(Operator):
     uninstall: BoolProperty(name='Uninstall', default=False)
 
     def execute(self, context):
+        commands = list()
+
+        def _execute_command(args: Sequence[str]) -> int:
+            completed_process = subprocess.run(args)
+            return completed_process.returncode != 0
+
+
         # Ensure PIP is installed.
-        args = [sys.executable, '-m', 'ensurepip', '--upgrade']
-        completed_process = subprocess.run(args)
-        if completed_process.returncode != 0:
-            self.report({'ERROR'}, 'An error occurred while installing PIP.')
-            return {'CANCELLED'}
+        commands.append(([sys.executable, '-m', 'ensurepip', '--upgrade'], 'An error occurred while installing PIP.'))
+
+        # TODO: have this be a YAML file.
+        modules = OrderedDict()
+        modules['t3dpy'] = 't3dpy'
+        modules['bdk_py'] = r'C:\dev\bdk_py\target\wheels\bdk_py-0.1.0-cp311-none-win_amd64.whl'
 
         # Install our requirements using PIP. TODO: use a requirements.txt file
         if self.uninstall:
-            args = [sys.executable, '-m', 'pip', 'uninstall', 't3dpy', '-y']
-            completed_process = subprocess.run(args)
+            for module_name in modules.keys():
+                message = bpy.app.translations.pgettext('An error occurred while uninstalling {module_name}.')
+                message = message.format(module_name=module_name)
+                commands.append(([sys.executable, '-m', 'pip', 'uninstall', module_name, '-y'], message))
+
+        for module_name, module_path in modules.items():
+            message = bpy.app.translations.pgettext('An error occurred while installing {module_name}.')
+            message = message.format(module_name=module_name)
+            commands.append(([sys.executable, '-m', 'pip', 'install', module_path], message))
+
+        # Start a progress bar.
+        wm = context.window_manager
+        wm.progress_begin(0, len(commands))
+
+        for command_index, (command, error_message) in enumerate(commands):
+            wm.progress_update(command_index)
+            completed_process = subprocess.run(command)
             if completed_process.returncode != 0:
-                self.report({'ERROR'}, 'An error occurred while uninstalling t3dpy.')
+                self.report({'ERROR'}, error_message)
                 return {'CANCELLED'}
 
-        args = [sys.executable, '-m', 'pip', 'install', 't3dpy']
-        completed_process = subprocess.run(args)
-        if completed_process.returncode != 0:
-            self.report({'ERROR'}, 'An error occurred while installing t3dpy.')
-            return {'CANCELLED'}
+        wm.progress_end()
+
+        self.report({'INFO'}, 'BDK dependencies installed successfully.')
 
         return {'FINISHED'}
 

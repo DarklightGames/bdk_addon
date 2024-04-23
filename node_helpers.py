@@ -7,20 +7,6 @@ from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, Geome
 from .data import map_range_interpolation_type_items
 
 
-def should_rebuild_node_tree(node_tree: NodeTree, source_file: str) -> bool:
-    """
-    Determines if the node tree should be rebuilt.
-    :param node_tree: The node tree to check.
-    :param source_file: The file that the node tree was created from.
-    :return: True if the node tree should be rebuilt, otherwise False.
-    """
-
-    # Check if the node tree was created by a different version of the addon.
-    mtime = os.path.getmtime(source_file)
-    if mtime != node_tree.bdk.mtime:
-        return True
-    return False
-
 def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketInt', 'Operation'),
@@ -124,7 +110,7 @@ def add_noise_type_switch_nodes(
     :param vector_socket: The node socket that has the vector value.
     :param noise_type_socket: The node socket that has the noise type value.
     :param noise_distortion_socket: The node socket for the noise distortion value.
-    :param noise_roughness_socket:
+    :param noise_roughness_socket: The node socket for the noise roughness value.
     :return: The noise value node socket.
     """
 

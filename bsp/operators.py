@@ -21,7 +21,7 @@ class BDK_OT_bsp_brush_add(Operator):
     csg_operation: EnumProperty(
         name='CSG Operation',
         items=csg_operation_items,
-        default='CSG_Add',
+        default='ADD',
     )
 
     size: FloatProperty(name='Size', default=256.0, min=0.0)
@@ -397,7 +397,7 @@ class BDK_OT_bsp_build(Operator):
     bl_idname = 'bdk.bsp_build'
     bl_label = 'Build Level'
     bl_description = 'Build the level'
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER', 'UNDO', 'PRESET'}
 
     bsp_optimization: EnumProperty(
         name='Optimization',
@@ -464,11 +464,84 @@ class BDK_OT_bsp_build(Operator):
             self.report({'ERROR'}, 'bdk_py module is not installed')
             return {'CANCELLED'}
 
+        # Go to object mode, if we are not already in object mode.
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
         # Iterate over all the BSP brushes in the scene and create a list of all the brush objects.
         context.view_layer.update()
+        scene = context.scene
+
+        if scene.bdk.level_object is None:
+            # Create a new mesh object to hold the level geometry.
+            mesh_data = bpy.data.meshes.new('Level')
+            level_object = bpy.data.objects.new('Level', mesh_data)
+            level_object.bdk.type = 'LEVEL'
+
+            # Add the object to the top-most collection.
+            collection = scene.collection
+            collection.objects.link(level_object)
+
+            # Set the level object in the scene.
+            scene.bdk.level_object = level_object
+
+        level_object = scene.bdk.level_object
         brush_objects = [obj for obj in context.scene.objects if obj.bdk.type == 'BSP_BRUSH']
 
+        from bdk_py import Poly, Brush, csg_rebuild
 
+        # Make an algorithm that sorts the brushes based on the hierarchy and the sort order.
+        # TODO: do the sort order of the brushes.
+        # TODO: evaluate the brush objects in the depsgraph.
+
+        brushes = []
+        for brush_object in brush_objects:
+            # Check if this object is visible.
+            if self.should_do_only_visible and not brush_object.visible_get():
+                continue
+
+            # Create a new Poly object for each face of the brush.
+            polys = []
+            mesh_data = brush_object.data
+
+            for polygon in mesh_data.polygons:
+                vertex_indices = [v for v in polygon.vertices]
+                vertices = []
+                for vertex_index in vertex_indices:
+                    co = mesh_data.vertices[vertex_index].co
+                    co = brush_object.matrix_world @ co
+                    x, y, z = co
+                    vertices.append((x, y, z))
+                polys.append(Poly(vertices))
+
+            brush = Brush(polys,
+                          poly_flags=brush_object.bdk.bsp_brush.poly_flags,
+                          csg_operation=brush_object.bdk.bsp_brush.csg_operation)
+            brushes.append(brush)
+
+        # Rebuild the level geometry.
+        model = csg_rebuild(brushes)
+
+        bm = bmesh.new()
+
+        for point in model.points:
+            bm.verts.new(point)
+
+        bm.verts.ensure_lookup_table()
+
+        for node in model.nodes:
+            if node.vertex_count == 0:
+                continue
+            vertices = model.vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]
+            point_indices = [vert.vertex_index for vert in vertices]
+            bm.faces.new([bm.verts[i] for i in point_indices])
+
+        mesh_data = cast(Mesh, level_object.data)
+        bm.to_mesh(mesh_data)
+        bm.free()
+
+        for region in context.area.regions:
+            region.tag_redraw()
 
         return {'FINISHED'}
 

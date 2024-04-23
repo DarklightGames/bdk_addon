@@ -94,7 +94,7 @@ class BdkAddonPreferences(AddonPreferences):
         col.operator('bdk.build_path_move', icon='TRIA_DOWN', text='').direction = 'DOWN'
 
         # TODO: parse the requirements.txt
-        required_packages = ['t3dpy']
+        required_packages = ['t3dpy', 'bdk_py']
 
         # Dependencies.
         has_uninstalled_dependencies = False

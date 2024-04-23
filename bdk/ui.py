@@ -42,7 +42,23 @@ class BDK_PT_node_tree(Panel):
         layout.prop(node_tree.bdk, 'build_hash', text='Build Hash', icon='KEYINGSET', emboss=False)
 
 
+class BDK_PT_scene(Panel):
+    bl_idname = 'BDK_PT_scene'
+    bl_label = 'BDK'
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'scene'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        scene = context.scene
+        layout.prop(scene.bdk, 'level_object', text='Level Object')
+
+
 classes = (
     BDK_MT_object_add_menu,
-    BDK_PT_node_tree
+    BDK_PT_node_tree,
+    BDK_PT_scene,
 )

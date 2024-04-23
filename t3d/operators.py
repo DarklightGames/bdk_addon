@@ -105,7 +105,16 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
     actor = T3DObject('Actor')
     actor.properties['Class'] = 'Brush'
     actor.properties['Name'] = object_name
-    actor.properties['CsgOper'] = bsp_brush.csg_operation  # Convert the IDs to the expected format
+
+    # TODO: Bidirectional mapping would be nice!
+    csg_oper = 'CSG_Add'
+    match bsp_brush.csg_operation:
+        case 'ADD':
+            csg_oper = 'CSG_Add'
+        case 'SUBTRACT':
+            csg_oper = 'CSG_Subtract'
+
+    actor.properties['CsgOper'] = csg_oper
     actor.properties['PolyFlags'] = get_poly_flags_int(bsp_brush.poly_flags)
 
     add_movement_properties_to_actor(actor, bsp_brush_object, do_rotation=False, do_scale=False)
