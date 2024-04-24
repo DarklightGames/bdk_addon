@@ -1,19 +1,17 @@
+from .data import PolyFlags, bsp_optimization_items
+from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty
+from bpy.types import PropertyGroup, Object, Context
 from enum import Enum
 from typing import Set
 
-from bpy.types import PropertyGroup, Object, Context
-from bpy.props import EnumProperty, PointerProperty, IntProperty
-
-from .data import PolyFlags
-
 
 class BrushColors(Enum):
-    Subtract    = (1.0, 0.75, 0.25, 1.0)
-    Add         = (0.5, 0.5, 1.0, 1.0)
-    Grey        = (0.6367, 0.6367, 0.6367, 1.0)
-    Portal      = (0.5, 1.0, 0.0, 1.0)
-    NotSolid    = (0.25, 0.75, 0.125, 1.0)
-    SemiSolid   = (0.875, 0.6, 0.6, 1.0)
+    Subtract = (1.0, 0.75, 0.25, 1.0)
+    Add = (0.5, 0.5, 1.0, 1.0)
+    Grey = (0.6367, 0.6367, 0.6367, 1.0)
+    Portal = (0.5, 1.0, 0.0, 1.0)
+    NotSolid = (0.25, 0.75, 0.125, 1.0)
+    SemiSolid = (0.875, 0.6, 0.6, 1.0)
 
 
 def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, float, float, float]:
@@ -40,7 +38,8 @@ csg_operation_items = (
 
 poly_flags_items = (
     ('ADDITIVE', 'Additive', 'sjs - additive blending, (Aliases PF_DirtyShadows).', 0, PolyFlags.Additive.value),
-    ('ALPHA_TEXTURE', 'Alpha Texture', 'Honor texture alpha (reuse BigWavy and SpecialPoly flags)', 0, PolyFlags.AlphaTexture.value),
+    ('ALPHA_TEXTURE', 'Alpha Texture', 'Honor texture alpha (reuse BigWavy and SpecialPoly flags)', 0,
+     PolyFlags.AlphaTexture.value),
     ('ANTI_PORTAL', 'Anti-Portal', 'Antiportal', 0, PolyFlags.AntiPortal.value),
     ('ENVIRONMENT', 'Environment', 'Poly should be drawn environment mapped.', 0, PolyFlags.Environment.value),
     ('FAKE_BACKDROP', 'Fake Backdrop', 'Poly looks exactly like backdrop.', 0, PolyFlags.FakeBackdrop.value),
@@ -65,6 +64,7 @@ poly_flags_items = (
 __poly_flag_keys_to_values__ = {key: value for key, _, _, _, value in poly_flags_items}
 __poly_flag_values_to_keys__ = {value: key for key, _, _, _, value in poly_flags_items}
 
+
 def get_poly_flags_value_from_keys(keys: Set[str]) -> int:
     poly_flags: int = 0
     for key in keys:
@@ -86,8 +86,25 @@ def bsp_brush_update(self, context: Context):
 
 empty_set = set()
 
+
+class BDK_PG_level_brush(PropertyGroup):
+    id: IntProperty('ID')
+    brush_object: PointerProperty(type=Object, name='Brush Object')
+
+
+class BDK_PG_level(PropertyGroup):
+    node_count: IntProperty('Node Count')
+    surface_count: IntProperty('Surface Count')
+    bsp_optimization: EnumProperty(items=bsp_optimization_items, name='Optimization', default='LAME')
+    brushes: CollectionProperty(type=BDK_PG_level_brush, options={'HIDDEN'},
+                                description='The list of brush objects used in generating the level geometry. '
+                                            'This is used as a look-up table so that texturing work done on the '
+                                            'level geometry can be applied to the associated brush polygons')
+
+
 class BDK_PG_bsp_brush(PropertyGroup):
-    object: PointerProperty(type=Object, name='Object', description='The object this property group is attached to', options={'HIDDEN'})
+    object: PointerProperty(type=Object, name='Object', description='The object this property group is attached to',
+                            options={'HIDDEN'})
     csg_operation: EnumProperty(
         name='CSG Operation',
         description='The CSG operation to perform when this brush is applied to the world',

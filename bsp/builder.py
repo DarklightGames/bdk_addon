@@ -1,14 +1,12 @@
 # NOTE: This is taken more or less verbatim from the ase2t3d source, adopted for Python.
 # In the future, clean this up so that it's more clear what is going on.
-from typing import Iterable, Optional
-
-from math import isnan
-import mathutils
-import numpy as np
-
+from ..t3d.data import Polygon
 from bmesh.types import BMFace
 from bpy.types import Material
-from ..t3d.data import Polygon
+from math import isnan
+from typing import Iterable, Optional
+import mathutils
+import numpy as np
 
 
 def get_uvs_for_vertices(polygon: Polygon, material: Material, vertices: Iterable[mathutils.Vector]):

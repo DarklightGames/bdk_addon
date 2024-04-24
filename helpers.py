@@ -1,12 +1,11 @@
-import os
-import re
-import bpy
-from typing import Iterable, Optional, Dict, List, Tuple
-
-import numpy
+from .data import UReference
 from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, Image
 from pathlib import Path
-from .data import UReference
+from typing import Iterable, Optional, Dict, List, Tuple
+import bpy
+import numpy
+import os
+import re
 
 
 def ensure_name_unique(name, names: Iterable[str]):
@@ -166,8 +165,8 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
         if reference.object_name in bpy.data.objects:
             return bpy.data.objects[reference.object_name].data
         # Name look-up failed, sometimes the names can differ only by case, so manually check the names of each object
-        for object in bpy.data.objects:
-            if object.name.upper() == reference.object_name.upper():
+        for obj in bpy.data.objects:
+            if obj.name.upper() == reference.object_name.upper():
                 return bpy.data.objects[reference.object_name].data
         # Failed to find object in myLevel package. (handle reporting this errors downstream)
         return None

@@ -1,15 +1,15 @@
-import sys
+from ..helpers import is_bdk_py_installed
+from .data import bsp_optimization_items
+from .properties import csg_operation_items
+from bdk_py import Poly, Brush, csg_rebuild
+from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
+from bpy.types import Operator, Object, Context, Depsgraph, Mesh
 from collections import OrderedDict
 from enum import Enum
 from typing import Set, cast
-
-import bpy
-from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
-from bpy.types import Operator, Object, Context, Depsgraph, Mesh
 import bmesh
-
-from .properties import csg_operation_items
-from ..helpers import is_bdk_py_installed
+import bpy
+import sys
 
 
 class BDK_OT_bsp_brush_add(Operator):
@@ -18,12 +18,7 @@ class BDK_OT_bsp_brush_add(Operator):
     bl_description = 'Add a BSP brush to the scene'
     bl_options = {'REGISTER', 'UNDO'}
 
-    csg_operation: EnumProperty(
-        name='CSG Operation',
-        items=csg_operation_items,
-        default='ADD',
-    )
-
+    csg_operation: EnumProperty(name='CSG Operation', items=csg_operation_items, default='ADD')
     size: FloatProperty(name='Size', default=256.0, min=0.0)
 
     # TODO: options for shape, size etc.
@@ -71,12 +66,7 @@ class BDK_OT_bsp_brush_set_sort_order(Operator):
     bl_description = 'Set the sort order of selected BSP brushes'
     bl_options = {'REGISTER', 'UNDO'}
 
-    sort_order: IntProperty(
-        name='Sort Order',
-        default=0,
-        min=0,
-        max=8,
-    )
+    sort_order: IntProperty(name='Sort Order', default=0, min=0, max=8)
 
     @classmethod
     def poll(cls, context):
@@ -129,6 +119,7 @@ def poll_is_active_object_bsp_brush(cls, context: Context):
         cls.poll_message_set('Selected object is not a BSP brush')
         return False
     return True
+
 
 def poll_has_selected_bsp_brushes(cls, context: Context):
     if context.selected_objects is None:
@@ -191,17 +182,20 @@ class BDK_OT_bsp_brush_select_similar(Operator):
 
         return {'FINISHED'}
 
+
 class BspBrushError(Enum):
     NOT_MANIFOLD = 1
     NOT_CONVEX = 2
+
 
 def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> Set[BspBrushError]:
     """
     Check the given object for errors and return a set of all the errors that were found.
     """
+    evaluated_obj = obj.evaluated_get(depsgraph)
     errors = set()
     bm = bmesh.new()
-    bm.from_object(obj, depsgraph)
+    bm.from_object(evaluated_obj, depsgraph)
     for edge in bm.edges:
         if not edge.is_manifold:
             errors.add(BspBrushError.NOT_MANIFOLD)
@@ -349,8 +343,10 @@ class BDK_OT_select_brushes_inside(Operator):
 
         # Iterate over all BSP brushes in the scene and select those that are inside the active brush.
         for obj in context.scene.objects:
+
             if obj.bdk.type != 'BSP_BRUSH' or obj == active_object:
                 continue
+
             if self.visible_only and not obj.visible_get():
                 continue
 
@@ -401,11 +397,7 @@ class BDK_OT_bsp_build(Operator):
 
     bsp_optimization: EnumProperty(
         name='Optimization',
-        items=(
-            ('LAME', 'Lame', '', 0),
-            ('GOOD', 'Good', '', 1),
-            ('OPTIMAL', 'Optimal', '', 2),
-        ),
+        items=bsp_optimization_items,
         default='LAME',
     )
     bsp_balance: IntProperty(name='Balance', default=15, min=0, max=100, description='Balance of the BSP tree')
@@ -488,14 +480,11 @@ class BDK_OT_bsp_build(Operator):
         level_object = scene.bdk.level_object
         brush_objects = [obj for obj in context.scene.objects if obj.bdk.type == 'BSP_BRUSH']
 
-        from bdk_py import Poly, Brush, csg_rebuild
-
-        # Make an algorithm that sorts the brushes based on the hierarchy and the sort order.
-        # TODO: do the sort order of the brushes.
-        # TODO: evaluate the brush objects in the depsgraph.
+        # TODO: Make an algorithm that sorts the brushes based on the hierarchy first, then sort order of siblings.
+        # TODO: Evaluate the brush objects in the depsgraph.
 
         brushes = []
-        for brush_object in brush_objects:
+        for brush_index, brush_object in enumerate(brush_objects):
             # Check if this object is visible.
             if self.should_do_only_visible and not brush_object.visible_get():
                 continue
@@ -509,18 +498,25 @@ class BDK_OT_bsp_build(Operator):
                 vertices = []
                 for vertex_index in vertex_indices:
                     co = mesh_data.vertices[vertex_index].co
+                    # Convert brush geometry to world-space.
                     co = brush_object.matrix_world @ co
                     x, y, z = co
                     vertices.append((x, y, z))
                 polys.append(Poly(vertices))
 
-            brush = Brush(polys,
+            brush = Brush(id=brush_index,
+                          name=brush_object.name,
+                          polys=polys,
                           poly_flags=brush_object.bdk.bsp_brush.poly_flags,
                           csg_operation=brush_object.bdk.bsp_brush.csg_operation)
             brushes.append(brush)
 
         # Rebuild the level geometry.
-        model = csg_rebuild(brushes)
+        try:
+            model = csg_rebuild(brushes)
+        except RuntimeError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
 
         bm = bmesh.new()
 
@@ -529,16 +525,30 @@ class BDK_OT_bsp_build(Operator):
 
         bm.verts.ensure_lookup_table()
 
+        brush_ids = []
+        brush_polygon_indices = []
+
         for node in model.nodes:
             if node.vertex_count == 0:
                 continue
             vertices = model.vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]
             point_indices = [vert.vertex_index for vert in vertices]
+            surface = model.surfaces[node.surface_index]
             bm.faces.new([bm.verts[i] for i in point_indices])
+
+            brush_ids.append(surface.brush_id)
+            brush_polygon_indices.append(surface.brush_polygon_index)
 
         mesh_data = cast(Mesh, level_object.data)
         bm.to_mesh(mesh_data)
         bm.free()
+
+        # Add references to brush polygons as face attributes.
+        brush_id_attribute = mesh_data.attributes.new('brush_index', 'INT', 'FACE')
+        brush_polygon_index_attribute = mesh_data.attributes.new('brush_polygon_index', 'INT', 'FACE')
+
+        brush_id_attribute.data.foreach_set('value', brush_ids)
+        brush_polygon_index_attribute.data.foreach_set('value', brush_polygon_indices)
 
         for region in context.area.regions:
             region.tag_redraw()
@@ -548,11 +558,11 @@ class BDK_OT_bsp_build(Operator):
 
 classes = (
     BDK_OT_bsp_brush_add,
-    BDK_OT_convert_to_bsp_brush,
-    BDK_OT_bsp_brush_set_sort_order,
-    BDK_OT_bsp_brush_select_similar,
-    BDK_OT_bsp_brush_snap_to_grid,
     BDK_OT_bsp_brush_check_for_errors,
-    BDK_OT_select_brushes_inside,
+    BDK_OT_bsp_brush_select_similar,
+    BDK_OT_bsp_brush_set_sort_order,
+    BDK_OT_bsp_brush_snap_to_grid,
     BDK_OT_bsp_build,
+    BDK_OT_convert_to_bsp_brush,
+    BDK_OT_select_brushes_inside,
 )
