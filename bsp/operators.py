@@ -1,15 +1,40 @@
+import numpy as np
+from mathutils import Vector, Quaternion, Matrix
+
+from .builder import ensure_bdk_brush_uv_node_tree
 from ..helpers import is_bdk_py_installed
 from .data import bsp_optimization_items
 from .properties import csg_operation_items
-from bdk_py import Poly, Brush, csg_rebuild
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
-from bpy.types import Operator, Object, Context, Depsgraph, Mesh
+from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material
 from collections import OrderedDict
 from enum import Enum
-from typing import Set, cast
+from typing import Set, cast, List, Optional
 import bmesh
 import bpy
 import sys
+import time
+
+BRUSH_INDEX_ATTRIBUTE_NAME = 'bdk.brush_index'
+BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
+ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
+TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
+TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
+MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
+
+
+def ensure_bsp_brush_object(obj: Object, csg_operation: str = 'ADD'):
+    """
+    Ensure that the given object is set up as a BSP brush object.
+    """
+    # obj.display_type = 'WIRE'
+    obj.show_in_front = True
+    obj.show_all_edges = True
+    obj.show_wire = True
+    obj.display.show_shadows = False
+    obj.bdk.type = 'BSP_BRUSH'
+    obj.bdk.bsp_brush.object = obj
+    obj.bdk.bsp_brush.csg_operation = csg_operation
 
 
 class BDK_OT_bsp_brush_add(Operator):
@@ -42,11 +67,7 @@ class BDK_OT_bsp_brush_add(Operator):
         poly_flags_attribute = mesh.attributes.new('bdk.poly_flags', 'INT', 'FACE')
 
         obj = bpy.data.objects.new('Brush', mesh)
-        obj.display_type = 'WIRE'
-        obj.bdk.type = 'BSP_BRUSH'
-        obj.bdk.bsp_brush.object = obj
-        obj.bdk.bsp_brush.csg_operation = self.csg_operation
-        obj.bdk.bsp_brush.object = obj
+        _ensure_bsp_brush_object(obj, self.csg_operation)
 
         obj.location = context.scene.cursor.location
 
@@ -91,6 +112,12 @@ class BDK_OT_convert_to_bsp_brush(Operator):
     bl_description = 'Convert the active object to a BSP brush'
     bl_options = {'REGISTER', 'UNDO'}
 
+    csg_operation: EnumProperty(
+        name='CSG Operation',
+        items=csg_operation_items,
+        default='ADD',
+    )
+
     @classmethod
     def poll(cls, context):
         if context.active_object is None:
@@ -103,11 +130,14 @@ class BDK_OT_convert_to_bsp_brush(Operator):
             return False
         return True
 
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(self, 'csg_operation')
+
     def execute(self, context):
-        obj = context.active_object
-        obj.bdk.type = 'BSP_BRUSH'
-        obj.bdk.bsp_brush.object = obj
-        context.active_object.display_type = 'WIRE'
+        _ensure_bsp_brush_object(context.active_object, self.csg_operation)
         return {'FINISHED'}
 
 
@@ -257,7 +287,7 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
 class BDK_OT_bsp_brush_snap_to_grid(Operator):
     bl_idname = 'bdk.bsp_brush_snap_to_grid'
     bl_label = 'Snap BSP Brush to Grid'
-    bl_description = 'Snap the selected BSP brushe vertices to the grid'
+    bl_description = 'Snap the selected BSP brush vertices to the grid'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -456,6 +486,8 @@ class BDK_OT_bsp_build(Operator):
             self.report({'ERROR'}, 'bdk_py module is not installed')
             return {'CANCELLED'}
 
+        from bdk_py import Poly, Brush, csg_rebuild
+
         # Go to object mode, if we are not already in object mode.
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -464,52 +496,116 @@ class BDK_OT_bsp_build(Operator):
         context.view_layer.update()
         scene = context.scene
 
+        # The user may have deleted the old object, but the scene could still be referencing it.
+        # If the linked level object is not None, but it is not linked in the scene, unlink it so a new one is created.
+        if scene.bdk.level_object is not None and scene.bdk.level_object.name not in scene.objects:
+            scene.bdk.level_object = None
+
         if scene.bdk.level_object is None:
             # Create a new mesh object to hold the level geometry.
             mesh_data = bpy.data.meshes.new('Level')
             level_object = bpy.data.objects.new('Level', mesh_data)
             level_object.bdk.type = 'LEVEL'
+            level_object.lock_location = (True, True, True)
+            level_object.lock_rotation = (True, True, True)
+            level_object.lock_scale = (True, True, True)
 
             # Add the object to the top-most collection.
             collection = scene.collection
             collection.objects.link(level_object)
 
-            # Set the level object in the scene.
+            # Set the level object in the scene.1
             scene.bdk.level_object = level_object
 
         level_object = scene.bdk.level_object
-        brush_objects = [obj for obj in context.scene.objects if obj.bdk.type == 'BSP_BRUSH']
+
+        def brush_object_filter(obj: Object):
+            if not obj.bdk.type == 'BSP_BRUSH':
+                return False
+            if self.should_do_only_visible and not obj.visible_get():
+                return False
+            return True
+
+        brush_objects = [obj for obj in context.scene.objects if brush_object_filter(obj)]
 
         # TODO: Make an algorithm that sorts the brushes based on the hierarchy first, then sort order of siblings.
         # TODO: Evaluate the brush objects in the depsgraph.
 
-        brushes = []
-        for brush_index, brush_object in enumerate(brush_objects):
-            # Check if this object is visible.
-            if self.should_do_only_visible and not brush_object.visible_get():
-                continue
+        # This is a list of the materials used for the brushes. It is populated as we iterate over the brush objects.
+        # We then use this at the end to create the materials for the level object.
+        materials: List[Optional[Material]] = []
 
+        def _get_or_add_material(material: Optional[Material]) -> int:
+            try:
+                return materials.index(material)
+            except ValueError:
+                materials.append(material)
+                return len(materials) - 1
+
+        brushes: List[Brush] = []
+        for brush_index, brush_object in enumerate(brush_objects):
             # Create a new Poly object for each face of the brush.
             polys = []
             mesh_data = brush_object.data
 
+            polygon_count = len(mesh_data.polygons)
+
+            # Origin
+            origin_data = np.zeros(polygon_count * 3, dtype=np.float32)
+            mesh_data.attributes.get(ORIGIN_ATTRIBUTE_NAME).data.foreach_get('vector', origin_data)
+            origin_data = origin_data.reshape((polygon_count, 3))
+
+            # Texture U
+            texture_u_data = np.zeros(polygon_count * 3, dtype=np.float32)
+            mesh_data.attributes.get(TEXTURE_U_ATTRIBUTE_NAME).data.foreach_get('vector', texture_u_data)
+            texture_u_data = texture_u_data.reshape((polygon_count, 3))
+
+            # Texture V
+            texture_v_data = np.zeros(polygon_count * 3, dtype=np.float32)
+            mesh_data.attributes.get(TEXTURE_V_ATTRIBUTE_NAME).data.foreach_get('vector', texture_v_data)
+            texture_v_data = texture_v_data.reshape((polygon_count, 3))
+
+            # Transform the origin and texture vectors to world-space.
+            point_transform_matrix = brush_object.matrix_world
+            translation, rotation, scale = brush_object.matrix_world.decompose()
+            vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
+            origin_data = [point_transform_matrix @ Vector(origin) for origin in origin_data]
+            texture_u_data = [vector_transform_matrix @ Vector(texture_u) for texture_u in texture_u_data]
+            texture_v_data = [vector_transform_matrix @ Vector(texture_v) for texture_v in texture_v_data]
+
             for polygon in mesh_data.polygons:
-                vertex_indices = [v for v in polygon.vertices]
+                # vertex_indices = [v for v in polygon.vertices]
                 vertices = []
-                for vertex_index in vertex_indices:
+                for vertex_index in polygon.vertices:
                     co = mesh_data.vertices[vertex_index].co
                     # Convert brush geometry to world-space.
-                    co = brush_object.matrix_world @ co
+                    co = point_transform_matrix @ co
                     x, y, z = co
                     vertices.append((x, y, z))
-                polys.append(Poly(vertices))
+
+                # Get the material index for the polygon.
+                material = mesh_data.materials[polygon.material_index]
+                material_index = _get_or_add_material(material)
+
+                polys.append(Poly(
+                    vertices,
+                    origin=tuple(origin_data[polygon.index]),
+                    texture_u=tuple(texture_u_data[polygon.index]),
+                    texture_v=tuple(texture_v_data[polygon.index]),
+                    poly_flags=set(),   # TODO: populate this with a set of flags (e.g., {'INVISIBLE', 'TWO_SIDED'})
+                    material_index=material_index,
+                ))
 
             brush = Brush(id=brush_index,
                           name=brush_object.name,
                           polys=polys,
                           poly_flags=brush_object.bdk.bsp_brush.poly_flags,
                           csg_operation=brush_object.bdk.bsp_brush.csg_operation)
+
             brushes.append(brush)
+
+        # Start a timer.
+        start_time = time.time()
 
         # Rebuild the level geometry.
         try:
@@ -517,6 +613,16 @@ class BDK_OT_bsp_build(Operator):
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
+
+        duration = time.time() - start_time
+
+        bdk_level = level_object.bdk.level
+
+        # Update statistics.
+        bdk_level.node_count = len(model.nodes)
+        bdk_level.surface_count = len(model.surfaces)
+        bdk_level.vertex_count = len(model.vertices)
+        bdk_level.point_count = len(model.points)
 
         bm = bmesh.new()
 
@@ -527,6 +633,10 @@ class BDK_OT_bsp_build(Operator):
 
         brush_ids = []
         brush_polygon_indices = []
+        origins = []
+        texture_us = []
+        texture_vs = []
+        material_indices = []
 
         for node in model.nodes:
             if node.vertex_count == 0:
@@ -538,21 +648,70 @@ class BDK_OT_bsp_build(Operator):
 
             brush_ids.append(surface.brush_id)
             brush_polygon_indices.append(surface.brush_polygon_index)
+            origins.append(model.points[surface.base_point_index])
+            texture_us.append(model.vectors[surface.texture_u_index])
+            texture_vs.append(model.vectors[surface.texture_v_index])
+            material_indices.append(surface.material_index)
 
         mesh_data = cast(Mesh, level_object.data)
         bm.to_mesh(mesh_data)
         bm.free()
 
-        # Add references to brush polygons as face attributes.
-        brush_id_attribute = mesh_data.attributes.new('brush_index', 'INT', 'FACE')
-        brush_polygon_index_attribute = mesh_data.attributes.new('brush_polygon_index', 'INT', 'FACE')
+        # Create materials for the level object.
+        mesh_data.materials.clear()
+        for material in materials:
+            mesh_data.materials.append(material)
 
-        brush_id_attribute.data.foreach_set('value', brush_ids)
-        brush_polygon_index_attribute.data.foreach_set('value', brush_polygon_indices)
+        # Add references to brush polygons as face attributes.
+        mesh_data.attributes.new(BRUSH_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
+        mesh_data.attributes.new(BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
+        mesh_data.attributes.new(ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+        mesh_data.attributes.new(TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+        mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+        mesh_data.attributes.new(MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
+
+        # NOTE: Rather than using the reference returned from `attributes.new`, we need to do the lookup again.
+        #  This is because references to the attributes are not stable across calls to `attributes.new`.
+        mesh_data.attributes[BRUSH_INDEX_ATTRIBUTE_NAME].data.foreach_set('value', brush_ids)
+        mesh_data.attributes[BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME].data.foreach_set('value', brush_polygon_indices)
+        mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(origins).flatten())
+        mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_us).flatten())
+        mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_vs).flatten())
+        mesh_data.attributes[MATERIAL_INDEX_ATTRIBUTE_NAME].data.foreach_set('value', material_indices)
 
         for region in context.area.regions:
             region.tag_redraw()
 
+        # Make sure the level object has the UV geometry node modifier.
+        uv_map_modifier = level_object.modifiers.get('BDK Level UV Mapping')
+        if uv_map_modifier is None:
+            uv_map_modifier = level_object.modifiers.new(name='BDK Level UV Mapping', type='NODES')
+        uv_map_modifier.node_group = ensure_bdk_brush_uv_node_tree()
+
+        self.report({'INFO'}, f'Level built in {duration:.4f} seconds')
+
+        return {'FINISHED'}
+
+
+class BDK_OT_bsp_brush_demote(Operator):
+    bl_idname = 'bdk.bsp_brush_demote'
+    bl_label = 'Demote BSP Brush'
+    bl_description = 'Demote the selected BSP brush'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        if context.active_object is None:
+            cls.poll_message_set('No object selected')
+            return False
+        if context.active_object.bdk.type != 'BSP_BRUSH':
+            cls.poll_message_set('Selected object is not a BSP brush')
+            return False
+        return True
+
+    def execute(self, context):
+        obj = context.active_object
+        obj.bdk.type = 'NONE'
         return {'FINISHED'}
 
 
@@ -565,4 +724,5 @@ classes = (
     BDK_OT_bsp_build,
     BDK_OT_convert_to_bsp_brush,
     BDK_OT_select_brushes_inside,
+    BDK_OT_bsp_brush_demote,
 )

@@ -187,12 +187,12 @@ classes = actor_properties.classes + \
           terrain_doodad_operators.classes + \
           terrain_doodad_properties.classes + \
           terrain_doodad_ui.classes + \
-          bdk_preferences.classes + \
-          bdk_operators.classes + \
-          bdk_ui.classes + \
           bsp_properties.classes + \
           bsp_operators.classes + \
-          bsp_ui.classes
+          bsp_ui.classes + \
+          bdk_preferences.classes + \
+          bdk_operators.classes + \
+          bdk_ui.classes
 
 # TODO: change this so that the operators that require the T3DMap dependency return false from their poll() method
 #  this will help with discoverability of the need to install the dependencies
@@ -242,6 +242,8 @@ def bdk_terrain_export_func(self, _context: bpy.types.Context):
 def bdk_t3d_import_func(self, _context: bpy.types.Context):
     self.layout.operator(t3d_operators.BDK_OT_t3d_import_from_file.bl_idname)
 
+addon_keymaps = []
+
 
 def register():
     for cls in classes:
@@ -270,6 +272,14 @@ def register():
     # Asset browser
     bpy.types.ASSETBROWSER_MT_context_menu.append(bdk_asset_browser_import_data_func)
 
+    # Keymaps
+    addon_keymaps.clear()
+    window_manager = bpy.context.window_manager
+    key_configuration = window_manager.keyconfigs.addon
+    if key_configuration is not None:
+        keymap = key_configuration.keymaps.new(name='3D View', space_type='VIEW_3D')
+        addon_keymaps.append((keymap, keymap.keymap_items.new(bsp_operators.BDK_OT_bsp_build.bl_idname, 'B', 'PRESS', ctrl=True, shift=True)))
+
 
 def unregister():
     for cls in reversed(classes):
@@ -295,6 +305,10 @@ def unregister():
 
     # Asset browser
     bpy.types.ASSETBROWSER_MT_context_menu.remove(bdk_asset_browser_import_data_func)
+
+    # Keymaps
+    for keymap, item in addon_keymaps:
+        keymap.keymap_items.remove(item)
 
 
 if __name__ == '__main__':

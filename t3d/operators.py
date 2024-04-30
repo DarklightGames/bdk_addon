@@ -5,7 +5,7 @@ from typing import List
 import bmesh
 import bpy
 import numpy
-from mathutils import Euler, Matrix
+from mathutils import Euler, Matrix, Vector
 from bpy.types import Operator, Context, Object
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
@@ -15,7 +15,7 @@ from ..bsp.properties import __poly_flag_keys_to_values__
 from ..bsp.builder import create_bsp_brush_polygon
 from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, create_terrain_info_actor, \
     convert_blender_matrix_to_unreal_movement_units
-from .data import T3DObject
+from .data import T3DObject, Polygon
 from pathlib import Path
 from .importer import import_t3d
 from .writer import T3DWriter
@@ -128,15 +128,23 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
     bm.from_object(bsp_brush_object, context.evaluated_depsgraph_get())
     uv_layer = bm.loops.layers.uv.verify()
 
+    # TODO: Ensure that the texturing info from the level geometry has been applied to the brushes before exporting.
+
     bdk_poly_flags_layer = bm.faces.layers.int.get('bdk.poly_flags', None)
+    bdk_texture_u_layer = bm.faces.layers.float_vector.get('bdk.texture_u', None)
+    bdk_texture_v_layer = bm.faces.layers.float_vector.get('bdk.texture_v', None)
+    bdk_origin_layer = bm.faces.layers.float_vector.get('bdk.origin', None)
 
     """
     In the engine, BSP brushes ignore scale & rotation during the CSG build.
     Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
     We let the actor's location handle the translation.
     """
-    scale_matrix = Matrix.Diagonal(bsp_brush_object.scale).to_4x4()
-    rotation_matrix = bsp_brush_object.rotation_euler.to_matrix().to_4x4()
+    # TODO: this doesn't take into account the parent's scale and rotation. Peril abound. Use the matrix_world instead and decompose it.
+    translation, rotation, scale = bsp_brush_object.matrix_world.decompose()
+    scale_matrix = Matrix.Diagonal(scale).to_4x4()
+    rotation_matrix = rotation.to_matrix().to_4x4()
+    uv_transform_matrix = rotation_matrix @ scale_matrix.inverted()
     transform_matrix = rotation_matrix @ scale_matrix
 
     for face_index, face in enumerate(bm.faces):
@@ -150,7 +158,38 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
         poly.properties['Texture'] = texture if texture else 'None'
         poly.properties['Link'] = face_index
         poly.properties['Flags'] = face[bdk_poly_flags_layer] if bdk_poly_flags_layer is not None else 0
-        poly.polygon = create_bsp_brush_polygon(material, uv_layer, face, transform_matrix)
+
+        # Apply the transformation matrix to the vertices of the face. Also reverse the order of the vertices to match
+        # Unreal's winding order.
+        vertices = [transform_matrix @ Vector(vert.co) for vert in reversed(face.verts)]
+        # Reverse the Y component of the vertices to match Unreal's coordinate system.
+        vertices = [(vert.x, -vert.y, vert.z) for vert in vertices]
+
+        texture_u = face[bdk_texture_u_layer] if bdk_texture_u_layer is not None else (1.0, 0.0, 0.0)
+        texture_v = face[bdk_texture_v_layer] if bdk_texture_v_layer is not None else (0.0, 1.0, 0.0)
+        origin = face[bdk_origin_layer] if bdk_origin_layer is not None else (0.0, 0.0, 0.0)
+
+        # Apply the transformation matrix to the texture U, texture V, and origin.
+        texture_u = uv_transform_matrix @ Vector(texture_u)
+        texture_v = uv_transform_matrix @ Vector(texture_v)
+        origin = transform_matrix @ Vector(origin)
+
+        # Reverse the Y component of the TextureU, TextureV, and Origin to match Unreal's coordinate system.
+        texture_u = Vector((texture_u.x, -texture_u.y, texture_u.z))
+        texture_v = Vector((texture_v.x, -texture_v.y, texture_v.z))
+        origin = Vector((origin.x, -origin.y, origin.z))
+
+        # TODO: probably have to do a lot of reversing of things
+
+        poly.polygon = Polygon(
+            link=face_index,
+            origin=origin,
+            normal=face.normal,
+            texture_u=texture_u,
+            texture_v=texture_v,
+            vertices=vertices,
+        )
+
         poly_list.children.append(poly)
 
     brush.children.append(poly_list)

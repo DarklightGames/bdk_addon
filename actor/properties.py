@@ -1,4 +1,4 @@
-from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty
+from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty, IntProperty, FloatVectorProperty
 from bpy.types import PropertyGroup
 
 from ..units import meters_to_unreal

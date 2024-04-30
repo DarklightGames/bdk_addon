@@ -1,37 +1,142 @@
 # NOTE: This is taken more or less verbatim from the ase2t3d source, adopted for Python.
 # In the future, clean this up so that it's more clear what is going on.
+from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree
 from ..t3d.data import Polygon
 from bmesh.types import BMFace
-from bpy.types import Material
+from bpy.types import Material, NodeTree
 from math import isnan
-from typing import Iterable, Optional
+from typing import Optional
 import mathutils
 import numpy as np
 
 
-def get_uvs_for_vertices(polygon: Polygon, material: Material, vertices: Iterable[mathutils.Vector]):
-    # Create a rotation & scale matrix from the UV-space vectors.
-    rotation_matrix = mathutils.Matrix.Identity(3)
-    rotation_matrix[0][0:3] = polygon.texture_u
-    rotation_matrix[1][0:3] = polygon.texture_v
-    rotation_matrix[2][0:3] = polygon.normal
+def ensure_bdk_brush_uv_node_tree():
 
-    # Create a translation matrix from the origin.
-    translation_matrix = mathutils.Matrix.Translation(polygon.origin)
+    items = {
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    }
 
-    # Create a scale matrix from the material's texture size.
-    scale_matrix = mathutils.Matrix.Identity(3)
-    scale_matrix[0][0] = material.bdk.size_x
-    scale_matrix[1][1] = material.bdk.size_y
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    # Create the final transformation matrix.
-    transform_matrix = translation_matrix @ rotation_matrix @ scale_matrix
-    transform_matrix.invert()
+        texture_u_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        texture_u_named_attribute_node.data_type = 'FLOAT_VECTOR'
+        texture_u_named_attribute_node.inputs['Name'].default_value = 'bdk.texture_u'
 
-    # Transform the vertices.
-    return [transform_matrix @ vertex for vertex in vertices]
+        texture_v_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        texture_v_named_attribute_node.data_type = 'FLOAT_VECTOR'
+        texture_v_named_attribute_node.inputs['Name'].default_value = 'bdk.texture_v'
+
+        origin_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        origin_named_attribute_node.data_type = 'FLOAT_VECTOR'
+        origin_named_attribute_node.inputs['Name'].default_value = 'bdk.origin'
+
+        face_of_corner_node = node_tree.nodes.new(type='GeometryNodeFaceOfCorner')
+
+        face_index_socket = face_of_corner_node.outputs['Face Index']
+
+        evaluate_at_index_texture_u_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_at_index_texture_u_node.data_type = 'FLOAT_VECTOR'
+        evaluate_at_index_texture_u_node.domain = 'FACE'
+
+        evaluate_at_index_texture_v_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_at_index_texture_v_node.data_type = 'FLOAT_VECTOR'
+        evaluate_at_index_texture_v_node.domain = 'FACE'
+
+        evaluate_at_index_origin_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_at_index_origin_node.data_type = 'FLOAT_VECTOR'
+        evaluate_at_index_origin_node.domain = 'FACE'
+
+        vertex_of_corner_node = node_tree.nodes.new(type='GeometryNodeVertexOfCorner')
+
+        evaluate_at_index_position_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_at_index_position_node.data_type = 'FLOAT_VECTOR'
+        evaluate_at_index_position_node.domain = 'POINT'
+
+        position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
+
+        vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        vector_math_node.operation = 'SUBTRACT'
+
+        # This socket is the result subtracting the origin from the position, essentially the face-space position.
+        vertex_position_socket = vector_math_node.outputs['Vector']
+
+        texture_u_dot_product_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        texture_u_dot_product_node.operation = 'DOT_PRODUCT'
+
+        texture_v_dot_product_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        texture_v_dot_product_node.operation = 'DOT_PRODUCT'
+
+        invert_u_dot_product_node = node_tree.nodes.new(type='ShaderNodeMath')
+        invert_u_dot_product_node.operation = 'MULTIPLY'
+        invert_u_dot_product_node.inputs[1].default_value = -1.0
+
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
+        store_named_attribute_node.domain = 'CORNER'
+        store_named_attribute_node.data_type = 'FLOAT2'
+        store_named_attribute_node.inputs['Name'].default_value = 'UVMap'
+
+        texture_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        texture_scale_node.operation = 'DIVIDE'
+
+        self_object_node = node_tree.nodes.new(type='GeometryNodeSelfObject')
+
+        object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+        combine_material_size_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        subtract_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        subtract_node.operation = 'SUBTRACT'
+        subtract_node.inputs[0].default_value = (0.0, 1.0, 0.0)
+
+        evaluate_at_index_material_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_at_index_material_index_node.data_type = 'INT'
+        evaluate_at_index_material_index_node.domain = 'FACE'
+
+        material_index_node = node_tree.nodes.new(type='GeometryNodeInputMaterialIndex')
+
+        # Inputs
+        node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
+
+        # Internal
+        node_tree.links.new(face_index_socket, evaluate_at_index_texture_u_node.inputs['Index'])
+        node_tree.links.new(face_index_socket, evaluate_at_index_texture_v_node.inputs['Index'])
+        node_tree.links.new(face_index_socket, evaluate_at_index_origin_node.inputs['Index'])
+        node_tree.links.new(position_node.outputs['Position'], evaluate_at_index_position_node.inputs['Value'])
+        node_tree.links.new(vertex_of_corner_node.outputs['Vertex Index'], evaluate_at_index_position_node.inputs['Index'])
+        node_tree.links.new(evaluate_at_index_origin_node.outputs['Value'], vector_math_node.inputs[1])
+        node_tree.links.new(evaluate_at_index_position_node.outputs['Value'], vector_math_node.inputs[0])
+        node_tree.links.new(evaluate_at_index_texture_u_node.outputs['Value'], texture_u_dot_product_node.inputs[0])
+        node_tree.links.new(vertex_position_socket, texture_u_dot_product_node.inputs[1])
+        node_tree.links.new(evaluate_at_index_texture_v_node.outputs['Value'], texture_v_dot_product_node.inputs[0])
+        node_tree.links.new(vertex_position_socket, texture_v_dot_product_node.inputs[1])
+        node_tree.links.new(texture_u_dot_product_node.outputs['Value'], invert_u_dot_product_node.inputs[0])
+        node_tree.links.new(invert_u_dot_product_node.outputs['Value'], combine_xyz_node.inputs['X'])
+        node_tree.links.new(texture_v_dot_product_node.outputs['Value'], combine_xyz_node.inputs['Y'])
+        node_tree.links.new(texture_u_named_attribute_node.outputs['Attribute'], evaluate_at_index_texture_u_node.inputs['Value'])
+        node_tree.links.new(texture_v_named_attribute_node.outputs['Attribute'], evaluate_at_index_texture_v_node.inputs['Value'])
+        node_tree.links.new(origin_named_attribute_node.outputs['Attribute'], evaluate_at_index_origin_node.inputs['Value'])
+        node_tree.links.new(texture_scale_node.outputs['Vector'], subtract_node.inputs[1])
+        node_tree.links.new(subtract_node.outputs['Vector'], store_named_attribute_node.inputs['Value'])
+        node_tree.links.new(self_object_node.outputs['Self Object'], object_material_size_node.inputs['Object'])
+        node_tree.links.new(object_material_size_node.outputs['U'], combine_material_size_node.inputs['X'])
+        node_tree.links.new(object_material_size_node.outputs['V'], combine_material_size_node.inputs['Y'])
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], texture_scale_node.inputs[0])
+        node_tree.links.new(combine_material_size_node.outputs['Vector'], texture_scale_node.inputs[1])
+        node_tree.links.new(evaluate_at_index_material_index_node.outputs['Value'], object_material_size_node.inputs['Material Index'])
+        node_tree.links.new(face_of_corner_node.outputs['Face Index'], evaluate_at_index_material_index_node.inputs['Index'])
+        node_tree.links.new(material_index_node.outputs['Material Index'], evaluate_at_index_material_index_node.inputs['Value'])
+
+        # Output
+        node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    return ensure_geometry_node_tree('BDK Brush UV', items, build_function)
 
 
+# TODO: We can use this, or something like it, when we to create a brush from an existing mesh that doesn't have the BDK
+#  brush attributes. It's logic may even be able to be converted to a geonode operator.
 def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFace, transform_matrix) -> Polygon:
     texture_coordinates = [loop[uv_layer].uv for loop in face.loops[0:3]]
 

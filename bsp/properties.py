@@ -92,16 +92,6 @@ class BDK_PG_level_brush(PropertyGroup):
     brush_object: PointerProperty(type=Object, name='Brush Object')
 
 
-class BDK_PG_level(PropertyGroup):
-    node_count: IntProperty('Node Count')
-    surface_count: IntProperty('Surface Count')
-    bsp_optimization: EnumProperty(items=bsp_optimization_items, name='Optimization', default='LAME')
-    brushes: CollectionProperty(type=BDK_PG_level_brush, options={'HIDDEN'},
-                                description='The list of brush objects used in generating the level geometry. '
-                                            'This is used as a look-up table so that texturing work done on the '
-                                            'level geometry can be applied to the associated brush polygons')
-
-
 class BDK_PG_bsp_brush(PropertyGroup):
     object: PointerProperty(type=Object, name='Object', description='The object this property group is attached to',
                             options={'HIDDEN'})
@@ -129,7 +119,26 @@ class BDK_PG_bsp_brush(PropertyGroup):
         max=8,  # This is not strictly necessary, but will stop the levelers from using insane values.
     )
 
+class BDK_PG_level(PropertyGroup):
+    brush_count: IntProperty(name='Brush Count')
+    zone_count: IntProperty(name='Zone Count')
+    poly_count: IntProperty(name='Poly Count')
+    node_count: IntProperty(name='Node Count')
+    surface_count: IntProperty(name='Surface Count')
+    max_depth: IntProperty(name='Max Depth')
+    average_depth: IntProperty(name='Average Depth')
+    point_count: IntProperty(name='Point Count')
+    vertex_count: IntProperty(name='Vertex Count')
+    brushes: CollectionProperty(type=BDK_PG_level_brush, options={'HIDDEN'},
+                                description='The list of brush objects used in generating the level geometry. '
+                                            'This is used as a look-up table so that texturing work done on the '
+                                            'level geometry can be applied to the associated brush polygons')
+
+    bsp_optimization: EnumProperty(items=bsp_optimization_items, name='Optimization', default='LAME')
+
 
 classes = (
     BDK_PG_bsp_brush,
+    BDK_PG_level_brush,
+    BDK_PG_level,
 )

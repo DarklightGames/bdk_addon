@@ -12,6 +12,7 @@ from mathutils import Matrix
 from typing import List, Optional, Dict, Any, cast, Type
 
 from ..fluid_surface.operators import create_fluid_surface_object
+from ..bsp.builder import ensure_bdk_brush_uv_node_tree
 from ..bsp.properties import get_poly_flags_keys_from_value
 from ..terrain.operators import add_terrain_layer_node
 from ..projector.builder import ensure_projector_node_tree
@@ -118,15 +119,40 @@ def set_brush_display_properties(bpy_object: Object):
 
 
 class BrushImporter(ActorImporter):
+
+    @classmethod
+    def _get_pre_pivot(cls, t3d_actor: t3dpy.T3dObject):
+        """
+        Get the pre-pivot vector from the T3D actor properties.
+        :param t3d_actor:
+        :return:
+        """
+        pre_pivot = mathutils.Vector()
+        if 'PrePivot' in t3d_actor.properties:
+            value = t3d_actor.properties['PrePivot']
+            pre_pivot.x = value.get('X', 0.0)
+            pre_pivot.y = value.get('Y', 0.0)
+            pre_pivot.z = value.get('Z', 0.0)
+        return pre_pivot
+
+
     @classmethod
     def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
+        pre_pivot = cls._get_pre_pivot(t3d_actor)
+        pre_pivot.y = -pre_pivot.y
+
         bm = bmesh.new()
 
         materials = OrderedDict()
 
+        origins = []
+        texture_us = []
+        texture_vs = []
+
         for child in t3d_actor.children:
             if child.type_ != 'Brush':
                 continue
+
             if len(child.children) < 0 and child.children[0].type_ != 'PolyList':
                 continue
 
@@ -137,9 +163,36 @@ class BrushImporter(ActorImporter):
 
                 if material_reference is not None:
                     if material_reference not in materials:
+                        # TODO: there are performance issues with load_bdk_material that probably make copy-pasting
+                        #  large T3D brush payloads very slow because of the I/O bottleneck.
                         materials[material_reference] = load_bdk_material(material_reference)
                 else:
+                    materials[None] = None
                     print(f'Warning: Missing or invalid material reference for polygon in brush {t3d_actor["Name"]}')
+
+                material_index = list(materials.keys()).index(material_reference)
+
+                def find_vector_property(prop_name: str, default_value: Any = None):
+                    for prop in polygon.vector_properties:
+                        if prop[0] == prop_name:
+                            return prop[1]
+                    return default_value
+
+                # If the origin exists in the vector properties, use it. Otherwise, use the default origin. The get function does not exist for vector properties.
+                origin = find_vector_property('Origin', (0.0, 0.0, 0.0))
+                texture_u = find_vector_property('TextureU', (1.0, 0.0, 0.0))
+                texture_v = find_vector_property('TextureV', (0.0, 1.0, 0.0))
+
+                origin = mathutils.Vector((origin[0], -origin[1], origin[2]))
+                # Add the pre-pivot to the origin.
+                origin -= pre_pivot
+
+                texture_u = (texture_u[0], -texture_u[1], texture_u[2])
+                texture_v = (texture_v[0], -texture_v[1], texture_v[2])
+
+                origins.append(origin)
+                texture_us.append(texture_u)
+                texture_vs.append(texture_v)
 
                 vertex_indices = []
                 for _, vertex in filter(lambda prop: prop[0] == 'Vertex', polygon.vector_properties):
@@ -155,29 +208,47 @@ class BrushImporter(ActorImporter):
                     vertex_indices.append(vertex_index)
 
                 bm.verts.ensure_lookup_table()
-                bm.faces.new(map(lambda i: bm.verts[i], reversed(vertex_indices)))
+                bm_face = bm.faces.new(map(lambda vi: bm.verts[vi], reversed(vertex_indices)))
+                bm_face.material_index = material_index
 
         mesh_data = bpy.data.meshes.new(t3d_actor['Name'])
         bm.to_mesh(mesh_data)
 
         bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh_data)
         bpy_object.bdk.type = 'BSP_BRUSH'
+
         set_brush_display_properties(bpy_object)
 
         bsp_brush = bpy_object.bdk.bsp_brush
         bsp_brush.object = bpy_object
 
         csg_operation = t3d_actor.properties.get('CsgOper', 'CSG_Add')
+
         match csg_operation:
             case 'CSG_Add':
                 csg_operation = 'ADD'
             case 'CSG_Subtract':
                 csg_operation = 'SUBTRACT'
+
         bsp_brush.csg_operation = csg_operation
         bsp_brush.poly_flags = get_poly_flags_keys_from_value(t3d_actor.properties.get('PolyFlags', 0))
 
         for key, material in materials.items():
             mesh_data.materials.append(material)
+
+        # Create the attributes for texturing.
+        origin_attribute = mesh_data.attributes.new('bdk.origin', 'FLOAT_VECTOR', 'FACE')
+        origin_attribute.data.foreach_set('vector', np.array(origins).flatten())
+
+        texture_u_attribute = mesh_data.attributes.new('bdk.texture_u', 'FLOAT_VECTOR', 'FACE')
+        texture_u_attribute.data.foreach_set('vector', np.array(texture_us).flatten())
+
+        texture_v_attribute = mesh_data.attributes.new('bdk.texture_v', 'FLOAT_VECTOR', 'FACE')
+        texture_v_attribute.data.foreach_set('vector', np.array(texture_vs).flatten())
+
+        # Add the geometry node tree for UV mapping.
+        geometry_node_modifier = bpy_object.modifiers.new(name="UV Mapping", type="NODES")
+        geometry_node_modifier.node_group = ensure_bdk_brush_uv_node_tree()
 
         return bpy_object
 
@@ -186,8 +257,8 @@ class BrushImporter(ActorImporter):
         # Handle the pre-pivot here, since the transforms have been applied to the object by this point.
         pre_pivot = mathutils.Vector((0.0, 0.0, 0.0))
 
-        # The inverse of the PrePivot is a translation that is applied to the geometry in world space after applying all other transformations.
-        # We can get the
+        # The inverse of the PrePivot is a translation that is applied to the geometry in world space after applying all
+        # other transformations.
         if 'PrePivot' in t3d_actor.properties:
             value = t3d_actor.properties['PrePivot']
             pre_pivot.x = value.get('X', 0.0)

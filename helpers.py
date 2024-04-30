@@ -67,6 +67,19 @@ def is_active_object_terrain_doodad(context: Context):
     return get_terrain_doodad(context.active_object) is not None
 
 
+def is_active_object_bdk_object(context: Context):
+    if context.active_object is None:
+        return False
+    return context.active_object.bdk.type != 'NONE'
+
+
+def are_any_selected_objects_bdk_objects(context: Context):
+    for obj in context.selected_objects:
+        if obj.bdk.type != 'NONE':
+            return True
+    return False
+
+
 def get_bdk_asset_library_paths() -> List[Path]:
     asset_library_paths = []
     asset_libraries = bpy.context.preferences.filepaths.asset_libraries
@@ -122,6 +135,10 @@ def load_bdk_material(reference: str):
         # The second argument is a library, which we pass as None to get the local material.
         # https://blender.stackexchange.com/questions/238342/how-to-recognize-local-and-linked-material-with-python
         return bpy.data.materials.get((reference.object_name, None), None)
+
+    # TODO: This can be very slow when called in a loop. We should be checking if we already have the material linked
+    #  before trying to load it.
+    # See if we already have the material loaded.
 
     blend_file = get_blend_file_for_package(reference.package_name)
 

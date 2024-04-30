@@ -4,7 +4,7 @@ from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty
 from ..fluid_surface.properties import BDK_PG_fluid_surface
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.doodad.properties import BDK_PG_terrain_doodad
-from ..bsp.properties import BDK_PG_bsp_brush
+from ..bsp.properties import BDK_PG_bsp_brush, BDK_PG_level
 
 
 class BDK_PG_object(PropertyGroup):
@@ -25,6 +25,7 @@ class BDK_PG_object(PropertyGroup):
     terrain_doodad: PointerProperty(type=BDK_PG_terrain_doodad)
     bsp_brush: PointerProperty(type=BDK_PG_bsp_brush)
     fluid_surface: PointerProperty(type=BDK_PG_fluid_surface)
+    level: PointerProperty(type=BDK_PG_level)
     package_reference: StringProperty(name='Package Reference', options={'HIDDEN'})
 
 
@@ -35,7 +36,10 @@ class BDK_PG_material(PropertyGroup):
 
 
 class BDK_PG_node_tree(PropertyGroup):
-    build_hash: StringProperty(name='Build Function Byte-Code Hash', description='Python byte-code hash for the function that built this node tree. Used to trigger rebuilds when build functions change', options={'HIDDEN'})
+    build_hash: StringProperty(name='Build Function Byte-Code Hash',
+                               options={'HIDDEN'},
+                               description='Python byte-code hash for the function that built this node tree. Used to '
+                                           'trigger rebuilds when build functions change')
 
 
 class BDK_PG_terrain_doodad_preset(PropertyGroup):
