@@ -1,7 +1,6 @@
 from collections import OrderedDict
 from pathlib import Path
 from typing import Set, Sequence
-from functools import partial
 
 import bpy
 from bpy.types import Operator, Context, Node, Event

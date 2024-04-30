@@ -154,8 +154,10 @@ def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFac
     # Texture Coordinates
     s0 = texture_coordinates[0][0]
     t0 = texture_coordinates[0][1]
+
     s1 = texture_coordinates[1][0]
     t1 = texture_coordinates[1][1]
+
     s2 = texture_coordinates[2][0]
     t2 = texture_coordinates[2][1]
 
@@ -172,6 +174,7 @@ def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFac
     s1 = (-u_offset * u_tiling) + scale_u_offset + s1
     s2 = (-u_offset * u_tiling) + scale_u_offset + s2
 
+    #
     t0 = -((-v_offset * v_tiling) + scale_v_offset + t0 - 1.0)
     t1 = -((-v_offset * v_tiling) + scale_v_offset + t1 - 1.0)
     t2 = -((-v_offset * v_tiling) + scale_v_offset + t2 - 1.0)
@@ -242,13 +245,6 @@ def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFac
     p_grad_u *= texture_width
     p_grad_v *= texture_height
 
-    # Calculate Normals. These are ignored anyway but make an effort...
-    a = np.subtract(pt1, pt0)
-    b = np.subtract(pt2, pt0)
-    c = np.cross(a, b)
-
-    normal = tuple(c / np.linalg.norm(c))
-
     # Check for error values
     impossible2 = isnan(p_base[0]) or isnan(p_base[1]) or isnan(p_base[2]) \
                   or isnan(p_grad_u[0]) or isnan(p_grad_u[1]) or isnan(p_grad_u[2]) \
@@ -257,14 +253,7 @@ def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFac
     impossible = impossible1 or impossible2
 
     origin = pt1 if impossible else p_base
-    texture_u = normal if impossible else p_grad_u
-    texture_v = normal if impossible else p_grad_v
+    texture_u = p_grad_u
+    texture_v = p_grad_v
 
-    return Polygon(
-        link=0,
-        origin=origin,
-        normal=normal,
-        texture_u=texture_u,
-        texture_v=texture_v,
-        vertices=vertices
-    )
+    return origin, texture_u, texture_v

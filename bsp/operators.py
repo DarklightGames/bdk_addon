@@ -1,7 +1,7 @@
 import numpy as np
 from mathutils import Vector, Quaternion, Matrix
 
-from .builder import ensure_bdk_brush_uv_node_tree
+from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon
 from ..helpers import is_bdk_py_installed
 from .data import bsp_optimization_items
 from .properties import csg_operation_items
@@ -23,7 +23,7 @@ TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
 MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
 
 
-def ensure_bsp_brush_object(obj: Object, csg_operation: str = 'ADD'):
+def _ensure_bsp_brush_object(obj: Object, csg_operation: str = 'ADD'):
     """
     Ensure that the given object is set up as a BSP brush object.
     """
@@ -106,6 +106,40 @@ class BDK_OT_bsp_brush_set_sort_order(Operator):
         return {'FINISHED'}
 
 
+def convert_uv_to_planar(obj: Object):
+    mesh_data: Mesh = cast(Mesh, obj.data)
+    mesh_data.attributes.new(ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+    mesh_data.attributes.new(TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+    mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+
+    bm = bmesh.new()
+    bm.from_mesh(mesh_data)
+
+    uv_layer = bm.loops.layers.uv.verify()
+
+    translation, rotation, scale = obj.matrix_world.decompose()
+    rotation_matrix = rotation.to_matrix().to_4x4()
+    scale_matrix = Matrix.Diagonal(scale).to_4x4()
+    transform_matrix = rotation_matrix @ scale_matrix
+
+    origins = []
+    texture_us = []
+    texture_vs = []
+
+    for face in bm.faces:
+        material = mesh_data.materials[face.material_index]
+        origin, texture_u, texture_v = create_bsp_brush_polygon(material, uv_layer, face, transform_matrix)
+        origins.append(origin)
+        texture_us.append(texture_u)
+        texture_vs.append(texture_v)
+
+    bm.free()
+
+    mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(origins).flatten())
+    mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_us).flatten())
+    mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_vs).flatten())
+
+
 class BDK_OT_convert_to_bsp_brush(Operator):
     bl_idname = 'bdk.convert_to_bsp_brush'
     bl_label = 'Convert to BSP Brush'
@@ -137,6 +171,9 @@ class BDK_OT_convert_to_bsp_brush(Operator):
         layout.prop(self, 'csg_operation')
 
     def execute(self, context):
+        # Convert the UV map to the planar UV map.
+        convert_uv_to_planar(context.active_object)
+        # Ensure that the object is set up as a BSP brush object.
         _ensure_bsp_brush_object(context.active_object, self.csg_operation)
         return {'FINISHED'}
 
