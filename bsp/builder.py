@@ -3,10 +3,146 @@
 from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree
 from mathutils import Vector, Quaternion
 from bmesh.types import BMFace
-from bpy.types import Material, NodeTree
+from bpy.types import Object, Mesh, Material, NodeTree
 from math import isnan
+from typing import Optional, Dict, cast
 import mathutils
 import numpy as np
+
+
+def get_level_face_data(level_object: Object) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+    """
+    Get the origin, texture U, and texture V data for the faces of the level object.
+    """
+    mesh_data = cast(Mesh, level_object.data)
+
+    polygon_count = len(mesh_data.polygons)
+    origins = np.zeros(polygon_count * 3, dtype=np.float32)
+    texture_us = np.zeros(polygon_count * 3, dtype=np.float32)
+    texture_vs = np.zeros(polygon_count * 3, dtype=np.float32)
+    material_indices = np.zeros(polygon_count, dtype=np.int32)
+
+    mesh_data.attributes['bdk.origin'].data.foreach_get(origins)
+    mesh_data.attributes['bdk.texture_u'].data.foreach_get(texture_us)
+    mesh_data.attributes['bdk.texture_v'].data.foreach_get(texture_vs)
+    mesh_data.attributes['material_index'].data.foreach_get(material_indices)
+
+    # Reshape in-place.
+    origins.shape = (polygon_count, 3)
+    texture_us.shape = (polygon_count, 3)
+    texture_vs.shape = (polygon_count, 3)
+
+    return origins, texture_us, texture_vs, material_indices
+
+
+class BrushMappingErrorType(Enum):
+    BRUSH_NOT_FOUND = 0
+    BRUSH_POLYGON_NOT_FOUND = 1
+
+
+class BrushMappingError:
+    def __init__(self, brush_index: int, error_type: BrushMappingErrorType, level_polygon_index: Optional[int] = None), brush_polygon_index: Optional[int] = None) -> None
+        self.brush_index = brush_index
+        self.error_type = error_type
+        self.level_polygon_index = level_polygon_index
+        self.brush_polygon_index = brush_polygon_index
+
+
+class BrushMappingResult:
+    def __init__(self):
+        self.errors: List[BrushMappingError] = []
+
+def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
+    result = BrushMappingResult()
+
+    mapping = build_level_to_brush_mapping(level_object)
+    origins, texture_us, texture_vs, level_material_indices = get_level_face_data(level_object)
+
+    # Possible scenarios where this will break:
+    # 1. If the brush mesh topology has changed since the mapping was created.
+    # 2. If the brush has been deleted (in this case it's just a no-op).
+
+    for brush_index, brush in enumerate(level_object.brushes):
+
+        if brush.brush_object is None:
+            # The brush object has been deleted.
+            result.errors.append(BrushMappingError(brush_index, BrushMappingErrorType.BRUSH_NOT_FOUND))
+            continue
+
+        if brush_index not in mapping:
+            # The brush has no polygons in the level.
+            continue
+
+        brush_mesh = cast(Mesh, brush_object.data)
+
+        # TODO: should probably ensure that these exist.
+        brush_origin_attribute = brush_mesh.attributes['bdk.origin']
+        brush_texture_u_attribute = brush_mesh.attributes['bdk.texture_u']
+        brush_texture_v_attribute = brush_mesh.attributes['bdk.texture_v']
+
+        material_index_mapping = {}  # Level material index to brush material index mapping.
+
+        # Get a set of the level material indices that are used by the polygons in this brush.
+        brush_level_material_indices = set(map(lambda i: level_material_indices[i], mapping[brush_index].values()))
+
+        # Map the material indices from the level to the brush.
+        #  1. Fetch the material data block from the level material.
+        #  2. Do a look-up to see if this material is already in the brush. If so, map the index.
+        #  3. If not, create a new material slot in the brush, and map the index.
+        for level_material_index in brush_level_material_indices:
+            level_material = level_object.material_slots[level_material_index].material
+            # Find the material in the brush.
+            brush_material_slot_index = brush_object.material_slots.find(level_material.name)
+            if brush_material_slot_index == -1:
+                # The material is not in the brush, so add it.
+                brush_material_slot_index = len(brush_object.material_slots)
+                brush_object.material_slots.append(level_material)
+            material_index_mapping[level_material_index] = brush_material_slot_index
+
+        for brush_polygon_index, level_polygon_index in mapping[brush_index].items():
+            if brush_polygon_index >= len(brush_mesh.polygons):
+                # The cached brush polygon index is out of range.
+                result.errors.append(
+                    BrushMappingError(brush_index, BrushMappingErrorType.BRUSH_POLYGON_NOT_FOUND,
+                                      level_polygon_index=level_polygon_index,
+                                      brush_polygon_index=brush_polygon_index))
+                continue
+
+            origin = origins[level_polygon_index]
+            texture_u = texture_us[level_polygon_index]
+            texture_v = texture_vs[level_polygon_index]
+            material_index = material_index_mapping[material_indices[level_polygon_index]]
+
+            # TODO: transform the U/V/origin data from level-space to brush space
+            #  (just needs to do the inverse of the BSP build code).
+
+            # NOTE: if we want to make this stable regardless of brush transform, we need to store the original
+            #  brush transform in the level object.
+
+            brush_origin_attribute.data[brush_polygon_index].vector = origin
+            brush_texture_u_attribute.data[brush_polygon_index].vector = texture_u
+            brush_texture_v_attribute.data[brush_polygon_index].vector = texture_v
+            brush_material_index_attribute.data[brush_polygon_index].value = material_index
+
+
+def build_level_to_brush_mapping(level_object: Object) -> Dict[int, Dict[int, int]]:
+    mesh_data = cast(Mesh, level_object.data)
+    polygon_count = len(mesh_data.polygons)
+    brush_indices = np.zeros(polygon_count, dtype=np.int32)
+    brush_polygon_indices = np.zeros(polygon_count, dtype=np.int32)
+
+    mesh_data.attributes['bdk.brush_index'].data.foreach_get(brush_indices)
+    mesh_data.attributes['bdk.brush_polygon_index'].data.foreach_get(brush_polygon_indices)
+
+    mapping: Dict[int, Dict[int, int]] = {}
+
+    for polygon_index, (brush_index, brush_polygon_index) in enumerate(zip(brush_indices, brush_polygon_indices)):
+        if brush_index not in mapping:
+            mapping[brush_index] = {}
+        if brush_polygon_index not in mapping[brush_index]:
+            mapping[brush_index][brush_polygon_index] = polygon_index
+
+    return mapping
 
 
 def ensure_bdk_brush_uv_node_tree():
@@ -160,8 +296,10 @@ def create_bsp_brush_polygon(texture_width: int, texture_height: int, uv_layer, 
     # Texture Coordinates
     s0 = texture_coordinates[0][0]
     t0 = texture_coordinates[0][1]
+
     s1 = texture_coordinates[1][0]
     t1 = texture_coordinates[1][1]
+
     s2 = texture_coordinates[2][0]
     t2 = texture_coordinates[2][1]
 
@@ -178,6 +316,7 @@ def create_bsp_brush_polygon(texture_width: int, texture_height: int, uv_layer, 
     s1 = (-u_offset * u_tiling) + scale_u_offset + s1
     s2 = (-u_offset * u_tiling) + scale_u_offset + s2
 
+    #
     t0 = -((-v_offset * v_tiling) + scale_v_offset + t0 - 1.0)
     t1 = -((-v_offset * v_tiling) + scale_v_offset + t1 - 1.0)
     t2 = -((-v_offset * v_tiling) + scale_v_offset + t2 - 1.0)

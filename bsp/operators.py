@@ -718,9 +718,11 @@ class BDK_OT_bsp_build(Operator):
             texture_v_data = texture_v_data.reshape((polygon_count, 3))
 
             # Transform the origin and texture vectors to world-space.
+            # TODO: extract this to a function so we can re-use it in the remapping operator.
             point_transform_matrix = brush_object.matrix_world
             translation, rotation, scale = brush_object.matrix_world.decompose()
             vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
+
             origin_data = [point_transform_matrix @ Vector(origin) for origin in origin_data]
             texture_u_data = [vector_transform_matrix @ Vector(texture_u) for texture_u in texture_u_data]
             texture_v_data = [vector_transform_matrix @ Vector(texture_v) for texture_v in texture_v_data]
@@ -841,6 +843,7 @@ class BDK_OT_bsp_build(Operator):
         # Make sure the level object has the UV geometry node modifier.
         _ensure_planar_texture_mapping_modifier(level_object)
 
+        # TODO: humanize the duration.
         self.report({'INFO'}, f'Level built in {duration:.4f} seconds')
 
         return {'FINISHED'}

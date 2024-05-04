@@ -88,7 +88,7 @@ empty_set = set()
 
 
 class BDK_PG_level_brush(PropertyGroup):
-    id: IntProperty('ID')
+    index: IntProperty('ID')
     brush_object: PointerProperty(type=Object, name='Brush Object')
 
 

@@ -126,7 +126,6 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
 
     bm = bmesh.new()
     bm.from_object(bsp_brush_object, context.evaluated_depsgraph_get())
-    uv_layer = bm.loops.layers.uv.verify()
 
     # TODO: Ensure that the texturing info from the level geometry has been applied to the brushes before exporting.
 
@@ -140,7 +139,6 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
     Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
     We let the actor's location handle the translation.
     """
-    # TODO: this doesn't take into account the parent's scale and rotation. Peril abound. Use the matrix_world instead and decompose it.
     translation, rotation, scale = bsp_brush_object.matrix_world.decompose()
     scale_matrix = Matrix.Diagonal(scale).to_4x4()
     rotation_matrix = rotation.to_matrix().to_4x4()

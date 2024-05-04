@@ -210,6 +210,7 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
 def are_bdk_dependencies_installed() -> bool:
     try:
         import t3dpy
+        import bdk_py
     except ModuleNotFoundError:
         return False
     return True
