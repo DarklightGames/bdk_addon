@@ -528,6 +528,19 @@ def add_repeat_zone_nodes(node_tree: NodeTree, repeat_items: Iterable[Tuple[str,
     return input_node, output_node
 
 
+def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, Tuple[float, float, float], NodeSocket]]) -> NodeSocket:
+    vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+    vector_math_node.operation = operation
+
+    for index, input in enumerate(inputs):
+        if isinstance(input, NodeSocket):
+            node_tree.links.new(input, vector_math_node.inputs[index])
+        else:
+            vector_math_node.inputs[index].default_value = input
+
+    return vector_math_node.outputs['Vector']
+
+
 def add_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, NodeSocket]]) -> NodeSocket:
     math_node = node_tree.nodes.new(type='ShaderNodeMath')
     math_node.operation = operation

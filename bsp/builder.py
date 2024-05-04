@@ -1,11 +1,10 @@
 # NOTE: This is taken more or less verbatim from the ase2t3d source, adopted for Python.
 # In the future, clean this up so that it's more clear what is going on.
 from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree
-from ..t3d.data import Polygon
+from mathutils import Vector, Quaternion
 from bmesh.types import BMFace
 from bpy.types import Material, NodeTree
 from math import isnan
-from typing import Optional
 import mathutils
 import numpy as np
 
@@ -84,7 +83,6 @@ def ensure_bdk_brush_uv_node_tree():
 
         self_object_node = node_tree.nodes.new(type='GeometryNodeSelfObject')
 
-        object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
         combine_material_size_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
 
         subtract_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
@@ -96,6 +94,19 @@ def ensure_bdk_brush_uv_node_tree():
         evaluate_at_index_material_index_node.domain = 'FACE'
 
         material_index_node = node_tree.nodes.new(type='GeometryNodeInputMaterialIndex')
+
+        try:
+            object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+            node_tree.links.new(evaluate_at_index_material_index_node.outputs['Value'], object_material_size_node.inputs['Material Index'])
+            node_tree.links.new(self_object_node.outputs['Self Object'], object_material_size_node.inputs['Object'])
+            material_size_u_socket = object_material_size_node.outputs['U']
+            material_size_v_socket = object_material_size_node.outputs['V']
+        except RuntimeError:
+            # For debugging purposes on machines without the Blender BDK fork.
+            material_size_fallback_vector_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+            material_size_fallback_vector_node.inputs['Vector'].default_value = (512.0, 512.0, 0.0)
+            material_size_u_socket = material_size_fallback_vector_node.outputs['X']
+            material_size_v_socket = material_size_fallback_vector_node.outputs['Y']
 
         # Inputs
         node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
@@ -120,12 +131,10 @@ def ensure_bdk_brush_uv_node_tree():
         node_tree.links.new(origin_named_attribute_node.outputs['Attribute'], evaluate_at_index_origin_node.inputs['Value'])
         node_tree.links.new(texture_scale_node.outputs['Vector'], subtract_node.inputs[1])
         node_tree.links.new(subtract_node.outputs['Vector'], store_named_attribute_node.inputs['Value'])
-        node_tree.links.new(self_object_node.outputs['Self Object'], object_material_size_node.inputs['Object'])
-        node_tree.links.new(object_material_size_node.outputs['U'], combine_material_size_node.inputs['X'])
-        node_tree.links.new(object_material_size_node.outputs['V'], combine_material_size_node.inputs['Y'])
+        node_tree.links.new(material_size_u_socket, combine_material_size_node.inputs['X'])
+        node_tree.links.new(material_size_v_socket, combine_material_size_node.inputs['Y'])
         node_tree.links.new(combine_xyz_node.outputs['Vector'], texture_scale_node.inputs[0])
         node_tree.links.new(combine_material_size_node.outputs['Vector'], texture_scale_node.inputs[1])
-        node_tree.links.new(evaluate_at_index_material_index_node.outputs['Value'], object_material_size_node.inputs['Material Index'])
         node_tree.links.new(face_of_corner_node.outputs['Face Index'], evaluate_at_index_material_index_node.inputs['Index'])
         node_tree.links.new(material_index_node.outputs['Material Index'], evaluate_at_index_material_index_node.inputs['Value'])
 
@@ -137,11 +146,8 @@ def ensure_bdk_brush_uv_node_tree():
 
 # TODO: We can use this, or something like it, when we to create a brush from an existing mesh that doesn't have the BDK
 #  brush attributes. It's logic may even be able to be converted to a geonode operator.
-def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFace, transform_matrix) -> Polygon:
+def create_bsp_brush_polygon(texture_width: int, texture_height: int, uv_layer, face: BMFace, transform_matrix) -> (Vector, Quaternion, Vector):
     texture_coordinates = [loop[uv_layer].uv for loop in face.loops[0:3]]
-
-    texture_width = material.bdk.size_x if material else 512
-    texture_height = material.bdk.size_y if material else 512
 
     u_tiling = 1
     v_tiling = 1
@@ -190,9 +196,6 @@ def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFac
 
     # Flip the Y axis
     vertices = [transform_matrix @ mathutils.Vector(vert.co) for vert in face.verts]
-    for vert in vertices:
-        vert[1] = -vert[1]
-    vertices.reverse()
 
     # Coordinates
     pt0, pt1, pt2 = vertices[0:3]
@@ -242,13 +245,6 @@ def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFac
     p_grad_u *= texture_width
     p_grad_v *= texture_height
 
-    # Calculate Normals. These are ignored anyway but make an effort...
-    a = np.subtract(pt1, pt0)
-    b = np.subtract(pt2, pt0)
-    c = np.cross(a, b)
-
-    normal = tuple(c / np.linalg.norm(c))
-
     # Check for error values
     impossible2 = isnan(p_base[0]) or isnan(p_base[1]) or isnan(p_base[2]) \
                   or isnan(p_grad_u[0]) or isnan(p_grad_u[1]) or isnan(p_grad_u[2]) \
@@ -257,14 +253,7 @@ def create_bsp_brush_polygon(material: Optional[Material], uv_layer, face: BMFac
     impossible = impossible1 or impossible2
 
     origin = pt1 if impossible else p_base
-    texture_u = normal if impossible else p_grad_u
-    texture_v = normal if impossible else p_grad_v
+    texture_u = p_grad_u
+    texture_v = p_grad_v
 
-    return Polygon(
-        link=0,
-        origin=origin,
-        normal=normal,
-        texture_u=texture_u,
-        texture_v=texture_v,
-        vertices=vertices
-    )
+    return origin, texture_u, texture_v

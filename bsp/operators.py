@@ -1,15 +1,16 @@
 import numpy as np
-from mathutils import Vector, Quaternion, Matrix
+from bmesh.types import BMFace
+from mathutils import Vector, Matrix
 
-from .builder import ensure_bdk_brush_uv_node_tree
+from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon
 from ..helpers import is_bdk_py_installed
 from .data import bsp_optimization_items
-from .properties import csg_operation_items
+from .properties import csg_operation_items, poly_flags_items
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
-from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material
+from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material, Event
 from collections import OrderedDict
 from enum import Enum
-from typing import Set, cast, List, Optional
+from typing import cast, List, Optional, Tuple
 import bmesh
 import bpy
 import sys
@@ -22,12 +23,22 @@ TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
 TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
 MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
 
+PLANAR_TEXTURE_MAPPING_MODIFIER_NAME = 'BDK Planar Texture Mapping'
 
-def ensure_bsp_brush_object(obj: Object, csg_operation: str = 'ADD'):
+
+def _ensure_planar_texture_mapping_modifier(obj: Object):
+    uv_map_modifier = obj.modifiers.get(PLANAR_TEXTURE_MAPPING_MODIFIER_NAME)
+    if uv_map_modifier is None:
+        uv_map_modifier = obj.modifiers.new(name=PLANAR_TEXTURE_MAPPING_MODIFIER_NAME, type='NODES')
+    uv_map_modifier.node_group = ensure_bdk_brush_uv_node_tree()
+
+
+def _ensure_bsp_brush_object(obj: Object, csg_operation: str = 'ADD'):
     """
     Ensure that the given object is set up as a BSP brush object.
     """
-    # obj.display_type = 'WIRE'
+    # TODO: perhaps set these up as drivers instead!
+    obj.display_type = 'WIRE'
     obj.show_in_front = True
     obj.show_all_edges = True
     obj.show_wire = True
@@ -35,6 +46,9 @@ def ensure_bsp_brush_object(obj: Object, csg_operation: str = 'ADD'):
     obj.bdk.type = 'BSP_BRUSH'
     obj.bdk.bsp_brush.object = obj
     obj.bdk.bsp_brush.csg_operation = csg_operation
+
+    _ensure_bdk_brush_attributes(obj.data)
+    _ensure_planar_texture_mapping_modifier(obj)
 
 
 class BDK_OT_bsp_brush_add(Operator):
@@ -63,10 +77,12 @@ class BDK_OT_bsp_brush_add(Operator):
         bm = bmesh.new()
         bmesh.ops.create_cube(bm, size=self.size)
         bm.to_mesh(mesh)
+        bm.free()
 
         poly_flags_attribute = mesh.attributes.new('bdk.poly_flags', 'INT', 'FACE')
 
         obj = bpy.data.objects.new('Brush', mesh)
+
         _ensure_bsp_brush_object(obj, self.csg_operation)
 
         obj.location = context.scene.cursor.location
@@ -106,38 +122,132 @@ class BDK_OT_bsp_brush_set_sort_order(Operator):
         return {'FINISHED'}
 
 
+def _ensure_bdk_brush_attributes(mesh_data: Mesh):
+    if ORIGIN_ATTRIBUTE_NAME not in mesh_data.attributes:
+        mesh_data.attributes.new(ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+    if TEXTURE_U_ATTRIBUTE_NAME not in mesh_data.attributes:
+        mesh_data.attributes.new(TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+    if TEXTURE_V_ATTRIBUTE_NAME not in mesh_data.attributes:
+        mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+
+
+def _create_planar_texture_mapping_attributes(obj: Object, texture_width_fallback: int, texture_height_fallback: int):
+    """
+    Creates and populates the planar texture mapping attributes from the mesh's UV mapping.
+
+    Accurate mapping relies on the texture dimension information that is available in BDK materials. If a face has a
+    non-BDK material or the material is missing, the fallback values will be used.
+    :param obj: A Blender mesh object.
+    :return: The number of faces that were mapped using the fallback texture dimensions.
+    """
+    if obj.type != 'MESH':
+        raise RuntimeError('Object must be a mesh object')
+
+    mesh_data: Mesh = cast(Mesh, obj.data)
+
+    _ensure_bdk_brush_attributes(mesh_data)
+
+    bm = bmesh.new()
+    bm.from_mesh(mesh_data)
+
+    uv_layer = bm.loops.layers.uv.verify()
+
+    translation, rotation, scale = obj.matrix_world.decompose()
+    rotation_matrix = rotation.to_matrix().to_4x4()
+    scale_matrix = Matrix.Diagonal(scale).to_4x4()
+    transform_matrix = rotation_matrix @ scale_matrix
+
+    origins = []
+    texture_us = []
+    texture_vs = []
+
+    unsupported_face_count = 0
+
+    for face in bm.faces:
+        texture_width = texture_width_fallback
+        texture_height = texture_height_fallback
+        if face.material_index >= len(mesh_data.materials):
+            unsupported_face_count += 1
+        else:
+            material = mesh_data.materials[face.material_index]
+            if material.bdk.package_reference == '':
+                unsupported_face_count += 1
+            else:
+                texture_width = material.bdk.size_x
+                texture_height = material.bdk.size_y
+
+        # Calculate the texture plane.
+        origin, texture_u, texture_v = create_bsp_brush_polygon(
+            texture_width, texture_height, uv_layer, face, transform_matrix
+        )
+
+        origins.append(origin)
+        texture_us.append(texture_u)
+        texture_vs.append(texture_v)
+
+    bm.free()
+
+    mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(origins).flatten())
+    mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_us).flatten())
+    mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_vs).flatten())
+
+    return unsupported_face_count
+
+
+def can_convert_object_to_bsp_brush(obj: Object):
+    if obj.type != 'MESH':
+        return False
+    if obj.bdk.type != 'NONE':
+        return False
+    return True
+
+
 class BDK_OT_convert_to_bsp_brush(Operator):
     bl_idname = 'bdk.convert_to_bsp_brush'
     bl_label = 'Convert to BSP Brush'
-    bl_description = 'Convert the active object to a BSP brush'
+    bl_description = 'Convert the selected objects to BSP brushes'
     bl_options = {'REGISTER', 'UNDO'}
 
-    csg_operation: EnumProperty(
-        name='CSG Operation',
-        items=csg_operation_items,
-        default='ADD',
-    )
+    csg_operation: EnumProperty(items=csg_operation_items, name='CSG Operation', default='ADD')
+    texture_width_fallback: IntProperty(name='Texture Width Fallback', default=512, min=1)
+    texture_height_fallback: IntProperty(name='Texture Height Fallback', default=512, min=1)
 
     @classmethod
     def poll(cls, context):
-        if context.active_object is None:
-            return False
-        if context.active_object.type != 'MESH':
-            cls.poll_message_set('Object is not a mesh')
-            return False
-        if context.active_object.bdk.type != 'NONE':
-            cls.poll_message_set('Object is already a BDK object')
-            return False
-        return True
+        for obj in context.selected_objects:
+            if can_convert_object_to_bsp_brush(obj):
+                return True
+        cls.poll_message_set('At least one selected object must be a mesh')
+        return False
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.prop(self, 'csg_operation')
+        advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
+        advanced_header.label(text='Advanced')
+        if advanced_panel:
+            advanced_panel.prop(self, 'texture_width_fallback')
+            advanced_panel.prop(self, 'texture_height_fallback')
+
+    def invoke(self, context: Context, event: Event):
+        return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-        _ensure_bsp_brush_object(context.active_object, self.csg_operation)
+        for obj in context.selected_objects:
+            if not can_convert_object_to_bsp_brush(obj):
+                continue
+            # Create the planar texture mapping from the UV mapping.
+            bad_face_count = _create_planar_texture_mapping_attributes(
+                obj, self.texture_width_fallback, self.texture_height_fallback
+            )
+            if bad_face_count > 0:
+                self.report({'WARNING'}, f'{bad_face_count} faces used fallback texture dimensions')
+
+            # Ensure that the object is set up as a BSP brush object.
+            _ensure_bsp_brush_object(obj, self.csg_operation)
+
         return {'FINISHED'}
 
 
@@ -188,26 +298,23 @@ class BDK_OT_bsp_brush_select_similar(Operator):
         active_object = context.object
         bsp_brush = active_object.bdk.bsp_brush
 
-        def is_bsp_brush(obj: Object):
-            return obj.bdk.type == 'BSP_BRUSH'
-
         if self.property == 'CSG_OPERATION':
             def filter_csg_operation(obj: Object):
-                return is_bsp_brush(obj) and obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
+                return obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
             filter_function = filter_csg_operation
         elif self.property == 'POLY_FLAGS':
             def filter_poly_flags(obj: Object):
-                return is_bsp_brush(obj) and obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
+                return obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
             filter_function = filter_poly_flags
         elif self.property == 'SORT_ORDER':
             def filter_sort_order(obj: Object):
-                return is_bsp_brush(obj) and obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
+                return obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
             filter_function = filter_sort_order
         else:
             self.report({'ERROR'}, f'Invalid property: {self.property}')
             return {'CANCELLED'}
 
-        for obj in filter(filter_function, context.scene.objects):
+        for obj in filter(filter_function, filter(lambda x: obj.bdk.type == 'BSP_BRUSH', context.scene.objects)):
             obj.select_set(True)
 
         return {'FINISHED'}
@@ -216,22 +323,65 @@ class BDK_OT_bsp_brush_select_similar(Operator):
 class BspBrushError(Enum):
     NOT_MANIFOLD = 1
     NOT_CONVEX = 2
+    TWISTED_FACE = 3
 
 
-def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> Set[BspBrushError]:
+def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> List[Tuple[BspBrushError, int]]:
     """
     Check the given object for errors and return a set of all the errors that were found.
     """
     evaluated_obj = obj.evaluated_get(depsgraph)
-    errors = set()
+    errors = list()
     bm = bmesh.new()
     bm.from_object(evaluated_obj, depsgraph)
-    for edge in bm.edges:
+
+    for edge_index, edge in enumerate(bm.edges):
         if not edge.is_manifold:
-            errors.add(BspBrushError.NOT_MANIFOLD)
+            errors.append((BspBrushError.NOT_MANIFOLD, edge_index))
         if not edge.is_convex:
-            errors.add(BspBrushError.NOT_CONVEX)
+            errors.append((BspBrushError.NOT_CONVEX, edge_index))
+
+    # This value is copied from the BSP build code.
+    # TODO: Have these constants available to import from bdk_py.
+    THRESH_NORMALS_ARE_SAME = 0.00002
+
+    def _is_face_twisted(face: BMFace, threshold: float = THRESH_NORMALS_ARE_SAME):
+        """
+        Return true if a face is "twisted". A twisted face is one where the triangles that make up the face have normals
+        that differ by greater than the specified threshold.
+
+        :param face: The face to check.
+        :param threshold: The threshold to test against. This is compared against the dot product delta.
+        :return: Returns `True` if the face is twisted, `False` if it is not.
+        """
+        if len(face.verts) <= 3:
+            return False
+
+        normals = set()
+        for i in range(len(face.verts) - 2):
+            a = face.verts[i + 1].co - face.verts[i].co
+            b = face.verts[i + 2].co - face.verts[i + 1].co
+            normal = a.cross(b).normalized().freeze()
+            normals.add(normal)
+        normals = list(normals)
+
+        # Compare each normal against the first one. This ensures the checks are stable and that errors do not compound.
+        for normal in normals[1:]:
+            dot_product = normals[0].dot(normal)
+            diff = abs(1.0 - dot_product)
+            if diff > threshold:
+                return True
+
+        return False
+
+    # Check for polygons whose triangulated faces have differing normals. This is the classic "twisted quad" scenario
+    # that can lead to BSP holes.
+    for face_index, face in enumerate(bm.faces):
+        if _is_face_twisted(face):
+            errors.append((BspBrushError.TWISTED_FACE, face_index))
+
     bm.free()
+
     return errors
 
 
@@ -241,9 +391,9 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
     bl_description = 'Check the selected BSP brush for errors'
     bl_options = {'REGISTER', 'UNDO'}
 
-    select: BoolProperty(
-        name='Selected',
-        description='Select the object if it has errors',
+    deselect_ok: BoolProperty(
+        name='Deselect Brushes Without Errors',
+        description='Deselect brushes that do not have any errors',
         default=True,
     )
 
@@ -253,10 +403,7 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
 
     def draw(self, context: Context):
         layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        layout.prop(self, 'errors')
-        layout.prop(self, 'select')
+        layout.prop(self, 'deselect_ok')
 
     def execute(self, context):
         depsgraph = context.evaluated_depsgraph_get()
@@ -264,23 +411,26 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
         for obj in context.selected_objects:
             if obj.bdk.type == 'BSP_BRUSH':
                 bsp_brush_errors = get_bsp_brush_errors(obj, depsgraph)
-                if BspBrushError.NOT_MANIFOLD in bsp_brush_errors:
-                    object_errors[obj] = BspBrushError.NOT_MANIFOLD
-                if BspBrushError.NOT_CONVEX in bsp_brush_errors:
-                    object_errors[obj] = BspBrushError.NOT_CONVEX
-        if object_errors:
-            self.report({'ERROR'}, f'Found {len(object_errors)} errors')
-            for obj, error in object_errors.items():
-                if error == BspBrushError.NOT_MANIFOLD:
-                    self.report({'ERROR'}, f'{obj.name}: Not manifold')
-                elif error == BspBrushError.NOT_CONVEX:
-                    self.report({'ERROR'}, f'{obj.name}: Not convex')
-            if self.select:
+                if bsp_brush_errors:
+                    object_errors[obj] = bsp_brush_errors
+        if len(object_errors) > 0:
+            self.report({'ERROR'}, f'Found {len(object_errors)} brush(es) with errors')
+            for obj, errors in object_errors.items():
+                for (error, index) in errors:
+                    print(error, index)
+                    if error == BspBrushError.NOT_MANIFOLD:
+                        self.report({'ERROR'}, f'{obj.name}: Edge {index} is not manifold')
+                    elif error == BspBrushError.NOT_CONVEX:
+                        self.report({'ERROR'}, f'{obj.name}: Edge {index} is not convex')
+                    elif error == BspBrushError.TWISTED_FACE:
+                        self.report({'ERROR'}, f'{obj.name}: Face {index} is twisted')
+            if self.deselect_ok:
                 # Go through all selected objects and deselect those that don't have errors.
                 for obj in context.selected_objects:
                     if obj not in object_errors:
                         obj.select_set(False)
-        self.report({'INFO'}, 'No errors found')
+        else:
+            self.report({'INFO'}, 'No errors found')
         return {'FINISHED'}
 
 
@@ -475,7 +625,6 @@ class BDK_OT_bsp_build(Operator):
             lighting_panel.prop(self, 'lightmap_format')
             lighting_panel.prop(self, 'should_dither_lightmaps')
 
-
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
@@ -486,6 +635,7 @@ class BDK_OT_bsp_build(Operator):
             self.report({'ERROR'}, 'bdk_py module is not installed')
             return {'CANCELLED'}
 
+        # Now that we know the dependencies are installed, it's safe to import the module.
         from bdk_py import Poly, Brush, csg_rebuild
 
         # Go to object mode, if we are not already in object mode.
@@ -550,6 +700,8 @@ class BDK_OT_bsp_build(Operator):
 
             polygon_count = len(mesh_data.polygons)
 
+            print(brush_object.name)
+
             # Origin
             origin_data = np.zeros(polygon_count * 3, dtype=np.float32)
             mesh_data.attributes.get(ORIGIN_ATTRIBUTE_NAME).data.foreach_get('vector', origin_data)
@@ -584,7 +736,7 @@ class BDK_OT_bsp_build(Operator):
                     vertices.append((x, y, z))
 
                 # Get the material index for the polygon.
-                material = mesh_data.materials[polygon.material_index]
+                material = mesh_data.materials[polygon.material_index] if polygon.material_index < len(mesh_data.materials) else None
                 material_index = _get_or_add_material(material)
 
                 polys.append(Poly(
@@ -656,6 +808,10 @@ class BDK_OT_bsp_build(Operator):
         mesh_data = cast(Mesh, level_object.data)
         bm.to_mesh(mesh_data)
         bm.free()
+        
+        # Add references to brush polygons as face attributes.
+        # TODO: add section index. this way, when we make edits to the texturing, we can apply it to all the faces in
+        #  the associated section.
 
         # Create materials for the level object.
         mesh_data.materials.clear()
@@ -683,10 +839,7 @@ class BDK_OT_bsp_build(Operator):
             region.tag_redraw()
 
         # Make sure the level object has the UV geometry node modifier.
-        uv_map_modifier = level_object.modifiers.get('BDK Level UV Mapping')
-        if uv_map_modifier is None:
-            uv_map_modifier = level_object.modifiers.new(name='BDK Level UV Mapping', type='NODES')
-        uv_map_modifier.node_group = ensure_bdk_brush_uv_node_tree()
+        _ensure_planar_texture_mapping_modifier(level_object)
 
         self.report({'INFO'}, f'Level built in {duration:.4f} seconds')
 
@@ -715,10 +868,94 @@ class BDK_OT_bsp_brush_demote(Operator):
         return {'FINISHED'}
 
 
+
+class BDK_OT_bsp_brush_debug_ensure_attributes(Operator):
+    bl_idname = 'bdk.bsp_brush_debug_ensure_attributes'
+    bl_label = 'Ensure BSP Brush Attributes'
+    bl_description = 'Ensure that the selected BSP brushes have the required attributes'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_selected_bsp_brushes(cls, context)
+
+    def execute(self, context):
+        for obj in context.selected_objects:
+            if obj.bdk.type == 'BSP_BRUSH':
+                _ensure_bdk_brush_attributes(obj.data)
+        return {'FINISHED'}
+
+
+class BDK_OT_bsp_brush_operation_toggle(Operator):
+    bl_idname = 'bdk.bsp_brush_operation_toggle'
+    bl_label = 'Toggle BSP Brush Operation'
+    bl_description = 'Toggle the CSG operation of the active BSP brush'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return poll_is_active_object_bsp_brush(cls, context)
+
+    def execute(self, context: Context):
+        bsp_brush = context.active_object.bdk.bsp_brush
+        match bsp_brush.csg_operation:
+            case 'ADD':
+                bsp_brush.csg_operation = 'SUBTRACT'
+            case 'SUBTRACT':
+                bsp_brush.csg_operation = 'ADD'
+        return {'FINISHED'}
+
+select_with_poly_flags_mode_items = (
+    ('ALL', 'All', 'Select BSP brushes that have all the specified poly flags'),
+    ('ANY', 'Any', 'Select BSP brushes that have any of the specified poly flags'),
+    ('NONE', 'None', 'Select BSP brushes that do not have any of the specified poly flags'),
+)
+
+class BDK_OT_bsp_brush_select_with_poly_flags(Operator):
+    bl_idname = 'bdk.bsp_brush_select_with_poly_flags'
+    bl_label = 'Select BSP Brushes with Poly Flags'
+    bl_description = 'Select all BSP brushes with the specified poly flags'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    mode: EnumProperty(name='Mode', items=select_with_poly_flags_mode_items, default='ALL')
+    poly_flags: EnumProperty(name='Poly Flags', items=poly_flags_items, options={'ENUM_FLAG'})
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'mode')
+
+        flow = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+        flow.prop(self, 'poly_flags')
+
+    def execute(self, context: Context):
+        bsp_brush_objects = [obj for obj in context.scene.objects if obj.bdk.type == 'BSP_BRUSH']
+        match self.mode:
+            case 'ALL':
+                filter_function = lambda obj: obj.bdk.bsp_brush.poly_flags & self.poly_flags == self.poly_flags
+            case 'ANY':
+                filter_function = lambda obj: obj.bdk.bsp_brush.poly_flags & self.poly_flags != 0
+            case _:  # NONE
+                filter_function = lambda obj: obj.bdk.bsp_brush.poly_flags & self.poly_flags == 0
+
+        for obj in filter(filter_function, bsp_brush_objects):
+            obj.select_set(True)
+
+        return {'FINISHED'}
+
+
+
 classes = (
+    BDK_OT_bsp_brush_debug_ensure_attributes,
     BDK_OT_bsp_brush_add,
     BDK_OT_bsp_brush_check_for_errors,
+    BDK_OT_bsp_brush_operation_toggle,
     BDK_OT_bsp_brush_select_similar,
+    BDK_OT_bsp_brush_select_with_poly_flags,
     BDK_OT_bsp_brush_set_sort_order,
     BDK_OT_bsp_brush_snap_to_grid,
     BDK_OT_bsp_build,

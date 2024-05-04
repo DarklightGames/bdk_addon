@@ -7,7 +7,7 @@ import bmesh
 import mathutils
 import numpy as np
 import t3dpy
-from bpy.types import Context, Object, Mesh, Image, Camera
+from bpy.types import Context, Object, Mesh, Image, Camera, WindowManager
 from mathutils import Matrix
 from typing import List, Optional, Dict, Any, cast, Type
 
@@ -148,6 +148,19 @@ class BrushImporter(ActorImporter):
         origins = []
         texture_us = []
         texture_vs = []
+        poly_flags = []
+
+        csg_operation = t3d_actor.properties.get('CsgOper', 'CSG_Active')
+
+        match csg_operation:
+            case 'CSG_Add':
+                csg_operation = 'ADD'
+            case 'CSG_Subtract':
+                csg_operation = 'SUBTRACT'
+            case _:
+                # If we don't handle the CSG operation, just ignore this brush.
+                return None
+                pass
 
         for child in t3d_actor.children:
             if child.type_ != 'Brush':
@@ -193,6 +206,7 @@ class BrushImporter(ActorImporter):
                 origins.append(origin)
                 texture_us.append(texture_u)
                 texture_vs.append(texture_v)
+                poly_flags.append(polygon.properties.get('Flags', 0))
 
                 vertex_indices = []
                 for _, vertex in filter(lambda prop: prop[0] == 'Vertex', polygon.vector_properties):
@@ -222,14 +236,6 @@ class BrushImporter(ActorImporter):
         bsp_brush = bpy_object.bdk.bsp_brush
         bsp_brush.object = bpy_object
 
-        csg_operation = t3d_actor.properties.get('CsgOper', 'CSG_Add')
-
-        match csg_operation:
-            case 'CSG_Add':
-                csg_operation = 'ADD'
-            case 'CSG_Subtract':
-                csg_operation = 'SUBTRACT'
-
         bsp_brush.csg_operation = csg_operation
         bsp_brush.poly_flags = get_poly_flags_keys_from_value(t3d_actor.properties.get('PolyFlags', 0))
 
@@ -245,6 +251,9 @@ class BrushImporter(ActorImporter):
 
         texture_v_attribute = mesh_data.attributes.new('bdk.texture_v', 'FLOAT_VECTOR', 'FACE')
         texture_v_attribute.data.foreach_set('vector', np.array(texture_vs).flatten())
+
+        poly_flags_attribute = mesh_data.attributes.new('bdk.poly_flags', 'INT', 'FACE')
+        poly_flags_attribute.data.foreach_set('value', np.array(poly_flags).flatten())
 
         # Add the geometry node tree for UV mapping.
         geometry_node_modifier = bpy_object.modifiers.new(name="UV Mapping", type="NODES")
@@ -605,7 +614,7 @@ def get_alpha_data_from_image(image: Image) -> np.array:
     return np.array(list(image.pixels)[3::4], dtype=float)
 
 
-def import_t3d(contents: str, context: Context):
+def import_t3d(window_manager: WindowManager, contents: str, context: Context):
     def set_custom_properties(t3d_actor: t3dpy.T3dObject, bpy_object: Object):
         location = mathutils.Vector((0.0, 0.0, 0.0))
         rotation_euler = mathutils.Euler((0.0, 0.0, 0.0))
@@ -684,5 +693,10 @@ def import_t3d(contents: str, context: Context):
     print(f'T3DMap reading completed')
     print(f'Importing {len(t3d_objects)} objects...')
 
-    for t3d_object in t3d_objects:
+    window_manager.progress_begin(0, len(t3d_objects))
+
+    for object_index, t3d_object in enumerate(t3d_objects):
         import_t3d_object(t3d_object, context)
+        window_manager.progress_update(object_index)
+
+    window_manager.progress_end()

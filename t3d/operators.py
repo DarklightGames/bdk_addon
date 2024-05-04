@@ -38,7 +38,7 @@ class BDK_OT_t3d_import_from_clipboard(Operator):
 
     def execute(self, context: Context):
         try:
-            import_t3d(context.window_manager.clipboard, context)
+            import_t3d(context.window_manager, context.window_manager.clipboard, context)
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -74,7 +74,7 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
     def execute(self, context: Context):
         contents = Path(self.filepath).read_text()
         try:
-            import_t3d(contents, context)
+            import_t3d(context.window_manager, contents, context)
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -375,8 +375,6 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
         # Copy the string to the clipboard.
         bpy.context.window_manager.clipboard = string_io.read()
-
-        wm.progress_end()
 
         self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({size} bytes)')
 
