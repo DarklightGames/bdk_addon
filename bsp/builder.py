@@ -1,16 +1,41 @@
 # NOTE: This is taken more or less verbatim from the ase2t3d source, adopted for Python.
 # In the future, clean this up so that it's more clear what is going on.
+
+import time
+from enum import Enum
+
 from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree
 from mathutils import Vector, Quaternion
 from bmesh.types import BMFace
-from bpy.types import Object, Mesh, Material, NodeTree
+from bpy.types import Object, Mesh, NodeTree
 from math import isnan
-from typing import Optional, Dict, cast
+from typing import Optional, Dict, cast, List
 import mathutils
 import numpy as np
 
+ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
+TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
+TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
+POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
+MATERIAL_SLOT_ATTRIBUTE_NAME = 'material_index'
+BRUSH_INDEX_ATTRIBUTE_NAME = 'bdk.brush_index'
+BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
 
-def get_level_face_data(level_object: Object) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray):
+
+def _ensure_bsp_surface_attributes(mesh_data: Mesh):
+    attributes = (
+        (ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+        (TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+        (TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+        (MATERIAL_SLOT_ATTRIBUTE_NAME, 'INT', 'FACE'),
+    )
+
+    for (name, type_, domain) in attributes:
+        if name not in mesh_data.attributes:
+            mesh_data.attributes.new(name, type_, domain)
+
+
+def get_level_face_data(level_object: Object) -> (np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray):
     """
     Get the origin, texture U, and texture V data for the faces of the level object.
     """
@@ -20,19 +45,30 @@ def get_level_face_data(level_object: Object) -> (np.ndarray, np.ndarray, np.nda
     origins = np.zeros(polygon_count * 3, dtype=np.float32)
     texture_us = np.zeros(polygon_count * 3, dtype=np.float32)
     texture_vs = np.zeros(polygon_count * 3, dtype=np.float32)
+    poly_flags = np.zeros(polygon_count, dtype=np.int32)
     material_indices = np.zeros(polygon_count, dtype=np.int32)
 
-    mesh_data.attributes['bdk.origin'].data.foreach_get(origins)
-    mesh_data.attributes['bdk.texture_u'].data.foreach_get(texture_us)
-    mesh_data.attributes['bdk.texture_v'].data.foreach_get(texture_vs)
-    mesh_data.attributes['material_index'].data.foreach_get(material_indices)
+    if ORIGIN_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_get('vector', origins)
+
+    if TEXTURE_U_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_get('vector', texture_us)
+
+    if TEXTURE_V_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_get('vector', texture_vs)
+
+    if POLY_FLAGS_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[POLY_FLAGS_ATTRIBUTE_NAME].data.foreach_get('value', poly_flags)
+
+    if MATERIAL_SLOT_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[MATERIAL_SLOT_ATTRIBUTE_NAME].data.foreach_get('value', material_indices)
 
     # Reshape in-place.
     origins.shape = (polygon_count, 3)
     texture_us.shape = (polygon_count, 3)
     texture_vs.shape = (polygon_count, 3)
 
-    return origins, texture_us, texture_vs, material_indices
+    return origins, texture_us, texture_vs, material_indices, poly_flags
 
 
 class BrushMappingErrorType(Enum):
@@ -41,31 +77,44 @@ class BrushMappingErrorType(Enum):
 
 
 class BrushMappingError:
-    def __init__(self, brush_index: int, error_type: BrushMappingErrorType, level_polygon_index: Optional[int] = None), brush_polygon_index: Optional[int] = None) -> None
+    def __init__(self, brush_index: int, error_type: BrushMappingErrorType, level_polygon_index: Optional[int] = None, brush_polygon_index: Optional[int] = None) -> None:
         self.brush_index = brush_index
         self.error_type = error_type
         self.level_polygon_index = level_polygon_index
         self.brush_polygon_index = brush_polygon_index
 
+    def __str__(self):
+        if self.error_type == BrushMappingErrorType.BRUSH_NOT_FOUND:
+            return f'Brush {self.brush_index} not found.'
+        elif self.error_type == BrushMappingErrorType.BRUSH_POLYGON_NOT_FOUND:
+            return f'Polygon {self.level_polygon_index} not found in brush {self.brush_index}.'
+
 
 class BrushMappingResult:
     def __init__(self):
+        self.face_count = 0
+        self.brush_count = 0
+        self.missing_brush_count = 0
         self.errors: List[BrushMappingError] = []
+        self.duration = 0.0
 
 def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
     result = BrushMappingResult()
 
-    mapping = build_level_to_brush_mapping(level_object)
-    origins, texture_us, texture_vs, level_material_indices = get_level_face_data(level_object)
+    timer = time.time()
 
+    mapping = build_level_to_brush_mapping(level_object)
+
+    origins, texture_us, texture_vs, level_material_indices, poly_flags = get_level_face_data(level_object)
     # Possible scenarios where this will break:
     # 1. If the brush mesh topology has changed since the mapping was created.
     # 2. If the brush has been deleted (in this case it's just a no-op).
 
-    for brush_index, brush in enumerate(level_object.brushes):
+    for brush_index, brush in enumerate(level_object.bdk.level.brushes):
 
         if brush.brush_object is None:
             # The brush object has been deleted.
+            result.missing_brush_count += 1
             result.errors.append(BrushMappingError(brush_index, BrushMappingErrorType.BRUSH_NOT_FOUND))
             continue
 
@@ -73,12 +122,19 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
             # The brush has no polygons in the level.
             continue
 
+        result.brush_count += 1
+
+        brush_object = cast(Object, brush.brush_object)
         brush_mesh = cast(Mesh, brush_object.data)
 
-        # TODO: should probably ensure that these exist.
+        # Ensure that the brush mesh has the necessary attributes.
+        _ensure_bsp_surface_attributes(brush_mesh)
+
         brush_origin_attribute = brush_mesh.attributes['bdk.origin']
         brush_texture_u_attribute = brush_mesh.attributes['bdk.texture_u']
         brush_texture_v_attribute = brush_mesh.attributes['bdk.texture_v']
+        brush_poly_flags_attribute = brush_mesh.attributes['bdk.poly_flags']
+        brush_material_index_attribute = brush_mesh.attributes['material_index']
 
         material_index_mapping = {}  # Level material index to brush material index mapping.
 
@@ -92,11 +148,11 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
         for level_material_index in brush_level_material_indices:
             level_material = level_object.material_slots[level_material_index].material
             # Find the material in the brush.
-            brush_material_slot_index = brush_object.material_slots.find(level_material.name)
+            brush_material_slot_index = brush_object.material_slots.find(level_material.name if level_material is not None else '')
             if brush_material_slot_index == -1:
                 # The material is not in the brush, so add it.
                 brush_material_slot_index = len(brush_object.material_slots)
-                brush_object.material_slots.append(level_material)
+                brush_object.data.materials.append(level_material)
             material_index_mapping[level_material_index] = brush_material_slot_index
 
         for brush_polygon_index, level_polygon_index in mapping[brush_index].items():
@@ -108,21 +164,37 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
                                       brush_polygon_index=brush_polygon_index))
                 continue
 
-            origin = origins[level_polygon_index]
-            texture_u = texture_us[level_polygon_index]
-            texture_v = texture_vs[level_polygon_index]
-            material_index = material_index_mapping[material_indices[level_polygon_index]]
+            origin = Vector(origins[level_polygon_index])
+            texture_u = Vector(texture_us[level_polygon_index])
+            texture_v = Vector(texture_vs[level_polygon_index])
 
-            # TODO: transform the U/V/origin data from level-space to brush space
-            #  (just needs to do the inverse of the BSP build code).
+            # TODO: this logic is untested.
+            # Transform the texturing plane from level-space to brush space.
+            inverse_brush_world_matrix = brush_object.matrix_world.inverted()
+            translation, rotation, scale = inverse_brush_world_matrix.decompose()
+            rotation_matrix = rotation.to_matrix().to_4x4()
+            scale_matrix = mathutils.Matrix.Diagonal(scale.to_4d())
+            points_matrix = inverse_brush_world_matrix
+            vectors_matrix = rotation_matrix @ scale_matrix
 
-            # NOTE: if we want to make this stable regardless of brush transform, we need to store the original
-            #  brush transform in the level object.
+            origin = points_matrix @ origin
+            texture_u = vectors_matrix @ texture_u
+            texture_v = vectors_matrix @ texture_v
+
+            # TODO: To make this stable regardless of brush transform, store the original brush transform in the level
+            #  object.
 
             brush_origin_attribute.data[brush_polygon_index].vector = origin
             brush_texture_u_attribute.data[brush_polygon_index].vector = texture_u
             brush_texture_v_attribute.data[brush_polygon_index].vector = texture_v
-            brush_material_index_attribute.data[brush_polygon_index].value = material_index
+            brush_poly_flags_attribute.data[brush_polygon_index].value = poly_flags[level_polygon_index]
+            brush_material_index_attribute.data[brush_polygon_index].value = material_index_mapping[level_material_indices[level_polygon_index]]
+
+            result.face_count += 1
+
+    result.duration = time.time() - timer
+
+    return result
 
 
 def build_level_to_brush_mapping(level_object: Object) -> Dict[int, Dict[int, int]]:
@@ -131,8 +203,11 @@ def build_level_to_brush_mapping(level_object: Object) -> Dict[int, Dict[int, in
     brush_indices = np.zeros(polygon_count, dtype=np.int32)
     brush_polygon_indices = np.zeros(polygon_count, dtype=np.int32)
 
-    mesh_data.attributes['bdk.brush_index'].data.foreach_get(brush_indices)
-    mesh_data.attributes['bdk.brush_polygon_index'].data.foreach_get(brush_polygon_indices)
+    if BRUSH_INDEX_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[BRUSH_INDEX_ATTRIBUTE_NAME].data.foreach_get('value', brush_indices)
+
+    if BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME].data.foreach_get('value', brush_polygon_indices)
 
     mapping: Dict[int, Dict[int, int]] = {}
 
@@ -231,18 +306,20 @@ def ensure_bdk_brush_uv_node_tree():
 
         material_index_node = node_tree.nodes.new(type='GeometryNodeInputMaterialIndex')
 
-        try:
-            object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
-            node_tree.links.new(evaluate_at_index_material_index_node.outputs['Value'], object_material_size_node.inputs['Material Index'])
-            node_tree.links.new(self_object_node.outputs['Self Object'], object_material_size_node.inputs['Object'])
-            material_size_u_socket = object_material_size_node.outputs['U']
-            material_size_v_socket = object_material_size_node.outputs['V']
-        except RuntimeError:
-            # For debugging purposes on machines without the Blender BDK fork.
-            material_size_fallback_vector_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-            material_size_fallback_vector_node.inputs['Vector'].default_value = (512.0, 512.0, 0.0)
-            material_size_u_socket = material_size_fallback_vector_node.outputs['X']
-            material_size_v_socket = material_size_fallback_vector_node.outputs['Y']
+        material_size_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        material_size_switch_node.input_type = 'VECTOR'
+
+        object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+
+        material_size_fallback_vector_node = node_tree.nodes.new(type='FunctionNodeInputVector')
+        material_size_fallback_vector_node.vector = (512.0, 512.0, 0.0)
+
+        node_tree.links.new(evaluate_at_index_material_index_node.outputs['Value'], object_material_size_node.inputs['Material Index'])
+        node_tree.links.new(self_object_node.outputs['Self Object'], object_material_size_node.inputs['Object'])
+        node_tree.links.new(object_material_size_node.outputs['Exists'], material_size_switch_node.inputs['Switch'])
+
+        node_tree.links.new(material_size_fallback_vector_node.outputs['Vector'], material_size_switch_node.inputs['False'])
+        node_tree.links.new(combine_material_size_node.outputs['Vector'], material_size_switch_node.inputs['True'])
 
         # Inputs
         node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
@@ -267,10 +344,10 @@ def ensure_bdk_brush_uv_node_tree():
         node_tree.links.new(origin_named_attribute_node.outputs['Attribute'], evaluate_at_index_origin_node.inputs['Value'])
         node_tree.links.new(texture_scale_node.outputs['Vector'], subtract_node.inputs[1])
         node_tree.links.new(subtract_node.outputs['Vector'], store_named_attribute_node.inputs['Value'])
-        node_tree.links.new(material_size_u_socket, combine_material_size_node.inputs['X'])
-        node_tree.links.new(material_size_v_socket, combine_material_size_node.inputs['Y'])
+        node_tree.links.new(object_material_size_node.outputs['U'], combine_material_size_node.inputs['X'])
+        node_tree.links.new(object_material_size_node.outputs['V'], combine_material_size_node.inputs['Y'])
         node_tree.links.new(combine_xyz_node.outputs['Vector'], texture_scale_node.inputs[0])
-        node_tree.links.new(combine_material_size_node.outputs['Vector'], texture_scale_node.inputs[1])
+        node_tree.links.new(material_size_switch_node.outputs['Output'], texture_scale_node.inputs[1])
         node_tree.links.new(face_of_corner_node.outputs['Face Index'], evaluate_at_index_material_index_node.inputs['Index'])
         node_tree.links.new(material_index_node.outputs['Material Index'], evaluate_at_index_material_index_node.inputs['Value'])
 

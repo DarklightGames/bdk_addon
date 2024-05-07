@@ -1,11 +1,12 @@
 from bpy.types import NodeTree
 
-from ...node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_vector_math_operation_nodes, \
+from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_vector_math_operation_nodes, \
     add_math_operation_nodes
 
 ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
 TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
 TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
+LIGHT_MAP_SCALE_ATTRIBUTE_NAME = 'bdk.light_map_scale'
 
 
 def ensure_bdk_bsp_surface_info_node_tree() -> NodeTree:
@@ -14,6 +15,7 @@ def ensure_bdk_bsp_surface_info_node_tree() -> NodeTree:
         ('OUTPUT', 'NodeSocketVector', 'U'),
         ('OUTPUT', 'NodeSocketVector', 'V'),
         ('OUTPUT', 'NodeSocketVector', 'Origin'),
+        ('OUTPUT', 'NodeSocketFloat', 'Light Map Scale')
     }
 
     def build_function(node_tree: NodeTree):
@@ -21,39 +23,53 @@ def ensure_bdk_bsp_surface_info_node_tree() -> NodeTree:
 
         texture_u_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
         texture_u_attribute_node.inputs['Name'].default_value = TEXTURE_U_ATTRIBUTE_NAME
+        texture_u_attribute_node.data_type = 'FLOAT_VECTOR'
 
         texture_v_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
         texture_v_attribute_node.inputs['Name'].default_value = TEXTURE_V_ATTRIBUTE_NAME
+        texture_v_attribute_node.data_type = 'FLOAT_VECTOR'
 
         origin_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
         origin_attribute_node.inputs['Name'].default_value = ORIGIN_ATTRIBUTE_NAME
+        origin_attribute_node.data_type = 'FLOAT_VECTOR'
+
+        light_map_scale_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+        light_map_scale_attribute_node.inputs['Name'].default_value = LIGHT_MAP_SCALE_ATTRIBUTE_NAME
 
         node_tree.links.new(texture_u_attribute_node.outputs['Attribute'], output_node.inputs['U'])
         node_tree.links.new(texture_v_attribute_node.outputs['Attribute'], output_node.inputs['V'])
         node_tree.links.new(origin_attribute_node.outputs['Attribute'], output_node.inputs['Origin'])
+        node_tree.links.new(light_map_scale_attribute_node.outputs['Attribute'], output_node.inputs['Light Map Scale'])
 
     return ensure_geometry_node_tree('BDK BSP Surface Info', items, build_function)
 
 
+def make_tool_node_tree(node_tree: NodeTree):
+    node_tree.is_modifier = False
+    node_tree.is_tool = True
+    node_tree.is_mode_object = False
+    node_tree.is_mode_edit = True
+    node_tree.is_mode_sculpt = False
+    node_tree.is_type_mesh = True
+    node_tree.use_fake_user = True
+
 def ensure_bdk_bsp_surface_pan_node_tree() -> NodeTree:
     items = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('INPUT', 'NodeSocketVector', 'U'),
-        ('INPUT', 'NodeSocketVector', 'V'),
+        ('INPUT', 'NodeSocketFloat', 'U'),
+        ('INPUT', 'NodeSocketFloat', 'V'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):
-        node_tree.is_modifier = False
-        node_tree.is_tool = True
-        node_tree.is_mode_object = False
-        node_tree.is_mode_edit = True
-        node_tree.is_mode_sculpt = False
+        make_tool_node_tree(node_tree)
 
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         store_origin_attribute = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
         store_origin_attribute.inputs['Name'].default_value = ORIGIN_ATTRIBUTE_NAME
+        store_origin_attribute.data_type = 'FLOAT_VECTOR'
+        store_origin_attribute.domain = 'FACE'
 
         bsp_face_info_node_group = node_tree.nodes.new('GeometryNodeGroup')
         bsp_face_info_node_group.node_tree = ensure_bdk_bsp_surface_info_node_tree()
@@ -63,12 +79,14 @@ def ensure_bdk_bsp_surface_pan_node_tree() -> NodeTree:
         origin_socket = add_vector_math_operation_nodes(node_tree, 'ADD', [
             bsp_face_info_node_group.outputs['Origin'],
             add_vector_math_operation_nodes(node_tree, 'ADD', [
-                add_vector_math_operation_nodes(node_tree, 'SCALE',[
-                    bsp_face_info_node_group.outputs['U'], input_node.outputs['U']]),
-                add_vector_math_operation_nodes(node_tree, 'SCALE',[
-                    bsp_face_info_node_group.outputs['V'],
-                    add_math_operation_nodes(node_tree, 'MULTIPLY', [input_node.outputs['V'], -1.0])
-                ])
+                add_vector_math_operation_nodes(node_tree, 'SCALE', {
+                    'Vector': add_vector_math_operation_nodes(node_tree, 'NORMALIZE', [bsp_face_info_node_group.outputs['U']]),
+                    'Scale': input_node.outputs['U']
+                }),
+                add_vector_math_operation_nodes(node_tree, 'SCALE',{
+                    'Vector': add_vector_math_operation_nodes(node_tree, 'NORMALIZE', [bsp_face_info_node_group.outputs['V']]),
+                    'Scale': add_math_operation_nodes(node_tree, 'MULTIPLY', [input_node.outputs['V'], -1.0])
+                })
             ])
         ])
 
@@ -88,11 +106,13 @@ def ensure_bdk_bsp_surface_pan_node_tree() -> NodeTree:
 def ensure_bdk_bsp_surface_rotate_node_tree() -> NodeTree:
     inputs = {
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('INPUT', 'NodeSocketFloatAngle', 'Angle'),
+        ('INPUT', 'NodeSocketFloat', 'Angle'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     }
 
     def build_function(node_tree: NodeTree):
+        make_tool_node_tree(node_tree)
+
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         store_texture_u_attribute = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
@@ -138,3 +158,5 @@ def ensure_bdk_bsp_surface_align_node_tree() -> NodeTree:
 def ensure_bdk_bsp_tool_node_trees():
     ensure_bdk_bsp_surface_info_node_tree()
     ensure_bdk_bsp_surface_pan_node_tree()
+    ensure_bdk_bsp_surface_rotate_node_tree()
+    ensure_bdk_bsp_surface_align_node_tree()

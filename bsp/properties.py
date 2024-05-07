@@ -1,5 +1,5 @@
 from .data import PolyFlags, bsp_optimization_items
-from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty
+from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty, FloatProperty
 from bpy.types import PropertyGroup, Object, Context
 from enum import Enum
 from typing import Set
@@ -119,7 +119,14 @@ class BDK_PG_bsp_brush(PropertyGroup):
         max=8,  # This is not strictly necessary, but will stop the levelers from using insane values.
     )
 
-class BDK_PG_level(PropertyGroup):
+
+class BDK_PG_level_performance(PropertyGroup):
+    object_serialization_duration: FloatProperty(name='Object Serialization', unit='TIME_ABSOLUTE')
+    csg_build_duration: FloatProperty(name='CSG Build', unit='TIME_ABSOLUTE')
+    mesh_build_duration: FloatProperty(name='Mesh Build', unit='TIME_ABSOLUTE')
+
+
+class BDK_PG_level_statistics(PropertyGroup):
     brush_count: IntProperty(name='Brush Count')
     zone_count: IntProperty(name='Zone Count')
     poly_count: IntProperty(name='Poly Count')
@@ -129,16 +136,22 @@ class BDK_PG_level(PropertyGroup):
     average_depth: IntProperty(name='Average Depth')
     point_count: IntProperty(name='Point Count')
     vertex_count: IntProperty(name='Vertex Count')
+
+
+class BDK_PG_level(PropertyGroup):
     brushes: CollectionProperty(type=BDK_PG_level_brush, options={'HIDDEN'},
                                 description='The list of brush objects used in generating the level geometry. '
                                             'This is used as a look-up table so that texturing work done on the '
                                             'level geometry can be applied to the associated brush polygons')
-
+    statistics: PointerProperty(type=BDK_PG_level_statistics, options={'HIDDEN'})
+    performance: PointerProperty(type=BDK_PG_level_performance, options={'HIDDEN'})
     bsp_optimization: EnumProperty(items=bsp_optimization_items, name='Optimization', default='LAME')
 
 
 classes = (
     BDK_PG_bsp_brush,
+    BDK_PG_level_performance,
+    BDK_PG_level_statistics,
     BDK_PG_level_brush,
     BDK_PG_level,
 )

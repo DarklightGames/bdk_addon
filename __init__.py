@@ -74,6 +74,7 @@ if 'bpy' in locals():
 
     # BSP
     importlib.reload(bsp_builder)
+    importlib.reload(bsp_tools)
     importlib.reload(bsp_properties)
     importlib.reload(bsp_operators)
     importlib.reload(bsp_ui)
@@ -152,6 +153,7 @@ else:
 
     # BSP
     from .bsp import builder as bsp_builder
+    from .bsp import tools as bsp_tools
     from .bsp import properties as bsp_properties
     from .bsp import operators as bsp_operators
     from .bsp import ui as bsp_ui

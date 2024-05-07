@@ -2,7 +2,7 @@ import numpy as np
 from bmesh.types import BMFace
 from mathutils import Vector, Matrix
 
-from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon
+from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping
 from ..helpers import is_bdk_py_installed
 from .data import bsp_optimization_items
 from .properties import csg_operation_items, poly_flags_items
@@ -21,6 +21,7 @@ BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
 ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
 TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
 TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
+POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
 MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
 
 PLANAR_TEXTURE_MAPPING_MODIFIER_NAME = 'BDK Planar Texture Mapping'
@@ -482,7 +483,7 @@ class BDK_OT_select_brushes_inside(Operator):
         description='Threshold for determining if a point is on a plane',
         default=0.1,
         min=0.0,
-        step=0.1,
+        step=0.1
     )
     filter: EnumProperty(
         name='Filter',
@@ -598,6 +599,10 @@ class BDK_OT_bsp_build(Operator):
         default='RGB8',
     )
 
+    apply_level_texturing_to_brushes: BoolProperty(name='Apply Texturing to Brushes', default=True,
+                                                   description='Apply the level texturing to the brush polygons before building the level geometry')
+
+
     def draw(self, context):
         layout = self.layout
 
@@ -625,10 +630,20 @@ class BDK_OT_bsp_build(Operator):
             lighting_panel.prop(self, 'lightmap_format')
             lighting_panel.prop(self, 'should_dither_lightmaps')
 
+        advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
+        advanced_header.label(text='Advanced')
+        if advanced_panel:
+            advanced_panel.use_property_split = True
+            advanced_panel.use_property_decorate = False
+            advanced_panel.prop(self, 'apply_level_texturing_to_brushes')
+
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
+
+        start_time = time.time()
+
         # Make sure that the bdk_py module is available.
         # TODO: Move this to the poll function once we are done debugging.
         if not is_bdk_py_installed():
@@ -669,6 +684,12 @@ class BDK_OT_bsp_build(Operator):
 
         level_object = scene.bdk.level_object
 
+        # Apply the texturing to the brushes, if the option is enabled.
+        if self.apply_level_texturing_to_brushes:
+            result = apply_level_to_brush_mapping(level_object)
+            for error in result.errors:
+                self.report({'WARNING'}, str(error))
+
         def brush_object_filter(obj: Object):
             if not obj.bdk.type == 'BSP_BRUSH':
                 return False
@@ -692,6 +713,15 @@ class BDK_OT_bsp_build(Operator):
                 materials.append(material)
                 return len(materials) - 1
 
+        # Add the brushes to the level object.
+        level_object.bdk.level.brushes.clear()
+        for brush_index, brush_object in enumerate(brush_objects):
+            level_brush = level_object.bdk.level.brushes.add()
+            level_brush.index = brush_index
+            level_brush.brush_object = brush_object
+
+        timer = time.time()
+
         brushes: List[Brush] = []
         for brush_index, brush_object in enumerate(brush_objects):
             # Create a new Poly object for each face of the brush.
@@ -699,8 +729,6 @@ class BDK_OT_bsp_build(Operator):
             mesh_data = brush_object.data
 
             polygon_count = len(mesh_data.polygons)
-
-            print(brush_object.name)
 
             # Origin
             origin_data = np.zeros(polygon_count * 3, dtype=np.float32)
@@ -758,7 +786,9 @@ class BDK_OT_bsp_build(Operator):
 
             brushes.append(brush)
 
-        # Start a timer.
+        level = level_object.bdk.level
+        level.performance.object_serialization_duration = time.time() - timer
+
         start_time = time.time()
 
         # Rebuild the level geometry.
@@ -768,16 +798,16 @@ class BDK_OT_bsp_build(Operator):
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
 
-        duration = time.time() - start_time
-
-        bdk_level = level_object.bdk.level
+        level.performance.csg_build_duration = time.time() - start_time
 
         # Update statistics.
-        bdk_level.node_count = len(model.nodes)
-        bdk_level.surface_count = len(model.surfaces)
-        bdk_level.vertex_count = len(model.vertices)
-        bdk_level.point_count = len(model.points)
+        level.statistics.node_count = len(model.nodes)
+        level.statistics.surface_count = len(model.surfaces)
+        level.statistics.vertex_count = len(model.vertices)
+        level.statistics.point_count = len(model.points)
 
+        # Build the mesh.
+        timer = time.time()
         bm = bmesh.new()
 
         for point in model.points:
@@ -785,32 +815,54 @@ class BDK_OT_bsp_build(Operator):
 
         bm.verts.ensure_lookup_table()
 
-        brush_ids = []
-        brush_polygon_indices = []
-        origins = []
-        texture_us = []
-        texture_vs = []
-        material_indices = []
+        # Pre-allocate the arrays for the number of faces.
+        valid_node_count = 0
+        for node in model.nodes:
+            if node.vertex_count > 0:
+                valid_node_count += 1
+
+        brush_ids = np.zeros(valid_node_count, dtype=np.int32)
+        brush_polygon_indices = np.zeros(valid_node_count, dtype=np.int32)
+        material_indices = np.zeros(valid_node_count, dtype=np.int32)
+        origins = np.zeros((valid_node_count, 3), dtype=np.float32)
+        texture_us = np.zeros((valid_node_count, 3), dtype=np.float32)
+        texture_vs = np.zeros((valid_node_count, 3), dtype=np.float32)
+        poly_flags = np.zeros(valid_node_count, dtype=np.int32)
+
+        node_index = 0
+
+        # NOTE: For the sake of performance, we copy the data from the model to numpy arrays instead of accessing them
+        #  directly. It is dramatically slower if accessed directly (1500ms vs 45ms). There is probably some sort of
+        #  overhead or inefficiency in the way the data is accessed in the model object.
+        vertices = np.array(model.vertices)
+        points = np.array(model.points)
+        vectors = np.array(model.vectors)
 
         for node in model.nodes:
             if node.vertex_count == 0:
                 continue
-            vertices = model.vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]
-            point_indices = [vert.vertex_index for vert in vertices]
-            surface = model.surfaces[node.surface_index]
-            bm.faces.new([bm.verts[i] for i in point_indices])
 
-            brush_ids.append(surface.brush_id)
-            brush_polygon_indices.append(surface.brush_polygon_index)
-            origins.append(model.points[surface.base_point_index])
-            texture_us.append(model.vectors[surface.texture_u_index])
-            texture_vs.append(model.vectors[surface.texture_v_index])
-            material_indices.append(surface.material_index)
+            point_indices = [vert.vertex_index for vert in vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]]
+            bm.faces.new(map(lambda i: bm.verts[i], point_indices))
+
+            surface = model.surfaces[node.surface_index]
+            brush_ids[node_index] = surface.brush_id
+            brush_polygon_indices[node_index] = surface.brush_polygon_index
+            material_indices[node_index] = surface.material_index
+
+            origins[node_index] = points[surface.base_point_index]
+            texture_us[node_index] = vectors[surface.texture_u_index]
+            texture_vs[node_index] = vectors[surface.texture_v_index]
+            poly_flags[node_index] = surface.poly_flags
+
+            node_index += 1
 
         mesh_data = cast(Mesh, level_object.data)
         bm.to_mesh(mesh_data)
         bm.free()
-        
+
+        level.performance.mesh_build_duration = time.time() - timer
+
         # Add references to brush polygons as face attributes.
         # TODO: add section index. this way, when we make edits to the texturing, we can apply it to all the faces in
         #  the associated section.
@@ -820,6 +872,7 @@ class BDK_OT_bsp_build(Operator):
         for material in materials:
             mesh_data.materials.append(material)
 
+        # TODO: use ensure method.
         # Add references to brush polygons as face attributes.
         mesh_data.attributes.new(BRUSH_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
         mesh_data.attributes.new(BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
@@ -827,24 +880,29 @@ class BDK_OT_bsp_build(Operator):
         mesh_data.attributes.new(TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
         mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
         mesh_data.attributes.new(MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
+        mesh_data.attributes.new(POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE')
 
         # NOTE: Rather than using the reference returned from `attributes.new`, we need to do the lookup again.
         #  This is because references to the attributes are not stable across calls to `attributes.new`.
         mesh_data.attributes[BRUSH_INDEX_ATTRIBUTE_NAME].data.foreach_set('value', brush_ids)
         mesh_data.attributes[BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME].data.foreach_set('value', brush_polygon_indices)
-        mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(origins).flatten())
-        mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_us).flatten())
-        mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_set('vector', np.array(texture_vs).flatten())
+        mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_set('vector', origins.flatten())
+        mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_set('vector', texture_us.flatten())
+        mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_set('vector', texture_vs.flatten())
         mesh_data.attributes[MATERIAL_INDEX_ATTRIBUTE_NAME].data.foreach_set('value', material_indices)
-
-        for region in context.area.regions:
-            region.tag_redraw()
+        mesh_data.attributes[POLY_FLAGS_ATTRIBUTE_NAME].data.foreach_set('value', poly_flags)
 
         # Make sure the level object has the UV geometry node modifier.
         _ensure_planar_texture_mapping_modifier(level_object)
 
+        end_time = time.time()
+        duration = end_time - start_time
+
         # TODO: humanize the duration.
         self.report({'INFO'}, f'Level built in {duration:.4f} seconds')
+
+        for region in context.area.regions:
+            region.tag_redraw()
 
         return {'FINISHED'}
 
@@ -951,9 +1009,49 @@ class BDK_OT_bsp_brush_select_with_poly_flags(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_apply_level_texturing_to_brushes(Operator):
+    bl_idname = 'bdk.apply_level_texturing_to_brushes'
+    bl_label = 'Apply Texturing to Brushes'
+    bl_description = 'Apply the level texturing to BSP brushes'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        # Make sure that we are in object mode.
+        if context.mode != 'OBJECT':
+            cls.poll_message_set('Must be in object mode')
+            return False
+        # Make sure that the scene has a level object.
+        if context.scene.bdk.level_object is None:
+            cls.poll_message_set('No level object in the scene')
+            return False
+        return True
+
+    def execute(self, context):
+        result = apply_level_to_brush_mapping(context.scene.bdk.level_object)
+
+        for error in result.errors:
+            self.report({'WARNING'}, str(error))
+
+        self.report({'INFO'}, f'Applied level texturing to {result.brush_count} brushes ({result.face_count} faces)')
+
+        return {'FINISHED'}
+
+
+class BDK_OT_ensure_tool_operators(Operator):
+    bl_idname = 'bdk.ensure_tool_operators'
+    bl_label = 'Ensure Tool Operators'
+    bl_description = 'Ensure that the tool operators are registered'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from .tools import ensure_bdk_bsp_tool_node_trees
+        ensure_bdk_bsp_tool_node_trees()
+        return {'FINISHED'}
+
 
 classes = (
-    BDK_OT_bsp_brush_debug_ensure_attributes,
+    BDK_OT_bsp_brush_debug_ensure_attributes,  # TODO: remove this, was only used for debugging.
     BDK_OT_bsp_brush_add,
     BDK_OT_bsp_brush_check_for_errors,
     BDK_OT_bsp_brush_operation_toggle,
@@ -965,4 +1063,6 @@ classes = (
     BDK_OT_convert_to_bsp_brush,
     BDK_OT_select_brushes_inside,
     BDK_OT_bsp_brush_demote,
+    BDK_OT_apply_level_texturing_to_brushes,
+    BDK_OT_ensure_tool_operators,
 )

@@ -1,5 +1,5 @@
 import os.path
-from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable, cast, Union
+from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable, cast, Union, Dict, Sequence
 
 import bpy
 from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNode, GeometryNodeRepeatOutput
@@ -528,15 +528,25 @@ def add_repeat_zone_nodes(node_tree: NodeTree, repeat_items: Iterable[Tuple[str,
     return input_node, output_node
 
 
-def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, Tuple[float, float, float], NodeSocket]]) -> NodeSocket:
+def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Union[
+        Dict[str, Union[int, float, Tuple[float, float, float], NodeSocket]],
+        List[Union[int, float, Tuple[float, float, float], NodeSocket]]
+    ]) -> NodeSocket:
     vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
     vector_math_node.operation = operation
 
-    for index, input in enumerate(inputs):
-        if isinstance(input, NodeSocket):
-            node_tree.links.new(input, vector_math_node.inputs[index])
-        else:
-            vector_math_node.inputs[index].default_value = input
+    if isinstance(inputs, dict):
+        for key, input_ in inputs.items():
+            if isinstance(input_, NodeSocket):
+                node_tree.links.new(input_, vector_math_node.inputs[key])
+            else:
+                vector_math_node.inputs[key].default_value = input_
+    elif isinstance(inputs, list):
+        for index, input_ in enumerate(inputs):
+            if isinstance(input_, NodeSocket):
+                node_tree.links.new(input_, vector_math_node.inputs[index])
+            else:
+                vector_math_node.inputs[index].default_value = input_
 
     return vector_math_node.outputs['Vector']
 
