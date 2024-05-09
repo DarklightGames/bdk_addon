@@ -238,6 +238,9 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
                                   description='The value at which the mask will be applied')
     mask_invert: BoolProperty(name='Invert', default=False, options=empty_set, description='Invert the mask')
 
+    # Actor Settings
+    actor_group: StringProperty(name='Group', default='', options={'HIDDEN'}, description='')
+
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 

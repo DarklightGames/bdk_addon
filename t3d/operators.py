@@ -270,6 +270,9 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
             actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
             actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
 
+            if scatter_layer.actor_group != '':
+                actor.properties['Group'] = scatter_layer.actor_group
+
             actors.append(actor)
 
     return actors

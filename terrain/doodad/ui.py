@@ -839,6 +839,30 @@ class BDK_PT_terrain_doodad_scatter_layer_mask(Panel):
 
         flow.prop(scatter_layer, 'mask_attribute_id', emboss=False)
 
+class BDK_PT_terrain_doodad_scatter_layer_advanced(Panel):
+    bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_advanced'
+    bl_label = 'Advanced'
+    bl_category = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_order = 31
+    bl_parent_id = 'BDK_PT_terrain_doodad_scatter_layers'
+
+    @classmethod
+    def poll(cls, context: 'Context'):
+        return poll_has_terrain_doodad_scatter_layer_selected(cls, context)
+
+    def draw(self, context):
+        layout = self.layout
+        terrain_doodad = get_terrain_doodad(context.active_object)
+        scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
+
+        flow = layout.grid_flow(align=True, columns=1)
+        flow.use_property_split = True
+        flow.use_property_decorate = False
+
+        flow.prop(scatter_layer, 'actor_group', text='Group')
+
 
 def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = None):
     layout.prop(data, 'is_curve_reversed')
@@ -1028,6 +1052,7 @@ classes = (
     BDK_PT_terrain_doodad_scatter_layer_curve_settings,
     BDK_PT_terrain_doodad_scatter_layer_mesh_settings,
     BDK_PT_terrain_doodad_scatter_layer_mask,
+    BDK_PT_terrain_doodad_scatter_layer_advanced,
     BDK_PT_terrain_doodad_scatter_layer_debug,
     BDK_PT_terrain_doodad_advanced,
     BDK_PT_terrain_doodad_operators,
