@@ -207,13 +207,23 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
     return mesh
 
 
-def are_bdk_dependencies_installed() -> bool:
+def are_t3d_dependencies_installed() -> bool:
     try:
         import t3dpy
+    except ModuleNotFoundError:
+        return False
+    return True
+
+def are_bsp_dependencies_installed() -> bool:
+    try:
         import bdk_py
     except ModuleNotFoundError:
         return False
     return True
+
+
+def are_bdk_dependencies_installed() -> bool:
+    return are_t3d_dependencies_installed() and are_bsp_dependencies_installed()
 
 def is_bdk_py_installed() -> bool:
     try:
@@ -227,7 +237,7 @@ def is_bdk_py_installed() -> bool:
 def copy_simple_property_group(source, target, ignore: Iterable[str] = set()):
     if not hasattr(source, "__annotations__"):
         return
-    # TODO: this doesn't work for inherited annotations
+    # TODO: this doesn't work for inherited annotations or PointerProperty types
     for prop_name in source.__annotations__.keys():
         if prop_name in ignore:
             continue

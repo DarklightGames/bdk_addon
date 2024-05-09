@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Set, Sequence
 
 import bpy
-from bpy.types import Operator, Context, Node, Event
+from bpy.types import Operator, Context, Node, Event, NodeSocket
 from bpy.props import BoolProperty, StringProperty
 
 import subprocess
@@ -32,7 +32,7 @@ class BDK_OT_install_dependencies(Operator):
         # TODO: have this be a YAML file.
         modules = OrderedDict()
         modules['t3dpy'] = 't3dpy'
-        modules['bdk_py'] = r'C:\dev\bdk_py\target\wheels\bdk_py-0.1.0-cp311-none-win_amd64.whl'
+        # modules['bdk_py'] = r'C:\dev\bdk_py\target\wheels\bdk_py-0.1.0-cp311-none-win_amd64.whl'
 
         # Install our requirements using PIP. TODO: use a requirements.txt file
         if self.uninstall:
@@ -149,18 +149,7 @@ class BDK_OT_generate_node_code(Operator):
         return True
 
     def execute(self, context: Context):
-
         selected_nodes = context.selected_nodes
-
-        # Get the selected nodes in the node editor.
-        def get_socket_index(sockets, socket):
-            for i, s in enumerate(sockets):
-                if s == socket:
-                    return i
-            return None
-
-        lines = []
-
         nodes: OrderedDictType[str, Node] = OrderedDict()
 
         for node in selected_nodes:
@@ -169,7 +158,18 @@ class BDK_OT_generate_node_code(Operator):
             else:
                 variable_name = node.bl_label.replace(' ', '_').lower()
             variable_name += '_node'
+
+            # Avoid name collisions by appending a number to the variable name.
+            # If the variable already has a number appended, increment it.
+            if variable_name in nodes:
+                i = 1
+                while f'{variable_name}_{i}' in nodes:
+                    i += 1
+                variable_name = f'{variable_name}_{i}'
+
             nodes[variable_name] = node
+
+        lines = []
 
         for variable_name, node in nodes.items():
             lines.append(f'{variable_name} = node_tree.nodes.new(type=\'{node.bl_idname}\')')
@@ -186,15 +186,19 @@ class BDK_OT_generate_node_code(Operator):
                 # Ignore PointerProperty properties.
                 if property_meta.type == 'POINTER':
                     continue
-                if property_name in ('name', 'label', 'location', 'width', 'height', 'name', 'color', 'select', 'show_options'):
+                if property_name in ('name', 'label', 'location', 'width', 'height', 'name', 'color', 'select', 'show_options', 'is_active_output'):
                     continue
-                if getattr(node, property_name) != property_meta.default:
+                if getattr(node, property_name) != property_meta.default:  # TODO: the default value is not always correct.
                     value = getattr(node, property_name)
                     if isinstance(value, str):
                         value = f'\'{value}\''
+                    print(property_name, type(value), value)
                     lines.append(f'{variable_name}.{property_name} = {value}')
+                else:
+                    print('default', property_meta.default, getattr(node, property_name))
 
-            # Check if the node has any input sockets whose default value doesn't match the default value of the socket type.
+            # Check if the node has any input sockets whose default value doesn't match the default value of the socket
+            # type.
             for socket in node.inputs:
                 if socket.is_linked or socket.is_unavailable:
                     continue
@@ -203,17 +207,16 @@ class BDK_OT_generate_node_code(Operator):
                     if type(socket.default_value) == str:
                         default_value = f'\'{default_value}\''
                     # TODO: other types are too much of a pain to handle right now
-                    lines.append(f'{variable_name}.inputs["{socket.name}"].default_value = {default_value}')
+                    lines.append(f'{variable_name}.inputs[\'{socket.name}\'].default_value = {default_value}')
 
             lines.append('')
-
 
         # Get all the links between the selected nodes.
         links = set()
         for variable_name, node in nodes.items():
-            for input in node.inputs:
-                if input.is_linked:
-                    for link in input.links:
+            for input_ in node.inputs:
+                if input_.is_linked:
+                    for link in input_.links:
                         links.add(link)
             for output in node.outputs:
                 if output.is_linked:
@@ -274,7 +277,6 @@ class BDK_OT_generate_node_code(Operator):
             lines.append('# Outgoing Links')
             for (link, from_variable_name, from_socket_index) in outgoing_links:
                 lines.append(f'# {from_variable_name}.outputs[\'{from_socket_index}\']  # {link.from_socket.name}')
-
 
         # Copy the lines to the clipboard.
         context.window_manager.clipboard = '\n'.join(lines)

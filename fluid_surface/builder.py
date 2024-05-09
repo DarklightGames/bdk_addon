@@ -1,4 +1,3 @@
-import bpy
 from bpy.types import NodeTree, ID, bpy_struct
 from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree
 
@@ -20,8 +19,11 @@ def _add_fluid_surface_driver_ex(
         data_path += f"[{index}]"
     var.targets[0].data_path = data_path
 
+
 def ensure_fluid_surface_node_tree(fluid_surface: 'BDK_PG_fluid_surface') -> NodeTree:
-    items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
+    items = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def add_fluid_surface_driver(struct: bpy_struct, data_path: str, index: int = -1):
         _add_fluid_surface_driver_ex(struct, fluid_surface.object, data_path, index, 'default_value')

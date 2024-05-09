@@ -168,12 +168,11 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
             texture_u = Vector(texture_us[level_polygon_index])
             texture_v = Vector(texture_vs[level_polygon_index])
 
-            # TODO: this logic is untested.
             # Transform the texturing plane from level-space to brush space.
             inverse_brush_world_matrix = brush_object.matrix_world.inverted()
             translation, rotation, scale = inverse_brush_world_matrix.decompose()
             rotation_matrix = rotation.to_matrix().to_4x4()
-            scale_matrix = mathutils.Matrix.Diagonal(scale.to_4d())
+            scale_matrix = mathutils.Matrix.Diagonal(scale.to_4d()).inverted()  # The scale matrix is inverted again.
             points_matrix = inverse_brush_world_matrix
             vectors_matrix = rotation_matrix @ scale_matrix
 
@@ -222,10 +221,10 @@ def build_level_to_brush_mapping(level_object: Object) -> Dict[int, Dict[int, in
 
 def ensure_bdk_brush_uv_node_tree():
 
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -292,34 +291,40 @@ def ensure_bdk_brush_uv_node_tree():
         texture_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         texture_scale_node.operation = 'DIVIDE'
 
-        self_object_node = node_tree.nodes.new(type='GeometryNodeSelfObject')
-
-        combine_material_size_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-
         subtract_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         subtract_node.operation = 'SUBTRACT'
         subtract_node.inputs[0].default_value = (0.0, 1.0, 0.0)
 
-        evaluate_at_index_material_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
-        evaluate_at_index_material_index_node.data_type = 'INT'
-        evaluate_at_index_material_index_node.domain = 'FACE'
-
-        material_index_node = node_tree.nodes.new(type='GeometryNodeInputMaterialIndex')
-
         material_size_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         material_size_switch_node.input_type = 'VECTOR'
-
-        object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
 
         material_size_fallback_vector_node = node_tree.nodes.new(type='FunctionNodeInputVector')
         material_size_fallback_vector_node.vector = (512.0, 512.0, 0.0)
 
-        node_tree.links.new(evaluate_at_index_material_index_node.outputs['Value'], object_material_size_node.inputs['Material Index'])
-        node_tree.links.new(self_object_node.outputs['Self Object'], object_material_size_node.inputs['Object'])
-        node_tree.links.new(object_material_size_node.outputs['Exists'], material_size_switch_node.inputs['Switch'])
+        try:
+            object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+            combine_material_size_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+            evaluate_at_index_material_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+            evaluate_at_index_material_index_node.data_type = 'INT'
+            evaluate_at_index_material_index_node.domain = 'FACE'
+            self_object_node = node_tree.nodes.new(type='GeometryNodeSelfObject')
+            material_index_node = node_tree.nodes.new(type='GeometryNodeInputMaterialIndex')
+
+            node_tree.links.new(evaluate_at_index_material_index_node.outputs['Value'],
+                                object_material_size_node.inputs['Material Index'])
+            node_tree.links.new(self_object_node.outputs['Self Object'], object_material_size_node.inputs['Object'])
+            node_tree.links.new(object_material_size_node.outputs['Exists'], material_size_switch_node.inputs['Switch'])
+            node_tree.links.new(object_material_size_node.outputs['U'], combine_material_size_node.inputs['X'])
+            node_tree.links.new(object_material_size_node.outputs['V'], combine_material_size_node.inputs['Y'])
+            node_tree.links.new(combine_material_size_node.outputs['Vector'], material_size_switch_node.inputs['True'])
+            node_tree.links.new(face_of_corner_node.outputs['Face Index'],
+                                evaluate_at_index_material_index_node.inputs['Index'])
+            node_tree.links.new(material_index_node.outputs['Material Index'],
+                                evaluate_at_index_material_index_node.inputs['Value'])
+        except RuntimeError:
+            pass
 
         node_tree.links.new(material_size_fallback_vector_node.outputs['Vector'], material_size_switch_node.inputs['False'])
-        node_tree.links.new(combine_material_size_node.outputs['Vector'], material_size_switch_node.inputs['True'])
 
         # Inputs
         node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
@@ -344,12 +349,8 @@ def ensure_bdk_brush_uv_node_tree():
         node_tree.links.new(origin_named_attribute_node.outputs['Attribute'], evaluate_at_index_origin_node.inputs['Value'])
         node_tree.links.new(texture_scale_node.outputs['Vector'], subtract_node.inputs[1])
         node_tree.links.new(subtract_node.outputs['Vector'], store_named_attribute_node.inputs['Value'])
-        node_tree.links.new(object_material_size_node.outputs['U'], combine_material_size_node.inputs['X'])
-        node_tree.links.new(object_material_size_node.outputs['V'], combine_material_size_node.inputs['Y'])
         node_tree.links.new(combine_xyz_node.outputs['Vector'], texture_scale_node.inputs[0])
         node_tree.links.new(material_size_switch_node.outputs['Output'], texture_scale_node.inputs[1])
-        node_tree.links.new(face_of_corner_node.outputs['Face Index'], evaluate_at_index_material_index_node.inputs['Index'])
-        node_tree.links.new(material_index_node.outputs['Material Index'], evaluate_at_index_material_index_node.inputs['Value'])
 
         # Output
         node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])

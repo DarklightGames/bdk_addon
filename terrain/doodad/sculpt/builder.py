@@ -7,7 +7,7 @@ from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_
 
 def ensure_sculpt_noise_node_group():
     # Create a new geometry node group.
-    items = {
+    items = (
         ('INPUT', 'NodeSocketFloat', 'Distance'),
         ('INPUT', 'NodeSocketFloat', 'Radius'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
@@ -17,8 +17,8 @@ def ensure_sculpt_noise_node_group():
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Scale'),
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Lacunarity'),
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Detail'),
-        ('OUTPUT', 'NodeSocketFloat', 'Offset')
-    }
+        ('OUTPUT', 'NodeSocketFloat', 'Offset'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -71,7 +71,7 @@ def ensure_sculpt_noise_node_group():
 
 
 def ensure_curve_modifier_node_group():
-    items = {
+    items = (
         ('INPUT', 'NodeSocketObject', 'Terrain Doodad Object'),
         ('INPUT', 'NodeSocketBool', 'Reverse Curve'),
         ('INPUT', 'NodeSocketFloat', 'Curve Trim Factor Start'),
@@ -81,7 +81,7 @@ def ensure_curve_modifier_node_group():
         ('INPUT', 'NodeSocketFloat', 'Curve Trim Length End'),
         ('INPUT', 'NodeSocketFloat', 'Curve Normal Offset'),
         ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -117,8 +117,9 @@ def ensure_curve_modifier_node_group():
 
     return ensure_geometry_node_tree('BDK Curve Modifier', items, build_function)
 
+
 def ensure_sculpt_value_node_group() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
         ('INPUT', 'NodeSocketFloat', 'Distance'),
         ('INPUT', 'NodeSocketFloat', 'Radius'),
@@ -133,7 +134,7 @@ def ensure_sculpt_value_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Noise Radius Factor'),
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
         ('OUTPUT', 'NodeSocketFloat', 'Value'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

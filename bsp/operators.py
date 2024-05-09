@@ -80,8 +80,6 @@ class BDK_OT_bsp_brush_add(Operator):
         bm.to_mesh(mesh)
         bm.free()
 
-        poly_flags_attribute = mesh.attributes.new('bdk.poly_flags', 'INT', 'FACE')
-
         obj = bpy.data.objects.new('Brush', mesh)
 
         _ensure_bsp_brush_object(obj, self.csg_operation)
@@ -130,6 +128,8 @@ def _ensure_bdk_brush_attributes(mesh_data: Mesh):
         mesh_data.attributes.new(TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
     if TEXTURE_V_ATTRIBUTE_NAME not in mesh_data.attributes:
         mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
+    if POLY_FLAGS_ATTRIBUTE_NAME not in mesh_data.attributes:
+        mesh_data.attributes.new(POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE')
 
 
 def _create_planar_texture_mapping_attributes(obj: Object, texture_width_fallback: int, texture_height_fallback: int):
@@ -171,7 +171,10 @@ def _create_planar_texture_mapping_attributes(obj: Object, texture_width_fallbac
             unsupported_face_count += 1
         else:
             material = mesh_data.materials[face.material_index]
-            if material.bdk.package_reference == '':
+            if material is None:
+                texture_width = 512
+                texture_height = 512
+            elif material.bdk.package_reference == '':
                 unsupported_face_count += 1
             else:
                 texture_width = material.bdk.size_x

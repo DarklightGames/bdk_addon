@@ -142,7 +142,7 @@ def _add_scatter_layer_object_driver_ex(
 
 
 def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketBool', 'Fence Mode'),
         ('INPUT','NodeSocketFloat', 'Factor'),
@@ -152,8 +152,8 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketVector', 'Rotation Offset'),
         ('INPUT', 'NodeSocketFloat', 'Rotation Offset Saturation'),
         ('INPUT', 'NodeSocketInt', 'Rotation Offset Saturation Seed'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Geometry')
-    }
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -281,12 +281,12 @@ def ensure_terrain_doodad_curve_align_to_terrain_node_tree() -> NodeTree:
 
 
 def ensure_snap_to_terrain_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT',  'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketBool', 'Mute'),
         ('OUTPUT',  'NodeSocketGeometry', 'Geometry'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -323,7 +323,9 @@ def ensure_snap_to_terrain_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
-    items = {('OUTPUT','NodeSocketGeometry', 'Geometry')}
+    items = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -376,7 +378,10 @@ def ensure_scatter_layer_sprout_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_
 
 
 def ensure_geometry_size_node_tree() -> NodeTree:
-    items = {('INPUT','NodeSocketGeometry', 'Geometry'), ('OUTPUT','NodeSocketVector', 'Size')}
+    items = (
+        ('INPUT','NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT','NodeSocketVector', 'Size'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -402,11 +407,11 @@ def ensure_geometry_size_node_tree() -> NodeTree:
 def ensure_vector_component_node_tree() -> NodeTree:
     # TODO: this probably has bugs after the int->str refactor
 
-    items = {
+    items = (
         ('INPUT', 'NodeSocketVector', 'Vector'),
         ('INPUT','NodeSocketInt', 'Index'),
-        ('OUTPUT', 'NodeSocketFloat', 'Value')
-    }
+        ('OUTPUT', 'NodeSocketFloat', 'Value'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -578,13 +583,13 @@ def ensure_fence_point_tangent_and_normal_node_tree() -> NodeTree:
 
 
 def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketFloat', 'Spacing Length'),
         ('OUTPUT', 'NodeSocketGeometry', 'Points'),
         ('OUTPUT', 'NodeSocketVector', 'Tangent'),
         ('OUTPUT', 'NodeSocketVector', 'Normal'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -823,7 +828,7 @@ def ensure_scatter_layer_origin_offset_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketBool', 'Fence Mode'),
         ('INPUT', 'NodeSocketFloat', 'Spacing Length'),
@@ -832,8 +837,8 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Tangent Offset Max'),
         ('INPUT', 'NodeSocketInt', 'Tangent Offset Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Points')
-    }
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -914,7 +919,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
 
 
 def ensure_select_object_index_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketBool', 'Selection'),
         ('INPUT', 'NodeSocketInt', 'Object Count'),
@@ -931,7 +936,7 @@ def ensure_select_object_index_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Random Weight 6'),
         ('INPUT', 'NodeSocketFloat', 'Random Weight 7'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -999,14 +1004,14 @@ def ensure_select_object_index_node_tree() -> NodeTree:
 
 
 def ensure_terrain_normal_offset_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Min'),
         ('INPUT', 'NodeSocketFloat', 'Terrain Normal Offset Max'),
         ('INPUT', 'NodeSocketInt', 'Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1042,7 +1047,7 @@ def ensure_terrain_normal_offset_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_object_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketInt', 'Object Index'),
@@ -1069,7 +1074,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketBool', 'Fence Mode'),
         ('INPUT', 'NodeSocketVector', 'Origin Offset'),
         ('OUTPUT', 'NodeSocketGeometry', 'Points'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1239,7 +1244,7 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_position_deviation_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketFloat', 'Deviation Min'),
         ('INPUT', 'NodeSocketFloat', 'Deviation Max'),
@@ -1247,7 +1252,7 @@ def ensure_scatter_layer_position_deviation_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
         ('INPUT', 'NodeSocketBool', 'Selection'),
         ('OUTPUT', 'NodeSocketGeometry', 'Points'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1294,7 +1299,9 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
     terrain_doodad_object = scatter_layer.terrain_doodad_object
     terrain_info = terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
 
-    items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
+    items = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def build_function(node_tree: NodeTree):
         def add_scatter_layer_driver(struct: bpy_struct, data_path: str, index: int = -1, path: str = 'default_value'):
@@ -1509,7 +1516,9 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
     terrain_doodad_object = scatter_layer.terrain_doodad_object
     terrain_info_object = scatter_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object
 
-    items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
+    items = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def build_function(node_tree: NodeTree):
         def _add_terrain_doodad_driver(struct: bpy_struct, terrain_doodad: 'BDK_PG_terrain_doodad', data_path: str,
@@ -1862,14 +1871,14 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_mask_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketString', 'Attribute Name'),
         ('INPUT', 'NodeSocketFloat', 'Threshold'),
         ('INPUT', 'NodeSocketBool', 'Invert'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Points')
-    }
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

@@ -19,7 +19,7 @@ from .data import T3DObject, Polygon
 from pathlib import Path
 from .importer import import_t3d
 from .writer import T3DWriter
-from ..helpers import are_bdk_dependencies_installed
+from ..helpers import are_t3d_dependencies_installed
 
 
 class BDK_OT_t3d_import_from_clipboard(Operator):
@@ -66,8 +66,8 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
 
     @classmethod
     def poll(cls, context: Context):
-        if not are_bdk_dependencies_installed():
-            cls.poll_message_set('Dependencies are not installed')
+        if not are_t3d_dependencies_installed():
+            cls.poll_message_set('T3D dependencies are not installed')
             return False
         return True
 

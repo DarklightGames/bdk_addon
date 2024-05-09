@@ -12,13 +12,13 @@ from ..material.importer import MaterialBuilder, MaterialCache
 
 
 def _ensure_terrain_paint_layer_uv_group_node() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketFloat', 'UScale'),
         ('INPUT', 'NodeSocketFloat', 'VScale'),
         ('INPUT', 'NodeSocketFloat', 'TextureRotation'),
         ('INPUT', 'NodeSocketFloat', 'TerrainScale'),
         ('OUTPUT', 'NodeSocketVector', 'UV'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

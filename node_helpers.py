@@ -8,12 +8,12 @@ from .data import map_range_interpolation_type_items
 
 
 def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketInt', 'Operation'),
         ('INPUT', 'NodeSocketFloat', 'Value 1'),
         ('INPUT', 'NodeSocketFloat', 'Value 2'),
-        ('OUTPUT', 'NodeSocketFloat', 'Value')
-    }
+        ('OUTPUT', 'NodeSocketFloat', 'Value'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -64,11 +64,11 @@ def add_operation_switch_nodes(
 
 
 def ensure_interpolation_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketInt', 'Interpolation Type'),
         ('INPUT', 'NodeSocketFloat', 'Value'),
         ('OUTPUT', 'NodeSocketFloat', 'Value'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -152,7 +152,7 @@ def add_noise_type_switch_nodes(
     return index_switch_node.outputs['Output']
 
 
-def ensure_geometry_node_tree(name: str, items: AbstractSet[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
+def ensure_geometry_node_tree(name: str, items: Iterable[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
     """
     Ensures that a geometry node tree with the given name, inputs and outputs exists.
     """
@@ -160,7 +160,7 @@ def ensure_geometry_node_tree(name: str, items: AbstractSet[Tuple[str, str, str]
 
 
 def ensure_shader_node_tree(
-    name: str, items: AbstractSet[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
+    name: str, items: Iterable[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
     """
     Ensures that a shader node tree with the given name, inputs and outputs exists.
     """
@@ -169,7 +169,7 @@ def ensure_shader_node_tree(
 
 def ensure_node_tree(name: str,
                      node_group_type: str,
-                     items: AbstractSet[Tuple[str, str, str]],
+                     items: Iterable[Tuple[str, str, str]],
                      build_function: Callable[[NodeTree], None],
                      should_force_build: bool = False
                      ) -> NodeTree:
@@ -181,26 +181,16 @@ def ensure_node_tree(name: str,
     else:
         node_tree = bpy.data.node_groups.new(name=name, type=node_group_type)
 
-    def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str, socket_type: str):
-        for index, item in enumerate(node_tree.interface.items_tree):
-            if item.item_type == 'SOCKET' and item.in_out ==  in_out and item.name == name and item.socket_type == socket_type:
-                return item
-        return None
-
     # Compare the inputs and outputs of the node tree with the given inputs and outputs.
     # If they are different, clear the inputs and outputs and add the new ones.
     node_tree_items = set(map(lambda x: (x.in_out, x.bl_socket_idname, x.name), node_tree.interface.items_tree))
 
-    # For items that do not exist in the node tree, add them.
-    items_to_add = (items - node_tree_items)
-    for in_out, socket_type, name in items_to_add:
-        node_tree.interface.new_socket(name, in_out=in_out, socket_type=socket_type)
+    if node_tree_items != set(items):
+        node_tree.interface.clear()
+        for in_out, socket_type, name in items:
+            node_tree.interface.new_socket(name, in_out=in_out, socket_type=socket_type)
 
-    # For items that exist in the node tree but not in the given items, remove them.
-    inputs_to_remove = (node_tree_items - items)
-    for in_out, socket_type, name in inputs_to_remove:
-        item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
-        node_tree.interface.remove(item)
+    # TODO: handle default values and subtypes.
 
     # Hash the build function byte-code.
     build_hash = hex(hash(build_function.__code__.co_code))
@@ -251,7 +241,7 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
 
 
 def ensure_curve_modifier_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketInt', 'Trim Mode'),
         ('INPUT', 'NodeSocketFloat', 'Trim Factor Start'),
@@ -261,7 +251,7 @@ def ensure_curve_modifier_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Normal Offset'),
         ('INPUT', 'NodeSocketBool', 'Is Curve Reversed'),
         ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -301,11 +291,11 @@ def ensure_curve_modifier_node_tree() -> NodeTree:
 
 
 def ensure_curve_normal_offset_node_tree() -> NodeTree:
-    node_tree_items = {
+    node_tree_items = (
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketFloat', 'Normal Offset'),
         ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -351,7 +341,7 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
 
 
 def ensure_trim_curve_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketInt', 'Mode'),
         ('INPUT', 'NodeSocketFloat', 'Factor Start'),
@@ -359,7 +349,7 @@ def ensure_trim_curve_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Length Start'),
         ('INPUT', 'NodeSocketFloat', 'Length End'),
         ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

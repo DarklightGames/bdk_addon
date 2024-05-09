@@ -1,6 +1,6 @@
 from .data import PolyFlags, bsp_optimization_items
-from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty, FloatProperty
-from bpy.types import PropertyGroup, Object, Context
+from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty, FloatProperty, FloatVectorProperty
+from bpy.types import PropertyGroup, Object, Context, Material
 from enum import Enum
 from typing import Set
 

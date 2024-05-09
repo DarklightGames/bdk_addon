@@ -4,7 +4,7 @@ from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_no
 
 
 def ensure_projector_node_tree() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketObject', 'Target'),
         ('INPUT', 'NodeSocketFloat', 'MaxTraceDistance'),
         ('INPUT', 'NodeSocketFloat', 'FOV'),
@@ -13,7 +13,7 @@ def ensure_projector_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketInt', 'USize'),
         ('INPUT', 'NodeSocketInt', 'VSize'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

@@ -79,7 +79,7 @@ if 'bpy' in locals():
     importlib.reload(bsp_operators)
     importlib.reload(bsp_ui)
 
-    if bdk_helpers.are_bdk_dependencies_installed():
+    if bdk_helpers.are_t3d_dependencies_installed():
         # T3D
         importlib.reload(t3d_data)
         importlib.reload(t3d_operators)
@@ -158,7 +158,7 @@ else:
     from .bsp import operators as bsp_operators
     from .bsp import ui as bsp_ui
 
-    if bdk_helpers.are_bdk_dependencies_installed():
+    if bdk_helpers.are_t3d_dependencies_installed():
         # T3D
         from .t3d import data as t3d_data
         from .t3d import ui as t3d_ui
@@ -198,7 +198,7 @@ classes = actor_properties.classes + \
 
 # TODO: change this so that the operators that require the T3DMap dependency return false from their poll() method
 #  this will help with discoverability of the need to install the dependencies
-if bdk_helpers.are_bdk_dependencies_installed():
+if bdk_helpers.are_t3d_dependencies_installed():
     classes += t3d_ui.classes + \
                t3d_operators.classes
 
@@ -266,7 +266,7 @@ def register():
 
     bpy.types.VIEW3D_MT_select_object.append(bdk_select_menu_func)
 
-    if bdk_helpers.are_bdk_dependencies_installed():
+    if bdk_helpers.are_t3d_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)
         bpy.types.VIEW3D_MT_object_context_menu.append(bdk_t3d_copy_func)
         bpy.types.OUTLINER_MT_collection.append(bdk_t3d_copy_func)
@@ -300,7 +300,7 @@ def unregister():
     bpy.types.VIEW3D_MT_select_object.remove(bdk_select_menu_func)
 
     # T3DMap Copy (doodad/collections)
-    if bdk_helpers.are_bdk_dependencies_installed():
+    if bdk_helpers.are_t3d_dependencies_installed():
         bpy.types.TOPBAR_MT_file_import.remove(bdk_t3d_import_func)
         bpy.types.VIEW3D_MT_object_context_menu.remove(bdk_t3d_copy_func)
         bpy.types.OUTLINER_MT_collection.remove(bdk_t3d_copy_func)

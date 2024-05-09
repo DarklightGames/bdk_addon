@@ -61,11 +61,12 @@ def add_terrain_layer_node_driver(
     target.id = target_id
     target.data_path = data_path_function(dataptr_name, dataptr_index, node_index, property_name, index)
 
+
 def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index: int, dataptr_id: str, nodes: Iterable, target_id: ID) -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Geometry')
-    }
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -107,7 +108,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
 
 
 def ensure_noise_node_group() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketInt', 'Noise Type'),
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Scale'),
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Detail'),
@@ -115,7 +116,7 @@ def ensure_noise_node_group() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Lacunarity'),
         ('INPUT', 'NodeSocketFloat', 'Perlin Noise Distortion'),
         ('OUTPUT', 'NodeSocketFloat', 'Value'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -232,14 +233,14 @@ def add_density_from_terrain_layer_node(
 
 
 def ensure_terrain_layer_node_density_node_group() -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketFloat', 'Value'),
         ('INPUT', 'NodeSocketFloat', 'Factor'),
         ('INPUT', 'NodeSocketBool', 'Use Map Range'),
         ('INPUT', 'NodeSocketFloat', 'Map Range From Min'),
         ('INPUT', 'NodeSocketFloat', 'Map Range From Max'),
         ('OUTPUT', 'NodeSocketFloat', 'Value'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -330,7 +331,9 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, target_id: ID, dat
 
 
 def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> NodeTree:
-    items = {('OUTPUT', 'NodeSocketGeometry', 'Geometry')}
+    items = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -489,10 +492,10 @@ def create_terrain_deco_layer_node_convert_to_paint_layer_node_tree(node, target
 
 
 def _create_convert_node_to_paint_node_node_tree(node, target_id: ID, dataptr_name: str, dataptr_index: int, node_index: int, data_path_function: NodeDataPathFunctionType) -> NodeTree:
-    items = {
+    items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
