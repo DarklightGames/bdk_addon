@@ -5,8 +5,10 @@ from collections import OrderedDict
 import bpy
 import bmesh
 import mathutils
+from mathutils import Vector
 import numpy as np
 import t3dpy
+from bmesh.types import BMesh
 from bpy.types import Context, Object, Mesh, Image, Camera, WindowManager
 from mathutils import Matrix
 from typing import List, Optional, Dict, Any, cast, Type
@@ -118,6 +120,94 @@ def set_brush_display_properties(bpy_object: Object):
     bpy_object.show_in_front = True
 
 
+def poly_list_to_mesh(name: str, poly_list: t3dpy.T3dObject, pre_pivot: Vector) -> Mesh:
+    origins = []
+    texture_us = []
+    texture_vs = []
+    poly_flags = []
+    materials = dict()
+    mesh_data = bpy.data.meshes.new(name)
+
+    bm = None
+
+    bm = bmesh.new()
+
+    for polygon in filter(lambda x: x.type_ == 'Polygon', poly_list.children):
+        material_reference = polygon.properties.get('Texture', None)
+
+        if material_reference is not None:
+            if material_reference not in materials:
+                # TODO: there are performance issues with load_bdk_material that probably make copy-pasting
+                #  large T3D brush payloads very slow because of the I/O bottleneck.
+                materials[material_reference] = load_bdk_material(material_reference)
+        else:
+            materials[None] = None
+            # print(f'Warning: Missing or invalid material reference for polygon in brush {t3d_actor["Name"]}')
+
+        material_index = list(materials.keys()).index(material_reference)
+
+        def find_vector_property(prop_name: str, default_value: Any = None):
+            for prop in polygon.vector_properties:
+                if prop[0] == prop_name:
+                    return prop[1]
+            return default_value
+
+        # If the origin exists in the vector properties, use it. Otherwise, use the default origin. The get function does not exist for vector properties.
+        origin = find_vector_property('Origin', (0.0, 0.0, 0.0))
+        texture_u = find_vector_property('TextureU', (1.0, 0.0, 0.0))
+        texture_v = find_vector_property('TextureV', (0.0, 1.0, 0.0))
+
+        origin = mathutils.Vector((origin[0], -origin[1], origin[2]))
+        # Add the pre-pivot to the origin.
+        origin -= pre_pivot
+
+        texture_u = (texture_u[0], -texture_u[1], texture_u[2])
+        texture_v = (texture_v[0], -texture_v[1], texture_v[2])
+
+        origins.append(origin)
+        texture_us.append(texture_u)
+        texture_vs.append(texture_v)
+        poly_flags.append(polygon.properties.get('Flags', 0))
+
+        vertex_indices = []
+        for _, vertex in filter(lambda prop: prop[0] == 'Vertex', polygon.vector_properties):
+            co = mathutils.Vector((vertex[0], -vertex[1], vertex[2]))
+            # Check if the vertex exists in the vertex map.
+            vertex_index: int | None = None
+            for i, vert in enumerate(bm.verts):
+                if vert.co == co:
+                    vertex_index = i
+            if vertex_index is None:
+                vertex_index = len(bm.verts)
+                bm.verts.new(co)
+            vertex_indices.append(vertex_index)
+
+        bm.verts.ensure_lookup_table()
+        bm_face = bm.faces.new(map(lambda vi: bm.verts[vi], reversed(vertex_indices)))
+        bm_face.material_index = material_index
+
+    bm.to_mesh(mesh_data)
+
+    # Materials
+    for key, material in materials.items():
+        mesh_data.materials.append(material)
+
+    # Create the attributes for texturing.
+    origin_attribute = mesh_data.attributes.new('bdk.origin', 'FLOAT_VECTOR', 'FACE')
+    origin_attribute.data.foreach_set('vector', np.array(origins).flatten())
+
+    texture_u_attribute = mesh_data.attributes.new('bdk.texture_u', 'FLOAT_VECTOR', 'FACE')
+    texture_u_attribute.data.foreach_set('vector', np.array(texture_us).flatten())
+
+    texture_v_attribute = mesh_data.attributes.new('bdk.texture_v', 'FLOAT_VECTOR', 'FACE')
+    texture_v_attribute.data.foreach_set('vector', np.array(texture_vs).flatten())
+
+    poly_flags_attribute = mesh_data.attributes.new('bdk.poly_flags', 'INT', 'FACE')
+    poly_flags_attribute.data.foreach_set('value', np.array(poly_flags).flatten())
+
+    return mesh_data
+
+
 class BrushImporter(ActorImporter):
 
     @classmethod
@@ -141,15 +231,6 @@ class BrushImporter(ActorImporter):
         pre_pivot = cls._get_pre_pivot(t3d_actor)
         pre_pivot.y = -pre_pivot.y
 
-        bm = bmesh.new()
-
-        materials = OrderedDict()
-
-        origins = []
-        texture_us = []
-        texture_vs = []
-        poly_flags = []
-
         csg_operation = t3d_actor.properties.get('CsgOper', 'CSG_Active')
 
         match csg_operation:
@@ -162,6 +243,7 @@ class BrushImporter(ActorImporter):
                 return None
                 pass
 
+        mesh_data = None
         for child in t3d_actor.children:
             if child.type_ != 'Brush':
                 continue
@@ -170,63 +252,12 @@ class BrushImporter(ActorImporter):
                 continue
 
             poly_list = child.children[0]
+            mesh_data = poly_list_to_mesh(t3d_actor['Name'], poly_list, pre_pivot)
+            break
 
-            for polygon in filter(lambda x: x.type_ == 'Polygon', poly_list.children):
-                material_reference = polygon.properties.get('Texture', None)
-
-                if material_reference is not None:
-                    if material_reference not in materials:
-                        # TODO: there are performance issues with load_bdk_material that probably make copy-pasting
-                        #  large T3D brush payloads very slow because of the I/O bottleneck.
-                        materials[material_reference] = load_bdk_material(material_reference)
-                else:
-                    materials[None] = None
-                    print(f'Warning: Missing or invalid material reference for polygon in brush {t3d_actor["Name"]}')
-
-                material_index = list(materials.keys()).index(material_reference)
-
-                def find_vector_property(prop_name: str, default_value: Any = None):
-                    for prop in polygon.vector_properties:
-                        if prop[0] == prop_name:
-                            return prop[1]
-                    return default_value
-
-                # If the origin exists in the vector properties, use it. Otherwise, use the default origin. The get function does not exist for vector properties.
-                origin = find_vector_property('Origin', (0.0, 0.0, 0.0))
-                texture_u = find_vector_property('TextureU', (1.0, 0.0, 0.0))
-                texture_v = find_vector_property('TextureV', (0.0, 1.0, 0.0))
-
-                origin = mathutils.Vector((origin[0], -origin[1], origin[2]))
-                # Add the pre-pivot to the origin.
-                origin -= pre_pivot
-
-                texture_u = (texture_u[0], -texture_u[1], texture_u[2])
-                texture_v = (texture_v[0], -texture_v[1], texture_v[2])
-
-                origins.append(origin)
-                texture_us.append(texture_u)
-                texture_vs.append(texture_v)
-                poly_flags.append(polygon.properties.get('Flags', 0))
-
-                vertex_indices = []
-                for _, vertex in filter(lambda prop: prop[0] == 'Vertex', polygon.vector_properties):
-                    co = mathutils.Vector((vertex[0], -vertex[1], vertex[2]))
-                    # Check if the vertex exists in the vertex map.
-                    vertex_index: int | None = None
-                    for i, vert in enumerate(bm.verts):
-                        if vert.co == co:
-                            vertex_index = i
-                    if vertex_index is None:
-                        vertex_index = len(bm.verts)
-                        bm.verts.new(co)
-                    vertex_indices.append(vertex_index)
-
-                bm.verts.ensure_lookup_table()
-                bm_face = bm.faces.new(map(lambda vi: bm.verts[vi], reversed(vertex_indices)))
-                bm_face.material_index = material_index
-
-        mesh_data = bpy.data.meshes.new(t3d_actor['Name'])
-        bm.to_mesh(mesh_data)
+        if mesh_data is None:
+            # No polygons found in the brush.
+            return None
 
         bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh_data)
         bpy_object.bdk.type = 'BSP_BRUSH'
@@ -235,25 +266,8 @@ class BrushImporter(ActorImporter):
 
         bsp_brush = bpy_object.bdk.bsp_brush
         bsp_brush.object = bpy_object
-
         bsp_brush.csg_operation = csg_operation
         bsp_brush.poly_flags = get_poly_flags_keys_from_value(t3d_actor.properties.get('PolyFlags', 0))
-
-        for key, material in materials.items():
-            mesh_data.materials.append(material)
-
-        # Create the attributes for texturing.
-        origin_attribute = mesh_data.attributes.new('bdk.origin', 'FLOAT_VECTOR', 'FACE')
-        origin_attribute.data.foreach_set('vector', np.array(origins).flatten())
-
-        texture_u_attribute = mesh_data.attributes.new('bdk.texture_u', 'FLOAT_VECTOR', 'FACE')
-        texture_u_attribute.data.foreach_set('vector', np.array(texture_us).flatten())
-
-        texture_v_attribute = mesh_data.attributes.new('bdk.texture_v', 'FLOAT_VECTOR', 'FACE')
-        texture_v_attribute.data.foreach_set('vector', np.array(texture_vs).flatten())
-
-        poly_flags_attribute = mesh_data.attributes.new('bdk.poly_flags', 'INT', 'FACE')
-        poly_flags_attribute.data.foreach_set('value', np.array(poly_flags).flatten())
 
         # Add the geometry node tree for UV mapping.
         geometry_node_modifier = bpy_object.modifiers.new(name="UV Mapping", type="NODES")
@@ -282,6 +296,38 @@ class BrushImporter(ActorImporter):
         mesh_data = cast(Mesh, bpy_object.data)
         for vertex in mesh_data.vertices:
             vertex.co = pivot_matrix @ (vertex.co - pre_pivot)
+
+
+class VolumeImporter(BrushImporter):
+    @classmethod
+    def create_object(cls, t3d_actor: t3dpy.T3dObject, context: Context) -> Optional[Object]:
+        pre_pivot = cls._get_pre_pivot(t3d_actor)
+        pre_pivot.y = -pre_pivot.y
+
+        mesh_data = None
+        for child in t3d_actor.children:
+            if child.type_ != 'Brush':
+                continue
+
+            if len(child.children) < 0 and child.children[0].type_ != 'PolyList':
+                continue
+
+            poly_list = child.children[0]
+            mesh_data = poly_list_to_mesh(t3d_actor['Name'], poly_list, pre_pivot)
+            break
+
+        if mesh_data is None:
+            print('Failed to import volume: ' + str(t3d_actor['Name']) + ' (no polygons found)')
+            # No polygons found in the brush.
+            return None
+
+        bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh_data)
+        # bpy_object.bdk.type = 'BSP_BRUSH' # TODO: maybe volume?
+
+        set_brush_display_properties(bpy_object)
+
+        return bpy_object
+
 
 class FluidSurfaceInfoImporter(ActorImporter):
     @classmethod
@@ -584,6 +630,7 @@ __actor_type_importers__ = {
     'SpectatorCam': SpectatorCamImporter,
     'Projector': ProjectorImporter,
     'Brush': BrushImporter,
+    'Volume': VolumeImporter,
     # Volume and volume derived classes (going to need some way to handle these more generally, DrawType?)
 }
 
