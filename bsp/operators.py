@@ -412,11 +412,17 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
     def execute(self, context):
         depsgraph = context.evaluated_depsgraph_get()
         object_errors = OrderedDict()
-        for obj in context.selected_objects:
-            if obj.bdk.type == 'BSP_BRUSH':
-                bsp_brush_errors = get_bsp_brush_errors(obj, depsgraph)
-                if bsp_brush_errors:
-                    object_errors[obj] = bsp_brush_errors
+
+        brush_objects = [obj for obj in context.selected_objects if obj.bdk.type == 'BSP_BRUSH']
+
+        context.window_manager.progress_begin(0, len(brush_objects))
+
+        for obj_index, obj in enumerate(brush_objects):
+            bsp_brush_errors = get_bsp_brush_errors(obj, depsgraph)
+            if bsp_brush_errors:
+                object_errors[obj] = bsp_brush_errors
+            context.window_manager.progress_update(obj_index)
+
         if len(object_errors) > 0:
             self.report({'ERROR'}, f'Found {len(object_errors)} brush(es) with errors')
             for obj, errors in object_errors.items():
@@ -435,6 +441,9 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
                         obj.select_set(False)
         else:
             self.report({'INFO'}, 'No errors found')
+
+        context.window_manager.progress_end()
+
         return {'FINISHED'}
 
 
