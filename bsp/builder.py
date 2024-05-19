@@ -27,6 +27,7 @@ def _ensure_bsp_surface_attributes(mesh_data: Mesh):
         (ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
         (TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
         (TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+        (POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE'),
         (MATERIAL_SLOT_ATTRIBUTE_NAME, 'INT', 'FACE'),
     )
 
