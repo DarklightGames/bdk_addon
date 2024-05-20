@@ -1,8 +1,9 @@
 import os.path
-from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable, cast, Union, Dict, Sequence
+from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable, cast, Union, Dict, Sequence, Any
 
 import bpy
-from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNode, GeometryNodeRepeatOutput
+from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNode, GeometryNodeRepeatOutput, \
+    NodeTreeInterfaceItem
 
 from .data import map_range_interpolation_type_items
 
@@ -169,7 +170,7 @@ def ensure_shader_node_tree(
 
 def ensure_node_tree(name: str,
                      node_group_type: str,
-                     items: Iterable[Tuple[str, str, str]],
+                     items: Iterable[Union[Tuple[str, str, str], Tuple[str, str, str, Any]]],
                      build_function: Callable[[NodeTree], None],
                      should_force_build: bool = False
                      ) -> NodeTree:
@@ -181,14 +182,29 @@ def ensure_node_tree(name: str,
     else:
         node_tree = bpy.data.node_groups.new(name=name, type=node_group_type)
 
+    def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str, socket_type: str) -> Optional[NodeTreeInterfaceItem]:
+        for index, item in enumerate(node_tree.interface.items_tree):
+            if item.item_type == 'SOCKET' and item.in_out ==  in_out and item.name == name and item.socket_type == socket_type:
+                return item
+        return None
+
     # Compare the inputs and outputs of the node tree with the given inputs and outputs.
-    # If they are different, clear the inputs and outputs and add the new ones.
+    # If they are different, remove the ones that are now missing and add the new ones.
+    # Do not remove the ones that are still there, as this would remove existing connections and break the node tree.
     node_tree_items = set(map(lambda x: (x.in_out, x.bl_socket_idname, x.name), node_tree.interface.items_tree))
 
-    if node_tree_items != set(items):
-        node_tree.interface.clear()
-        for in_out, socket_type, name in items:
-            node_tree.interface.new_socket(name, in_out=in_out, socket_type=socket_type)
+    new_items = set([item[:3] for item in items])
+
+    # For items that do not exist in the node tree, add them.
+    items_to_add = (new_items - node_tree_items)
+    for in_out, socket_type, name in items_to_add:
+        node_tree.interface.new_socket(name, in_out=in_out, socket_type=socket_type)
+
+    # For items that exist in the node tree but not in the given items, remove them.
+    inputs_to_remove = (node_tree_items - new_items)
+    for in_out, socket_type, name in inputs_to_remove:
+        item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
+        node_tree.interface.remove(item)
 
     # TODO: handle default values and subtypes.
 
@@ -213,6 +229,16 @@ def ensure_node_tree(name: str,
 
         # Update the node tree's build code
         node_tree.bdk.build_hash = build_hash
+
+        # If there are default values or subtypes, set them.
+        # TODO: doesn't work.
+        for item_index, item in enumerate(items):
+            if len(item) <= 3:
+                continue
+            default_value = item[3]
+            in_out, socket_type, name = item[:3]
+            item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
+            item.default_value = default_value
 
     return node_tree
 

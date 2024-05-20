@@ -242,7 +242,7 @@ def ensure_bdk_bsp_surface_scale_uniform() -> NodeTree:
     return ensure_geometry_node_tree('BDK BSP Surface Scale Uniform', items, build_function)
 
 
-def ensure_matching_brush_face_selection_node_tree() -> NodeTree:
+def ensure_bdk_bsp_matching_brush_face_selection_node_tree() -> NodeTree:
     items = (
         ('INPUT', 'NodeSocketInt', 'Face Index'),
         ('OUTPUT', 'NodeSocketBool', 'Selection'),
@@ -278,6 +278,7 @@ def ensure_matching_brush_face_selection_node_tree() -> NodeTree:
         evaluate_at_index_node_2.data_type = 'INT'
 
         evaluate_at_index_node_3 = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
+        evaluate_at_index_node_3.domain = 'FACE'
         evaluate_at_index_node_3.data_type = 'INT'
 
         compare_node_1 = node_tree.nodes.new(type='FunctionNodeCompare')
@@ -376,7 +377,7 @@ def ensure_bdk_duplicate_active_face_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Duplicate Active Face', items, build_function)
 
 
-def move_edge_to_origin_node_tree() -> NodeTree:
+def ensure_bdk_move_edge_to_origin_node_tree() -> NodeTree:
     items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketInt', 'Edge Index'),
@@ -414,7 +415,7 @@ def move_edge_to_origin_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Move Edge To Origin', items, build_function)
 
 
-def ensure_face_edge_direction_node_tree() -> NodeTree:
+def ensure_bdk_face_edge_direction_node_tree() -> NodeTree:
     items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketInt', 'Edge Index'),
@@ -486,7 +487,7 @@ def ensure_bdk_bsp_align_face_to_xy_plane_node_tree() -> NodeTree:
         cross_product_node.operation = 'CROSS_PRODUCT'
 
         face_edge_direction_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        face_edge_direction_node.node_tree = ensure_face_edge_direction_node_tree()
+        face_edge_direction_node.node_tree = ensure_bdk_face_edge_direction_node_tree()
 
         transform_geometry_node = node_tree.nodes.new(type='GeometryNodeTransform')
 
@@ -498,7 +499,7 @@ def ensure_bdk_bsp_align_face_to_xy_plane_node_tree() -> NodeTree:
         invert_matrix_node = node_tree.nodes.new(type='FunctionNodeInvertMatrix')
 
         axes_to_matrix_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        axes_to_matrix_node.node_tree = bpy.data.node_groups['Axes to Matrix']
+        axes_to_matrix_node.node_tree = ensure_bdk_axes_to_matrix_node_tree()
 
         # Input Links
         node_tree.links.new(input_node.outputs['Geometry'], sample_index_node.inputs['Geometry'])
@@ -529,6 +530,7 @@ def ensure_bdk_bsp_align_to_edge_tool_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketMenu', 'Horizontal'),
         ('INPUT', 'NodeSocketMenu', 'Vertical'),
         ('INPUT', 'NodeSocketInt', 'Edge Index'),
+        ('INPUT', 'NodeSocketMenu', 'Fit Mode'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     )
 
@@ -553,7 +555,7 @@ def ensure_bdk_bsp_align_to_edge_tool_node_tree() -> NodeTree:
         math_node.operation = 'MODULO'
 
         move_edge_to_origin_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        move_edge_to_origin_node.node_tree = move_edge_to_origin_node_tree()
+        move_edge_to_origin_node.node_tree = ensure_bdk_move_edge_to_origin_node_tree()
 
         reroute_node = node_tree.nodes.new(type='NodeReroute')
 
@@ -570,68 +572,50 @@ def ensure_bdk_bsp_align_to_edge_tool_node_tree() -> NodeTree:
         set_face_attributes_node.node_tree = ensure_bdk_bsp_set_face_attributes_node_tree()
 
         scale_uv_and_offset_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        scale_uv_and_offset_node.node_tree = ensure_bdk_bsp_scale_uv_and_offset_node_tree()
+        scale_uv_and_offset_node.node_tree = ensure_bdk_bsp_surface_scale_uv_and_offset_node_tree()
 
         align_face_to_xy_plane_node = node_tree.nodes.new(type='GeometryNodeGroup')
         align_face_to_xy_plane_node.node_tree = ensure_bdk_bsp_align_face_to_xy_plane_node_tree()
 
-        # Internal Links
-        node_tree.links.new(duplicate_active_face_node.outputs['Geometry'],
-                            domain_size_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(align_face_to_xy_plane_node.outputs['Geometry'],
-                            surface_alignment_translation_matrix_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(input_node.outputs['Horizontal'],
-                            surface_alignment_translation_matrix_node.inputs['Horizontal'])  # Horizontal -> Horizontal
-        node_tree.links.new(math_node.outputs['Value'],
-                            move_edge_to_origin_node.inputs['Edge Index'])  # Value -> Edge Index
-        node_tree.links.new(transform_to_texture_plane_node.outputs['Location'],
-                            scale_uv_and_offset_node.inputs['Location'])  # Location -> Location
-        node_tree.links.new(input_node.outputs['Vertical'],
-                            surface_alignment_translation_matrix_node.inputs['Vertical'])  # Vertical -> Vertical
-        node_tree.links.new(invert_matrix_node.outputs['Matrix'],
-                            transform_to_texture_plane_node.inputs['Matrix'])  # Matrix -> Matrix
-        node_tree.links.new(domain_size_node.outputs['Edge Count'],
-                            math_node.inputs[1])  # Edge Count -> Value
-        node_tree.links.new(reroute_node.outputs['Output'],
-                            align_face_to_xy_plane_node.inputs['Edge Index'])  # Output -> Edge Index
-        node_tree.links.new(active_element_node.outputs['Index'],
-                            set_face_attributes_node.inputs['Face Index'])  # Index -> Face Index
-        node_tree.links.new(multiply_matrices_node.outputs['Matrix'],
-                            invert_matrix_node.inputs['Matrix'])  # Matrix -> Matrix
-        node_tree.links.new(scale_uv_and_offset_node.outputs['Location'],
-                            set_face_attributes_node.inputs['Origin'])  # Location -> Origin
-        node_tree.links.new(transform_to_texture_plane_node.outputs['U'],
-                            scale_uv_and_offset_node.inputs['U'])  # U -> U
-        node_tree.links.new(input_node.outputs['Geometry'],
-                            duplicate_active_face_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(scale_uv_and_offset_node.outputs['V'],
-                            set_face_attributes_node.inputs['V'])  # V -> V
-        node_tree.links.new(scale_uv_and_offset_node.outputs['U'],
-                            set_face_attributes_node.inputs['U'])  # U -> U
-        node_tree.links.new(align_face_to_xy_plane_node.outputs['Matrix'],
-                            multiply_matrices_node.inputs[1])  # Matrix -> Matrix
-        node_tree.links.new(input_node.outputs['Geometry'],
-                            scale_uv_and_offset_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(math_node.outputs['Value'], reroute_node.inputs['Input'])  # Value -> Input
-        node_tree.links.new(transform_to_texture_plane_node.outputs['V'],
-                            scale_uv_and_offset_node.inputs['V'])  # V -> V
-        node_tree.links.new(set_face_attributes_node.outputs['Geometry'],
-                            copy_face_info_to_matching_brush_polygons_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(copy_face_info_to_matching_brush_polygons_node.outputs['Geometry'],
-                            output_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(input_node.outputs['Edge Index'], math_node.inputs['Value'])  # Edge Index -> Value
-        node_tree.links.new(duplicate_active_face_node.outputs['Geometry'],
-                            move_edge_to_origin_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(move_edge_to_origin_node.outputs['Geometry'],
-                            align_face_to_xy_plane_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(active_element_node.outputs['Index'],
-                            copy_face_info_to_matching_brush_polygons_node.inputs['Face Index'])  # Index -> Face Index
-        node_tree.links.new(input_node.outputs['Geometry'],
-                            set_face_attributes_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(reroute_node.outputs['Output'],
-                            scale_uv_and_offset_node.inputs['Edge Index'])  # Output -> Edge Index
-        node_tree.links.new(surface_alignment_translation_matrix_node.outputs['Matrix'],
-                            multiply_matrices_node.inputs[0])  # Matrix -> Matrix
+        object_self_node = node_tree.nodes.new('GeometryNodeSelfObject')
+
+        # Input
+        node_tree.links.new(input_node.outputs['Horizontal'], surface_alignment_translation_matrix_node.inputs['Horizontal'])
+        node_tree.links.new(input_node.outputs['Vertical'], surface_alignment_translation_matrix_node.inputs['Vertical'])
+        node_tree.links.new(input_node.outputs['Geometry'], duplicate_active_face_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Geometry'], scale_uv_and_offset_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Edge Index'], math_node.inputs['Value'])
+        node_tree.links.new(input_node.outputs['Geometry'], set_face_attributes_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Fit Mode'], scale_uv_and_offset_node.inputs['Fit'])
+
+        # Internal
+        node_tree.links.new(object_self_node.outputs['Self Object'], scale_uv_and_offset_node.inputs['Object'])
+        node_tree.links.new(duplicate_active_face_node.outputs['Geometry'], domain_size_node.inputs['Geometry'])
+        node_tree.links.new(align_face_to_xy_plane_node.outputs['Geometry'], surface_alignment_translation_matrix_node.inputs['Geometry'])
+        node_tree.links.new(math_node.outputs['Value'], move_edge_to_origin_node.inputs['Edge Index'])
+        node_tree.links.new(transform_to_texture_plane_node.outputs['Location'], scale_uv_and_offset_node.inputs['Location'])
+        node_tree.links.new(invert_matrix_node.outputs['Matrix'], transform_to_texture_plane_node.inputs['Matrix'])
+        node_tree.links.new(domain_size_node.outputs['Edge Count'], math_node.inputs[1])
+        node_tree.links.new(reroute_node.outputs['Output'], align_face_to_xy_plane_node.inputs['Edge Index'])
+        node_tree.links.new(active_element_node.outputs['Index'], set_face_attributes_node.inputs['Face Index'])
+        node_tree.links.new(multiply_matrices_node.outputs['Matrix'], invert_matrix_node.inputs['Matrix'])
+        node_tree.links.new(scale_uv_and_offset_node.outputs['Location'], set_face_attributes_node.inputs['Origin'])
+        node_tree.links.new(transform_to_texture_plane_node.outputs['U'], scale_uv_and_offset_node.inputs['U'])
+        node_tree.links.new(scale_uv_and_offset_node.outputs['V'], set_face_attributes_node.inputs['V'])
+        node_tree.links.new(scale_uv_and_offset_node.outputs['U'], set_face_attributes_node.inputs['U'])
+        node_tree.links.new(align_face_to_xy_plane_node.outputs['Matrix'], multiply_matrices_node.inputs[1])
+        node_tree.links.new(math_node.outputs['Value'], reroute_node.inputs['Input'])
+        node_tree.links.new(transform_to_texture_plane_node.outputs['V'], scale_uv_and_offset_node.inputs['V'])
+        node_tree.links.new(set_face_attributes_node.outputs['Geometry'], copy_face_info_to_matching_brush_polygons_node.inputs['Geometry'])
+        node_tree.links.new(duplicate_active_face_node.outputs['Geometry'], move_edge_to_origin_node.inputs['Geometry'])
+        node_tree.links.new(move_edge_to_origin_node.outputs['Geometry'], align_face_to_xy_plane_node.inputs['Geometry'])
+        node_tree.links.new(active_element_node.outputs['Index'], copy_face_info_to_matching_brush_polygons_node.inputs['Face Index'])
+        node_tree.links.new(reroute_node.outputs['Output'], scale_uv_and_offset_node.inputs['Edge Index'])
+        node_tree.links.new(surface_alignment_translation_matrix_node.outputs['Matrix'], multiply_matrices_node.inputs[0])
+        node_tree.links.new(surface_alignment_translation_matrix_node.outputs['Extents'], scale_uv_and_offset_node.inputs['Face Extents'])
+
+        # Output
+        node_tree.links.new(copy_face_info_to_matching_brush_polygons_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree('BDK BSP Surface Align To Edge', items, build_function)
 
@@ -771,40 +755,26 @@ def ensure_bdk_bsp_surface_alignment_translation_matrix_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Vertical'], vertical_menu_switch_node.inputs[0])
 
         separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-
         separate_xyz_node_1 = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-
         combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-
         vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         vector_math_node.operation = 'SCALE'
         vector_math_node.inputs['Scale'].default_value = -1.0
-
         vector_math_node_1 = node_tree.nodes.new(type='ShaderNodeVectorMath')
-
         separate_xyz_node_2 = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-
         combine_xyz_node_1 = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
-
         vector_math_node_2 = node_tree.nodes.new(type='ShaderNodeVectorMath')
         vector_math_node_2.operation = 'SCALE'
         vector_math_node_2.inputs['Scale'].default_value = 0.5
-
         vector_math_node_3 = node_tree.nodes.new(type='ShaderNodeVectorMath')
         vector_math_node_3.operation = 'SCALE'
         vector_math_node_3.inputs['Scale'].default_value = 0.5
-
         vector_math_node_4 = node_tree.nodes.new(type='ShaderNodeVectorMath')
-
         bounding_box_node = node_tree.nodes.new(type='GeometryNodeBoundBox')
-
         group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         group_node.node_tree = ensure_bdk_bsp_surface_texture_world_scale_node_tree()
-
         separate_xyz_node_3 = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
-
         combine_matrix_node = node_tree.nodes.new(type='FunctionNodeCombineMatrix')
-
         vector_math_node_5 = node_tree.nodes.new(type='ShaderNodeVectorMath')
         vector_math_node_5.operation = 'SUBTRACT'
 
@@ -965,34 +935,37 @@ def ensure_bdk_bsp_surface_get_uv_scale() -> NodeTree:
     return ensure_geometry_node_tree('BDK BSP Surface Get UV Scale', items, build_function)
 
 
-def ensure_bdk_bsp_scale_uv_and_offset_node_tree() -> NodeTree:
+def ensure_bdk_bsp_surface_scale_uv_and_offset_node_tree() -> NodeTree:
     inputs = (
         ('OUTPUT', 'NodeSocketVector', 'Location'),
         ('OUTPUT', 'NodeSocketVector', 'U'),
         ('OUTPUT', 'NodeSocketVector', 'V'),
+        ('INPUT', 'NodeSocketObject', 'Object'),
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketVector', 'U'),
         ('INPUT', 'NodeSocketVector', 'V'),
         ('INPUT', 'NodeSocketVector', 'Location'),
         ('INPUT', 'NodeSocketInt', 'Edge Index'),
+        ('INPUT', 'NodeSocketMenu', 'Fit', 'Maximum'),
+        ('INPUT', 'NodeSocketVector', 'Face Extents'),
     )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        vector_math_node.operation = 'SCALE'
+        u_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        u_scale_node.operation = 'SCALE'
 
-        vector_math_node_1 = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        vector_math_node_1.operation = 'SCALE'
+        v_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        v_scale_node.operation = 'SCALE'
 
         vector_math_node_2 = node_tree.nodes.new(type='ShaderNodeVectorMath')
 
-        vector_math_node_3 = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        vector_math_node_3.operation = 'LENGTH'
+        u_length_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        u_length_node.operation = 'LENGTH'
 
-        vector_math_node_4 = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        vector_math_node_4.operation = 'LENGTH'
+        v_length_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        v_length_node.operation = 'LENGTH'
 
         sample_index_node = node_tree.nodes.new(type='GeometryNodeSampleIndex')
         sample_index_node.data_type = 'FLOAT_VECTOR'
@@ -1008,28 +981,97 @@ def ensure_bdk_bsp_scale_uv_and_offset_node_tree() -> NodeTree:
         sample_face_node = node_tree.nodes.new(type='GeometryNodeGroup')
         sample_face_node.node_tree = ensure_bdk_bsp_surface_sample_face_node_tree()
 
+        active_face_material_size_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        active_face_material_size_node.node_tree = ensure_bdk_bsp_surface_active_face_material_size_node_tree()
+
+        vector_divide_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
+        vector_divide_node.operation = 'DIVIDE'
+
+        node_tree.links.new(active_face_material_size_node.outputs['Size'], vector_divide_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Face Extents'], vector_divide_node.inputs[1])
+
+        separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+        math_minimum_node = node_tree.nodes.new(type='ShaderNodeMath')
+        math_minimum_node.operation = 'MINIMUM'
+
+        math_maximum_node = node_tree.nodes.new(type='ShaderNodeMath')
+        math_maximum_node.operation = 'MAXIMUM'
+
+        fit_mode_menu_switch_node = node_tree.nodes.new(type='GeometryNodeMenuSwitch')
+        fit_mode_menu_switch_node.data_type = 'INT'
+        fit_mode_menu_switch_node.enum_items.clear()
+        fit_mode_menu_switch_node.enum_items.new('None')
+        fit_mode_menu_switch_node.enum_items.new('Maximum')
+        fit_mode_menu_switch_node.enum_items.new('Minimum')
+        fit_mode_menu_switch_node.inputs['None'].default_value = -1
+        fit_mode_menu_switch_node.inputs['Minimum'].default_value = 0
+        fit_mode_menu_switch_node.inputs['Maximum'].default_value = 1
+
+        min_max_index_switch_node = node_tree.nodes.new(type='GeometryNodeIndexSwitch')
+        min_max_index_switch_node.data_type = 'FLOAT'
+
+        is_fitting_compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        is_fitting_compare_node.data_type = 'INT'
+        is_fitting_compare_node.operation = 'NOT_EQUAL'
+        is_fitting_compare_node.inputs['B'].default_value = -1
+
+        u_scale_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        u_scale_switch_node.input_type = 'FLOAT'
+
+        v_scale_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        v_scale_switch_node.input_type = 'FLOAT'
+
+        node_tree.links.new(u_length_node.outputs['Value'], u_scale_switch_node.inputs['False'])
+        node_tree.links.new(v_length_node.outputs['Value'], v_scale_switch_node.inputs['False'])
+
+        node_tree.links.new(min_max_index_switch_node.outputs['Output'], u_scale_switch_node.inputs['True'])
+        node_tree.links.new(min_max_index_switch_node.outputs['Output'], v_scale_switch_node.inputs['True'])
+
+        node_tree.links.new(fit_mode_menu_switch_node.outputs['Output'], is_fitting_compare_node.inputs['A'])
+
+        node_tree.links.new(is_fitting_compare_node.outputs['Result'], u_scale_switch_node.inputs['Switch'])
+        node_tree.links.new(is_fitting_compare_node.outputs['Result'], v_scale_switch_node.inputs['Switch'])
+
+        node_tree.links.new(fit_mode_menu_switch_node.outputs['Output'], min_max_index_switch_node.inputs['Index'])
+        node_tree.links.new(math_maximum_node.outputs['Value'], min_max_index_switch_node.inputs['0'])
+        node_tree.links.new(math_minimum_node.outputs['Value'], min_max_index_switch_node.inputs['1'])
+
+        node_tree.links.new(input_node.outputs['Fit'], fit_mode_menu_switch_node.inputs['Menu'])
+
+        node_tree.links.new(separate_xyz_node.outputs['X'], math_minimum_node.inputs[0])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], math_minimum_node.inputs[1])
+
+        node_tree.links.new(separate_xyz_node.outputs['X'], math_maximum_node.inputs[0])
+        node_tree.links.new(separate_xyz_node.outputs['Y'], math_maximum_node.inputs[1])
+
+        node_tree.links.new(vector_divide_node.outputs['Vector'], separate_xyz_node.inputs['Vector'])
+
+        node_tree.links.new(input_node.outputs['Geometry'], active_face_material_size_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Object'], active_face_material_size_node.inputs['Object'])
+
         # Input
-        node_tree.links.new(input_node.outputs['V'], vector_math_node_1.inputs['Vector'])  # V -> Vector
-        node_tree.links.new(input_node.outputs['Geometry'], duplicate_active_face_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(input_node.outputs['Location'], vector_math_node_2.inputs[0])  # Location -> Vector
-        node_tree.links.new(input_node.outputs['Geometry'], sample_face_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(input_node.outputs['U'], vector_math_node.inputs['Vector'])  # U -> Vector
-        node_tree.links.new(input_node.outputs['Edge Index'], sample_index_node.inputs['Index'])  # Edge Index -> Index
+        node_tree.links.new(input_node.outputs['V'], v_scale_node.inputs['Vector'])
+        node_tree.links.new(input_node.outputs['Geometry'], duplicate_active_face_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Location'], vector_math_node_2.inputs[0])
+        node_tree.links.new(input_node.outputs['Geometry'], sample_face_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['U'], u_scale_node.inputs['Vector'])
+        node_tree.links.new(input_node.outputs['Edge Index'], sample_index_node.inputs['Index'])
 
         # Internal
-        node_tree.links.new(position_node.outputs['Position'], sample_index_node.inputs['Value'])  # Position -> Value
-        node_tree.links.new(active_element_node.outputs['Index'], sample_face_node.inputs['Face Index'])  # Index -> Face Index
-        node_tree.links.new(sample_face_node.outputs['U'], vector_math_node_3.inputs['Vector'])  # U -> Vector
-        node_tree.links.new(vector_math_node_3.outputs['Value'], vector_math_node.inputs['Scale'])  # Value -> Scale
-        node_tree.links.new(sample_face_node.outputs['V'], vector_math_node_4.inputs['Vector'])  # V -> Vector
-        node_tree.links.new(vector_math_node_4.outputs['Value'], vector_math_node_1.inputs['Scale'])  # Value -> Scale
-        node_tree.links.new(duplicate_active_face_node.outputs['Geometry'], sample_index_node.inputs['Geometry'])  # Geometry -> Geometry
-        node_tree.links.new(sample_index_node.outputs['Value'], vector_math_node_2.inputs[1])  # Value -> Vector
+        node_tree.links.new(position_node.outputs['Position'], sample_index_node.inputs['Value'])
+        node_tree.links.new(active_element_node.outputs['Index'], sample_face_node.inputs['Face Index'])
+        node_tree.links.new(sample_face_node.outputs['U'], u_length_node.inputs['Vector'])
+        node_tree.links.new(u_scale_switch_node.outputs['Output'], u_scale_node.inputs['Scale'])
+        node_tree.links.new(sample_face_node.outputs['V'], v_length_node.inputs['Vector'])
+        node_tree.links.new(v_scale_switch_node.outputs['Output'], v_scale_node.inputs['Scale'])
+        node_tree.links.new(duplicate_active_face_node.outputs['Geometry'], sample_index_node.inputs['Geometry'])
+        node_tree.links.new(sample_index_node.outputs['Value'], vector_math_node_2.inputs[1])
 
         # Output
-        node_tree.links.new(vector_math_node.outputs['Vector'], output_node.inputs['U'])  # Vector -> U
-        node_tree.links.new(vector_math_node_1.outputs['Vector'], output_node.inputs['V'])  # Vector -> V
-        node_tree.links.new(vector_math_node_2.outputs['Vector'], output_node.inputs['Location'])  # Vector -> Location
+        node_tree.links.new(u_scale_node.outputs['Vector'], output_node.inputs['U'])
+        node_tree.links.new(v_scale_node.outputs['Vector'], output_node.inputs['V'])
+        node_tree.links.new(vector_math_node_2.outputs['Vector'], output_node.inputs['Location'])
 
     return ensure_geometry_node_tree('BDK BSP Scale UV and Offset', inputs, build_function)
 
@@ -1045,7 +1087,7 @@ def ensure_bdk_bsp_copy_face_info_to_matching_brush_polygon_node_tree() -> NodeT
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         matching_brush_polygon_selection_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        matching_brush_polygon_selection_node.node_tree = ensure_matching_brush_face_selection_node_tree()
+        matching_brush_polygon_selection_node.node_tree = ensure_bdk_bsp_matching_brush_face_selection_node_tree()
 
         copy_face_attributes_to_selection_node = node_tree.nodes.new(type='GeometryNodeGroup')
         copy_face_attributes_to_selection_node.node_tree = ensure_bdk_bsp_surface_copy_face_attributes_to_selection_node_tree()
@@ -1060,24 +1102,92 @@ def ensure_bdk_bsp_copy_face_info_to_matching_brush_polygon_node_tree() -> NodeT
     return ensure_geometry_node_tree('BDK Brush Surface Copy Face Info To Matching Brush Polygons', items, build_function)
 
 
-def ensure_bdk_bsp_surface_align_node_tree() -> NodeTree:
+def ensure_bdk_axes_to_matrix_node_tree() -> NodeTree:
     items = (
-        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketVector', 'X'),
+        ('INPUT', 'NodeSocketVector', 'Y'),
+        ('INPUT', 'NodeSocketVector', 'Z'),
+        ('OUTPUT', 'NodeSocketMatrix', 'Matrix'),
     )
 
     def build_function(node_tree: NodeTree):
-        make_tool_node_tree(node_tree)
-        pass
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-    return ensure_geometry_node_tree('BDK BSP Surface Scale Uniform', items, build_function)
+        combine_matrix_node = node_tree.nodes.new(type='FunctionNodeCombineMatrix')
+        separate_xyz_x_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+        separate_xyz_y_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+        separate_xyz_z_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+
+        node_tree.links.new(input_node.outputs['X'], separate_xyz_x_node.inputs['Vector'])
+        node_tree.links.new(input_node.outputs['Y'], separate_xyz_y_node.inputs['Vector'])
+        node_tree.links.new(input_node.outputs['Z'], separate_xyz_z_node.inputs['Vector'])
+
+        node_tree.links.new(separate_xyz_x_node.outputs['X'], combine_matrix_node.inputs['Column 1 Row 1'])
+        node_tree.links.new(separate_xyz_x_node.outputs['Y'], combine_matrix_node.inputs['Column 1 Row 2'])
+        node_tree.links.new(separate_xyz_x_node.outputs['Z'], combine_matrix_node.inputs['Column 1 Row 3'])
+
+        node_tree.links.new(separate_xyz_y_node.outputs['X'], combine_matrix_node.inputs['Column 2 Row 1'])
+        node_tree.links.new(separate_xyz_y_node.outputs['Y'], combine_matrix_node.inputs['Column 2 Row 2'])
+        node_tree.links.new(separate_xyz_y_node.outputs['Z'], combine_matrix_node.inputs['Column 2 Row 3'])
+
+        node_tree.links.new(separate_xyz_z_node.outputs['X'], combine_matrix_node.inputs['Column 3 Row 1'])
+        node_tree.links.new(separate_xyz_z_node.outputs['Y'], combine_matrix_node.inputs['Column 3 Row 2'])
+        node_tree.links.new(separate_xyz_z_node.outputs['Z'], combine_matrix_node.inputs['Column 3 Row 3'])
+
+        node_tree.links.new(combine_matrix_node.outputs['Matrix'], output_node.inputs['Matrix'])
+
+    return ensure_geometry_node_tree('BDK Axes to Matrix', items, build_function)
+
+
+def ensure_bdk_bsp_surface_active_face_material_size_node_tree() -> NodeTree:
+    items = (
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketObject', 'Object'),
+        ('OUTPUT', 'NodeSocketVector', 'Size'),
+    )
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        bdk_object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+
+        active_element_node = node_tree.nodes.new(type='GeometryNodeToolActiveElement')
+        active_element_node.domain = 'FACE'
+
+        material_index_node = node_tree.nodes.new(type='GeometryNodeInputMaterialIndex')
+
+        combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+
+        sample_index_node = node_tree.nodes.new(type='GeometryNodeSampleIndex')
+        sample_index_node.data_type = 'INT'
+        sample_index_node.domain = 'FACE'
+
+        # Input
+        node_tree.links.new(input_node.outputs['Geometry'], sample_index_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Object'], bdk_object_material_size_node.inputs['Object'])
+
+        # Internal
+        node_tree.links.new(sample_index_node.outputs['Value'], bdk_object_material_size_node.inputs['Material Index'])
+        node_tree.links.new(bdk_object_material_size_node.outputs['U'], combine_xyz_node.inputs['X'])
+        node_tree.links.new(bdk_object_material_size_node.outputs['V'], combine_xyz_node.inputs['Y'])
+        node_tree.links.new(active_element_node.outputs['Index'], sample_index_node.inputs['Index'])
+        node_tree.links.new(material_index_node.outputs['Material Index'], sample_index_node.inputs['Value'])
+
+        # Output
+        node_tree.links.new(combine_xyz_node.outputs['Vector'], output_node.inputs['Size'])
+
+    return ensure_geometry_node_tree('BDK BSP Surface Active Face Material Size', items, build_function)
 
 
 ensure_functions: List[Callable[[], NodeTree]] = [
+    ensure_bdk_axes_to_matrix_node_tree,
+    ensure_bdk_duplicate_active_face_node_tree,
+    ensure_bdk_move_edge_to_origin_node_tree,
+    ensure_bdk_face_edge_direction_node_tree,
+
     ensure_bdk_bsp_surface_info_node_tree,
     ensure_bdk_bsp_surface_pan_node_tree,
     ensure_bdk_bsp_surface_rotate_node_tree,
-    ensure_bdk_bsp_surface_align_node_tree,
     ensure_bdk_bsp_surface_scale_uniform,
     ensure_bdk_bsp_surface_sample_face_node_tree,
     ensure_bdk_bsp_surface_texture_world_scale_node_tree,
@@ -1085,19 +1195,13 @@ ensure_functions: List[Callable[[], NodeTree]] = [
     ensure_bdk_bsp_transform_to_plane_node_tree,
     ensure_bdk_bsp_surface_copy_face_attributes_to_selection_node_tree,
     ensure_bdk_bsp_set_face_attributes_node_tree,
-
     ensure_bdk_bsp_surface_get_uv_scale,
-    ensure_bdk_bsp_scale_uv_and_offset_node_tree,
-
+    ensure_bdk_bsp_surface_scale_uv_and_offset_node_tree,
     ensure_bdk_bsp_align_to_edge_tool_node_tree,
-
     ensure_bdk_bsp_copy_face_info_to_matching_brush_polygon_node_tree,
-    ensure_matching_brush_face_selection_node_tree,
-
-    ensure_bdk_duplicate_active_face_node_tree,
-    move_edge_to_origin_node_tree,
-    ensure_face_edge_direction_node_tree,
+    ensure_bdk_bsp_matching_brush_face_selection_node_tree,
     ensure_bdk_bsp_align_face_to_xy_plane_node_tree,
+    ensure_bdk_bsp_surface_active_face_material_size_node_tree,
 ]
 
 
