@@ -129,13 +129,12 @@ class BDK_PG_level_performance(PropertyGroup):
 class BDK_PG_level_statistics(PropertyGroup):
     brush_count: IntProperty(name='Brush Count')
     zone_count: IntProperty(name='Zone Count')
-    poly_count: IntProperty(name='Poly Count')
     node_count: IntProperty(name='Node Count')
+    # TODO: section count?
     surface_count: IntProperty(name='Surface Count')
-    max_depth: IntProperty(name='Max Depth')
-    average_depth: IntProperty(name='Average Depth')
-    point_count: IntProperty(name='Point Count')
-    vertex_count: IntProperty(name='Vertex Count')
+    depth_count: IntProperty(name='Depth Count')
+    depth_max: IntProperty(name='Depth Max', description='The maximum depth of any BSP leaf node')
+    depth_average: FloatProperty(name='Depth Average', precision=2, description='The average depth of each BSP leaf node')
 
 
 class BDK_PG_level(PropertyGroup):

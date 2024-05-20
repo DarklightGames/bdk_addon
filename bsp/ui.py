@@ -85,10 +85,10 @@ class BDK_PT_level(Panel):
             bsp_header.label(text='BSP')
 
             if bsp_panel is not None:
-                bsp_panel.prop(statistics, 'poly_count', emboss=False)
                 bsp_panel.prop(statistics, 'node_count', emboss=False)
-                bsp_panel.prop(statistics, 'max_depth', emboss=False)
-                bsp_panel.prop(statistics, 'average_depth', emboss=False)
+                bsp_panel.prop(statistics, 'depth_count', emboss=False)
+                bsp_panel.prop(statistics, 'depth_max', emboss=False)
+                bsp_panel.prop(statistics, 'depth_average', emboss=False)
 
         performance_header, performance_panel = layout.panel('Performance', default_closed=False)
         performance_header.label(text='Performance')

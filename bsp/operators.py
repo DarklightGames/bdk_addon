@@ -3,14 +3,14 @@ from bmesh.types import BMFace
 from mathutils import Vector, Matrix
 
 from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping
-from ..helpers import is_bdk_py_installed
+from ..helpers import is_bdk_py_installed, should_show_bdk_developer_extras
 from .data import bsp_optimization_items
-from .properties import csg_operation_items, poly_flags_items
+from .properties import csg_operation_items, poly_flags_items, BDK_PG_bsp_brush
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
 from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material, Event
 from collections import OrderedDict
 from enum import Enum
-from typing import cast, List, Optional, Tuple
+from typing import cast, List, Optional, Tuple, Set
 import bmesh
 import bpy
 import sys
@@ -104,20 +104,66 @@ class BDK_OT_bsp_brush_set_sort_order(Operator):
 
     sort_order: IntProperty(name='Sort Order', default=0, min=0, max=8)
 
-    @classmethod
-    def poll(cls, context):
-        if context.selected_objects is None:
-            return False
-        # Make sure that at least one BSP brush is selected.
-        for obj in context.selected_objects:
-            if obj.bdk.type == 'BSP_BRUSH':
-                return True
-        return False
-
     def execute(self, context):
         for obj in context.selected_objects:
             if obj.bdk.type == 'BSP_BRUSH':
                 obj.bdk.bsp_brush.sort_order = self.sort_order
+        return {'FINISHED'}
+
+
+class BDK_OT_bsp_brush_set_poly_flags(Operator):
+    bl_idname = 'bdk.set_poly_flags'
+    bl_label = 'Set BSP Poly Flags'
+    bl_description = 'Set the poly flags of selected BSP brushes'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    poly_flags: EnumProperty(name='Poly Flags', items=poly_flags_items, options={'ENUM_FLAG'})
+    operation: EnumProperty(name='Operation', items=(('SET', 'Set', ''), ('ADD', 'Add', ''), ('REMOVE', 'Remove', '')), default='SET')
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(self, 'operation')
+
+        poly_flags_header, poly_flags_panel = layout.panel('Poly Flags', default_closed=True)
+        poly_flags_header.label(text='Poly Flags')
+
+        if poly_flags_panel is not None:
+            flow = poly_flags_panel.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
+            flow.use_property_split = True
+            flow.use_property_decorate = False
+
+            flow.prop(self, 'poly_flags')
+
+    def execute(self, context):
+        def set_flags(bsp_brush: BDK_PG_bsp_brush, flags: Set[str]):
+            bsp_brush.poly_flags = flags
+
+        def add_flags(bsp_brush: BDK_PG_bsp_brush, flags: Set[str]):
+            bsp_brush.poly_flags |= flags
+
+        def remove_flags(bsp_brush: BDK_PG_bsp_brush, flags: Set[str]):
+            bsp_brush.poly_flags -= flags
+
+        def get_operation_function(operation: str):
+            match operation:
+                case 'SET':
+                    return set_flags
+                case 'ADD':
+                    return add_flags
+                case 'REMOVE':
+                    return remove_flags
+
+        operation_function = get_operation_function(self.operation)
+
+        for obj in context.selected_objects:
+            if obj.bdk.type == 'BSP_BRUSH':
+                operation_function(obj.bdk.bsp_brush, self.poly_flags)
+
         return {'FINISHED'}
 
 
@@ -613,6 +659,7 @@ class BDK_OT_bsp_build(Operator):
 
     apply_level_texturing_to_brushes: BoolProperty(name='Apply Texturing to Brushes', default=True,
                                                    description='Apply the level texturing to the brush polygons before building the level geometry')
+    should_optimize_geometry: BoolProperty(name='Optimize Geometry', default=True)
 
 
     def draw(self, context):
@@ -649,6 +696,14 @@ class BDK_OT_bsp_build(Operator):
             advanced_panel.use_property_decorate = False
             advanced_panel.prop(self, 'apply_level_texturing_to_brushes')
 
+        if should_show_bdk_developer_extras(context):
+            debug_header, debug_panel = layout.panel('Debug', default_closed=True)
+            debug_header.label(text='Debug')
+            if debug_panel:
+                debug_panel.use_property_split = True
+                debug_panel.use_property_decorate = False
+                debug_panel.prop(self, 'should_optimize_geometry')
+
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
@@ -663,7 +718,7 @@ class BDK_OT_bsp_build(Operator):
             return {'CANCELLED'}
 
         # Now that we know the dependencies are installed, it's safe to import the module.
-        from bdk_py import Poly, Brush, csg_rebuild
+        from bdk_py import Poly, Brush, csg_rebuild, BspBuildOptions
 
         # Go to object mode, if we are not already in object mode.
         if context.mode != 'OBJECT':
@@ -803,20 +858,40 @@ class BDK_OT_bsp_build(Operator):
 
         start_time = time.time()
 
+        context.window_manager.progress_begin(0, 1)
+
         # Rebuild the level geometry.
         try:
-            model = csg_rebuild(brushes)
+            options = BspBuildOptions()
+            options.bsp_optimization = self.bsp_optimization
+            options.bsp_balance = self.bsp_balance
+            options.bsp_portal_bias = self.bsp_portal_bias
+            options.do_geometry = self.should_do_geometry
+            options.do_bsp = self.should_do_bsp
+            options.do_lighting = self.should_do_lighting
+            options.dither_lightmaps = self.should_dither_lightmaps
+            options.lightmap_format = self.lightmap_format
+            options.should_optimize_geometry = self.should_optimize_geometry
+
+            def progress_cb():
+                print('we called the progress callback')
+                context.window_manager.progress_update(0.5)
+
+            model = csg_rebuild(brushes, options, progress_callback=progress_cb)
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
+
+        context.window_manager.progress_end()
 
         level.performance.csg_build_duration = time.time() - start_time
 
         # Update statistics.
         level.statistics.node_count = len(model.nodes)
-        level.statistics.surface_count = len(model.surfaces)
-        level.statistics.vertex_count = len(model.vertices)
-        level.statistics.point_count = len(model.points)
+        level.statistics.brush_count = len(brushes)
+        level.statistics.depth_count = model.stats.depth_count
+        level.statistics.depth_max = model.stats.depth_max
+        level.statistics.depth_average = model.stats.depth_average
 
         # Build the mesh.
         timer = time.time()
