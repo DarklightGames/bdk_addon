@@ -377,6 +377,8 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         # Copy the string to the clipboard.
         bpy.context.window_manager.clipboard = string_io.read()
 
+        wm.progress_end()
+
         self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({size} bytes)')
 
         return {'FINISHED'}
