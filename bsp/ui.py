@@ -1,6 +1,7 @@
 from bpy.types import Panel, Context
 
-from ..bsp.operators import BDK_OT_apply_level_texturing_to_brushes, BDK_OT_ensure_tool_operators
+from ..helpers import should_show_bdk_developer_extras
+from ..bsp.operators import BDK_OT_apply_level_texturing_to_brushes, BDK_OT_ensure_tool_operators, BDK_OT_bsp_build
 
 
 def poll_is_active_object_bsp_brush(cls, context: Context):
@@ -37,8 +38,7 @@ class BDK_PT_bsp_brush(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        layout.prop(brush, 'csg_operation')
-        layout.prop(brush, 'sort_order')
+        layout.prop(brush, 'csg_operation', text='Operation')
 
         poly_flags_header, poly_flags_panel = layout.panel('Poly Flags', default_closed=True)
         poly_flags_header.label(text='Poly Flags')
@@ -50,6 +50,15 @@ class BDK_PT_bsp_brush(Panel):
 
             flow.prop(brush, 'poly_flags')
 
+        advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
+        advanced_header.label(text='Advanced')
+
+        if advanced_panel is not None:
+            flow = advanced_panel.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
+            flow.use_property_split = True
+            flow.use_property_decorate = False
+            flow.prop(brush, 'sort_order')
+
 
 class BDK_PT_level(Panel):
     bl_idname = 'BDK_PT_level'
@@ -60,14 +69,18 @@ class BDK_PT_level(Panel):
 
     @classmethod
     def poll(cls, context):
-        return poll_is_active_object_level(cls, context)
+        return context.scene.bdk.level_object is not None
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.prop(context.scene.bdk.level_object, 'hide_viewport', text='', icon_only=True, emboss=False)
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        level = context.active_object.bdk.level
+        level = context.scene.bdk.level_object.bdk.level
         statistics = level.statistics
 
         statistics_header, statistics_panel = layout.panel('Statistics', default_closed=False)
@@ -103,8 +116,15 @@ class BDK_PT_level(Panel):
         operators_header.label(text='Operators')
 
         if operators_panel is not None:
-            operators_panel.operator(BDK_OT_apply_level_texturing_to_brushes.bl_idname, icon='TEXTURE', text='Apply Texturing To Brushes')
-            operators_panel.operator(BDK_OT_ensure_tool_operators.bl_idname, icon='TOOL_SETTINGS', text='Ensure Tool Operators')
+            operators_panel.operator(BDK_OT_apply_level_texturing_to_brushes.bl_idname, icon='TEXTURE')
+            operators_panel.operator(BDK_OT_bsp_build.bl_idname, icon='MOD_BUILD')
+
+        if should_show_bdk_developer_extras(context):
+            debug_header, debug_panel = layout.panel('Debug', default_closed=True)
+            debug_header.label(text='Debug')
+
+            if debug_panel is not None:
+                debug_panel.operator(BDK_OT_ensure_tool_operators.bl_idname, icon='TOOL_SETTINGS')
 
 
 classes = (
