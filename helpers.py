@@ -1,7 +1,7 @@
 from .data import UReference
-from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, Image
+from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, Image, ViewLayer, LayerCollection
 from pathlib import Path
-from typing import Iterable, Optional, Dict, List, Tuple
+from typing import Iterable, Optional, Dict, List, Tuple, Set
 import bpy
 import numpy
 import os
@@ -207,6 +207,8 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
     return mesh
 
 
+# TODO: add check for if we are running the BDK fork. this can gate features that are specific to the fork such as
+#  certain terrain doodad functionality.
 def are_t3d_dependencies_installed() -> bool:
     try:
         import t3dpy
@@ -327,3 +329,31 @@ def padded_roll(array, shift):
     array = array[x_start:x_end, y_start:y_end]
 
     return array
+
+
+def dfs_view_layer_objects(view_layer: ViewLayer):
+    """
+    A BDK-specific depth-first iterator of objects in a view layer meant to provide a means
+    for level authors to create and maintain stable CSG brush ordering.
+    * Collections are evaluated recursively.
+    * Object ordering respects object hierarchy (i.e., the parent object will be returned first, then all children, recursively).
+    Note that all sibling objects within a hierarchy level will be returned in an unpredictable order.
+    """
+    visited: Set[Object] = set()
+
+    def layer_collection_objects_recursive(layer_collection: LayerCollection):
+        for child in layer_collection.children:
+            yield from layer_collection_objects_recursive(child)
+        # Iterate only the top-level objects in this collection first.
+        for obj in layer_collection.collection.objects:
+            if obj.parent is None or obj.parent not in set(layer_collection.collection.objects) and obj not in visited:
+                yield obj
+                visited.add(obj)
+                # `children_recursive` returns objects regardless of collection, so we need to make sure
+                # that the children are in this collection.
+                for child in obj.children_recursive:
+                    if child not in visited and child in set(layer_collection.collection.objects):
+                        yield child
+                        visited.add(child)
+
+    yield from layer_collection_objects_recursive(view_layer.layer_collection)

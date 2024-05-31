@@ -19,7 +19,7 @@ from .data import T3DObject, Polygon
 from pathlib import Path
 from .importer import import_t3d
 from .writer import T3DWriter
-from ..helpers import are_t3d_dependencies_installed
+from ..helpers import are_t3d_dependencies_installed, dfs_view_layer_objects
 
 
 class BDK_OT_t3d_import_from_clipboard(Operator):
@@ -316,16 +316,17 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
         def can_copy(bpy_object: Object) -> bool:
             # TODO: SpectatorCam, Projector, FluidSurface etc.
-            return bpy_object.type == 'MESH' and bpy_object.data is not None
+            return bpy_object.bdk.type != 'NONE' and bpy_object.type == 'MESH' and bpy_object.data is not None
 
+        selected_objects = list(filter(lambda obj: obj.select_get(), dfs_view_layer_objects(context.view_layer)))
         bsp_brush_objects = []
 
         # Start a progress bar.
         wm = context.window_manager
-        wm.progress_begin(0, len(context.selected_objects))
+        wm.progress_begin(0, len(selected_objects))
 
         #
-        for obj_index, obj in enumerate(context.selected_objects):
+        for obj_index, obj in enumerate(selected_objects):
             match obj.bdk.type:
                 case 'BSP_BRUSH':
                     # Add the brush to the list of brushes to copy, we have to sort them by sort order.
@@ -361,8 +362,7 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
             wm.progress_update(obj_index)
 
-        # TODO: we need a tie breaker for sort order.
-        for bsp_brush_object in sorted(bsp_brush_objects, key=lambda obj: obj.bdk.bsp_brush.sort_order):
+        for bsp_brush_object in bsp_brush_objects:
             copy_actors.append(bsp_brush_to_actor(context, bsp_brush_object))
 
         for actor in copy_actors:

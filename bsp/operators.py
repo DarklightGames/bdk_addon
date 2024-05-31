@@ -3,7 +3,7 @@ from bmesh.types import BMFace
 from mathutils import Vector, Matrix
 
 from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping
-from ..helpers import is_bdk_py_installed, should_show_bdk_developer_extras
+from ..helpers import is_bdk_py_installed, should_show_bdk_developer_extras, dfs_view_layer_objects
 from .data import bsp_optimization_items
 from .properties import csg_operation_items, poly_flags_items, BDK_PG_bsp_brush
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
@@ -764,10 +764,7 @@ class BDK_OT_bsp_build(Operator):
                 return False
             return True
 
-        brush_objects = [obj for obj in context.scene.objects if brush_object_filter(obj)]
-
-        # TODO: Make an algorithm that sorts the brushes based on the hierarchy first, then sort order of siblings.
-        # TODO: Evaluate the brush objects in the depsgraph.
+        brush_objects = [obj for obj in dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj)]
 
         # This is a list of the materials used for the brushes. It is populated as we iterate over the brush objects.
         # We then use this at the end to create the materials for the level object.
