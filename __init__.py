@@ -223,9 +223,6 @@ def bdk_object_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
     self.layout.operator(terrain_doodad_operators.BDK_OT_convert_to_terrain_doodad.bl_idname)
 
-def bdk_header_menu_func(self, _context: bpy.types.Context):
-    self.layout.operator(bsp_operators.BDK_OT_bsp_build.bl_idname)
-
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
     self.layout.separator()
@@ -262,7 +259,6 @@ def register():
 
     bpy.types.VIEW3D_MT_add.append(bdk_add_menu_func)
     bpy.types.VIEW3D_MT_object.append(bdk_object_menu_func)
-    bpy.types.VIEW3D_HT_header.append(bdk_header_menu_func)
 
     bpy.types.VIEW3D_MT_select_object.append(bdk_select_menu_func)
 
@@ -297,7 +293,6 @@ def unregister():
 
     bpy.types.VIEW3D_MT_add.remove(bdk_add_menu_func)
     bpy.types.VIEW3D_MT_object.remove(bdk_object_menu_func)
-    bpy.types.VIEW3D_HT_header.remove(bdk_header_menu_func)
     bpy.types.VIEW3D_MT_select_object.remove(bdk_select_menu_func)
 
     # T3DMap Copy (doodad/collections)
