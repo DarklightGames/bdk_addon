@@ -922,24 +922,44 @@ class BDK_OT_bsp_build(Operator):
         points = np.array(model.points)
         vectors = np.array(model.vectors)
 
+        invalid_face_indices = []
+
+        node_index = 0
         for node in model.nodes:
             if node.vertex_count == 0:
                 continue
 
-            point_indices = [vert.vertex_index for vert in vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]]
-            bm.faces.new(map(lambda i: bm.verts[i], point_indices))
+            point_indices = [vert.point_index for vert in vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]]
 
-            surface = model.surfaces[node.surface_index]
-            brush_ids[node_index] = surface.brush_id
-            brush_polygon_indices[node_index] = surface.brush_polygon_index
-            material_indices[node_index] = surface.material_index
+            try:
+                bm.faces.new(map(lambda i: bm.verts[i], point_indices))
 
-            origins[node_index] = points[surface.base_point_index]
-            texture_us[node_index] = vectors[surface.texture_u_index]
-            texture_vs[node_index] = vectors[surface.texture_v_index]
-            poly_flags[node_index] = surface.poly_flags
+                surface = model.surfaces[node.surface_index]
+                brush_ids[node_index] = surface.brush_id
+                brush_polygon_indices[node_index] = surface.brush_polygon_index
+                material_indices[node_index] = surface.material_index
+
+                origins[node_index] = points[surface.base_point_index]
+                texture_us[node_index] = vectors[surface.texture_u_index]
+                texture_vs[node_index] = vectors[surface.texture_v_index]
+                poly_flags[node_index] = surface.poly_flags
+
+            except ValueError:
+                invalid_face_indices.append(node_index)
 
             node_index += 1
+
+        if invalid_face_indices:
+            self.report({'WARNING'}, f'Discarded {len(invalid_face_indices)} duplicate faces')
+
+        # Remove the data at the indices that were not added to the mesh due to invalid faces.
+        brush_ids = np.delete(brush_ids, invalid_face_indices)
+        brush_polygon_indices = np.delete(brush_polygon_indices, invalid_face_indices)
+        material_indices = np.delete(material_indices, invalid_face_indices)
+        origins = np.delete(origins, invalid_face_indices, axis=0)
+        texture_us = np.delete(texture_us, invalid_face_indices, axis=0)
+        texture_vs = np.delete(texture_vs, invalid_face_indices, axis=0)
+        poly_flags = np.delete(poly_flags, invalid_face_indices)
 
         mesh_data = cast(Mesh, level_object.data)
         bm.to_mesh(mesh_data)
