@@ -206,7 +206,15 @@ def ensure_node_tree(name: str,
         item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
         node_tree.interface.remove(item)
 
-    # TODO: handle default values and subtypes.
+    # Make sure that all the output items are at the top of the list.
+    items = sorted(items, key=lambda x: x[0] == 'INPUT')
+
+    # Now move the items to the correct position.
+    for index, item in enumerate(items):
+        in_out, socket_type, name = item[:3]
+        item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
+        if item is not None:
+            node_tree.interface.move(item, index)
 
     # Hash the build function byte-code.
     build_hash = hex(hash(build_function.__code__.co_code))
