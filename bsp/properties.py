@@ -113,10 +113,11 @@ class BDK_PG_bsp_brush(PropertyGroup):
     )
     sort_order: IntProperty(
         name='Sort Order',
-        description='The sort order of this brush. Lower values are evaluated first',
+        description='Used for resolving sort order for brushes at the same object hierarchy level (i.e., siblings). Lower values are sorted first.\n\n'
+                    'This is primarily used for maintaining the original brush order when importing brushes from the SDK.\n\n'
+                    'For new levels, it is highly recommended to use collection and object hierarchy to control the brush order',
         default=0,
         min=0,
-        max=8,  # This is not strictly necessary, but will stop the levelers from using insane values.
     )
 
 
