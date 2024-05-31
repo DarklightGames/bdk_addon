@@ -13,6 +13,7 @@ LIGHT_MAP_SCALE_ATTRIBUTE_NAME = 'bdk.light_map_scale'
 BRUSH_INDEX_ATTRIBUTE_NAME = 'bdk.brush_index'
 BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
 POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
+MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
 
 
 def ensure_bdk_bsp_surface_info_node_tree() -> NodeTree:
@@ -223,8 +224,7 @@ def ensure_bdk_bsp_set_scale_node_tree() -> NodeTree:
         store_named_attribute_node = node_tree.nodes.new(type='GeometryNodeStoreNamedAttribute')
         store_named_attribute_node.data_type = 'FLOAT_VECTOR'
         store_named_attribute_node.domain = 'FACE'
-        store_named_attribute_node.inputs["Selection"].default_value = True
-        store_named_attribute_node.inputs["Name"].default_value = 'bdk.texture_u'
+        store_named_attribute_node.inputs['Name'].default_value = TEXTURE_U_ATTRIBUTE_NAME
 
     return ensure_geometry_node_tree('BDK BSP Surface Set Scale', items, build_function)
 
@@ -842,6 +842,7 @@ def ensure_bdk_bsp_surface_copy_face_attributes_to_selection_node_tree() -> Node
             (TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'U'),
             (TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'V'),
             (POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'Poly Flags'),
+            (MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'Material Index'),
         )
 
         geometry_socket = input_node.outputs['Geometry']
@@ -896,7 +897,7 @@ def ensure_bdk_bsp_transform_to_plane_node_tree() -> NodeTree:
         node_tree.links.new(separate_transform_node.outputs['Rotation'], transform_direction_node_1.inputs['Transform'])
 
         # Outgoing Links
-        node_tree.links.new(separate_transform_node.outputs['Location'], output_node.inputs['Location'])
+        node_tree.links.new(separate_transform_node.outputs['Translation'], output_node.inputs['Location'])
         node_tree.links.new(transform_direction_node.outputs['Direction'], output_node.inputs['U'])
         node_tree.links.new(transform_direction_node_1.outputs['Direction'], output_node.inputs['V'])
 
