@@ -450,10 +450,6 @@ class BDK_OT_asset_import_data_linked(Operator):
 
     @classmethod
     def poll(cls, context: 'Context'):
-        if context.mode != 'OBJECT':
-            # TODO: why is this a requirement?
-            cls.poll_message_set('Must be in object mode')
-            return False
         assets = context.selected_assets
         if len(assets) == 0:
             cls.poll_message_set('No assets selected')
@@ -476,7 +472,11 @@ class BDK_OT_asset_import_data_linked(Operator):
                 skipped_count += 1
                 continue
 
-            bpy.ops.wm.append(filename=asset.full_path, link=True, instance_object_data=False, instance_collections=False)
+            # bpy.ops.wm.append(filename=asset.full_path, link=True, instance_object_data=False, instance_collections=False)
+            with bpy.data.libraries.load(asset.full_library_path, link=True) as (data_from, data_to):
+                match asset.id_type:
+                    case 'MATERIAL':
+                        data_to.materials = [asset.name]
 
             linked_count += 1
 
