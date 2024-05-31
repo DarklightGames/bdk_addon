@@ -1161,6 +1161,7 @@ classes = (
     BDK_OT_bsp_brush_operation_toggle,
     BDK_OT_bsp_brush_select_similar,
     BDK_OT_bsp_brush_select_with_poly_flags,
+    BDK_OT_bsp_brush_set_poly_flags,
     BDK_OT_bsp_brush_set_sort_order,
     BDK_OT_bsp_brush_snap_to_grid,
     BDK_OT_bsp_build,
