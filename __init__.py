@@ -281,6 +281,7 @@ def register():
     if key_configuration is not None:
         keymap = key_configuration.keymaps.new(name='3D View', space_type='VIEW_3D')
         addon_keymaps.append((keymap, keymap.keymap_items.new(bsp_operators.BDK_OT_bsp_build.bl_idname, 'B', 'PRESS', ctrl=True, shift=True)))
+        addon_keymaps.append((keymap, keymap.keymap_items.new(bdk_operators.BDK_OT_toggle_level_visibility.bl_idname, 'L', 'PRESS', alt=True, shift=True)))
 
 
 def unregister():

@@ -427,6 +427,21 @@ class BDK_OT_node_split_group_input_nodes(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_toggle_level_visibility(Operator):
+    bl_idname = 'bdk.toggle_level_visibility'
+    bl_label = 'Toggle Level Visibility'
+    bl_description = 'Toggle the visibility of the level object'
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context: Context):
+        return context.scene.bdk.level_object is not None
+
+    def execute(self, context: Context):
+        context.scene.bdk.level_object.hide_viewport = not context.scene.bdk.level_object.hide_viewport
+        return {'FINISHED'}
+
+
 class BDK_OT_asset_import_data_linked(Operator):
     bl_idname = 'bdk_asset_browser.import_data_linked'
     bl_description = 'Link asset from a library'
@@ -480,4 +495,5 @@ classes = (
     BDK_OT_node_join_group_input_nodes,
     BDK_OT_node_split_group_input_nodes,
     BDK_OT_asset_import_data_linked,
+    BDK_OT_toggle_level_visibility,
 )
