@@ -14,6 +14,8 @@ from mathutils import Matrix
 from typing import List, Optional, Dict, Any, cast, Type
 
 from ..fluid_surface.operators import create_fluid_surface_object
+from ..bsp.data import ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
+    POLY_FLAGS_ATTRIBUTE_NAME
 from ..bsp.builder import ensure_bdk_brush_uv_node_tree
 from ..bsp.properties import get_poly_flags_keys_from_value
 from ..terrain.operators import add_terrain_layer_node
@@ -193,16 +195,16 @@ def poly_list_to_mesh(name: str, poly_list: t3dpy.T3dObject, pre_pivot: Vector) 
         mesh_data.materials.append(material)
 
     # Create the attributes for texturing.
-    origin_attribute = mesh_data.attributes.new('bdk.origin', 'FLOAT_VECTOR', 'FACE')
+    origin_attribute = mesh_data.attributes.new(ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
     origin_attribute.data.foreach_set('vector', np.array(origins).flatten())
 
-    texture_u_attribute = mesh_data.attributes.new('bdk.texture_u', 'FLOAT_VECTOR', 'FACE')
+    texture_u_attribute = mesh_data.attributes.new(TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
     texture_u_attribute.data.foreach_set('vector', np.array(texture_us).flatten())
 
-    texture_v_attribute = mesh_data.attributes.new('bdk.texture_v', 'FLOAT_VECTOR', 'FACE')
+    texture_v_attribute = mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
     texture_v_attribute.data.foreach_set('vector', np.array(texture_vs).flatten())
 
-    poly_flags_attribute = mesh_data.attributes.new('bdk.poly_flags', 'INT', 'FACE')
+    poly_flags_attribute = mesh_data.attributes.new(POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE')
     poly_flags_attribute.data.foreach_set('value', np.array(poly_flags).flatten())
 
     return mesh_data

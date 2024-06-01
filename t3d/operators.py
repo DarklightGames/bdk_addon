@@ -12,7 +12,8 @@ from bpy_extras.io_utils import ImportHelper
 
 from ..data import UReference
 from ..bsp.properties import __poly_flag_keys_to_values__
-from ..bsp.builder import create_bsp_brush_polygon
+from ..bsp.data import POLY_FLAGS_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
+    ORIGIN_ATTRIBUTE_NAME
 from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, create_terrain_info_actor, \
     convert_blender_matrix_to_unreal_movement_units
 from .data import T3DObject, Polygon
@@ -129,10 +130,10 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
 
     # TODO: Ensure that the texturing info from the level geometry has been applied to the brushes before exporting.
 
-    bdk_poly_flags_layer = bm.faces.layers.int.get('bdk.poly_flags', None)
-    bdk_texture_u_layer = bm.faces.layers.float_vector.get('bdk.texture_u', None)
-    bdk_texture_v_layer = bm.faces.layers.float_vector.get('bdk.texture_v', None)
-    bdk_origin_layer = bm.faces.layers.float_vector.get('bdk.origin', None)
+    bdk_poly_flags_layer = bm.faces.layers.int.get(POLY_FLAGS_ATTRIBUTE_NAME, None)
+    bdk_texture_u_layer = bm.faces.layers.float_vector.get(TEXTURE_U_ATTRIBUTE_NAME, None)
+    bdk_texture_v_layer = bm.faces.layers.float_vector.get(TEXTURE_V_ATTRIBUTE_NAME, None)
+    bdk_origin_layer = bm.faces.layers.float_vector.get(ORIGIN_ATTRIBUTE_NAME, None)
 
     """
     In the engine, BSP brushes ignore scale & rotation during the CSG build.

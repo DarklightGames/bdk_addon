@@ -39,3 +39,14 @@ bsp_optimization_items = (
     ('GOOD', 'Good', '', 1),
     ('OPTIMAL', 'Optimal', '', 2),
 )
+
+BRUSH_INDEX_ATTRIBUTE_NAME = 'bdk.brush_index'
+BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
+DIRTY_ATTRIBUTE_NAME = 'bdk.dirty'
+LIGHT_MAP_SCALE_ATTRIBUTE_NAME = 'bdk.light_map_scale'
+MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
+NORMAL_ATTRIBUTE_NAME = 'normal'
+ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
+POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
+TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
+TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'

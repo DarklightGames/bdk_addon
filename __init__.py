@@ -73,6 +73,7 @@ if 'bpy' in locals():
     importlib.reload(terrain_doodad_ui)
 
     # BSP
+    importlib.reload(bsp_data)
     importlib.reload(bsp_builder)
     importlib.reload(bsp_tools)
     importlib.reload(bsp_properties)
@@ -152,6 +153,7 @@ else:
     from .terrain.doodad import ui as terrain_doodad_ui
 
     # BSP
+    from .bsp import data as bsp_data
     from .bsp import builder as bsp_builder
     from .bsp import tools as bsp_tools
     from .bsp import properties as bsp_properties

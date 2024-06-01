@@ -5,6 +5,9 @@ import time
 import uuid
 from enum import Enum
 
+from .data import BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, ORIGIN_ATTRIBUTE_NAME, \
+    TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, POLY_FLAGS_ATTRIBUTE_NAME, MATERIAL_INDEX_ATTRIBUTE_NAME, \
+    LIGHT_MAP_SCALE_ATTRIBUTE_NAME, DIRTY_ATTRIBUTE_NAME
 from .properties import poly_flags_items
 from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree, add_chained_bitwise_operation_nodes
 from mathutils import Vector, Quaternion
@@ -15,22 +18,16 @@ from typing import Optional, Dict, cast, List
 import mathutils
 import numpy as np
 
-ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
-TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
-TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
-POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
-MATERIAL_SLOT_ATTRIBUTE_NAME = 'material_index'
-BRUSH_INDEX_ATTRIBUTE_NAME = 'bdk.brush_index'
-BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
-
 
 def _ensure_bsp_surface_attributes(mesh_data: Mesh):
     attributes = (
         (ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
         (TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
         (TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+        (LIGHT_MAP_SCALE_ATTRIBUTE_NAME, 'FLOAT', 'FACE'),
         (POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE'),
-        (MATERIAL_SLOT_ATTRIBUTE_NAME, 'INT', 'FACE'),
+        (MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE'),
+        (DIRTY_ATTRIBUTE_NAME, 'BOOLEAN', 'FACE'),
     )
 
     for (name, type_, domain) in attributes:
@@ -63,8 +60,8 @@ def get_level_face_data(level_object: Object) -> (np.ndarray, np.ndarray, np.nda
     if POLY_FLAGS_ATTRIBUTE_NAME in mesh_data.attributes:
         mesh_data.attributes[POLY_FLAGS_ATTRIBUTE_NAME].data.foreach_get('value', poly_flags)
 
-    if MATERIAL_SLOT_ATTRIBUTE_NAME in mesh_data.attributes:
-        mesh_data.attributes[MATERIAL_SLOT_ATTRIBUTE_NAME].data.foreach_get('value', material_indices)
+    if MATERIAL_INDEX_ATTRIBUTE_NAME in mesh_data.attributes:
+        mesh_data.attributes[MATERIAL_INDEX_ATTRIBUTE_NAME].data.foreach_get('value', material_indices)
 
     # Reshape in-place.
     origins.shape = (polygon_count, 3)
@@ -133,11 +130,11 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
         # Ensure that the brush mesh has the necessary attributes.
         _ensure_bsp_surface_attributes(brush_mesh)
 
-        brush_origin_attribute = brush_mesh.attributes['bdk.origin']
-        brush_texture_u_attribute = brush_mesh.attributes['bdk.texture_u']
-        brush_texture_v_attribute = brush_mesh.attributes['bdk.texture_v']
-        brush_poly_flags_attribute = brush_mesh.attributes['bdk.poly_flags']
-        brush_material_index_attribute = brush_mesh.attributes['material_index']
+        brush_origin_attribute = brush_mesh.attributes[ORIGIN_ATTRIBUTE_NAME]
+        brush_texture_u_attribute = brush_mesh.attributes[TEXTURE_U_ATTRIBUTE_NAME]
+        brush_texture_v_attribute = brush_mesh.attributes[TEXTURE_V_ATTRIBUTE_NAME]
+        brush_poly_flags_attribute = brush_mesh.attributes[POLY_FLAGS_ATTRIBUTE_NAME]
+        brush_material_index_attribute = brush_mesh.attributes[MATERIAL_INDEX_ATTRIBUTE_NAME]
 
         material_index_mapping = {}  # Level material index to brush material index mapping.
 
@@ -234,15 +231,15 @@ def ensure_bdk_brush_uv_node_tree():
 
         texture_u_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
         texture_u_named_attribute_node.data_type = 'FLOAT_VECTOR'
-        texture_u_named_attribute_node.inputs['Name'].default_value = 'bdk.texture_u'
+        texture_u_named_attribute_node.inputs['Name'].default_value = TEXTURE_U_ATTRIBUTE_NAME
 
         texture_v_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
         texture_v_named_attribute_node.data_type = 'FLOAT_VECTOR'
-        texture_v_named_attribute_node.inputs['Name'].default_value = 'bdk.texture_v'
+        texture_v_named_attribute_node.inputs['Name'].default_value = TEXTURE_V_ATTRIBUTE_NAME
 
         origin_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
         origin_named_attribute_node.data_type = 'FLOAT_VECTOR'
-        origin_named_attribute_node.inputs['Name'].default_value = 'bdk.origin'
+        origin_named_attribute_node.inputs['Name'].default_value = ORIGIN_ATTRIBUTE_NAME
 
         face_of_corner_node = node_tree.nodes.new(type='GeometryNodeFaceOfCorner')
 

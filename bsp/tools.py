@@ -5,15 +5,7 @@ from bpy.types import NodeTree
 
 from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_vector_math_operation_nodes, \
     add_math_operation_nodes
-
-ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
-TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
-TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
-LIGHT_MAP_SCALE_ATTRIBUTE_NAME = 'bdk.light_map_scale'
-BRUSH_INDEX_ATTRIBUTE_NAME = 'bdk.brush_index'
-BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
-POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
-MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
+from ..bsp.data import *
 
 
 def ensure_bdk_bsp_surface_info_node_tree() -> NodeTree:
@@ -253,11 +245,11 @@ def ensure_bdk_bsp_matching_brush_face_selection_node_tree() -> NodeTree:
 
         named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
         named_attribute_node.data_type = 'INT'
-        named_attribute_node.inputs['Name'].default_value = 'bdk.brush_index'
+        named_attribute_node.inputs['Name'].default_value = BRUSH_INDEX_ATTRIBUTE_NAME
 
         named_attribute_node_1 = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
         named_attribute_node_1.data_type = 'INT'
-        named_attribute_node_1.inputs['Name'].default_value = 'bdk.brush_polygon_index'
+        named_attribute_node_1.inputs['Name'].default_value = BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME
 
         evaluate_at_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
         evaluate_at_index_node.domain = 'FACE'
@@ -636,12 +628,12 @@ def ensure_bdk_bsp_surface_sample_face_node_tree() -> NodeTree:
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         values = (
-            ('material_index', 'INT', 'Material Index'),
-            ('bdk.origin', 'FLOAT_VECTOR', 'Origin'),
-            ('normal', 'FLOAT_VECTOR', 'Normal'),
-            ('bdk.texture_u', 'FLOAT_VECTOR', 'U'),
-            ('bdk.texture_v', 'FLOAT_VECTOR', 'V'),
-            ('bdk.poly_flags', 'INT', 'Poly Flags'),
+            (MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'Material Index'),
+            (ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'Origin'),
+            (NORMAL_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'Normal'),
+            (TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'U'),
+            (TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'V'),
+            (POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'Poly Flags'),
         )
 
         for (name, data_type, output_name) in values:

@@ -5,7 +5,9 @@ from mathutils import Vector, Matrix
 from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping, \
     ensure_bdk_level_visibility_modifier
 from ..helpers import is_bdk_py_installed, should_show_bdk_developer_extras, dfs_view_layer_objects
-from .data import bsp_optimization_items
+from .data import bsp_optimization_items, ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
+    POLY_FLAGS_ATTRIBUTE_NAME, BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, \
+    MATERIAL_INDEX_ATTRIBUTE_NAME
 from .properties import csg_operation_items, poly_flags_items, BDK_PG_bsp_brush, get_poly_flags_keys_from_value
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
 from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material, Event
@@ -16,14 +18,6 @@ import bmesh
 import bpy
 import sys
 import time
-
-BRUSH_INDEX_ATTRIBUTE_NAME = 'bdk.brush_index'
-BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME = 'bdk.brush_polygon_index'
-ORIGIN_ATTRIBUTE_NAME = 'bdk.origin'
-TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
-TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
-POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
-MATERIAL_INDEX_ATTRIBUTE_NAME = 'material_index'
 
 PLANAR_TEXTURE_MAPPING_MODIFIER_NAME = 'BDK Planar Texture Mapping'
 
