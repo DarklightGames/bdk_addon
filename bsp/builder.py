@@ -2,12 +2,14 @@
 # In the future, clean this up so that it's more clear what is going on.
 
 import time
+import uuid
 from enum import Enum
 
-from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree
+from .properties import poly_flags_items
+from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree, add_chained_bitwise_operation_nodes
 from mathutils import Vector, Quaternion
 from bmesh.types import BMFace
-from bpy.types import Object, Mesh, NodeTree
+from bpy.types import Object, Mesh, NodeTree, bpy_struct
 from math import isnan
 from typing import Optional, Dict, cast, List
 import mathutils
@@ -357,6 +359,105 @@ def ensure_bdk_brush_uv_node_tree():
         node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree('BDK Brush UV', items, build_function)
+
+
+def ensure_bdk_bsp_poly_flags_node_tree():
+    items = [
+        ('OUTPUT', 'NodeSocketInt', 'Poly Flags'),
+    ]
+
+    for poly_flag_item in poly_flags_items:
+        items.append(('INPUT', 'NodeSocketBool', poly_flag_item[1]))
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        flag_value_sockets = []
+
+        for _, name, _, _, value in poly_flags_items:
+            poly_flag_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+            poly_flag_switch_node.input_type = 'INT'
+            poly_flag_switch_node.inputs['True'].default_value = value
+
+            node_tree.links.new(input_node.outputs[name], poly_flag_switch_node.inputs['Switch'])
+
+            flag_value_sockets.append(poly_flag_switch_node.outputs['Output'])
+
+        output_socket = add_chained_bitwise_operation_nodes(node_tree, 'OR', flag_value_sockets)
+
+        node_tree.links.new(output_socket, output_node.inputs['Poly Flags'])
+
+    return ensure_geometry_node_tree('BDK BSP Poly Flags', items, build_function)
+
+
+def ensure_bdk_level_visibility_modifier(level_object: Object):
+    # Make sure that the level object has the level visibility modifier. If it already exists, update the node tree.
+    modifier_name = 'BDK Level Visibility'
+    modifier = level_object.modifiers.get(modifier_name)
+
+    if modifier is None:
+        modifier = level_object.modifiers.new(name=modifier_name, type='NODES')
+
+    modifier.node_group = ensure_bdk_level_visibility_node_tree(level_object)
+
+
+def ensure_bdk_level_visibility_node_tree(level_object: Object):
+    items = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+
+        poly_flags_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        poly_flags_group_node.node_tree = ensure_bdk_bsp_poly_flags_node_tree()
+
+        # Add drivers for the relevant inputs.
+        def add_level_visibility_driver(id: bpy_struct, data_path_name: str):
+            driver = id.driver_add('default_value').driver
+            driver.type = 'AVERAGE'
+            variable = driver.variables.new()
+            variable.name = 'visibility'
+            variable.targets[0].id = level_object
+            variable.targets[0].data_path = f'bdk.level.visibility.{data_path_name}'
+
+        drivers = (
+            ('Fake Backdrop', 'fake_backdrop'),
+            ('Invisible', 'invisible'),
+            ('Portal', 'portal'),
+        )
+
+        for (input_socket_name, data_path_name) in drivers:
+            add_level_visibility_driver(poly_flags_group_node.inputs[input_socket_name], data_path_name)
+
+        poly_flags_named_attribute_node = node_tree.nodes.new(type='GeometryNodeInputNamedAttribute')
+        poly_flags_named_attribute_node.data_type = 'INT'
+        poly_flags_named_attribute_node.inputs['Name'].default_value = POLY_FLAGS_ATTRIBUTE_NAME
+
+        delete_geometry_node = node_tree.nodes.new(type='GeometryNodeDeleteGeometry')
+        delete_geometry_node.domain = 'FACE'
+        delete_geometry_node.mode = 'ONLY_FACE'
+
+        bitwise_and_operation_node = node_tree.nodes.new(type='FunctionNodeBitwiseOperation')
+        bitwise_and_operation_node.operation = 'AND'
+
+        compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
+        compare_node.data_type = 'INT'
+        compare_node.operation = 'NOT_EQUAL'
+        compare_node.inputs[1].default_value = 0
+
+        node_tree.links.new(input_node.outputs['Geometry'], delete_geometry_node.inputs['Geometry'])
+        node_tree.links.new(poly_flags_group_node.outputs['Poly Flags'], bitwise_and_operation_node.inputs[0])
+        node_tree.links.new(poly_flags_named_attribute_node.outputs['Attribute'], bitwise_and_operation_node.inputs[1])
+        node_tree.links.new(bitwise_and_operation_node.outputs['Result'], compare_node.inputs['A'])
+        node_tree.links.new(compare_node.outputs['Result'], delete_geometry_node.inputs['Selection'])
+        node_tree.links.new(delete_geometry_node.outputs['Geometry'], output_node.inputs['Geometry'])
+
+    if level_object.bdk.level.visibility_modifier_id == '':
+        level_object.bdk.level.visibility_modifier_id = uuid.uuid4().hex
+
+    return ensure_geometry_node_tree(level_object.bdk.level.visibility_modifier_id, items, build_function, should_force_build=True)
 
 
 # TODO: We can use this, or something like it, when we to create a brush from an existing mesh that doesn't have the BDK

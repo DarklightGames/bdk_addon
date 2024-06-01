@@ -2,10 +2,11 @@ import numpy as np
 from bmesh.types import BMFace
 from mathutils import Vector, Matrix
 
-from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping
+from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping, \
+    ensure_bdk_level_visibility_modifier
 from ..helpers import is_bdk_py_installed, should_show_bdk_developer_extras, dfs_view_layer_objects
 from .data import bsp_optimization_items
-from .properties import csg_operation_items, poly_flags_items, BDK_PG_bsp_brush
+from .properties import csg_operation_items, poly_flags_items, BDK_PG_bsp_brush, get_poly_flags_keys_from_value
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
 from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material, Event
 from collections import OrderedDict
@@ -708,9 +709,6 @@ class BDK_OT_bsp_build(Operator):
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-
-        start_time = time.time()
-
         # Make sure that the bdk_py module is available.
         # TODO: Move this to the poll function once we are done debugging.
         if not is_bdk_py_installed():
@@ -913,8 +911,6 @@ class BDK_OT_bsp_build(Operator):
         texture_vs = np.zeros((valid_node_count, 3), dtype=np.float32)
         poly_flags = np.zeros(valid_node_count, dtype=np.int32)
 
-        node_index = 0
-
         # NOTE: For the sake of performance, we copy the data from the model to numpy arrays instead of accessing them
         #  directly. It is dramatically slower if accessed directly (1500ms vs 45ms). There is probably some sort of
         #  overhead or inefficiency in the way the data is accessed in the model object.
@@ -998,6 +994,7 @@ class BDK_OT_bsp_build(Operator):
 
         # Make sure the level object has the UV geometry node modifier.
         _ensure_planar_texture_mapping_modifier(level_object)
+        ensure_bdk_level_visibility_modifier(level_object)
 
         end_time = time.time()
         duration = end_time - start_time

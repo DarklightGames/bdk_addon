@@ -1,5 +1,6 @@
 from .data import PolyFlags, bsp_optimization_items
-from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty, FloatProperty, FloatVectorProperty
+from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty, FloatProperty, \
+    FloatVectorProperty, BoolProperty, StringProperty
 from bpy.types import PropertyGroup, Object, Context, Material
 from enum import Enum
 from typing import Set
@@ -138,6 +139,12 @@ class BDK_PG_level_statistics(PropertyGroup):
     depth_average: FloatProperty(name='Depth Average', precision=2, description='The average depth of each BSP leaf node')
 
 
+class BDK_PG_level_visibility(PropertyGroup):
+    fake_backdrop: BoolProperty(name='Fake Backdrop', default=False)
+    invisible: BoolProperty(name='Invisible', default=False)
+    portal: BoolProperty(name='Portal', default=False)
+
+
 class BDK_PG_level(PropertyGroup):
     brushes: CollectionProperty(type=BDK_PG_level_brush, options={'HIDDEN'},
                                 description='The list of brush objects used in generating the level geometry. '
@@ -147,9 +154,13 @@ class BDK_PG_level(PropertyGroup):
     performance: PointerProperty(type=BDK_PG_level_performance, options={'HIDDEN'})
     bsp_optimization: EnumProperty(items=bsp_optimization_items, name='Optimization', default='LAME')
 
+    visibility: PointerProperty(type=BDK_PG_level_visibility, options={'HIDDEN'})
+    visibility_modifier_id: StringProperty(name='Visibility Modifier ID', default='', options={'HIDDEN'})
+
 
 classes = (
     BDK_PG_bsp_brush,
+    BDK_PG_level_visibility,
     BDK_PG_level_performance,
     BDK_PG_level_statistics,
     BDK_PG_level_brush,

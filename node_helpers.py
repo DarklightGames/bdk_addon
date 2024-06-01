@@ -440,6 +440,19 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
 
+def add_chained_bitwise_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
+    if not value_sockets:
+        return None
+    output_socket = value_sockets[0]
+    for value_socket in value_sockets[1:]:
+        operation_node = node_tree.nodes.new(type='FunctionNodeBitwiseOperation')
+        operation_node.operation = operation
+        node_tree.links.new(output_socket, operation_node.inputs[0])
+        node_tree.links.new(value_socket, operation_node.inputs[1])
+        output_socket = operation_node.outputs[0]
+    return output_socket
+
+
 def add_chained_math_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
     if not value_sockets:
         return None

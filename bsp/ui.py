@@ -73,7 +73,7 @@ class BDK_PT_level(Panel):
 
     def draw_header(self, context):
         layout = self.layout
-        layout.prop(context.scene.bdk.level_object, 'hide_viewport', text='', icon_only=True, emboss=False)
+        layout.prop(context.scene.bdk.level_object, 'hide_viewport', text='', icon_only=True, icon='HIDE_ON' if context.scene.bdk.level_object.hide_viewport else 'HIDE_OFF', emboss=False)
 
     def draw(self, context):
         layout = self.layout
@@ -83,18 +83,27 @@ class BDK_PT_level(Panel):
         level = context.scene.bdk.level_object.bdk.level
         statistics = level.statistics
 
-        statistics_header, statistics_panel = layout.panel('Statistics', default_closed=False)
+        visibility_header, visibility_panel = layout.panel('Visibility', default_closed=True)
+        visibility_header.label(text='Visibility')
+
+        if visibility_panel is not None:
+            visibility_panel.use_property_split = False
+            visibility_properties = ('fake_backdrop', 'invisible', 'portal')
+            for visibility_property in visibility_properties:
+                visibility_panel.prop(level.visibility, visibility_property, icon='HIDE_ON' if getattr(level.visibility, visibility_property) else 'HIDE_OFF', emboss=False)
+
+        statistics_header, statistics_panel = layout.panel('Statistics', default_closed=True)
         statistics_header.label(text='Statistics')
 
         if statistics_panel is not None:
-            geometry_header, geometry_panel = statistics_panel.panel('Geometry', default_closed=False)
+            geometry_header, geometry_panel = statistics_panel.panel('Geometry', default_closed=True)
             geometry_header.label(text='Geometry')
 
             if geometry_panel is not None:
                 geometry_panel.prop(statistics, 'brush_count', emboss=False)
                 geometry_panel.prop(statistics, 'zone_count', emboss=False)
 
-            bsp_header, bsp_panel = statistics_panel.panel('BSP', default_closed=False)
+            bsp_header, bsp_panel = statistics_panel.panel('BSP', default_closed=True)
             bsp_header.label(text='BSP')
 
             if bsp_panel is not None:
@@ -103,7 +112,7 @@ class BDK_PT_level(Panel):
                 bsp_panel.prop(statistics, 'depth_max', emboss=False)
                 bsp_panel.prop(statistics, 'depth_average', emboss=False)
 
-        performance_header, performance_panel = layout.panel('Performance', default_closed=False)
+        performance_header, performance_panel = layout.panel('Performance', default_closed=True)
         performance_header.label(text='Performance')
 
         if performance_panel is not None:
@@ -112,7 +121,7 @@ class BDK_PT_level(Panel):
             performance_panel.prop(performance, 'csg_build_duration', emboss=False)
             performance_panel.prop(performance, 'mesh_build_duration', emboss=False)
 
-        operators_header, operators_panel = layout.panel('Operators', default_closed=False)
+        operators_header, operators_panel = layout.panel('Operators', default_closed=True)
         operators_header.label(text='Operators')
 
         if operators_panel is not None:

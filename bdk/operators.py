@@ -472,7 +472,6 @@ class BDK_OT_asset_import_data_linked(Operator):
                 skipped_count += 1
                 continue
 
-            # bpy.ops.wm.append(filename=asset.full_path, link=True, instance_object_data=False, instance_collections=False)
             with bpy.data.libraries.load(asset.full_library_path, link=True) as (data_from, data_to):
                 match asset.id_type:
                     case 'MATERIAL':
