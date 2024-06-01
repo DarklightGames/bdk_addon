@@ -205,7 +205,7 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     # TODO:  We could make this a more sensible unit. IIRC, the current unit is the number of points per square meter.
     #  This causes issues when the object is scaled, causing the program to freeze even with small increases to this
     #  number.
-    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.001, min=0.0)
+    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.0001, min=0.0, max=0.001, options={'HIDDEN'})
     mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, max=1.0,
                                                                subtype='FACTOR')
     mesh_face_distribute_seed: IntProperty(name='Distribution Seed', default=0, min=0)

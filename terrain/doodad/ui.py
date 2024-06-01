@@ -522,7 +522,6 @@ class BDK_PT_terrain_doodad_scatter_layer_mesh_settings(Panel):
                 flow.prop(scatter_layer, 'mesh_face_distribute_random_density')
             elif scatter_layer.mesh_face_distribute_method == 'POISSON_DISK':
                 flow.prop(scatter_layer, 'mesh_face_distribute_poisson_distance_min')
-                flow.prop(scatter_layer, 'mesh_face_distribute_poisson_density_max')
                 flow.prop(scatter_layer, 'mesh_face_distribute_poisson_density_factor')
 
 
