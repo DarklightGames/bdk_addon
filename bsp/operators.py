@@ -807,6 +807,10 @@ class BDK_OT_bsp_build(Operator):
             mesh_data.attributes.get(TEXTURE_V_ATTRIBUTE_NAME).data.foreach_get('vector', texture_v_data)
             texture_v_data = texture_v_data.reshape((polygon_count, 3))
 
+            # Poly Flags
+            poly_flags_data = np.zeros(polygon_count, dtype=np.int32)
+            mesh_data.attributes.get(POLY_FLAGS_ATTRIBUTE_NAME).data.foreach_get('value', poly_flags_data)
+
             # Transform the origin and texture vectors to world-space.
             # TODO: extract this to a function so we can re-use it in the remapping operator.
             point_transform_matrix = brush_object.matrix_world
@@ -836,7 +840,7 @@ class BDK_OT_bsp_build(Operator):
                     origin=tuple(origin_data[polygon.index]),
                     texture_u=tuple(texture_u_data[polygon.index]),
                     texture_v=tuple(texture_v_data[polygon.index]),
-                    poly_flags=set(),   # TODO: populate this with a set of flags (e.g., {'INVISIBLE', 'TWO_SIDED'})
+                    poly_flags=get_poly_flags_keys_from_value(poly_flags_data[polygon.index]),
                     material_index=material_index,
                 ))
 
