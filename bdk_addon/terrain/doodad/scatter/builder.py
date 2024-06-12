@@ -1320,103 +1320,145 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
         terrain_doodad_object_info_node.inputs['Object'].default_value = terrain_doodad_object
         terrain_doodad_object_info_node.transform_space = 'RELATIVE'
 
-        if scatter_layer.terrain_doodad_object.type == 'CURVE':
-            # Get the maximum length of all the objects in the scatter layer.
-            length_sockets = []
-            for scatter_layer_object in scatter_layer.objects:
-                size_socket = add_object_extents(node_tree, scatter_layer_object.object)
-                vector_component_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-                vector_component_group_node.node_tree = ensure_vector_component_node_tree()
-                node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
-                add_scatter_layer_driver(vector_component_group_node.inputs['Index'], 'curve_spacing_relative_axis')
-                length_sockets.append(vector_component_group_node.outputs['Value'])
-            spacing_length_socket = add_chained_math_operation_nodes(node_tree, 'MAXIMUM', length_sockets)
+        points_socket = None
 
-            spacing_mode_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-            spacing_mode_switch_node.input_type = 'FLOAT'
-            add_scatter_layer_driver(spacing_mode_switch_node.inputs['Switch'], 'curve_spacing_method')
-            add_scatter_layer_driver(spacing_mode_switch_node.inputs['True'], 'curve_spacing_absolute')
+        match scatter_layer.geometry_source:
+            case 'SCATTER_LAYER':
+                terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
+                # Find the scatter layer that the current scatter layer is based on.
+                geometry_source_scatter_layer = None
+                for doodad_scatter_layer in terrain_doodad.scatter_layers:
+                    if doodad_scatter_layer.id == scatter_layer.geometry_source_id:
+                        geometry_source_scatter_layer = doodad_scatter_layer
+                if geometry_source_scatter_layer:
+                    scatter_layer_seed_object_info_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+                    scatter_layer_seed_object_info_node.inputs['Object'].default_value = geometry_source_scatter_layer.seed_object
 
-            spacing_relative_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
-            spacing_relative_factor_node.operation = 'MULTIPLY'
+                    mesh_to_points_node = node_tree.nodes.new(type='GeometryNodeMeshToPoints')
 
-            if spacing_length_socket:
-                node_tree.links.new(spacing_length_socket, spacing_relative_factor_node.inputs[0])
+                    node_tree.links.new(scatter_layer_seed_object_info_node.outputs['Geometry'],
+                                        mesh_to_points_node.inputs['Mesh'])
 
-            add_scatter_layer_driver(spacing_relative_factor_node.inputs[1], 'curve_spacing_relative_factor')
+                    points_socket = mesh_to_points_node.outputs['Points']
+            case 'DOODAD':
+                match scatter_layer.terrain_doodad_object.type:
+                    case 'CURVE':
+                        # Get the maximum length of all the objects in the scatter layer.
+                        length_sockets = []
+                        for scatter_layer_object in scatter_layer.objects:
+                            size_socket = add_object_extents(node_tree, scatter_layer_object.object)
+                            vector_component_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+                            vector_component_group_node.node_tree = ensure_vector_component_node_tree()
+                            node_tree.links.new(size_socket, vector_component_group_node.inputs['Vector'])
+                            add_scatter_layer_driver(vector_component_group_node.inputs['Index'], 'curve_spacing_relative_axis')
+                            length_sockets.append(vector_component_group_node.outputs['Value'])
+                        spacing_length_socket = add_chained_math_operation_nodes(node_tree, 'MAXIMUM', length_sockets)
 
-            node_tree.links.new(spacing_relative_factor_node.outputs['Value'], spacing_mode_switch_node.inputs['False'])
+                        spacing_mode_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+                        spacing_mode_switch_node.input_type = 'FLOAT'
+                        add_scatter_layer_driver(spacing_mode_switch_node.inputs['Switch'], 'curve_spacing_method')
+                        add_scatter_layer_driver(spacing_mode_switch_node.inputs['True'], 'curve_spacing_absolute')
 
-            spacing_length_socket = spacing_mode_switch_node.outputs['Output']
+                        spacing_relative_factor_node = node_tree.nodes.new(type='ShaderNodeMath')
+                        spacing_relative_factor_node.operation = 'MULTIPLY'
 
-            curve_modifier_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-            curve_modifier_group_node.node_tree = ensure_curve_modifier_node_tree()
+                        if spacing_length_socket:
+                            node_tree.links.new(spacing_length_socket, spacing_relative_factor_node.inputs[0])
 
-            add_scatter_layer_driver(curve_modifier_group_node.inputs['Is Curve Reversed'], 'is_curve_reversed')
-            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Mode'], 'curve_trim_mode')
-            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Factor Start'], 'curve_trim_factor_start')
-            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Factor End'], 'curve_trim_factor_end')
-            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Length Start'], 'curve_trim_length_start')
-            add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Length End'], 'curve_trim_length_end')
-            add_scatter_layer_driver(curve_modifier_group_node.inputs['Normal Offset'], 'curve_normal_offset')
+                        add_scatter_layer_driver(spacing_relative_factor_node.inputs[1], 'curve_spacing_relative_factor')
 
-            curve_to_points_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-            curve_to_points_group_node.node_tree = ensure_scatter_layer_curve_to_points_node_tree()
+                        node_tree.links.new(spacing_relative_factor_node.outputs['Value'],
+                                            spacing_mode_switch_node.inputs['False'])
 
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset Max'], 'curve_normal_offset_max')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset Seed'], 'curve_normal_offset_seed')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Tangent Offset Max'], 'curve_tangent_offset_max')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Tangent Offset Seed'], 'curve_tangent_offset_seed')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Global Seed'], 'global_seed')
-            add_scatter_layer_driver(curve_to_points_group_node.inputs['Fence Mode'], 'fence_mode')
+                        spacing_length_socket = spacing_mode_switch_node.outputs['Output']
 
-            shrinkwrap_curve_to_terrain_node = node_tree.nodes.new(type='GeometryNodeGroup')
-            shrinkwrap_curve_to_terrain_node.node_tree = ensure_shrinkwrap_curve_to_terrain_node_tree()
+                        curve_modifier_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+                        curve_modifier_group_node.node_tree = ensure_curve_modifier_node_tree()
 
-            shrinkwrap_curve_to_terrain_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
-            shrinkwrap_curve_to_terrain_switch_node.input_type = 'GEOMETRY'
+                        add_scatter_layer_driver(curve_modifier_group_node.inputs['Is Curve Reversed'], 'is_curve_reversed')
+                        add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Mode'], 'curve_trim_mode')
+                        add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Factor Start'],
+                                                 'curve_trim_factor_start')
+                        add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Factor End'], 'curve_trim_factor_end')
+                        add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Length Start'],
+                                                 'curve_trim_length_start')
+                        add_scatter_layer_driver(curve_modifier_group_node.inputs['Trim Length End'], 'curve_trim_length_end')
+                        add_scatter_layer_driver(curve_modifier_group_node.inputs['Normal Offset'], 'curve_normal_offset')
 
-            add_scatter_layer_driver(shrinkwrap_curve_to_terrain_switch_node.inputs['Switch'], 'fence_mode')
+                        curve_to_points_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+                        curve_to_points_group_node.node_tree = ensure_scatter_layer_curve_to_points_node_tree()
 
-            terrain_info_object_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-            terrain_info_object_node.inputs['Object'].default_value = terrain_info.terrain_info_object
+                        add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset Max'],
+                                                 'curve_normal_offset_max')
+                        add_scatter_layer_driver(curve_to_points_group_node.inputs['Normal Offset Seed'],
+                                                 'curve_normal_offset_seed')
+                        add_scatter_layer_driver(curve_to_points_group_node.inputs['Tangent Offset Max'],
+                                                 'curve_tangent_offset_max')
+                        add_scatter_layer_driver(curve_to_points_group_node.inputs['Tangent Offset Seed'],
+                                                 'curve_tangent_offset_seed')
+                        add_scatter_layer_driver(curve_to_points_group_node.inputs['Global Seed'], 'global_seed')
+                        add_scatter_layer_driver(curve_to_points_group_node.inputs['Fence Mode'], 'fence_mode')
 
-            node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_node.inputs['Curve'])
-            node_tree.links.new(terrain_info_object_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_node.inputs['Terrain Geometry'])
+                        shrinkwrap_curve_to_terrain_node = node_tree.nodes.new(type='GeometryNodeGroup')
+                        shrinkwrap_curve_to_terrain_node.node_tree = ensure_shrinkwrap_curve_to_terrain_node_tree()
 
-            node_tree.links.new(shrinkwrap_curve_to_terrain_node.outputs['Curve'], shrinkwrap_curve_to_terrain_switch_node.inputs['True'])
-            node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_switch_node.inputs['False'])
+                        shrinkwrap_curve_to_terrain_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+                        shrinkwrap_curve_to_terrain_switch_node.input_type = 'GEOMETRY'
 
-            node_tree.links.new(shrinkwrap_curve_to_terrain_switch_node.outputs['Output'], curve_modifier_group_node.inputs['Curve'])
-            node_tree.links.new(curve_modifier_group_node.outputs['Curve'], curve_to_points_group_node.inputs['Curve'])
+                        add_scatter_layer_driver(shrinkwrap_curve_to_terrain_switch_node.inputs['Switch'], 'fence_mode')
 
-            if spacing_length_socket is not None:
-                node_tree.links.new(spacing_length_socket, curve_to_points_group_node.inputs['Spacing Length'])
+                        terrain_info_object_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
+                        terrain_info_object_node.inputs['Object'].default_value = terrain_info.terrain_info_object
 
-            points_socket = curve_to_points_group_node.outputs['Points']
-        elif scatter_layer.terrain_doodad_object.type == 'EMPTY':
-            # TODO: we're gonna certainly want more options here (e.g., random distance/angle from the center)
-            points_node = node_tree.nodes.new(type='GeometryNodePoints')
-            node_tree.links.new(terrain_doodad_object_info_node.outputs['Location'], points_node.inputs['Position'])
-            points_socket = points_node.outputs['Geometry']
-        elif scatter_layer.terrain_doodad_object.type == 'MESH':
-            mesh_to_points_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
-            mesh_to_points_node_group_node.node_tree = ensure_scatter_layer_mesh_to_points_node_tree()
+                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'],
+                                            shrinkwrap_curve_to_terrain_node.inputs['Curve'])
+                        node_tree.links.new(terrain_info_object_node.outputs['Geometry'],
+                                            shrinkwrap_curve_to_terrain_node.inputs['Terrain Geometry'])
 
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Method'], 'mesh_face_distribute_method')
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Random Density'], 'mesh_face_distribute_random_density')
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Poisson Distance Min'], 'mesh_face_distribute_poisson_distance_min')
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Poisson Density Max'], 'mesh_face_distribute_poisson_density_max')
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Poisson Density Factor'], 'mesh_face_distribute_poisson_density_factor')
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Seed'], 'mesh_face_distribute_seed')
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Global Seed'], 'global_seed')
-            add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Element Mode'], 'mesh_element_mode')
+                        node_tree.links.new(shrinkwrap_curve_to_terrain_node.outputs['Curve'],
+                                            shrinkwrap_curve_to_terrain_switch_node.inputs['True'])
+                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'],
+                                            shrinkwrap_curve_to_terrain_switch_node.inputs['False'])
 
-            node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], mesh_to_points_node_group_node.inputs['Mesh'])
+                        node_tree.links.new(shrinkwrap_curve_to_terrain_switch_node.outputs['Output'],
+                                            curve_modifier_group_node.inputs['Curve'])
+                        node_tree.links.new(curve_modifier_group_node.outputs['Curve'],
+                                            curve_to_points_group_node.inputs['Curve'])
 
-            points_socket = mesh_to_points_node_group_node.outputs['Points']
-        else:
-            raise RuntimeError('Unsupported terrain doodad object type: ' + scatter_layer.terrain_doodad_object.type)
+                        if spacing_length_socket is not None:
+                            node_tree.links.new(spacing_length_socket, curve_to_points_group_node.inputs['Spacing Length'])
+
+                        points_socket = curve_to_points_group_node.outputs['Points']
+                    case 'EMPTY':
+                        # TODO: we're gonna certainly want more options here (e.g., random distance/angle from the center)
+                        points_node = node_tree.nodes.new(type='GeometryNodePoints')
+                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Location'], points_node.inputs['Position'])
+                        points_socket = points_node.outputs['Geometry']
+                    case 'MESH':
+                        mesh_to_points_node_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
+                        mesh_to_points_node_group_node.node_tree = ensure_scatter_layer_mesh_to_points_node_tree()
+
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Method'],
+                                                 'mesh_face_distribute_method')
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Random Density'],
+                                                 'mesh_face_distribute_random_density')
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Poisson Distance Min'],
+                                                 'mesh_face_distribute_poisson_distance_min')
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Poisson Density Max'],
+                                                 'mesh_face_distribute_poisson_density_max')
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Poisson Density Factor'],
+                                                 'mesh_face_distribute_poisson_density_factor')
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Face Distribute Seed'],
+                                                 'mesh_face_distribute_seed')
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Global Seed'], 'global_seed')
+                        add_scatter_layer_driver(mesh_to_points_node_group_node.inputs['Element Mode'], 'mesh_element_mode')
+
+                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'],
+                                            mesh_to_points_node_group_node.inputs['Mesh'])
+
+                        points_socket = mesh_to_points_node_group_node.outputs['Points']
+                    case _:
+                        raise RuntimeError('Unsupported terrain doodad object type: ' + scatter_layer.terrain_doodad_object.type)
 
         # Position Deviation
         use_deviation_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
@@ -1434,8 +1476,9 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
         add_scatter_layer_driver(deviation_node.inputs['Seed'], 'position_deviation_seed')
         add_scatter_layer_driver(deviation_node.inputs['Global Seed'], 'global_seed')
 
-        node_tree.links.new(points_socket, use_deviation_switch_node.inputs['False'])
-        node_tree.links.new(points_socket, deviation_node.inputs['Points'])
+        if points_socket:
+            node_tree.links.new(points_socket, use_deviation_switch_node.inputs['False'])
+            node_tree.links.new(points_socket, deviation_node.inputs['Points'])
         node_tree.links.new(deviation_node.outputs['Points'], use_deviation_switch_node.inputs['True'])
 
         points_socket = use_deviation_switch_node.outputs['Output']

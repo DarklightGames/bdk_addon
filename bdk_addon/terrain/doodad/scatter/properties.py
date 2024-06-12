@@ -135,12 +135,35 @@ def terrain_doodad_scatter_layer_mask_type_update_cb(self: 'BDK_PG_terrain_dooda
     ensure_scatter_layer_modifiers(context, terrain_doodad)
 
 
+def terrain_doodad_scatter_layer_geometry_source_name_search_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context, edit_text: str):
+    return [scatter_layer.name for scatter_layer in filter(lambda x: x != self, self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers)]
+
+
+def terrain_doodad_scatter_layer_geometry_source_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
+    scatter_layer = next((scatter_layer for scatter_layer in self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers if scatter_layer.name == self.geometry_source_name), None)
+    self.geometry_source_id = scatter_layer.id if scatter_layer else ''
+    ensure_scatter_layer_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad)
+
+
+def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
+    terrain_doodad = self.terrain_doodad_object.bdk.terrain_doodad
+    ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     id: StringProperty(name='ID', options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
     name: StringProperty(name='Name', default='Scatter Layer')
     mute: BoolProperty(name='Mute', default=False)
     terrain_doodad_object: PointerProperty(type=Object, name='Terrain Doodad Object', options={'HIDDEN'})
+    geometry_source: EnumProperty(name='Geometry Source', items=(
+        ('DOODAD', 'Doodad', 'Use the terrain doodad geometry'),
+        ('SCATTER_LAYER', 'Scatter Layer', 'Use the points of another scatter layer as the basis for the scatter')
+    ), default='DOODAD', update=terrain_doodad_scatter_layer_update_cb)
+    geometry_source_name: StringProperty(name='Geometry Source Name', default='', options={'HIDDEN'},
+                                         search=terrain_doodad_scatter_layer_geometry_source_name_search_cb,
+                                         update=terrain_doodad_scatter_layer_geometry_source_name_update_cb)
+    geometry_source_id: StringProperty(name='Geometry Source ID', default='', options={'HIDDEN'}, update=terrain_doodad_scatter_layer_update_cb)
     scatter_type: EnumProperty(name='Scatter Type', items=(
         ('ORDER', 'Order', 'The objects will be scattered in the order that they appear in the object list.'),
         ('RANDOM', 'Random', 'The objects will be scattered randomly based on the probability weight.'),

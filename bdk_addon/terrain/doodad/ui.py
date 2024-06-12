@@ -501,6 +501,8 @@ class BDK_PT_terrain_doodad_scatter_layer_mesh_settings(Panel):
         # Get selected scatter layer.
         if len(terrain_doodad.scatter_layers) == 0:
             return False
+        if terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index].geometry_source == 'SCATTER_LAYER':
+            return False
         return True
 
     def draw(self, context: 'Context'):
@@ -547,8 +549,9 @@ class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
         terrain_doodad = get_terrain_doodad(context.active_object)
         if terrain_doodad.object.type != 'CURVE':
             return False
-        # Get selected scatter layer.
         if len(terrain_doodad.scatter_layers) == 0:
+            return False
+        if terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index].geometry_source == 'SCATTER_LAYER':
             return False
         return True
 
@@ -910,6 +913,12 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
+        flow.prop(scatter_layer, 'geometry_source')
+
+        if scatter_layer.geometry_source == 'SCATTER_LAYER':
+            flow.prop(scatter_layer, 'geometry_source_name', text='Scatter Layer')
+
+        flow.separator()
         flow.prop(scatter_layer, 'global_seed')
         flow.separator()
         flow.prop(scatter_layer, 'density')

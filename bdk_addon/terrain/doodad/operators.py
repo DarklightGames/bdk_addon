@@ -65,9 +65,6 @@ class BDK_OT_terrain_doodad_add(Operator):
         context.view_layer.objects.active = terrain_doodad
         terrain_doodad.select_set(True)
 
-        # This needs to be called after the terrain doodad's parent is set.
-        ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
-
         return {'FINISHED'}
 
 
