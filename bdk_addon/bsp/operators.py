@@ -820,7 +820,6 @@ class BDK_OT_bsp_build(Operator):
             texture_v_data = [vector_transform_matrix @ Vector(texture_v) for texture_v in texture_v_data]
 
             for polygon in mesh_data.polygons:
-                # vertex_indices = [v for v in polygon.vertices]
                 vertices = []
                 for vertex_index in polygon.vertices:
                     co = mesh_data.vertices[vertex_index].co

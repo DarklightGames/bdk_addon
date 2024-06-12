@@ -1,6 +1,6 @@
 import math
 from io import StringIO
-from typing import List
+from typing import List, Tuple
 
 import bmesh
 import bpy
@@ -91,7 +91,7 @@ def get_poly_flags_int(poly_flags: set[str]) -> int:
     return poly_flags_int
 
 
-def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
+def bsp_brush_to_actor(context: Context, bsp_brush_object: Object, matrix_world: Matrix) -> T3DObject:
     object_name = sanitize_name(bsp_brush_object.name)
 
     bsp_brush = bsp_brush_object.bdk.bsp_brush
@@ -113,9 +113,15 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
 
     add_movement_properties_to_actor(actor, bsp_brush_object, do_rotation=False, do_scale=False)
 
+    pre_pivot = matrix_world @ bsp_brush_object.matrix_local.translation
+    pre_pivot.y = -pre_pivot.y
+
     brush = T3DObject('Brush')
     brush.properties['Name'] = object_name
+    brush.properties['PrePivot'] = pre_pivot
 
+    # TODO: We may need to actually use the world_matrix so that the brush actor matches the object's position.
+    #  The current system will "work" but may break in subtle ways if the actor is too far from the origin.
     poly_list = T3DObject('PolyList')
 
     bm = bmesh.new()
@@ -133,11 +139,12 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
     Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
     We let the actor's location handle the translation.
     """
-    translation, rotation, scale = bsp_brush_object.matrix_world.decompose()
-    scale_matrix = Matrix.Diagonal(scale).to_4x4()
-    rotation_matrix = rotation.to_matrix().to_4x4()
-    uv_transform_matrix = rotation_matrix @ scale_matrix.inverted()
-    transform_matrix = rotation_matrix @ scale_matrix
+    point_transform_matrix = matrix_world @ bsp_brush_object.matrix_local
+    translation, rotation, scale = point_transform_matrix.decompose()
+    vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
+
+    # Calculate normals.
+    bm.normal_update()
 
     for face_index, face in enumerate(bm.faces):
         material = bsp_brush_object.material_slots[face.material_index].material if face.material_index < len(bsp_brush_object.material_slots) else None
@@ -153,7 +160,7 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
 
         # Apply the transformation matrix to the vertices of the face. Also reverse the order of the vertices to match
         # Unreal's winding order.
-        vertices = [transform_matrix @ Vector(vert.co) for vert in reversed(face.verts)]
+        vertices = [point_transform_matrix @ Vector(vert.co) for vert in reversed(face.verts)]
         # Reverse the Y component of the vertices to match Unreal's coordinate system.
         vertices = [(vert.x, -vert.y, vert.z) for vert in vertices]
 
@@ -162,23 +169,17 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object) -> T3DObject:
         origin = face[bdk_origin_layer] if bdk_origin_layer is not None else (0.0, 0.0, 0.0)
 
         # Apply the transformation matrix to the texture U, texture V, and origin.
-        texture_u = uv_transform_matrix @ Vector(texture_u)
-        texture_v = uv_transform_matrix @ Vector(texture_v)
-        origin = transform_matrix @ Vector(origin)
+        texture_u = vector_transform_matrix @ Vector(texture_u)
+        texture_v = vector_transform_matrix @ Vector(texture_v)
+        origin = point_transform_matrix @ Vector(origin)
 
         # Reverse the Y component of the TextureU, TextureV, and Origin to match Unreal's coordinate system.
-        texture_u = Vector((texture_u.x, -texture_u.y, texture_u.z))
-        texture_v = Vector((texture_v.x, -texture_v.y, texture_v.z))
-        origin = Vector((origin.x, -origin.y, origin.z))
-
-        # TODO: probably have to do a lot of reversing of things
-
         poly.polygon = Polygon(
             link=face_index,
-            origin=origin,
+            origin=Vector((origin.x, -origin.y, origin.z)),
             normal=face.normal,
-            texture_u=texture_u,
-            texture_v=texture_v,
+            texture_u=Vector((texture_u.x, -texture_u.y, texture_u.z)),
+            texture_v=Vector((texture_v.x, -texture_v.y, texture_v.z)),
             vertices=vertices,
         )
 
@@ -314,19 +315,20 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
             # TODO: SpectatorCam, Projector, FluidSurface etc.
             return bpy_object.bdk.type != 'NONE' and bpy_object.type == 'MESH' and bpy_object.data is not None
 
-        selected_objects = list(filter(lambda obj: obj.select_get(), dfs_view_layer_objects(context.view_layer)))
-        bsp_brush_objects = []
+        selected_objects = list(filter(lambda obj: obj[0].select_get(), dfs_view_layer_objects(context.view_layer)))
+        bsp_brush_objects: List[Tuple[Object, Matrix]] = []
 
         # Start a progress bar.
         wm = context.window_manager
         wm.progress_begin(0, len(selected_objects))
 
         #
-        for obj_index, obj in enumerate(selected_objects):
+        for obj_index, selected_object in enumerate(selected_objects):
+            obj, asset_instance, matrix_world = selected_object
             match obj.bdk.type:
                 case 'BSP_BRUSH':
                     # Add the brush to the list of brushes to copy, we have to sort them by sort order.
-                    bsp_brush_objects.append(obj)
+                    bsp_brush_objects.append((obj, matrix_world))
                 case 'TERRAIN_DOODAD':
                     copy_actors += terrain_doodad_to_t3d_objects(context, obj)
                 case 'FLUID_SURFACE':
@@ -349,6 +351,7 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
                         # Adjust the camera's rotation to match the Unreal coordinate system.
                         map_object.children.append(camera_actor)
                     else:
+                        # TODO: DFS iterator should already handle this, but double-check.
                         if obj.instance_collection:
                             copy_actors += [create_static_mesh_actor(o, obj)
                                             for o in obj.instance_collection.all_objects
@@ -358,8 +361,8 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
             wm.progress_update(obj_index)
 
-        for bsp_brush_object in bsp_brush_objects:
-            copy_actors.append(bsp_brush_to_actor(context, bsp_brush_object))
+        for bsp_brush_object, matrix_world in bsp_brush_objects:
+            copy_actors.append(bsp_brush_to_actor(context, bsp_brush_object, matrix_world))
 
         for actor in copy_actors:
             map_object.children.append(actor)
