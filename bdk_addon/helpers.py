@@ -1,7 +1,10 @@
+import mathutils
+
+from .bdk.preferences import BdkAddonPreferences
 from .data import UReference
-from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, Image, ViewLayer, LayerCollection
+from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, Image, ViewLayer, LayerCollection, Collection
 from pathlib import Path
-from typing import Iterable, Optional, Dict, List, Tuple, Set
+from typing import Iterable, Optional, Dict, List, Tuple, Set, Callable
 import bpy
 import numpy
 import os
@@ -207,34 +210,6 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
     return mesh
 
 
-# TODO: add check for if we are running the BDK fork. this can gate features that are specific to the fork such as
-#  certain terrain doodad functionality.
-def are_t3d_dependencies_installed() -> bool:
-    try:
-        import t3dpy
-    except ModuleNotFoundError:
-        return False
-    return True
-
-def are_bsp_dependencies_installed() -> bool:
-    try:
-        import bdk_py
-    except ModuleNotFoundError:
-        return False
-    return True
-
-
-def are_bdk_dependencies_installed() -> bool:
-    return are_t3d_dependencies_installed() and are_bsp_dependencies_installed()
-
-def is_bdk_py_installed() -> bool:
-    try:
-        import bdk_py
-    except ModuleNotFoundError:
-        return False
-    return True
-
-
 # https://blenderartists.org/t/duplicating-pointerproperty-propertygroup-and-collectionproperty/1419096/2
 def copy_simple_property_group(source, target, ignore: Iterable[str] = set()):
     if not hasattr(source, "__annotations__"):
@@ -250,7 +225,7 @@ def copy_simple_property_group(source, target, ignore: Iterable[str] = set()):
 
 
 def should_show_bdk_developer_extras(context: Context):
-    return getattr(context.preferences.addons['bdk_addon'].preferences, 'developer_extras', False)
+    return getattr(context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'developer_extras', False)
 
 
 # TODO: maybe put all these attribute functions in their own file?
@@ -336,24 +311,48 @@ def dfs_view_layer_objects(view_layer: ViewLayer):
     A BDK-specific depth-first iterator of objects in a view layer meant to provide a means
     for level authors to create and maintain stable CSG brush ordering.
     * Collections are evaluated recursively.
-    * Object ordering respects object hierarchy (i.e., the parent object will be returned first, then all children, recursively).
+    * Object ordering respects object hierarchy (i.e., the parent object will be returned first, then all children,
+    recursively).
     Note that all sibling objects within a hierarchy level will be returned in an unpredictable order.
     """
-    visited: Set[Object] = set()
+    visited: Set[Tuple[Object, Optional[Object]]] = set()
+
+    # TODO: Handle instance collections.
+    # In order to do this, we will need to also output the instance in the iterator. It is then the responsibility of
+    # the caller to handle the tuple of object and instance.
+    # TODO: How to handle nested instances? (create a hierarchy of instances; just a flat list?)
+    # TODO: Make a function that takes an object and a list of (parent) asset objects and returns the world matrix.
 
     def layer_collection_objects_recursive(layer_collection: LayerCollection):
         for child in layer_collection.children:
             yield from layer_collection_objects_recursive(child)
+        # TODO: extract the logic below to a function that can be called for asset instances.
         # Iterate only the top-level objects in this collection first.
-        for obj in layer_collection.collection.objects:
-            if obj.parent is None or obj.parent not in set(layer_collection.collection.objects) and obj not in visited:
-                yield obj
-                visited.add(obj)
-                # `children_recursive` returns objects regardless of collection, so we need to make sure
-                # that the children are in this collection.
-                for child in obj.children_recursive:
-                    if child not in visited and child in set(layer_collection.collection.objects):
-                        yield child
-                        visited.add(child)
+        def collection_fn(
+            collection: Collection,
+            instance_object: Optional[Object] = None,
+            matrix_world: mathutils.Matrix = mathutils.Matrix.Identity(4)
+        ):
+            for obj in collection.objects:
+                if obj.parent is None or obj.parent not in set(collection.objects) and obj not in visited:
+                    # If this an instance, we need to recurse into it.
+                    if obj.instance_collection is not None:
+                        # Calculate the instance transform.
+                        instance_offset_matrix = mathutils.Matrix.Translation(-obj.instance_collection.instance_offset)
+                        # Recurse into the instance collection.
+                        yield from collection_fn(obj.instance_collection, obj, (obj.matrix_local @ instance_offset_matrix) @ matrix_world)
+                    else:
+                        yield (obj, instance_object, matrix_world)
+                        visited.add((obj, instance_object))
+                        # `children_recursive` returns objects regardless of collection, so we need to make sure
+                        # that the children are in this collection.
+                        # TODO: this needs to be changed so that we walk the hierarchy. this may have instances inside.
+                        #  Also, the obj.matrix_local is only relevant for direct descendants of `obj`.
+                        for child_obj in obj.children_recursive:
+                            if child_obj not in visited and child_obj in set(collection.objects):
+                                yield (child_obj, instance_object, matrix_world @ obj.matrix_local)
+                                visited.add((child_obj, instance_object))
+
+        yield from collection_fn(layer_collection.collection)
 
     yield from layer_collection_objects_recursive(view_layer.layer_collection)

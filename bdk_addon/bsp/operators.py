@@ -4,7 +4,7 @@ from mathutils import Vector, Matrix
 
 from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping, \
     ensure_bdk_level_visibility_modifier
-from ..helpers import is_bdk_py_installed, should_show_bdk_developer_extras, dfs_view_layer_objects
+from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects
 from .data import bsp_optimization_items, ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     POLY_FLAGS_ATTRIBUTE_NAME, BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, \
     MATERIAL_INDEX_ATTRIBUTE_NAME
@@ -652,6 +652,7 @@ class BDK_OT_bsp_build(Operator):
         default='RGB8',
     )
 
+    # TODO: add some sort of property to the faces of the level to track if it has been modified since the last build.
     apply_level_texturing_to_brushes: BoolProperty(name='Apply Texturing to Brushes', default=True,
                                                    description='Apply the level texturing to the brush polygons before building the level geometry')
     should_optimize_geometry: BoolProperty(name='Optimize Geometry', default=True)
@@ -703,12 +704,6 @@ class BDK_OT_bsp_build(Operator):
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-        # Make sure that the bdk_py module is available.
-        # TODO: Move this to the poll function once we are done debugging.
-        if not is_bdk_py_installed():
-            self.report({'ERROR'}, 'bdk_py module is not installed')
-            return {'CANCELLED'}
-
         # Now that we know the dependencies are installed, it's safe to import the module.
         from bdk_py import Poly, Brush, csg_rebuild, BspBuildOptions
 
@@ -749,14 +744,18 @@ class BDK_OT_bsp_build(Operator):
             for error in result.errors:
                 self.report({'WARNING'}, str(error))
 
-        def brush_object_filter(obj: Object):
+        def brush_object_filter(obj: Object, instance_obj: Optional[Object] = None):
             if not obj.bdk.type == 'BSP_BRUSH':
                 return False
-            if self.should_do_only_visible and not obj.visible_get():
-                return False
+            if self.should_do_only_visible:
+                if instance_obj is not None:
+                    if not instance_obj.visible_get():
+                        return False
+                elif not obj.visible_get():
+                    return False
             return True
 
-        brush_objects = [obj for obj in dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj)]
+        brush_objects = [(obj, instance_obj, matrix_world) for (obj, instance_obj, matrix_world) in dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj, instance_obj)]
 
         # This is a list of the materials used for the brushes. It is populated as we iterate over the brush objects.
         # We then use this at the end to create the materials for the level object.
@@ -771,7 +770,11 @@ class BDK_OT_bsp_build(Operator):
 
         # Add the brushes to the level object.
         level_object.bdk.level.brushes.clear()
-        for brush_index, brush_object in enumerate(brush_objects):
+        # TODO: We can now have multiple brushes with the same object. We must only add the object once, and only if it
+        #  is not part of an instance collection.
+        # TODO: this may even need to be done at the level of the data pointer.
+        concrete_brush_objects = filter(lambda x: x[1] is None, brush_objects)
+        for brush_index, (brush_object, instance_object, _) in enumerate(concrete_brush_objects):
             level_brush = level_object.bdk.level.brushes.add()
             level_brush.index = brush_index
             level_brush.brush_object = brush_object
@@ -779,7 +782,7 @@ class BDK_OT_bsp_build(Operator):
         timer = time.time()
 
         brushes: List[Brush] = []
-        for brush_index, brush_object in enumerate(brush_objects):
+        for brush_index, (brush_object, _, matrix_world) in enumerate(brush_objects):
             # Create a new Poly object for each face of the brush.
             polys = []
             mesh_data = brush_object.data
@@ -807,8 +810,9 @@ class BDK_OT_bsp_build(Operator):
 
             # Transform the origin and texture vectors to world-space.
             # TODO: extract this to a function so we can re-use it in the remapping operator.
-            point_transform_matrix = brush_object.matrix_world
-            translation, rotation, scale = brush_object.matrix_world.decompose()
+
+            point_transform_matrix = matrix_world @ brush_object.matrix_local
+            translation, rotation, scale = point_transform_matrix.decompose()
             vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
 
             origin_data = [point_transform_matrix @ Vector(origin) for origin in origin_data]

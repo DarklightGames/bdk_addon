@@ -33,8 +33,9 @@ def ensure_fluid_surface_node_tree(fluid_surface: 'BDK_PG_fluid_surface') -> Nod
 
         fluid_surface_node = node_tree.nodes.new('GeometryNodeBDKFluidSurface')
         set_material_node = node_tree.nodes.new('GeometryNodeSetMaterial')
+        flip_faces_node = node_tree.nodes.new('GeometryNodeFlipFaces')
 
-        set_material_node.inputs[2].default_value = fluid_surface.material
+        set_material_node.inputs['Material'].default_value = fluid_surface.material
 
         add_fluid_surface_driver(fluid_surface_node.inputs['FluidGridType'], 'fluid_grid_type')
         add_fluid_surface_driver(fluid_surface_node.inputs['FluidXSize'], 'fluid_x_size')
@@ -45,8 +46,9 @@ def ensure_fluid_surface_node_tree(fluid_surface: 'BDK_PG_fluid_surface') -> Nod
 
         # Internal
         node_tree.links.new(fluid_surface_node.outputs['Geometry'], set_material_node.inputs['Geometry'])
+        node_tree.links.new(set_material_node.outputs['Geometry'], flip_faces_node.inputs['Mesh'])
 
         # Output
-        node_tree.links.new(set_material_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        node_tree.links.new(flip_faces_node.outputs['Mesh'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(fluid_surface.id, items, build_function, should_force_build=True)

@@ -129,6 +129,8 @@ def add_noise_type_switch_nodes(
         if noise_type == 'PERLIN':
             noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
             noise_node.noise_dimensions = '2D'
+            # NOTE: There is a bug with using normal fDM noise where values end up as NaN. Use multi-fractal instead.
+            noise_node.noise_type = 'MULTIFRACTAL'
             noise_node.inputs['Scale'].default_value = 0.5
             noise_node.inputs['Detail'].default_value = 16
             noise_node.inputs['Distortion'].default_value = 0.5
@@ -487,7 +489,7 @@ def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: Nod
 
 
 def ensure_weighted_index_node_tree() -> NodeTree:
-    inputs = {
+    inputs = (
         ('OUTPUT', 'NodeSocketInt', 'Index'),
         ('INPUT', 'NodeSocketInt', 'Seed'),
         ('INPUT', 'NodeSocketFloat', 'Weight 0'),
@@ -498,7 +500,7 @@ def ensure_weighted_index_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Weight 5'),
         ('INPUT', 'NodeSocketFloat', 'Weight 6'),
         ('INPUT', 'NodeSocketFloat', 'Weight 7')
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

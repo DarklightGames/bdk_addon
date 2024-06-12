@@ -71,7 +71,7 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
         ('VERTEX', 'Vertex', '', 'VERTEXSEL', 0),
         ('EDGE', 'Edge', '', 'EDGESEL', 1),
         ('FACE', 'Face', '', 'FACESEL', 2)), default='FACE',
-                               description='The element of geometry that will be used to determine the area of effect.')
+                               description='The element of geometry that will be used to determine the area of effect')
 
     scatter_layer_id: StringProperty(name='Scatter Layer ID', default='', options={'HIDDEN'},
                                      update=terrain_doodad_sculpt_layer_scatter_layer_id_update_cb)

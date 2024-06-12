@@ -126,7 +126,7 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
             col.prop(paint_layer, 'distance_noise_offset', text='Offset')
             col.prop(paint_layer, 'distance_noise_factor', text='Factor')
             if paint_layer.noise_type == 'PERLIN':
-                col.prop(paint_layer, 'distance_noise_distortion', 'Distortion')
+                col.prop(paint_layer, 'distance_noise_distortion', text='Distortion')
 
 
 class BDK_PT_terrain_doodad_paint_layers(Panel):
@@ -431,16 +431,19 @@ class BDK_PT_terrain_doodad_scatter_layer_debug(Panel):
         depsgraph = context.evaluated_depsgraph_get()
 
         if scatter_layer.planter_object:
+            flow.prop(scatter_layer, 'planter_object', emboss=False, text='Planter')
             planter_object_evaluated = scatter_layer.planter_object.evaluated_get(depsgraph)
             for modifier in planter_object_evaluated.modifiers:
                 flow.prop(modifier, 'execution_time', emboss=False)
 
         if scatter_layer.seed_object:
+            flow.prop(scatter_layer, 'seed_object', emboss=False, text='Seed')
             seed_object_evaluated = scatter_layer.seed_object.evaluated_get(depsgraph)
             for modifier in seed_object_evaluated.modifiers:
                 flow.prop(modifier, 'execution_time', emboss=False)
 
         if scatter_layer.sprout_object:
+            flow.prop(scatter_layer, 'sprout_object', emboss=False, text='Sprout')
             sprout_object_evaluated = scatter_layer.sprout_object.evaluated_get(depsgraph)
             for modifier in sprout_object_evaluated.modifiers:
                 flow.prop(modifier, 'execution_time', emboss=False)
@@ -750,7 +753,7 @@ class BDK_PT_terrain_doodad_scatter_layer_objects(Panel):
         flow.use_property_split = True
         flow.use_property_decorate = False
 
-        flow.prop(scatter_layer, 'object_select_mode', text='Object Mode')
+        flow.prop(scatter_layer, 'object_select_mode', text='Select Mode')
 
         if scatter_layer.object_select_mode in {'RANDOM', 'WEIGHTED_RANDOM'}:
             flow.prop(scatter_layer, 'object_select_random_seed', text='Seed')
@@ -838,6 +841,8 @@ class BDK_PT_terrain_doodad_scatter_layer_mask(Panel):
 
         flow.prop(scatter_layer, 'mask_attribute_id', emboss=False)
 
+
+# TODO: rename this "actor properties" or something
 class BDK_PT_terrain_doodad_scatter_layer_advanced(Panel):
     bl_idname = 'BDK_PT_terrain_doodad_scatter_layer_advanced'
     bl_label = 'Advanced'

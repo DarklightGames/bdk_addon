@@ -72,7 +72,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-        named_attribute_node.data_type = 'FLOAT_COLOR'
+        named_attribute_node.data_type = 'FLOAT'
         named_attribute_node.inputs['Name'].default_value = dataptr_id
 
         add_node = node_tree.nodes.new('ShaderNodeMath')
@@ -101,7 +101,7 @@ def ensure_terrain_layer_node_group(name: str, dataptr_name: str, dataptr_index:
         node_tree.links.new(add_node.outputs['Value'], clamp_node.inputs['Value'])
         node_tree.links.new(clamp_node.outputs['Result'], store_named_attribute_node.inputs['Value'])
 
-        node_tree.links.new(input_node.outputs[0], store_named_attribute_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
         node_tree.links.new(store_named_attribute_node.outputs['Geometry'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
@@ -130,6 +130,7 @@ def ensure_noise_node_group() -> NodeTree:
         perlin_noise_node = node_tree.nodes.new('ShaderNodeTexNoise')
         perlin_noise_node.noise_dimensions = '2D'
         perlin_noise_node.normalize = True
+        perlin_noise_node.noise_type = 'MULTIFRACTAL'
 
         compare_node = node_tree.nodes.new('FunctionNodeCompare')
         compare_node.data_type = 'INT'

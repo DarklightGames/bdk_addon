@@ -12,58 +12,6 @@ import sys
 from ..helpers import guess_package_reference_from_names, load_bdk_material
 
 
-class BDK_OT_install_dependencies(Operator):
-    bl_idname = 'bdk.install_dependencies'
-    bl_label = 'Install Dependencies'
-
-    uninstall: BoolProperty(name='Uninstall', default=False)
-
-    def execute(self, context):
-        commands = list()
-
-        def _execute_command(args: Sequence[str]) -> int:
-            completed_process = subprocess.run(args)
-            return completed_process.returncode != 0
-
-
-        # Ensure PIP is installed.
-        commands.append(([sys.executable, '-m', 'ensurepip', '--upgrade'], 'An error occurred while installing PIP.'))
-
-        # TODO: have this be a YAML file.
-        modules = OrderedDict()
-        modules['t3dpy'] = 't3dpy'
-        # modules['bdk_py'] = r'C:\dev\bdk_py\target\wheels\bdk_py-0.1.0-cp311-none-win_amd64.whl'
-
-        # Install our requirements using PIP. TODO: use a requirements.txt file
-        if self.uninstall:
-            for module_name in modules.keys():
-                message = bpy.app.translations.pgettext('An error occurred while uninstalling {module_name}.')
-                message = message.format(module_name=module_name)
-                commands.append(([sys.executable, '-m', 'pip', 'uninstall', module_name, '-y'], message))
-
-        for module_name, module_path in modules.items():
-            message = bpy.app.translations.pgettext('An error occurred while installing {module_name}.')
-            message = message.format(module_name=module_name)
-            commands.append(([sys.executable, '-m', 'pip', 'install', module_path], message))
-
-        # Start a progress bar.
-        wm = context.window_manager
-        wm.progress_begin(0, len(commands))
-
-        for command_index, (command, error_message) in enumerate(commands):
-            wm.progress_update(command_index)
-            completed_process = subprocess.run(command)
-            if completed_process.returncode != 0:
-                self.report({'ERROR'}, error_message)
-                return {'CANCELLED'}
-
-        wm.progress_end()
-
-        self.report({'INFO'}, 'BDK dependencies installed successfully.')
-
-        return {'FINISHED'}
-
-
 # TODO: figure out a better name for this operator
 class BDK_OT_select_all_of_active_class(Operator):
     bl_idname = 'bdk.select_all_of_active_class'
@@ -485,7 +433,6 @@ class BDK_OT_asset_import_data_linked(Operator):
 
 
 classes = (
-    BDK_OT_install_dependencies,
     BDK_OT_select_all_of_active_class,
     BDK_OT_fix_bsp_import_materials,
     BDK_OT_generate_node_code,

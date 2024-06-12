@@ -5,6 +5,7 @@ from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
+from ..bdk.preferences import BdkAddonPreferences
 from ..helpers import get_terrain_info
 from ..node_helpers import ensure_shader_node_tree, ensure_input_and_output_nodes
 from ..data import UReference
@@ -81,7 +82,7 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
     last_shader_socket = None
 
-    bdk_build_paths = getattr(bpy.context.preferences.addons['bdk_addon'].preferences, 'build_paths')
+    bdk_build_paths = getattr(bpy.context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'build_paths')
     material_caches = [MaterialCache(bdk_build_path.path) for bdk_build_path in bdk_build_paths]
     material_builder = MaterialBuilder(material_caches, node_tree)
 

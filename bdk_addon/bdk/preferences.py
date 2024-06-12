@@ -1,7 +1,5 @@
 from bpy.types import AddonPreferences, Context, PropertyGroup, UIList, Operator, Event
-from bpy.props import StringProperty, BoolProperty, CollectionProperty, IntProperty, EnumProperty
-from pkg_resources import DistributionNotFound, get_distribution
-from .operators import BDK_OT_install_dependencies
+from bpy.props import CollectionProperty, IntProperty, BoolProperty, StringProperty, EnumProperty
 
 
 class BDK_UL_build_paths(UIList):
@@ -31,7 +29,7 @@ class BDK_OT_build_path_add(Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        addon_prefs = context.preferences.addons['bdk_addon'].preferences
+        addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
         build_path = addon_prefs.build_paths.add()
         build_path.path = self.directory
         addon_prefs.build_paths_index = len(addon_prefs.build_paths) - 1
@@ -46,7 +44,7 @@ class BDK_OT_build_path_remove(Operator):
     bl_description = 'Remove the selected build path from the list'
 
     def execute(self, context):
-        addon_prefs = context.preferences.addons['bdk_addon'].preferences
+        addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
         addon_prefs.build_paths.remove(addon_prefs.build_paths_index)
         addon_prefs.build_paths_index = min(addon_prefs.build_paths_index, len(addon_prefs.build_paths) - 1)
         return {'FINISHED'}
@@ -60,7 +58,7 @@ class BDK_OT_build_path_move(Operator):
     direction: EnumProperty(name='Direction', items=(('UP', 'Up', ''), ('DOWN', 'Down', '')))
 
     def execute(self, context):
-        preferences = context.preferences.addons['bdk_addon'].preferences
+        preferences = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
 
         if self.direction == 'UP':
             preferences.build_paths.move(preferences.build_paths_index, preferences.build_paths_index - 1)
@@ -71,8 +69,9 @@ class BDK_OT_build_path_move(Operator):
 
         return {'FINISHED'}
 
-
 class BdkAddonPreferences(AddonPreferences):
+    # NOTE: bl_idname is overridden in the __init__.py file.
+    # This is because it has access to the correct __package__ value.
     bl_idname = 'bdk_addon'
 
     build_paths: CollectionProperty(type=BDK_PG_build_path)
@@ -92,28 +91,6 @@ class BdkAddonPreferences(AddonPreferences):
         col.separator()
         col.operator('bdk.build_path_move', icon='TRIA_UP', text='').direction = 'UP'
         col.operator('bdk.build_path_move', icon='TRIA_DOWN', text='').direction = 'DOWN'
-
-        # TODO: parse the requirements.txt
-        required_packages = ['t3dpy', 'bdk_py']
-
-        # Dependencies.
-        has_uninstalled_dependencies = False
-        box = self.layout.box()
-        box.label(text='Dependencies', icon='SCRIPTPLUGINS')
-        for package in required_packages:
-            try:
-                dist = get_distribution(package)
-                box.label(text=f'{package} ({dist.version})', icon='CHECKMARK')
-            except DistributionNotFound as e:
-                box.label(text=package, icon='X')
-                has_uninstalled_dependencies = True
-
-        if has_uninstalled_dependencies:
-            box.operator(BDK_OT_install_dependencies.bl_idname)
-        else:
-            box.label(text='All dependencies are installed')
-            operator = box.operator(BDK_OT_install_dependencies.bl_idname, text='Reinstall')
-            operator.uninstall = True
 
 
 classes = (

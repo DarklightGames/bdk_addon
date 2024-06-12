@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .data import *
 from .reader import read_material
+from ..bdk.preferences import BdkAddonPreferences
 
 
 class MaterialCache:
@@ -931,7 +932,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
         default='')
 
     def execute(self, context: Context):
-        bdk_build_paths = getattr(context.preferences.addons['bdk_addon'].preferences, 'build_paths')
+        bdk_build_paths = getattr(context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'build_paths')
         bdk_build_paths = [x.path for x in bdk_build_paths if not x.mute]
 
         if not bdk_build_paths:

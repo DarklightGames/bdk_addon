@@ -20,7 +20,7 @@ from .data import T3DObject, Polygon
 from pathlib import Path
 from .importer import import_t3d
 from .writer import T3DWriter
-from ..helpers import are_t3d_dependencies_installed, dfs_view_layer_objects
+from ..helpers import dfs_view_layer_objects
 
 
 class BDK_OT_t3d_import_from_clipboard(Operator):
@@ -64,13 +64,6 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
         description='File path used for importing the T3DMap file',
         maxlen=1024,
         default='')
-
-    @classmethod
-    def poll(cls, context: Context):
-        if not are_t3d_dependencies_installed():
-            cls.poll_message_set('T3D dependencies are not installed')
-            return False
-        return True
 
     def execute(self, context: Context):
         contents = Path(self.filepath).read_text()
@@ -271,6 +264,8 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
             actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
             actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
 
+            # TODO: Individual actors should also have their own group. Just append the groups.
+            #  Also make sure that there are no commas, since it's used as a delimiter.
             if scatter_layer.actor_group != '':
                 actor.properties['Group'] = scatter_layer.actor_group
 

@@ -456,12 +456,12 @@ def ensure_vector_component_node_tree() -> NodeTree:
 
 
 def ensure_select_random_node_tree() -> NodeTree:
-    inputs = {
+    inputs = (
+        ('OUTPUT', 'NodeSocketBool', 'Selection'),
         ('INPUT', 'NodeSocketFloat', 'Factor'),
         ('INPUT', 'NodeSocketInt', 'Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
-        ('OUTPUT', 'NodeSocketBool', 'Selection'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -484,10 +484,10 @@ def ensure_select_random_node_tree() -> NodeTree:
 
 
 def ensure_get_tangent_node_tree() -> NodeTree:
-    inputs = {
-        ('INPUT', 'NodeSocketInt', 'Index'),
+    inputs = (
         ('OUTPUT', 'NodeSocketVector', 'Tangent'),
-    }
+        ('INPUT', 'NodeSocketInt', 'Index'),
+    )
 
     def build_function(node_tree: NodeTree):
 
@@ -529,11 +529,11 @@ def ensure_get_tangent_node_tree() -> NodeTree:
 
 
 def ensure_fence_point_tangent_and_normal_node_tree() -> NodeTree:
-    inputs = {
-        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+    inputs = (
         ('OUTPUT', 'NodeSocketVector', 'Normal'),
         ('OUTPUT', 'NodeSocketVector', 'Tangent'),
-    }
+        ('INPUT', 'NodeSocketGeometry', 'Geometry'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -688,14 +688,14 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
 
 
 def ensure_curve_to_points_node_tree() -> NodeTree:
-    inputs = {
-        ('INPUT', 'NodeSocketGeometry', 'Curve'),
-        ('INPUT', 'NodeSocketFloat', 'Length'),
-        ('INPUT', 'NodeSocketBool', 'Fence Mode'),
+    inputs = (
         ('OUTPUT', 'NodeSocketGeometry', 'Points'),
         ('OUTPUT', 'NodeSocketVector', 'Tangent'),
         ('OUTPUT', 'NodeSocketVector', 'Normal'),
-    }
+        ('INPUT', 'NodeSocketGeometry', 'Curve'),
+        ('INPUT', 'NodeSocketFloat', 'Length'),
+        ('INPUT', 'NodeSocketBool', 'Fence Mode'),
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -746,11 +746,11 @@ def ensure_curve_to_points_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_origin_offset_node_tree() -> NodeTree:
-    inputs = {
+    inputs = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketVector', 'Origin Offset'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1183,7 +1183,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
 
 
 def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
-    inputs = {
+    inputs = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketGeometry', 'Mesh'),
         ('INPUT', 'NodeSocketInt', 'Element Mode'),
         ('INPUT', 'NodeSocketInt', 'Face Distribute Method'),
@@ -1193,8 +1194,7 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketFloat', 'Face Distribute Poisson Density Factor'),
         ('INPUT', 'NodeSocketInt', 'Face Distribute Seed'),
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Points')
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1678,6 +1678,7 @@ def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_ter
             modifier = planter_object.modifiers.new(name=scatter_layer.id, type='NODES')
         else:
             modifier = planter_object.modifiers[scatter_layer.id]
+        # TODO: switch which node tree is used based on the fence mode.
         modifier.node_group = ensure_scatter_layer_planter_node_tree(scatter_layer)
 
         # Seed object
@@ -1698,11 +1699,11 @@ def ensure_scatter_layer_modifiers(context: Context, terrain_doodad: 'BDK_PG_ter
 
 
 def ensure_round_to_interval_node_tree() -> NodeTree:
-    inputs = {
+    inputs = (
         ('INPUT', 'NodeSocketFloat', 'Value'),
         ('INPUT', 'NodeSocketFloat', 'Interval'),
         ('OUTPUT', 'NodeSocketFloat', 'Value')
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1717,25 +1718,26 @@ def ensure_round_to_interval_node_tree() -> NodeTree:
         multiply_node.label = 'Multiply'
         multiply_node.operation = 'MULTIPLY'
 
-        # Internal Links
-        node_tree.links.new(divide_node.outputs[0], float_to_integer_node.inputs[0])  # Value -> Float
-        node_tree.links.new(input_node.outputs[0], multiply_node.inputs[1])  # Interval -> Value
-        node_tree.links.new(input_node.outputs[1], divide_node.inputs[0])  # Value -> Value
-        node_tree.links.new(multiply_node.outputs[0], output_node.inputs[0])  # Value -> Value
-        node_tree.links.new(float_to_integer_node.outputs[0], multiply_node.inputs[0])  # Integer -> Value
-        node_tree.links.new(input_node.outputs[0], divide_node.inputs[1])  # Interval -> Value
+        node_tree.links.new(input_node.outputs['Interval'], multiply_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Value'], divide_node.inputs[0])
+        node_tree.links.new(input_node.outputs['Interval'], divide_node.inputs[1])
+
+        node_tree.links.new(divide_node.outputs['Value'], float_to_integer_node.inputs['Float'])
+        node_tree.links.new(float_to_integer_node.outputs['Integer'], multiply_node.inputs[0])
+
+        node_tree.links.new(multiply_node.outputs['Value'], output_node.inputs['Value'])
 
     return ensure_geometry_node_tree('BDK Round To Interval', inputs, build_function)
 
 
 def ensure_snap_to_terrain_vertex_node_tree() -> NodeTree:
-    inputs = {
+    inputs = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketFloat', 'Quad Size'),
         ('INPUT', 'NodeSocketInt', 'Resolution'),
         ('INPUT', 'NodeSocketFloat', 'Factor'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Points')
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
@@ -1807,11 +1809,11 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
     """
     Creates a node tree that will shrinkwrap a curve to the terrain geometry.
     """
-    inputs = {
+    inputs = (
+        ('OUTPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
-        ('OUTPUT', 'NodeSocketGeometry', 'Curve')
-    }
+    )
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

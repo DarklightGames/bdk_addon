@@ -1,0 +1,6 @@
+[submodule "extern/bdk_py"]
+	path = extern/bdk_py
+	url = https://github.com/DarklightGames/bdk_py.git
+[submodule "extern/t3d-python"]
+	path = extern/t3d-python
+	url = https://github.com/DarklightGames/t3d-python.git

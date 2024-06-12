@@ -1,17 +1,5 @@
 from bpy.props import PointerProperty
 
-bl_info = {
-    "name": "Blender Development Kit (BDK)",
-    "author": "Colin Basnett",
-    "version": (0, 1, 0),
-    "blender": (3, 5, 0),
-    "description": "Blender Development Kit (BDK), a toolset for authoring levels for Unreal 1 & 2",
-    "warning": "",
-    "doc_url": "https://github.com/DarklightGames/bdk_addon",
-    "tracker_url": "https://github.com/DarklightGames/bdk_addon/issues",
-    "category": "Development"
-}
-
 if 'bpy' in locals():
     import importlib
 
@@ -80,13 +68,12 @@ if 'bpy' in locals():
     importlib.reload(bsp_operators)
     importlib.reload(bsp_ui)
 
-    if bdk_helpers.are_t3d_dependencies_installed():
-        # T3D
-        importlib.reload(t3d_data)
-        importlib.reload(t3d_operators)
-        importlib.reload(t3d_importer)
-        importlib.reload(t3d_writer)
-        importlib.reload(t3d_ui)
+    # T3D
+    importlib.reload(t3d_data)
+    importlib.reload(t3d_operators)
+    importlib.reload(t3d_importer)
+    importlib.reload(t3d_writer)
+    importlib.reload(t3d_ui)
 
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
@@ -160,13 +147,15 @@ else:
     from .bsp import operators as bsp_operators
     from .bsp import ui as bsp_ui
 
-    if bdk_helpers.are_t3d_dependencies_installed():
-        # T3D
-        from .t3d import data as t3d_data
-        from .t3d import ui as t3d_ui
-        from .t3d import operators as t3d_operators
-        from .t3d import importer as t3d_importer
-        from .t3d import writer as t3d_writer
+    # T3D
+    from .t3d import data as t3d_data
+    from .t3d import ui as t3d_ui
+    from .t3d import operators as t3d_operators
+    from .t3d import importer as t3d_importer
+    from .t3d import writer as t3d_writer
+
+# Ensure the preferences class is registered with the correct package name.
+bdk_preferences.BdkAddonPreferences.bl_idname = __package__
 
 
 import bpy
@@ -196,13 +185,9 @@ classes = actor_properties.classes + \
           bsp_ui.classes + \
           bdk_preferences.classes + \
           bdk_operators.classes + \
-          bdk_ui.classes
-
-# TODO: change this so that the operators that require the T3DMap dependency return false from their poll() method
-#  this will help with discoverability of the need to install the dependencies
-if bdk_helpers.are_t3d_dependencies_installed():
-    classes += t3d_ui.classes + \
-               t3d_operators.classes
+          bdk_ui.classes + \
+          t3d_ui.classes + \
+          t3d_operators.classes
 
 classes += bdk_properties.classes
 
@@ -264,10 +249,9 @@ def register():
 
     bpy.types.VIEW3D_MT_select_object.append(bdk_select_menu_func)
 
-    if bdk_helpers.are_t3d_dependencies_installed():
-        bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)
-        bpy.types.VIEW3D_MT_object_context_menu.append(bdk_t3d_copy_func)
-        bpy.types.OUTLINER_MT_collection.append(bdk_t3d_copy_func)
+    bpy.types.TOPBAR_MT_file_import.append(bdk_t3d_import_func)
+    bpy.types.VIEW3D_MT_object_context_menu.append(bdk_t3d_copy_func)
+    bpy.types.OUTLINER_MT_collection.append(bdk_t3d_copy_func)
 
     # Asset browser
     bpy.types.ASSETBROWSER_MT_context_menu.append(bdk_asset_browser_import_data_func)
@@ -298,10 +282,9 @@ def unregister():
     bpy.types.VIEW3D_MT_select_object.remove(bdk_select_menu_func)
 
     # T3DMap Copy (doodad/collections)
-    if bdk_helpers.are_t3d_dependencies_installed():
-        bpy.types.TOPBAR_MT_file_import.remove(bdk_t3d_import_func)
-        bpy.types.VIEW3D_MT_object_context_menu.remove(bdk_t3d_copy_func)
-        bpy.types.OUTLINER_MT_collection.remove(bdk_t3d_copy_func)
+    bpy.types.TOPBAR_MT_file_import.remove(bdk_t3d_import_func)
+    bpy.types.VIEW3D_MT_object_context_menu.remove(bdk_t3d_copy_func)
+    bpy.types.OUTLINER_MT_collection.remove(bdk_t3d_copy_func)
 
     # Asset browser
     bpy.types.ASSETBROWSER_MT_context_menu.remove(bdk_asset_browser_import_data_func)

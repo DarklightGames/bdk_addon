@@ -2,7 +2,6 @@ from bpy.types import PropertyGroup, Material, Object
 from bpy.props import EnumProperty, IntProperty, FloatProperty, PointerProperty, StringProperty
 
 from .builder import ensure_fluid_surface_node_tree
-from ..units import meters_to_unreal
 
 fluid_grid_type_items = (
     ('FGT_Square', 'Square', '', '', 0),
