@@ -567,6 +567,19 @@ def add_repeat_zone_nodes(node_tree: NodeTree, repeat_items: Iterable[Tuple[str,
     return input_node, output_node
 
 
+def add_boolean_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[bool, NodeSocket]]) -> NodeSocket:
+    math_node = node_tree.nodes.new(type='FunctionNodeBooleanMath')
+    math_node.operation = operation
+
+    for index, input in enumerate(inputs):
+        if isinstance(input, NodeSocket):
+            node_tree.links.new(input, math_node.inputs[index])
+        else:
+            math_node.inputs[index].default_value = input
+
+    return math_node.outputs['Boolean']
+
+
 def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Union[
         Dict[str, Union[int, float, Tuple[float, float, float], NodeSocket]],
         List[Union[int, float, Tuple[float, float, float], NodeSocket]]

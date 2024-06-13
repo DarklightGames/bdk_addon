@@ -7,7 +7,7 @@ from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, ap
 from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects
 from .data import bsp_optimization_items, ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     POLY_FLAGS_ATTRIBUTE_NAME, BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, \
-    MATERIAL_INDEX_ATTRIBUTE_NAME
+    MATERIAL_INDEX_ATTRIBUTE_NAME, READ_ONLY_ATTRIBUTE_NAME
 from .properties import csg_operation_items, poly_flags_items, BDK_PG_bsp_brush, get_poly_flags_keys_from_value
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
 from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material, Event
@@ -781,8 +781,17 @@ class BDK_OT_bsp_build(Operator):
 
         timer = time.time()
 
+        # A list of brush indices that are instances and not the original brush object.
+        # We keep track of these so that we can mark these brushes and their associated BSP surface as read-only in the
+        # level object and exclude them from BSP surface tool operations.
+        instanced_brush_indices = []
+
         brushes: List[Brush] = []
-        for brush_index, (brush_object, _, matrix_world) in enumerate(brush_objects):
+        for brush_index, (brush_object, asset_instance, matrix_world) in enumerate(brush_objects):
+
+            if asset_instance is not None:
+                instanced_brush_indices.append(brush_index)
+
             # Create a new Poly object for each face of the brush.
             polys = []
             mesh_data = brush_object.data
@@ -845,7 +854,8 @@ class BDK_OT_bsp_build(Operator):
                           name=brush_object.name,
                           polys=polys,
                           poly_flags=brush_object.bdk.bsp_brush.poly_flags,
-                          csg_operation=brush_object.bdk.bsp_brush.csg_operation)
+                          csg_operation=brush_object.bdk.bsp_brush.csg_operation
+                          )
 
             brushes.append(brush)
 
@@ -911,6 +921,7 @@ class BDK_OT_bsp_build(Operator):
         texture_us = np.zeros((valid_node_count, 3), dtype=np.float32)
         texture_vs = np.zeros((valid_node_count, 3), dtype=np.float32)
         poly_flags = np.zeros(valid_node_count, dtype=np.int32)
+        read_only = np.zeros(valid_node_count, dtype=np.bool_)
 
         # NOTE: For the sake of performance, we copy the data from the model to numpy arrays instead of accessing them
         #  directly. It is dramatically slower if accessed directly (1500ms vs 45ms). There is probably some sort of
@@ -920,6 +931,9 @@ class BDK_OT_bsp_build(Operator):
         vectors = np.array(model.vectors)
 
         invalid_face_indices = []
+
+        # Convert the list of instanced brush indices to a set for faster lookups.
+        instanced_brush_indices = set(instanced_brush_indices)
 
         node_index = 0
         for node in model.nodes:
@@ -935,6 +949,7 @@ class BDK_OT_bsp_build(Operator):
                 brush_ids[node_index] = surface.brush_id
                 brush_polygon_indices[node_index] = surface.brush_polygon_index
                 material_indices[node_index] = surface.material_index
+                read_only[node_index] = surface.brush_id in instanced_brush_indices
 
                 origins[node_index] = points[surface.base_point_index]
                 texture_us[node_index] = vectors[surface.texture_u_index]
@@ -957,6 +972,7 @@ class BDK_OT_bsp_build(Operator):
         texture_us = np.delete(texture_us, invalid_face_indices, axis=0)
         texture_vs = np.delete(texture_vs, invalid_face_indices, axis=0)
         poly_flags = np.delete(poly_flags, invalid_face_indices)
+        read_only = np.delete(read_only, invalid_face_indices)
 
         mesh_data = cast(Mesh, level_object.data)
         bm.to_mesh(mesh_data)
@@ -982,6 +998,7 @@ class BDK_OT_bsp_build(Operator):
         mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
         mesh_data.attributes.new(MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
         mesh_data.attributes.new(POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE')
+        mesh_data.attributes.new(READ_ONLY_ATTRIBUTE_NAME, 'BOOLEAN', 'FACE')
 
         # NOTE: Rather than using the reference returned from `attributes.new`, we need to do the lookup again.
         #  This is because references to the attributes are not stable across calls to `attributes.new`.
@@ -992,6 +1009,7 @@ class BDK_OT_bsp_build(Operator):
         mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_set('vector', texture_vs.flatten())
         mesh_data.attributes[MATERIAL_INDEX_ATTRIBUTE_NAME].data.foreach_set('value', material_indices)
         mesh_data.attributes[POLY_FLAGS_ATTRIBUTE_NAME].data.foreach_set('value', poly_flags)
+        mesh_data.attributes[READ_ONLY_ATTRIBUTE_NAME].data.foreach_set('value', read_only)
 
         # Make sure the level object has the UV geometry node modifier.
         _ensure_planar_texture_mapping_modifier(level_object)

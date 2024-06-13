@@ -111,23 +111,18 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object, matrix_world:
     actor.properties['CsgOper'] = csg_oper
     actor.properties['PolyFlags'] = get_poly_flags_int(bsp_brush.poly_flags)
 
-    add_movement_properties_to_actor(actor, bsp_brush_object, do_rotation=False, do_scale=False)
-
-    pre_pivot = matrix_world @ bsp_brush_object.matrix_local.translation
-    pre_pivot.y = -pre_pivot.y
+    point_transform_matrix = matrix_world @ bsp_brush_object.matrix_local
+    location = point_transform_matrix.translation
+    location.y = -location.y
+    actor.properties['Location'] = location
 
     brush = T3DObject('Brush')
     brush.properties['Name'] = object_name
-    brush.properties['PrePivot'] = pre_pivot
 
-    # TODO: We may need to actually use the world_matrix so that the brush actor matches the object's position.
-    #  The current system will "work" but may break in subtle ways if the actor is too far from the origin.
     poly_list = T3DObject('PolyList')
 
     bm = bmesh.new()
     bm.from_object(bsp_brush_object, context.evaluated_depsgraph_get())
-
-    # TODO: Ensure that the texturing info from the level geometry has been applied to the brushes before exporting.
 
     bdk_poly_flags_layer = bm.faces.layers.int.get(POLY_FLAGS_ATTRIBUTE_NAME, None)
     bdk_texture_u_layer = bm.faces.layers.float_vector.get(TEXTURE_U_ATTRIBUTE_NAME, None)
@@ -139,8 +134,8 @@ def bsp_brush_to_actor(context: Context, bsp_brush_object: Object, matrix_world:
     Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
     We let the actor's location handle the translation.
     """
-    point_transform_matrix = matrix_world @ bsp_brush_object.matrix_local
     translation, rotation, scale = point_transform_matrix.decompose()
+    point_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
     vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
 
     # Calculate normals.

@@ -1,10 +1,10 @@
 from typing import Callable, List
 
 import bpy
-from bpy.types import NodeTree
+from bpy.types import NodeTree, NodeSocket
 
 from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_vector_math_operation_nodes, \
-    add_math_operation_nodes
+    add_math_operation_nodes, add_boolean_math_operation_nodes
 from ..bsp.data import *
 
 
@@ -17,6 +17,7 @@ def ensure_bdk_bsp_surface_info_node_tree() -> NodeTree:
         ('OUTPUT', 'NodeSocketFloat', 'Light Map Scale'),
         ('OUTPUT', 'NodeSocketInt', 'Brush Index'),
         ('OUTPUT', 'NodeSocketInt', 'Brush Polygon Index'),
+        ('OUTPUT', 'NodeSocketBool', 'Read Only'),
     )
 
     def build_function(node_tree: NodeTree):
@@ -29,6 +30,7 @@ def ensure_bdk_bsp_surface_info_node_tree() -> NodeTree:
             (LIGHT_MAP_SCALE_ATTRIBUTE_NAME, 'FLOAT', 'Light Map Scale'),
             (BRUSH_INDEX_ATTRIBUTE_NAME, 'INT', 'Brush Index'),
             (BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, 'INT', 'Brush Polygon Index'),
+            (READ_ONLY_ATTRIBUTE_NAME, 'BOOLEAN', 'Read Only'),
         )
 
         for (name, data_type, output_name) in attributes:
@@ -51,6 +53,13 @@ def make_tool_node_tree(node_tree: NodeTree):
     node_tree.use_fake_user = True
 
 
+def add_surface_selection_nodes(node_tree: NodeTree, read_only_socket: NodeSocket) -> NodeSocket:
+    return add_boolean_math_operation_nodes(node_tree, 'AND', [
+        add_boolean_math_operation_nodes(node_tree, 'NOT', [read_only_socket]),
+        node_tree.nodes.new('GeometryNodeToolSelection').outputs['Selection']
+    ])
+
+
 def ensure_bdk_bsp_surface_pan_node_tree() -> NodeTree:
     items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -69,20 +78,20 @@ def ensure_bdk_bsp_surface_pan_node_tree() -> NodeTree:
         store_origin_attribute.data_type = 'FLOAT_VECTOR'
         store_origin_attribute.domain = 'FACE'
 
-        bsp_face_info_node_group = node_tree.nodes.new('GeometryNodeGroup')
-        bsp_face_info_node_group.node_tree = ensure_bdk_bsp_surface_info_node_tree()
+        bsp_face_surface_info_node = node_tree.nodes.new('GeometryNodeGroup')
+        bsp_face_surface_info_node.node_tree = ensure_bdk_bsp_surface_info_node_tree()
 
-        selection_node = node_tree.nodes.new('GeometryNodeToolSelection')
+        selection_socket = add_surface_selection_nodes(node_tree,  bsp_face_surface_info_node.outputs['Read Only'])
 
         origin_socket = add_vector_math_operation_nodes(node_tree, 'ADD', [
-            bsp_face_info_node_group.outputs['Origin'],
+            bsp_face_surface_info_node.outputs['Origin'],
             add_vector_math_operation_nodes(node_tree, 'ADD', [
                 add_vector_math_operation_nodes(node_tree, 'SCALE', {
-                    'Vector': add_vector_math_operation_nodes(node_tree, 'NORMALIZE', [bsp_face_info_node_group.outputs['U']]),
+                    'Vector': add_vector_math_operation_nodes(node_tree, 'NORMALIZE', [bsp_face_surface_info_node.outputs['U']]),
                     'Scale': input_node.outputs['U']
                 }),
                 add_vector_math_operation_nodes(node_tree, 'SCALE',{
-                    'Vector': add_vector_math_operation_nodes(node_tree, 'NORMALIZE', [bsp_face_info_node_group.outputs['V']]),
+                    'Vector': add_vector_math_operation_nodes(node_tree, 'NORMALIZE', [bsp_face_surface_info_node.outputs['V']]),
                     'Scale': add_math_operation_nodes(node_tree, 'MULTIPLY', [input_node.outputs['V'], -1.0])
                 })
             ])
@@ -93,7 +102,7 @@ def ensure_bdk_bsp_surface_pan_node_tree() -> NodeTree:
 
         # Internal
         node_tree.links.new(origin_socket, store_origin_attribute.inputs['Value'])
-        node_tree.links.new(selection_node.outputs['Selection'], store_origin_attribute.inputs['Selection'])
+        node_tree.links.new(selection_socket, store_origin_attribute.inputs['Selection'])
 
         # Output
         node_tree.links.new(store_origin_attribute.outputs['Geometry'], output_node.inputs['Geometry'])
@@ -125,7 +134,7 @@ def ensure_bdk_bsp_surface_rotate_node_tree() -> NodeTree:
 
         bsp_brush_surface_info_node = node_tree.nodes.new('GeometryNodeGroup')
         bsp_brush_surface_info_node.node_tree = ensure_bdk_bsp_surface_info_node_tree()
-        selection_node = node_tree.nodes.new('GeometryNodeToolSelection')
+        selection_socket = add_surface_selection_nodes(node_tree,  bsp_brush_surface_info_node.outputs['Read Only'])
         normal_node = node_tree.nodes.new('GeometryNodeInputNormal')
         axis_angle_to_rotation_node = node_tree.nodes.new('FunctionNodeAxisAngleToRotation')
         rotate_vector_u_node = node_tree.nodes.new('FunctionNodeRotateVector')
@@ -142,8 +151,8 @@ def ensure_bdk_bsp_surface_rotate_node_tree() -> NodeTree:
         node_tree.links.new(input_node.outputs['Geometry'], store_texture_u_attribute.inputs['Geometry'])
         node_tree.links.new(store_texture_u_attribute.outputs['Geometry'], store_texture_v_attribute.inputs['Geometry'])
         node_tree.links.new(store_texture_v_attribute.outputs['Geometry'], output_node.inputs['Geometry'])
-        node_tree.links.new(selection_node.outputs['Selection'], store_texture_u_attribute.inputs['Selection'])
-        node_tree.links.new(selection_node.outputs['Selection'], store_texture_v_attribute.inputs['Selection'])
+        node_tree.links.new(selection_socket, store_texture_u_attribute.inputs['Selection'])
+        node_tree.links.new(selection_socket, store_texture_v_attribute.inputs['Selection'])
 
     return ensure_geometry_node_tree('BDK BSP Surface Rotate', items, build_function)
 
@@ -571,6 +580,24 @@ def ensure_bdk_bsp_align_to_edge_tool_node_tree() -> NodeTree:
 
         object_self_node = node_tree.nodes.new('GeometryNodeSelfObject')
 
+        # Make sure that the active surface is not read-only.
+        bsp_surface_info_node = node_tree.nodes.new('GeometryNodeGroup')
+        bsp_surface_info_node.node_tree = ensure_bdk_bsp_surface_info_node_tree()
+
+        sample_index_node = node_tree.nodes.new('GeometryNodeSampleIndex')
+        sample_index_node.domain = 'FACE'
+        sample_index_node.data_type = 'BOOLEAN'
+
+        switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+        switch_node.input_type = 'GEOMETRY'
+
+        node_tree.links.new(copy_face_info_to_matching_brush_polygons_node.outputs['Geometry'], switch_node.inputs['False'])
+        node_tree.links.new(input_node.outputs['Geometry'], switch_node.inputs['True'])
+        node_tree.links.new(sample_index_node.outputs['Value'], switch_node.inputs['Switch'])
+        node_tree.links.new(input_node.outputs['Geometry'], sample_index_node.inputs['Geometry'])
+        node_tree.links.new(active_element_node.outputs['Index'], sample_index_node.inputs['Index'])
+        node_tree.links.new(bsp_surface_info_node.outputs['Read Only'], sample_index_node.inputs['Value'])
+
         # Input
         node_tree.links.new(input_node.outputs['Horizontal'], surface_alignment_translation_matrix_node.inputs['Horizontal'])
         node_tree.links.new(input_node.outputs['Vertical'], surface_alignment_translation_matrix_node.inputs['Vertical'])
@@ -607,7 +634,7 @@ def ensure_bdk_bsp_align_to_edge_tool_node_tree() -> NodeTree:
         node_tree.links.new(surface_alignment_translation_matrix_node.outputs['Extents'], scale_uv_and_offset_node.inputs['Face Extents'])
 
         # Output
-        node_tree.links.new(copy_face_info_to_matching_brush_polygons_node.outputs['Geometry'], output_node.inputs['Geometry'])
+        node_tree.links.new(switch_node.outputs['Output'], output_node.inputs['Geometry'])
 
     return ensure_geometry_node_tree('BDK BSP Surface Align To Edge', items, build_function)
 
@@ -1178,10 +1205,8 @@ ensure_functions: List[Callable[[], NodeTree]] = [
     ensure_bdk_move_edge_to_origin_node_tree,
     ensure_bdk_face_edge_direction_node_tree,
 
+    # Nodes
     ensure_bdk_bsp_surface_info_node_tree,
-    ensure_bdk_bsp_surface_pan_node_tree,
-    ensure_bdk_bsp_surface_rotate_node_tree,
-    ensure_bdk_bsp_surface_scale_uniform,
     ensure_bdk_bsp_surface_sample_face_node_tree,
     ensure_bdk_bsp_surface_texture_world_scale_node_tree,
     ensure_bdk_bsp_surface_alignment_translation_matrix_node_tree,
@@ -1190,11 +1215,17 @@ ensure_functions: List[Callable[[], NodeTree]] = [
     ensure_bdk_bsp_set_face_attributes_node_tree,
     ensure_bdk_bsp_surface_get_uv_scale,
     ensure_bdk_bsp_surface_scale_uv_and_offset_node_tree,
-    ensure_bdk_bsp_align_to_edge_tool_node_tree,
     ensure_bdk_bsp_copy_face_info_to_matching_brush_polygon_node_tree,
     ensure_bdk_bsp_matching_brush_face_selection_node_tree,
     ensure_bdk_bsp_align_face_to_xy_plane_node_tree,
     ensure_bdk_bsp_surface_active_face_material_size_node_tree,
+
+    # Tools
+    ensure_bdk_bsp_surface_pan_node_tree,
+    ensure_bdk_bsp_surface_rotate_node_tree,
+    ensure_bdk_bsp_surface_scale_uniform,
+    ensure_bdk_bsp_align_to_edge_tool_node_tree,
+
 ]
 
 
