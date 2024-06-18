@@ -12,7 +12,7 @@ from mathutils import Vector, Matrix, Euler
 from ..t3d.data import T3DObject
 from ..t3d.writer import T3DWriter
 from ..helpers import get_terrain_info, sanitize_name_for_unreal
-from ..g16.g16 import write_bmp_g16
+from ..io.g16 import write_bmp_g16
 
 
 def get_instance_offset(asset_instance: Object) -> Matrix:  # TODO: move to generic helpers

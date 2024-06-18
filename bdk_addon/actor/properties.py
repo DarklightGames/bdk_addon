@@ -1,4 +1,4 @@
-from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty, IntProperty, FloatVectorProperty
+from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty
 from bpy.types import PropertyGroup
 
 from ..units import meters_to_unreal
@@ -17,6 +17,7 @@ class BDK_PG_actor_properties(PropertyGroup):
     should_use_cull_distance: BoolProperty(name='Use Culling', default=True)
     cull_distance: FloatProperty(name='Cull Distance', default=meters_to_unreal(50.0), min=0.0, subtype='DISTANCE', description='The distance beyond which the actor will not be rendered')
     collision_flags: EnumProperty(name='Collision Flags', items=collision_flags_enum_items, options={'ENUM_FLAG'})
+    accepts_projectors: BoolProperty(name='Accepts Projectors', default=True)
 
 
 classes = (

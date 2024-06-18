@@ -9,6 +9,10 @@ if 'bpy' in locals():
 
     importlib.reload(actor_properties)
 
+    importlib.reload(repository_kernel)
+    importlib.reload(repository_properties)
+    importlib.reload(repository_ui)
+
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
@@ -82,13 +86,17 @@ else:
 
     from .actor import properties as actor_properties
 
+    from .bdk.repository import kernel as repository_kernel
+    from .bdk.repository import properties as repository_properties
+    from .bdk.repository import ui as repository_ui
+
     from .bdk import operators as bdk_operators
     from .bdk import properties as bdk_properties
     from .bdk import ui as bdk_ui
     from .bdk import preferences as bdk_preferences
 
      # G16
-    from .g16 import g16
+    from .io import g16
 
     # Material
     from .material import data as material_data
@@ -183,6 +191,8 @@ classes = actor_properties.classes + \
           bsp_properties.classes + \
           bsp_operators.classes + \
           bsp_ui.classes + \
+          repository_properties.classes + \
+          repository_ui.classes + \
           bdk_preferences.classes + \
           bdk_operators.classes + \
           bdk_ui.classes + \
@@ -231,6 +241,13 @@ def bdk_t3d_import_func(self, _context: bpy.types.Context):
 addon_keymaps = []
 
 
+def clear_preferences_runtime_data():
+    preferences = bpy.context.preferences.addons[__package__].preferences
+
+    for repository in preferences.repositories:
+        repository.runtime.has_been_scanned = False
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -264,6 +281,8 @@ def register():
         keymap = key_configuration.keymaps.new(name='3D View', space_type='VIEW_3D')
         addon_keymaps.append((keymap, keymap.keymap_items.new(bsp_operators.BDK_OT_bsp_build.bl_idname, 'B', 'PRESS', ctrl=True, shift=True)))
         addon_keymaps.append((keymap, keymap.keymap_items.new(bdk_operators.BDK_OT_toggle_level_visibility.bl_idname, 'L', 'PRESS', alt=True, shift=True)))
+
+    clear_preferences_runtime_data()
 
 
 def unregister():

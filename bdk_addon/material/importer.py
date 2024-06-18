@@ -25,9 +25,9 @@ class MaterialCache:
 
     def _build_package_paths(self):
         # Read the list of packages managed by BDK in the manifest.
-        manifest = {'files': {}}
+        manifest = {'packages': {}}
         try:
-            with open(os.path.join(self._root_directory, '.bdkmanifest'), 'r') as fp:
+            with open(os.path.join(self._root_directory, 'manifest.json'), 'r') as fp:
                 manifest = json.load(fp)
         except IOError as e:
             print(e)
@@ -37,7 +37,7 @@ class MaterialCache:
         # TODO: check if the files are still there! deleting things leaves dead references around.
 
         # Build list of texture packages.
-        file_paths = manifest['files'].keys()
+        file_paths = manifest['packages'].keys()
 
         package_paths = filter(lambda x: os.path.splitext(x)[1] in ['.u', '.utx', '.usx', '.rom'], file_paths)
 
@@ -52,7 +52,7 @@ class MaterialCache:
     def resolve_path_for_reference(self, reference: UReference) -> Optional[Path]:
         try:
             package_path = self._package_paths[reference.package_name]
-            return Path(os.path.join(self._root_directory, os.path.splitext(package_path)[0], reference.type_name,
+            return Path(os.path.join(self._root_directory, 'exports', os.path.splitext(package_path)[0], reference.type_name,
                                      f'{reference.object_name}.props.txt')).resolve()
         except KeyError:
             # The package could not be found in the material cache.
@@ -932,20 +932,17 @@ class BDK_OT_material_import(Operator, ImportHelper):
         default='')
 
     def execute(self, context: Context):
-        bdk_build_paths = getattr(context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'build_paths')
-        bdk_build_paths = [x.path for x in bdk_build_paths if not x.mute]
+        repositories = getattr(context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'repositories')
 
-        if not bdk_build_paths:
-            self.report({'ERROR_INVALID_CONTEXT'}, 'The BDK build path has not been set in the addon preferences.')
-            return {'CANCELLED'}
-
-        for bdk_build_path in bdk_build_paths:
-            if not os.path.isdir(bdk_build_path):
-                self.report({'ERROR_INVALID_CONTEXT'}, f'The BDK build path ({bdk_build_path}) is not a directory that '
+        for repository in repositories:
+            if not os.path.isdir(repository.cache_directory):
+                self.report({'ERROR_INVALID_CONTEXT'}, f'The BDK repository cache path ({repository.cache_directory}) is not a directory that '
                                                        f'could be found.')
                 return {'CANCELLED'}
 
-        material_caches = [MaterialCache(bdk_build_path) for bdk_build_path in bdk_build_paths]
+        repository_cache_directories = [str(Path(repository.cache_directory).resolve() / repository.id) for repository in repositories]
+
+        material_caches = [MaterialCache(repository_cache_directory) for repository_cache_directory in repository_cache_directories]
 
         # Get an Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))

@@ -260,6 +260,8 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
             actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
             actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
 
+            actor.properties['bAcceptsProjectors'] = actor_properties.accepts_projectors
+
             # TODO: Individual actors should also have their own group. Just append the groups.
             #  Also make sure that there are no commas, since it's used as a delimiter.
             if scatter_layer.actor_group != '':

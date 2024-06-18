@@ -1035,6 +1035,8 @@ class BDK_PT_terrain_doodad_scatter_layer_object_actor_properties(Panel):
         if actor_properties.should_use_cull_distance:
             flow.prop(actor_properties, 'cull_distance')
 
+        flow.prop(actor_properties, 'accepts_projectors')
+
         flow.separator()
         flow.prop(actor_properties, 'collision_flags')
 

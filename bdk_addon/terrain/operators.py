@@ -11,7 +11,7 @@ from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolPrope
 from bpy.types import Operator, Context, Mesh, Object, Event
 from bpy_extras.io_utils import ExportHelper
 
-from ..g16.g16 import read_bmp_g16
+from ..io.g16 import read_bmp_g16
 from ..data import move_direction_items
 from .context import get_selected_terrain_paint_layer_node
 from .layers import add_terrain_deco_layer

@@ -2,9 +2,9 @@ import mathutils
 
 from .bdk.preferences import BdkAddonPreferences
 from .data import UReference
-from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, Image, ViewLayer, LayerCollection, Collection
+from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, ViewLayer, LayerCollection, Collection
 from pathlib import Path
-from typing import Iterable, Optional, Dict, List, Tuple, Set, Callable
+from typing import Iterable, Optional, Dict, List, Tuple, Set
 import bpy
 import numpy
 import os
@@ -211,7 +211,9 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
 
 
 # https://blenderartists.org/t/duplicating-pointerproperty-propertygroup-and-collectionproperty/1419096/2
-def copy_simple_property_group(source, target, ignore: Iterable[str] = set()):
+def copy_simple_property_group(source, target, ignore=None):
+    if ignore is None:
+        ignore = set()
     if not hasattr(source, "__annotations__"):
         return
     # TODO: this doesn't work for inherited annotations or PointerProperty types

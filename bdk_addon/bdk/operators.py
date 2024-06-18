@@ -1,13 +1,10 @@
 from collections import OrderedDict
 from pathlib import Path
-from typing import Set, Sequence
+from typing import Set
 
 import bpy
-from bpy.types import Operator, Context, Node, Event, NodeSocket
-from bpy.props import BoolProperty, StringProperty
-
-import subprocess
-import sys
+from bpy.types import Operator, Context, Node, Event
+from bpy.props import StringProperty
 
 from ..helpers import guess_package_reference_from_names, load_bdk_material
 
