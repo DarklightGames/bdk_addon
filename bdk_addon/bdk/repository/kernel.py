@@ -117,6 +117,9 @@ class Manifest:
                 exported_time = package_data.get('exported_time', None)
                 if isinstance(exported_time, str):
                     package.exported_time = datetime.datetime.fromisoformat(exported_time)
+                build_time = package_data.get('build_time', None)
+                if isinstance(build_time, str):
+                    package.build_time = datetime.datetime.fromisoformat(build_time)
         return manifest
 
     def write(self, path: Path):

@@ -26,14 +26,17 @@ class BDK_UL_repositories(UIList):
         layout.prop(item, 'name', emboss=False, icon='DISK_DRIVE', text='')
 
 
-class BDK_MT_repository_menu(Menu):
-    bl_idname = 'BDK_MT_repository_menu'
+class BDK_MT_repository_special(Menu):
+    bl_idname = 'BDK_MT_repository_special'
     bl_label = 'Repository Specials'
 
     def draw(self, context):
         layout = self.layout
         layout.operator('bdk.repository_cache_delete', icon='REMOVE')
         layout.operator('bdk.repository_cache_invalidate', icon='FILE_REFRESH')
+        layout.separator()
+        layout.operator('bdk.repository_build_dependency_graph', icon='MODIFIER')
+
 
 
 class BDK_MT_repository_add(Menu):
@@ -42,14 +45,25 @@ class BDK_MT_repository_add(Menu):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator('bdk.repository_add', icon='ADD')
-        layout.operator('bdk.repository_add_existing', icon='FILE_FOLDER')
+        layout.operator('bdk.repository_create', icon='ADD')
+        layout.operator('bdk.repository_link', icon='LINKED')
+
+
+class BDK_MT_repository_remove(Menu):
+    bl_idname = 'BDK_MT_repository_remove'
+    bl_label = 'Remove Repository'
+    def draw(self, context):
+        layout = self.layout
+        layout.operator('bdk.repository_unlink', icon='UNLINKED')
+        layout.operator('bdk.repository_delete', icon='TRASH')
+
 
 
 
 classes = (
     BDK_UL_repositories,
     BDK_UL_repository_packages,
-    BDK_MT_repository_menu,
+    BDK_MT_repository_special,
     BDK_MT_repository_add,
+    BDK_MT_repository_remove,
 )

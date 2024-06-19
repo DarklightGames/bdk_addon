@@ -459,11 +459,9 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     umodel_path = str(get_umodel_path())
     args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"', f'-path="{repository.game_directory}"', str(package_path)]
 
-    print(package.path)
+    process = subprocess.run(args, capture_output=True)
 
-    p = subprocess.run(args, capture_output=True)
-
-    return (p, package)
+    return (process, package)
 
 
 def repository_package_build(repository: BDK_PG_repository, package: BDK_PG_repository_package):
@@ -495,7 +493,7 @@ def repository_package_build(repository: BDK_PG_repository, package: BDK_PG_repo
         f.write('=' * 80 + '\n\n')
         f.write(process.stderr.decode())
 
-    process.check_returncode()
+    return process, package
 
 
 class BDK_OT_repository_package_build(Operator):
