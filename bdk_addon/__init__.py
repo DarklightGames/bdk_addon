@@ -13,6 +13,8 @@ if 'bpy' in locals():
     importlib.reload(repository_properties)
     importlib.reload(repository_ui)
 
+    importlib.reload(package_reader)
+
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
@@ -97,6 +99,9 @@ else:
 
      # G16
     from .io import g16
+
+    # Package
+    from .package import reader as package_reader
 
     # Material
     from .material import data as material_data

@@ -32,7 +32,7 @@ class BDK_MT_repository_special(Menu):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator('bdk.repository_cache_delete', icon='REMOVE')
+        layout.operator('bdk.repository_cache_delete', icon='TRASH')
         layout.operator('bdk.repository_cache_invalidate', icon='FILE_REFRESH')
         layout.separator()
         layout.operator('bdk.repository_build_dependency_graph', icon='MODIFIER')

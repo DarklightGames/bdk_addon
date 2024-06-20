@@ -1,7 +1,9 @@
+import pprint
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 import shutil
+import json
 
 import bpy.app
 from bpy.types import AddonPreferences, PropertyGroup
@@ -11,8 +13,8 @@ from bpy_extras.io_utils import ImportHelper
 from .repository.kernel import repository_runtime_update, load_repository_manifest, is_game_directory_and_mod_valid, \
     repository_cache_delete
 from .repository.properties import BDK_PG_repository, BDK_PG_repository_package
-from .repository.ui import BDK_UL_repositories, BDK_UL_repository_packages, BDK_MT_repository_menu, \
-    BDK_MT_repository_add
+from .repository.ui import BDK_UL_repositories, BDK_UL_repository_packages, BDK_MT_repository_special, \
+    BDK_MT_repository_add, BDK_MT_repository_remove
 
 import uuid
 from bpy.props import StringProperty
@@ -81,6 +83,95 @@ class BDK_OT_repository_cache_delete(Operator):
 
         repository_cache_delete(repository)
         repository_runtime_update(repository)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_build_dependency_graph(Operator):
+    bl_idname = 'bdk.repository_build_dependency_graph'
+    bl_label = 'Build Dependency Graph'
+
+    def execute(self, context):
+        addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        from ..package.reader import get_package_dependencies
+        import networkx
+
+        print('Building dependency graph')
+
+        graph = networkx.DiGraph()
+
+        context.window_manager.progress_begin(0, len(repository.runtime.packages))
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            jobs = []
+
+            def read_dependencies(package):
+                package_path = Path(repository.game_directory) / package.path
+                dependencies = get_package_dependencies(str(package_path))
+                return package, dependencies
+
+            for package in repository.runtime.packages:
+                jobs.append(executor.submit(read_dependencies, package))
+
+            count = 0
+
+            nodes = set()
+            edges = set()
+
+            for future in as_completed(jobs):
+                package, dependencies = future.result()
+                package_name = os.path.splitext(os.path.basename(package.path))[0].upper()
+                nodes.add(package_name)
+                for dependency in dependencies:
+                    dependency = dependency.upper()
+                    nodes.add(dependency)
+                    edges.add((package_name, dependency))
+                context.window_manager.progress_update(count)
+                count += 1
+
+            graph.add_nodes_from(nodes)
+            graph.add_edges_from(edges)
+
+        context.window_manager.progress_end()
+
+        print(f'Dependency graph built ({len(graph.nodes)} nodes, {len(graph.edges)} edges)')
+
+        print(f'Detecting cycles...')
+
+        # Find any cycles in the graph.
+        cycles = list(networkx.simple_cycles(graph))
+
+        if len(cycles) > 0:
+            print(f'Found {len(cycles)} cycles')
+            for cycle in cycles:
+                print(cycle)
+        else:
+            print('No cycles found')
+
+        # Remove any edges that create cycles. This will have the effect of making the topographical sort not work as
+        # expected. For our purposes, however, this should be fine, since dependency cycles are relatively rare in
+        # Unreal packages.
+        # TODO: In the future, we could do a more sophisticated cycle removal by building packages in stages.
+        edges = set()
+        for cycle in cycles:
+            edges |= set([(cycle[i], cycle[i + 1]) for i in range(len(cycle) - 1)] + [(cycle[-1], cycle[0])])
+        for u, v in edges:
+            graph.remove_edge(u, v)
+
+        print('Performing topographical sort...')
+
+        # Get topographical order of the graph.
+        try:
+            topographical_order = list(reversed(list(networkx.topological_sort(graph))))
+        except networkx.exception.NetworkXUnfeasible:
+            self.report({'ERROR'}, 'Dependency graph has a cycle, cannot build')
+            return {'CANCELLED'}
+
+        import pprint as pp
+
+        pp.pprint(topographical_order)
 
         return {'FINISHED'}
 
@@ -228,9 +319,9 @@ class BDK_OT_repository_cache_invalidate(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_repository_add_existing(Operator, ImportHelper):
-    bl_idname = 'bdk.repository_add_existing'
-    bl_label = 'Add Existing Repository'
+class BDK_OT_repository_link(Operator, ImportHelper):
+    bl_idname = 'bdk.repository_link'
+    bl_label = 'Link Repository'
 
     filename_ext = '*.json'
     filter_glob: StringProperty(default='*.json', options={'HIDDEN'})
@@ -276,9 +367,7 @@ class BDK_OT_repository_add_existing(Operator, ImportHelper):
             if mod:
                 repository_name += f' ({self.mod})'
             repository.name = repository_name
-
-            # TODO: making an assumption that the name of the folder matches the ID for now, double check this.
-            repository.cache_directory = str(Path(self.filepath).parent.parent)
+            repository.cache_directory = str(Path(self.filepath).parent)
 
             repository_runtime_update(repository)
 
@@ -289,14 +378,15 @@ class BDK_OT_repository_add_existing(Operator, ImportHelper):
 
             tag_redraw_all_windows(context)
 
-            self.report({'INFO'}, f'Added repository "{repository.name}"')
+            self.report({'INFO'}, f'Linked repository "{repository.name}"')
 
         return {'FINISHED'}
 
 
-class BDK_OT_repository_add(Operator):
-    bl_idname = 'bdk.repository_add'
-    bl_label = 'Add New Repository'
+class BDK_OT_repository_create(Operator):
+    bl_idname = 'bdk.repository_create'
+    bl_label = 'Create Repository'
+    bl_description = 'Create a new repository'
 
     game_directory: StringProperty(name='Game Directory', subtype='DIR_PATH', description='The game\'s root directory')
     mod: StringProperty(name='Mod', description='The name of the mod directory (optional)')
@@ -370,8 +460,7 @@ class BDK_OT_repository_add(Operator):
         repository_cache_directory.mkdir(parents=True, exist_ok=True)
 
         # Write a repository.json file with the bare-bones information for recovery.
-        import json
-        with open(repository_cache_directory / 'repository.json', 'w') as f:
+        with open(repository_cache_directory / f'{repository.id}.json', 'w') as f:
             data = {
                 'id': repository.id,
                 'game_directory': self.game_directory,
@@ -397,39 +486,71 @@ def repository_asset_library_unlink(context, repository) -> int:
     return removed_count
 
 
-class BDK_OT_repository_remove(Operator):
-    bl_idname = 'bdk.repository_remove'
-    bl_label = 'Remove Repository'
-    bl_description = 'Remove the selected repository from the list'
+def repository_metadata_delete(repository):
+     repository_metadata_file = (Path(repository.cache_directory) / f'{repository.id}.id').resolve()
+     if repository_metadata_file.exists():
+         repository_metadata_file.unlink()
 
-    should_delete_cache: BoolProperty(name='Delete Cache From Disk', default=True, description='Delete the repository cache from disk. This action cannot be undone')
-    should_unlink_asset_library: BoolProperty(name='Unlink Asset Library', default=True, description='Remove the asset library from Blender')
+
+def poll_has_repository_selected(context):
+    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+    return (len(addon_prefs.repositories) > 0 and
+            addon_prefs.repositories_index >= 0 and
+            addon_prefs.repositories_index < len(addon_prefs.repositories))
+
+
+class BDK_OT_repository_unlink(Operator):
+    bl_idname = 'bdk.repository_unlink'
+    bl_label = 'Unlink Repository'
+    bl_description = 'Unlink the selected repository and unlink the asset library. This will not alter the files, and you can re-link the asset library later'
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_selected(context)
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, 'should_delete_cache')
-
-        row = layout.row()
-        row.enabled = not self.should_delete_cache
-        row.prop(self, 'should_unlink_asset_library')
 
     def execute(self, context):
         addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
 
-        if self.should_delete_cache:
-            repository_cache_delete(repository)
-
-        if self.should_unlink_asset_library:
-            asset_libraries_removed = repository_asset_library_unlink(context, repository)
+        repository_asset_library_unlink(context, repository)
 
         addon_prefs.repositories.remove(addon_prefs.repositories_index)
         addon_prefs.repositories_index = min(addon_prefs.repositories_index, len(addon_prefs.repositories) - 1)
 
-        self.report({'INFO'}, f'Removed repository. Unlinked {asset_libraries_removed} asset libraries.')
+        tag_redraw_all_windows(context)
+
+        self.report({'INFO'}, f'Unlinked repository "{repository.name}"')
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_delete(Operator):
+    bl_idname = 'bdk.repository_delete'
+    bl_label = 'Delete Repository'
+    bl_description = 'Remove the selected repository and delete all associated data. This operation cannot be undone'
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_selected(context)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        repository_cache_delete(repository)
+        repository_asset_library_unlink(context, repository)
+        repository_metadata_delete(repository)
+
+        addon_prefs.repositories.remove(addon_prefs.repositories_index)
+        addon_prefs.repositories_index = min(addon_prefs.repositories_index, len(addon_prefs.repositories) - 1)
+
+        self.report({'INFO'}, f'Deleted repository "{repository.name}"')
 
         tag_redraw_all_windows(context)
 
@@ -654,7 +775,7 @@ class BdkAddonPreferences(AddonPreferences):
                                        'repositories_index', rows=3)
             col = row.column(align=True)
             col.menu(BDK_MT_repository_add.bl_idname, icon='ADD', text='')
-            col.operator(BDK_OT_repository_remove.bl_idname, icon='REMOVE', text='')
+            col.menu(BDK_MT_repository_remove.bl_idname, icon='REMOVE', text='')
 
             repository = self.repositories[
                 self.repositories_index] if self.repositories_index >= 0 and self.repositories_index < len(
@@ -693,7 +814,7 @@ class BdkAddonPreferences(AddonPreferences):
                         col.separator()
                         col.operator(BDK_OT_repository_build_asset_library.bl_idname, icon='ASSET_MANAGER', text='')
                         col.separator()
-                        col.menu(BDK_MT_repository_menu.bl_idname, icon='DOWNARROW_HLT', text='')
+                        col.menu(BDK_MT_repository_special.bl_idname, icon='DOWNARROW_HLT', text='')
 
                         if repository.runtime.packages_index >= 0:
                             package_header, package_panel = repository_panel.panel('Package', default_closed=True)
@@ -741,9 +862,11 @@ classes = (
     BDK_OT_repository_cache_invalidate,
     BDK_OT_repository_cache_delete,
     BDK_OT_repository_scan,
-    BDK_OT_repository_add,
-    BDK_OT_repository_add_existing,
-    BDK_OT_repository_remove,
+    BDK_OT_repository_create,
+    BDK_OT_repository_link,
+    BDK_OT_repository_delete,
+    BDK_OT_repository_unlink,
+    BDK_OT_repository_build_dependency_graph,
     BDK_OT_check_umodel,
     BdkAddonPreferences,
 )
