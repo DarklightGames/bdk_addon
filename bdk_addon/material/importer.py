@@ -1,8 +1,7 @@
 import math
 import copy
-import json
 import os
-from typing import Dict, cast, Tuple, Callable, Any
+from typing import Dict, cast, Tuple, Callable, Any, List, Optional
 
 import bpy
 from bpy.props import StringProperty
@@ -10,70 +9,14 @@ from bpy.types import ShaderNodeTexImage, NodeTree, NodeSocket, Context, Node, O
 from bpy_extras.io_utils import ImportHelper
 from pathlib import Path
 
-from .data import *
-from .reader import read_material
+from .cache import MaterialCache
+from .data import UColorModifier, UCombiner, UConstantColor, UCubemap, UFinalBlend, UTexCoordSource, UTexEnvMap, \
+    UTexOscillator, UTexPanner, UTexRotator, UTexScaler, UTexture, UShader, UVariableTexPanner, UVertexColor, \
+    UFadeColor, UMaterialSwitch, EAlphaOperation, EColorOperation, EColorFadeType, UMaterial, ETexCoordSrc, \
+    ETexEnvMapType, ETexOscillationType, ETexRotationType, ETexClampMode
 from ..bdk.preferences import BdkAddonPreferences
-
-
-class MaterialCache:
-    def __init__(self, root_directory: str):
-        self._root_directory = root_directory
-        self._materials: Dict[str, UMaterial] = {}
-        self._package_paths: Dict[str, str] = {}
-
-        self._build_package_paths()
-
-    def _build_package_paths(self):
-        # Read the list of packages managed by BDK in the manifest.
-        manifest = {'packages': {}}
-        try:
-            with open(os.path.join(self._root_directory, 'manifest.json'), 'r') as fp:
-                manifest = json.load(fp)
-        except IOError as e:
-            print(e)
-        except UnicodeDecodeError as e:
-            print(e)
-
-        # TODO: check if the files are still there! deleting things leaves dead references around.
-
-        # Build list of texture packages.
-        file_paths = manifest['packages'].keys()
-
-        package_paths = filter(lambda x: os.path.splitext(x)[1] in ['.u', '.utx', '.usx', '.rom'], file_paths)
-
-        # Register package name with package directory
-        for package_path in package_paths:
-            package_name = os.path.splitext(os.path.basename(package_path))[0]
-            # Just like in UE2, the root folder takes precedence when there is a conflict.
-            # TODO: technically not working here, would need to sort and put mod folders later in the list.
-            if package_name not in self._package_paths:
-                self._package_paths[package_name] = package_path
-
-    def resolve_path_for_reference(self, reference: UReference) -> Optional[Path]:
-        try:
-            package_path = self._package_paths[reference.package_name]
-            return Path(os.path.join(self._root_directory, 'exports', os.path.splitext(package_path)[0], reference.type_name,
-                                     f'{reference.object_name}.props.txt')).resolve()
-        except KeyError:
-            # The package could not be found in the material cache.
-            print(f'Could not find package {reference.package_name} in material cache.')
-            pass
-        except RuntimeError:
-            pass
-        return None
-
-    def load_material(self, reference: UReference) -> Optional[UMaterial]:
-        if reference is None:
-            return None
-        key = str(reference)
-        if key in self._materials:
-            return self._materials[str(reference)]
-        path = self.resolve_path_for_reference(reference)
-        if path is None:
-            return None
-        material = read_material(str(path))
-        self._materials[key] = material
-        return material
+from ..bdk.repository.properties import BDK_PG_repository
+from ..data import UReference
 
 
 class MaterialSocketOutputs:
@@ -120,26 +63,29 @@ class MaterialBuilder:
         }
 
     def _load_image(self, reference: UReference):
+        extensions = ['.tga', '.png']  # A little dicey 🤔
         # myLevel images are stored within the blend files.
         if reference.package_name == 'myLevel':
-            print(f'Loading myLevel image from blend file \'{reference.object_name}.tga\'')
-            image = bpy.data.images.get((f'{reference.object_name}.tga', None), None)
-            if image is None:
-                print(f'Could not find image \'{reference.object_name}.tga\' in blend file.')
-            return image
+            for extension in extensions:
+                image_path = f'{reference.object_name}{extension}'
+                # The key is a tuple of the image path and the library to look in. Since we're not looking in a library,
+                # the library is None.
+                key = (image_path, None)
+                image = bpy.data.images.get(key, None)
+                if image is not None:
+                    return image
+            raise RuntimeError(f'Could not find image {reference.object_name} in myLevel')
 
-        # TODO: This is fundamentally unstable if the images are not being stored within the packages?
         for material_cache in self._material_caches:
             image_path = material_cache.resolve_path_for_reference(reference)
             image_path = str(image_path)
-            extensions = ['.tga']  # A little dicey 🤔
             for extension in extensions:
                 file_path = image_path.replace('.props.txt', extension)
                 if os.path.isfile(file_path):
                     image = bpy.data.images.load(str(file_path), check_existing=True)
                     image.alpha_mode = 'CHANNEL_PACKED'
                     return image
-        raise RuntimeError(f'Could not find file for reference {reference}')
+        raise RuntimeError(f'Could not find file for reference {reference} in {len(self._material_caches)} material caches')
 
     def load_material(self, reference: Optional[UReference]):
         if reference is None:
@@ -930,19 +876,31 @@ class BDK_OT_material_import(Operator, ImportHelper):
         description='File path used for importing the PSA file',
         maxlen=1024,
         default='')
+    repository_id: StringProperty(
+        name='Repository ID',
+        description='The ID of the repository to search for the material in',
+        maxlen=1024,
+        default=''
+    )
+
+    # TODO: use only a single asset library; it makes no sense to go searching in asset libraries unrelated to the
+    #  current repository.
 
     def execute(self, context: Context):
         repositories = getattr(context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'repositories')
 
-        for repository in repositories:
-            if not os.path.isdir(repository.cache_directory):
-                self.report({'ERROR_INVALID_CONTEXT'}, f'The BDK repository cache path ({repository.cache_directory}) is not a directory that '
-                                                       f'could be found.')
-                return {'CANCELLED'}
+        def find_repository_by_id(repository_id: str) -> Optional[BDK_PG_repository]:
+            for repository in repositories:
+                if repository.id == repository_id:
+                    return repository
+            return None
 
-        repository_cache_directories = [str(Path(repository.cache_directory).resolve() / repository.id) for repository in repositories]
+        repository = find_repository_by_id(self.repository_id)
+        if repository is None:
+            self.report({'ERROR_INVALID_CONTEXT'}, f'Repository with ID "{self.repository_id}" not found.')
+            return {'CANCELLED'}
 
-        material_caches = [MaterialCache(repository_cache_directory) for repository_cache_directory in repository_cache_directories]
+        material_caches = [MaterialCache(Path(repository.cache_directory) / repository.id)]
 
         # Get an Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))

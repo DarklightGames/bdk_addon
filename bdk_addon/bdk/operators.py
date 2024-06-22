@@ -4,7 +4,7 @@ from typing import Set
 
 import bpy
 from bpy.types import Operator, Context, Node, Event
-from bpy.props import StringProperty
+from bpy.props import StringProperty, IntProperty
 
 from ..helpers import guess_package_reference_from_names, load_bdk_material
 

@@ -11,9 +11,11 @@ class BDK_OT_link_material(Operator):
     bl_options = {'REGISTER', 'INTERNAL'}
 
     reference: StringProperty()
+    repository_id: StringProperty()
 
     def execute(self, context: Context):
-        material = load_bdk_material(self.reference)
+        print(f'Linking material with repository ID {self.repository_id} and reference {self.reference}')
+        material = load_bdk_material(self.reference, self.repository_id)
         if material is None:
             return {'CANCELLED'}
         return {'FINISHED'}

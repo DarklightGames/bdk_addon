@@ -54,6 +54,11 @@ class BDK_PT_scene(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         scene = context.scene
+
+        row = layout.row()
+        row.enabled = False
+        row.prop(scene.bdk, 'repository_id', text='Repository ID')
+
         layout.prop(scene.bdk, 'level_object', text='Level Object')
 
 

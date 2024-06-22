@@ -7,17 +7,44 @@ class BDK_PG_repository_package_pattern(PropertyGroup):
 
 
 repository_package_status_enum_items = (
-    ('NEEDS_EXPORT', 'Needs Export', 'The package contents need to be exported', 'TIME', 0),
-    ('NEEDS_BUILD', 'Needs Build', 'The package library needs to be built', 'TIME', 1),
+    ('NEEDS_EXPORT', 'Export Pending', 'The package contents need to be exported', 'EXPORT', 0),
+    ('NEEDS_BUILD', 'Build Pending', 'The package library needs to be built', 'MOD_BUILD', 1),
     ('UP_TO_DATE', 'Up To Date', 'The package is up to date', 'CHECKMARK', 2),
 )
 
+filter_repository_package_status_enum_items = (
+    ('ALL', 'All', 'Show all packages', 'NONE', 3),
+) + repository_package_status_enum_items
+
+
+def repository_package_is_enabled_update_cb(self, context):
+    from ..preferences import BdkAddonPreferences
+    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+    repository = None
+    for r in addon_prefs.repositories:
+        if r.id == self.repository_id:
+            repository = r
+            break
+    if repository is None:
+        return
+    repository.runtime.disabled_package_count += 1 if not self.is_enabled else -1
+    match self.status:
+        case 'NEEDS_EXPORT':
+            repository.runtime.need_export_package_count += 1 if self.is_enabled else -1
+        case 'NEEDS_BUILD':
+            repository.runtime.need_build_package_count += 1 if self.is_enabled else -1
+        case 'UP_TO_DATE':
+            repository.runtime.up_to_date_package_count += 1 if self.is_enabled else -1
+
 
 class BDK_PG_repository_package(PropertyGroup):
+    repository_id: StringProperty(name='Repository ID', options={'HIDDEN'})
     index: IntProperty()
     filename: StringProperty(name='File Name')
     path: StringProperty(name='Path')
     status: EnumProperty(name='Status', items=repository_package_status_enum_items, default='NEEDS_EXPORT')
+    is_selected: BoolProperty(name='Selected', default=False)
+    is_enabled: BoolProperty(name='Enabled', default=True, update=repository_package_is_enabled_update_cb)
     modified_time: IntProperty(name='Modified Time', default=0)
     exported_time: IntProperty(name='Exported Time', default=0)
     build_time: IntProperty(name='Build Time', default=0)
@@ -33,9 +60,10 @@ class BDK_PG_repository_runtime(PropertyGroup):
     package_patterns: CollectionProperty(type=BDK_PG_repository_package_pattern, name='Package Patterns', options={'SKIP_SAVE'})
     package_patterns_index: IntProperty(name='Index', default=-1, options={'SKIP_SAVE'})
 
-    up_to_date_package_count: IntProperty(name='Up To Date Package Count', default=0, options={'SKIP_SAVE'})
-    need_export_package_count: IntProperty(name='Need Export Package Count', default=0, options={'SKIP_SAVE'})
-    need_build_package_count: IntProperty(name='Need Build Package Count', default=0, options={'SKIP_SAVE'})
+    disabled_package_count: IntProperty(name='Disabled Package Count', default=0)
+    up_to_date_package_count: IntProperty(name='Up To Date Package Count', default=0)
+    need_export_package_count: IntProperty(name='Need Export Package Count', default=0)
+    need_build_package_count: IntProperty(name='Need Build Package Count', default=0)
 
 
 class BDK_PG_repository(PropertyGroup):

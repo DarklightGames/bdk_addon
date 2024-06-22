@@ -1,15 +1,19 @@
+from pathlib import Path
+
 import bmesh
 import bpy
-from bpy.types import Mesh, Object, NodeTree
+from bpy.types import Mesh, Object, NodeTree, Context
 from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
 from ..bdk.preferences import BdkAddonPreferences
+from ..bdk.repository.properties import BDK_PG_repository
 from ..helpers import get_terrain_info
 from ..node_helpers import ensure_shader_node_tree, ensure_input_and_output_nodes
 from ..data import UReference
-from ..material.importer import MaterialBuilder, MaterialCache
+from ..material.cache import MaterialCache
+from ..material.importer import MaterialBuilder
 
 
 def _ensure_terrain_paint_layer_uv_group_node() -> NodeTree:
@@ -66,7 +70,15 @@ def _ensure_terrain_paint_layer_uv_group_node() -> NodeTree:
     return ensure_shader_node_tree('BDK TerrainLayerUV', items, build_function, should_force_build=True)
 
 
-def build_terrain_material(terrain_info_object: bpy.types.Object):
+def get_scene_repository(context: Context) -> Optional[BDK_PG_repository]:
+    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+    for repository in addon_prefs.repositories:
+        if repository.id == context.scene.bdk.repository_id:
+            return repository
+    return None
+
+
+def build_terrain_material(terrain_info_object: Object):
     terrain_info = get_terrain_info(terrain_info_object)
     if terrain_info is None:
         raise RuntimeError('Invalid object')
@@ -82,8 +94,12 @@ def build_terrain_material(terrain_info_object: bpy.types.Object):
 
     last_shader_socket = None
 
-    bdk_build_paths = getattr(bpy.context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'build_paths')
-    material_caches = [MaterialCache(bdk_build_path.path) for bdk_build_path in bdk_build_paths]
+    # The scene should probably have a reference to the repository.
+    repository = get_scene_repository(bpy.context)
+
+    material_caches = []
+    if repository is not None:
+        material_caches.append(MaterialCache(Path(repository.cache_directory) / repository.id))
     material_builder = MaterialBuilder(material_caches, node_tree)
 
     def add_paint_layer_input_driver(node, input_prop: Union[str | int], paint_layer_prop: str):

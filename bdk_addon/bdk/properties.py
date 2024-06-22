@@ -51,6 +51,7 @@ class BDK_PG_terrain_doodad_preset(PropertyGroup):
 class BDK_PG_scene(PropertyGroup):
     level_object: PointerProperty(type=Object, poll=lambda self, obj: obj.bdk.type == 'LEVEL', name='Level Object',
                                   description='The mesh object to use for the level geometry')
+    repository_id: StringProperty(name='Repository ID', default='')
     terrain_doodad_presets: CollectionProperty(name='Terrain Doodad Presets', type=BDK_PG_terrain_doodad_preset)
     terrain_doodad_presets_index: IntProperty(options={'HIDDEN'})
 

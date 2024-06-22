@@ -94,7 +94,7 @@ def get_bdk_asset_library_paths() -> List[Path]:
     return asset_library_paths
 
 
-def get_blend_file_for_package(package_name: str) -> Optional[str]:
+def get_blend_file_for_package(package_name: str, repository_id: str) -> Optional[str]:
     asset_library_paths = get_bdk_asset_library_paths()
     for asset_library_path in asset_library_paths:
         blend_files = [fp for fp in asset_library_path.glob(f'**/{package_name}.blend') if fp.is_file()]
@@ -128,7 +128,7 @@ def guess_package_reference_from_names(names: Iterable[str]) -> Dict[str, Option
     return name_references
 
 
-def load_bdk_material(reference: str):
+def load_bdk_material(reference: str, repository_id: str) -> Optional[Material]:
     reference = UReference.from_string(reference)
 
     if reference is None:
@@ -143,7 +143,7 @@ def load_bdk_material(reference: str):
     #  before trying to load it.
     # See if we already have the material loaded.
 
-    blend_file = get_blend_file_for_package(reference.package_name)
+    blend_file = get_blend_file_for_package(reference.package_name, repository_id)
 
     if blend_file is None:
         print('Failed to find blend file for package reference: ' + reference.package_name)
@@ -174,7 +174,7 @@ def load_bdk_material(reference: str):
 
 
 # TODO: should actually do the object, not the mesh data
-def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
+def load_bdk_static_mesh(reference: str, repository_id: str) -> Optional[Mesh]:
 
     reference = UReference.from_string(reference)
 
@@ -194,7 +194,7 @@ def load_bdk_static_mesh(reference: str) -> Optional[Mesh]:
     # Strip the group name since we don't use it in the BDK library files.
     reference.group_name = None
 
-    blend_file = get_blend_file_for_package(reference.package_name)
+    blend_file = get_blend_file_for_package(reference.package_name, repository_id)
 
     if blend_file is None:
         return None

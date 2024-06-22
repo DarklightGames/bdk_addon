@@ -6,7 +6,6 @@ from typing import List
 import bpy
 import os
 import glob
-import addon_utils
 from argparse import ArgumentParser
 
 material_class_names = [
@@ -66,7 +65,7 @@ def build(args):
         object_name = os.path.basename(file).replace('.props.txt', '')
 
         try:
-            bpy.ops.bdk.import_material(filepath=filepath)
+            bpy.ops.bdk.import_material(filepath=filepath, repository_id=args.repository_id)
         except Exception as e:
             print(e)
             continue
@@ -89,7 +88,8 @@ def build(args):
                 bpy.ops.import_scene.psk(
                     filepath=filename,
                     should_import_skeleton=False,
-                    should_import_materials=True
+                    should_import_materials=True,
+                    bdk_repository_id=args.repository_id
                 )
             except Exception as e:
                 print(e)
@@ -130,14 +130,11 @@ def build(args):
 
 
 if __name__ == '__main__':
-    # TODO: these won't work because the key of the addon is unpredictable.
-    # addon_utils.enable('io_scene_psk_psa')
-    # addon_utils.enable('bdk_addon')
-
     parser = ArgumentParser()
     subparsers = parser.add_subparsers(title='command')
     build_subparser = subparsers.add_parser('build')
     build_subparser.add_argument('input_directory')
+    build_subparser.add_argument('repository_id')
     build_subparser.add_argument('--output_path', required=False, default=None)
     build_subparser.set_defaults(func=build)
     args = sys.argv[sys.argv.index('--')+1:]
