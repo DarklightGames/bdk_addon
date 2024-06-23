@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import EnumProperty
+from bpy.props import EnumProperty, BoolProperty
 from bpy.types import UIList, Menu
 from fnmatch import fnmatch
 
@@ -59,6 +59,7 @@ class BDK_UL_repository_packages(UIList):
             ('DISABLED', 'Disabled', 'Show only disabled packages'),
         ),
     )
+    use_filter_show: BoolProperty(default=True)
 
     def draw_filter(self, context, layout):
         row = layout.row()
@@ -90,15 +91,6 @@ class BDK_UL_repository_packages(UIList):
 
         row.prop(item, 'is_enabled', text='', icon='CHECKBOX_HLT' if item.is_enabled else 'CHECKBOX_DEHLT', emboss=False)
 
-    # def draw_filter(self, context, layout):
-    #     pg = getattr(context.scene, 'psa_import')
-    #     row = layout.row()
-    #     sub_row = row.row(align=True)
-    #     sub_row.prop(pg, 'sequence_filter_name', text='')
-    #     sub_row.prop(pg, 'sequence_use_filter_invert', text='', icon='ARROW_LEFTRIGHT')
-    #     sub_row.prop(pg, 'sequence_use_filter_regex', text='', icon='SORTBYEXT')
-    #     sub_row.prop(pg, 'sequence_filter_is_selected', text='', icon='CHECKBOX_HLT')
-
     def filter_items(self, context, data, property_):
         packages = getattr(data, property_)
         flt_flags = filter_packages(self, packages)
@@ -125,9 +117,10 @@ class BDK_MT_repository_special(Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator('bdk.repository_cache_delete', icon='TRASH')
-        layout.operator('bdk.repository_cache_invalidate', icon='FILE_REFRESH')
+        layout.operator_menu_enum('bdk.repository_cache_invalidate', 'mode', icon='FILE_REFRESH')
         layout.separator()
         layout.operator('bdk.repository_packages_set_enabled_by_pattern')
+        layout.operator('bdk.debug_material_cache_lookup')
 
 
 

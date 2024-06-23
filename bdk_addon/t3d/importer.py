@@ -95,7 +95,7 @@ class DefaultActorImporter(ActorImporter):
                 # Material slot index out of range.
                 continue
 
-            material = load_bdk_material(str(texture_reference))
+            material = load_bdk_material(context, str(texture_reference))
             if material is None:
                 print(f'Failed to load material for {texture_reference}')
                 continue
@@ -120,15 +120,13 @@ def set_brush_display_properties(bpy_object: Object):
     bpy_object.show_in_front = True
 
 
-def poly_list_to_mesh(name: str, poly_list: T3dObject, pre_pivot: Vector) -> Mesh:
+def poly_list_to_mesh(context: Context, name: str, poly_list: T3dObject, pre_pivot: Vector) -> Mesh:
     origins = []
     texture_us = []
     texture_vs = []
     poly_flags = []
     materials = dict()
     mesh_data = bpy.data.meshes.new(name)
-
-    bm = None
 
     bm = bmesh.new()
 
@@ -139,7 +137,7 @@ def poly_list_to_mesh(name: str, poly_list: T3dObject, pre_pivot: Vector) -> Mes
             if material_reference not in materials:
                 # TODO: there are performance issues with load_bdk_material that probably make copy-pasting
                 #  large T3D brush payloads very slow because of the I/O bottleneck.
-                materials[material_reference] = load_bdk_material(material_reference)
+                materials[material_reference] = load_bdk_material(context, material_reference)
         else:
             materials[None] = None
             # print(f'Warning: Missing or invalid material reference for polygon in brush {t3d_actor["Name"]}')
@@ -252,7 +250,7 @@ class BrushImporter(ActorImporter):
                 continue
 
             poly_list = child.children[0]
-            mesh_data = poly_list_to_mesh(t3d_actor['Name'], poly_list, pre_pivot)
+            mesh_data = poly_list_to_mesh(context, t3d_actor['Name'], poly_list, pre_pivot)
             break
 
         if mesh_data is None:
@@ -313,7 +311,7 @@ class VolumeImporter(BrushImporter):
                 continue
 
             poly_list = child.children[0]
-            mesh_data = poly_list_to_mesh(t3d_actor['Name'], poly_list, pre_pivot)
+            mesh_data = poly_list_to_mesh(context, t3d_actor['Name'], poly_list, pre_pivot)
             break
 
         if mesh_data is None:
@@ -489,7 +487,7 @@ class TerrainInfoImporter(ActorImporter):
             # Texture
             texture_reference = layer.get('Texture', None)
             if texture_reference is not None:
-                paint_layer.material = load_bdk_material(str(texture_reference))
+                paint_layer.material = load_bdk_material(context, str(texture_reference))
 
         deco_density_maps: Dict[str, bpy.types.Attribute] = {}
 

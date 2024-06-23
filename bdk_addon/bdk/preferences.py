@@ -8,7 +8,7 @@ import json
 import bpy.app
 import networkx
 from bpy.types import AddonPreferences, PropertyGroup
-from bpy.props import CollectionProperty, IntProperty, BoolProperty, PointerProperty
+from bpy.props import CollectionProperty, IntProperty, BoolProperty, PointerProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper
 
 from .repository.kernel import repository_runtime_update, load_repository_manifest, is_game_directory_and_mod_valid, \
@@ -25,6 +25,7 @@ import subprocess
 import os
 
 from ..data import UReference
+from ..material.cache import MaterialCache
 
 
 class BDK_OT_repository_scan(Operator):
@@ -207,7 +208,7 @@ class BDK_OT_repository_package_build(Operator):
 
         # Build the export path.
         context.window_manager.progress_begin(0, 1)
-        process, _ = repository_package_build(repository, package.path, package.filename)
+        process, _ = repository_package_build(repository, package.path, os.path.splitext(package.filename)[0])
 
         if process.returncode != 0:
             self.report({'ERROR'}, f'Failed to build package: {package.path}')
@@ -237,7 +238,7 @@ class BDK_OT_repository_package_cache_invalidate(Operator):
         package = repository.runtime.packages[self.index]
 
         manifest = load_repository_manifest(repository)
-        manifest.invalidate_package_cache(package.path)
+        manifest.invalidate_package(package.path)
         manifest.write()
 
         repository_runtime_update(repository)
@@ -253,7 +254,7 @@ class BDK_OT_repository_build_asset_library(Operator):
     @classmethod
     def poll(cls, context):
         addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
-        if len(addon_prefs.repositories) > 0:
+        if len(addon_prefs.repositories) == 0:
             return False
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
         count = repository.runtime.need_export_package_count + repository.runtime.need_build_package_count
@@ -311,7 +312,7 @@ class BDK_OT_repository_build_asset_library(Operator):
         package_build_levels = [level for level in package_build_levels if level]
 
         # Convert package_build_levels to a list of path and filename tuples.
-        package_build_levels = [[(x.path, x.filename) for x in level] for level in package_build_levels]
+        package_build_levels = [[(x.path, os.path.splitext(x.filename)[0]) for x in level] for level in package_build_levels]
 
         # Count the number of commands that will be executed.
         command_count = len(packages_to_export) + len(packages_to_build)
@@ -412,6 +413,15 @@ class BDK_OT_repository_cache_invalidate(Operator):
     bl_description = 'Invalidate the cache of the repository. This will mark all packages as needing to be exported and built, but will not delete any files. This action cannot be undone'
     bl_options = {'INTERNAL'}
 
+    mode: EnumProperty(
+        name='Mode',
+        items=(
+            ('ASSETS_ONLY', 'Assets Only', 'Invalidate only the assets cache'),
+            ('ALL', 'All', 'Invalidate all caches'),
+        ),
+        default='ALL'
+    )
+
     def invoke(self, context, event):
         return context.window_manager.invoke_confirm(self, event)
 
@@ -421,8 +431,13 @@ class BDK_OT_repository_cache_invalidate(Operator):
 
         manifest = load_repository_manifest(repository)
 
-        for package in repository.runtime.packages:
-            manifest.invalidate_package_cache(package.path)
+        match self.mode:
+            case 'ASSETS_ONLY':
+                for package in repository.runtime.packages:
+                    manifest.invalidate_package_assets(package.path)
+            case 'ALL':
+                for package in repository.runtime.packages:
+                    manifest.invalidate_package(package.path)
 
         manifest.write()
 
@@ -847,22 +862,8 @@ class BdkAddonPreferences(AddonPreferences):
                 repository_header.label(text='Repository')
 
                 if repository_panel is not None:
-
-                    paths_header, paths_panel = repository_panel.panel('Paths', default_closed=True)
-                    paths_header.label(text='Paths')
-
-                    if paths_panel is not None:
-                    col = repository_panel.column()
-                    col.enabled = False
-                    col.use_property_split = True
-                    col.prop(repository, 'id', emboss=False)
-                    col.prop(repository, 'game_directory')
-                    if repository.mod:
-                        col.prop(repository, 'mod', emboss=False)
-                    col.prop(repository, 'cache_directory')
-
                     # If we have not yet scanned the repository, we need to present the user with a button to scan it.
-                    packages_header, packages_panel = repository_panel.panel('Packages', default_closed=True)
+                    packages_header, packages_panel = repository_panel.panel('Packages', default_closed=False)
                     row = packages_header.row()
                     row.label(text='Packages')
                     col = row.column(align=True)
@@ -887,18 +888,25 @@ class BdkAddonPreferences(AddonPreferences):
                             col.label(text='button to scan the repository.')
 
                         else:
-                            row = repository_panel.row()
+                            main_row = repository_panel.row()
 
-                            col = row.column()
-                            col.alignment = 'LEFT'
+                            row_left = main_row.column()
+                            row_left.alignment = 'LEFT'
 
-                            row = col.row()
-                            row.label(text=f'{repository.runtime.disabled_package_count}', icon='CHECKBOX_DEHLT')
-                            row.label(text=f'{repository.runtime.need_export_package_count}', icon='EXPORT')
-                            row.label(text=f'{repository.runtime.need_build_package_count}', icon='MOD_BUILD')
-                            row.label(text=f'{repository.runtime.up_to_date_package_count}', icon='CHECKMARK')
+                            row = row_left.row()
+                            row.alignment = 'LEFT'
+                            if repository.runtime.disabled_package_count > 0:
+                                row.label(text=f'{repository.runtime.disabled_package_count} Disabled', icon='CHECKBOX_DEHLT')
+                            if repository.runtime.need_export_package_count > 0:
+                                row.label(text=f'{repository.runtime.need_export_package_count} Pending Export', icon='EXPORT')
+                            if repository.runtime.need_build_package_count > 0:
+                                row.label(text=f'{repository.runtime.need_build_package_count} Pending Build', icon='MOD_BUILD')
+                            if repository.runtime.up_to_date_package_count > 0:
+                                row.label(text=f'{repository.runtime.up_to_date_package_count} Up to Date', icon='CHECKMARK')
 
-                            row = row.column()
+                            main_row.column()
+
+                            row = main_row.column()
                             row.alignment = 'RIGHT'
                             row.operator(BDK_OT_repository_build_asset_library.bl_idname, icon='BLENDER', text='Build Assets')
 
@@ -937,6 +945,19 @@ class BdkAddonPreferences(AddonPreferences):
                                     op = package_panel.operator(BDK_OT_repository_package_build.bl_idname, text='Debug Build')
                                     op.index = repository.runtime.packages_index
 
+                    paths_header, paths_panel = repository_panel.panel('Paths', default_closed=True)
+                    paths_header.label(text='Paths')
+
+                    if paths_panel is not None:
+                        col = repository_panel.column()
+                        col.enabled = False
+                        col.use_property_split = True
+                        col.prop(repository, 'id', emboss=False)
+                        col.prop(repository, 'game_directory')
+                        if repository.mod:
+                            col.prop(repository, 'mod', emboss=False)
+                        col.prop(repository, 'cache_directory')
+
 
 class BDK_OT_scene_repository_set(Operator):
     bl_idname = 'bdk.scene_repository_set'
@@ -957,6 +978,34 @@ class BDK_OT_scene_repository_set(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_debug_material_cache_lookup(Operator):
+    bl_idname = 'bdk.debug_material_cache_lookup'
+    bl_label = 'Test Material Cache Lookup'
+    bl_description = 'Test the material cache lookup'
+    bl_options = {'INTERNAL'}
+
+    reference: StringProperty(name='Reference', default='')
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        material_cache = MaterialCache(Path(repository.cache_directory) / repository.id)
+        reference = UReference.from_string(self.reference)
+        path = material_cache.resolve_path_for_reference(reference)
+
+        if path is None:
+            self.report({'ERROR'}, f'Failed to resolve path for reference: {self.reference}')
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f'Resolved path for reference: {self.reference} to {path}')
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_PG_preferences_runtime,
     BDK_OT_scene_repository_set,
@@ -971,5 +1020,6 @@ classes = (
     BDK_OT_repository_unlink,
     BDK_OT_repository_package_cache_invalidate,
     BDK_OT_repository_packages_set_enabled_by_pattern,
+    BDK_OT_debug_material_cache_lookup,
     BdkAddonPreferences,
 )

@@ -4,9 +4,7 @@ from typing import Set
 
 import bpy
 from bpy.types import Operator, Context, Node, Event
-from bpy.props import StringProperty, IntProperty
-
-from ..helpers import guess_package_reference_from_names, load_bdk_material
+from bpy.props import StringProperty
 
 
 # TODO: figure out a better name for this operator
@@ -34,36 +32,6 @@ class BDK_OT_select_all_of_active_class(Operator):
         for obj in context.scene.objects:
             if obj.type == 'MESH' and obj.get('Class', None) == actor_class:
                 obj.select_set(True)
-        return {'FINISHED'}
-
-
-class BDK_OT_fix_bsp_import_materials(Operator):
-    bl_idname = 'bdk.fix_bsp_import_materials'
-    bl_label = 'Fix BSP Import Materials'
-    bl_description = 'Fix materials of BSP imported from OBJ files from the Unreal SDK'
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        # Return true if the active object is a mesh.
-        if context.object is None:
-            cls.poll_message_set('No active object')
-            return False
-        if context.object.type != 'MESH':
-            cls.poll_message_set('Active object is not a mesh')
-            return False
-        return True
-
-    def execute(self, context):
-        bpy_object = context.object
-        # Iterate over each material slot and look for a corresponding material in the asset library or current
-        # scene's assets.
-        material_slot_names = [material_slot.name for material_slot in bpy_object.material_slots]
-        name_references = guess_package_reference_from_names(material_slot_names)
-        for material_slot in bpy_object.material_slots:
-            if name_references.get(material_slot.name, None) is None:
-                continue
-            material_slot.material = load_bdk_material(str(name_references[material_slot.name]))
         return {'FINISHED'}
 
 
@@ -431,7 +399,6 @@ class BDK_OT_asset_import_data_linked(Operator):
 
 classes = (
     BDK_OT_select_all_of_active_class,
-    BDK_OT_fix_bsp_import_materials,
     BDK_OT_generate_node_code,
     BDK_OT_force_node_tree_rebuild,
     BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier,

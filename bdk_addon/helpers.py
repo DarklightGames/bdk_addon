@@ -1,13 +1,13 @@
 import mathutils
 
 from .bdk.preferences import BdkAddonPreferences
+from .bdk.repository.properties import BDK_PG_repository
 from .data import UReference
 from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, ViewLayer, LayerCollection, Collection
 from pathlib import Path
-from typing import Iterable, Optional, Dict, List, Tuple, Set
+from typing import Iterable, Optional, Tuple, Set
 import bpy
 import numpy
-import os
 import re
 
 
@@ -82,53 +82,34 @@ def are_any_selected_objects_bdk_objects(context: Context):
             return True
     return False
 
-
-def get_bdk_asset_library_paths() -> List[Path]:
-    asset_library_paths = []
-    asset_libraries = bpy.context.preferences.filepaths.asset_libraries
-    # TODO: this is very janky; come up with a better way to handle the BDK asset libraries.
-    asset_library_name = 'BDK Library'
-    for asset_library in asset_libraries:
-        if asset_library.name.startswith(asset_library_name):
-            asset_library_paths.append(Path(asset_library.path))
-    return asset_library_paths
-
-
-def get_blend_file_for_package(package_name: str, repository_id: str) -> Optional[str]:
-    asset_library_paths = get_bdk_asset_library_paths()
-    for asset_library_path in asset_library_paths:
-        blend_files = [fp for fp in asset_library_path.glob(f'**/{package_name}.blend') if fp.is_file()]
-        if len(blend_files) > 0:
-            return str(blend_files[0])
+def get_repository_by_id(context: Context, repository_id: str) -> Optional[BDK_PG_repository]:
+    from .bdk.preferences import BdkAddonPreferences
+    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+    for repository in addon_prefs.repositories:
+        if repository.id == repository_id:
+            return repository
     return None
 
 
-def guess_package_reference_from_names(names: Iterable[str]) -> Dict[str, Optional[UReference]]:
+
+def get_blend_file_for_package(context: Context, package_name: str, repository_id: str) -> Optional[str]:
+    repository = get_repository_by_id(context, repository_id)
+    if repository is None:
+        return None
+    asset_library_path = Path(repository.cache_directory) / repository.id / 'assets'
+    blend_files = [fp for fp in asset_library_path.glob(f'**/{package_name}.blend') if fp.is_file()]
+    if len(blend_files) > 0:
+        return str(blend_files[0])
+    return None
+
+
+def load_bdk_material(context: Context, reference: str, repository_id: str = None) -> Optional[Material]:
     """
-    Guesses a package reference from a name. Returns None if no reference could be guessed.
-    :param names:
-    :return:
+    Loads a material from a BDK repository.
+    :param context: The Blender context.
+    :param reference: The reference to the material.
+    :param repository_id: The ID of the repository to load the material from. If None, the repository ID from the scene.
     """
-    # Iterate through all the libraries in the asset library and try to find a match.
-    asset_library_paths = get_bdk_asset_library_paths()
-    name_references = dict()
-
-    if not asset_library_paths:
-        return name_references
-
-    for asset_library_path in asset_library_paths:
-        for blend_file in asset_library_path.glob('**/*.blend'):
-            if not blend_file.is_file():
-                continue
-            package = os.path.splitext(os.path.basename(blend_file))[0]
-            with bpy.data.libraries.load(str(blend_file), link=True, relative=False, assets_only=True) as (data_in, data_out):
-                for name in set(data_in.materials).intersection(names):
-                    name_references[name] = UReference.from_string(f'Texture\'{package}.{name}\'')
-
-    return name_references
-
-
-def load_bdk_material(reference: str, repository_id: str) -> Optional[Material]:
     reference = UReference.from_string(reference)
 
     if reference is None:
@@ -143,7 +124,10 @@ def load_bdk_material(reference: str, repository_id: str) -> Optional[Material]:
     #  before trying to load it.
     # See if we already have the material loaded.
 
-    blend_file = get_blend_file_for_package(reference.package_name, repository_id)
+    if repository_id is None:
+        repository_id = context.scene.bdk.repository_id
+
+    blend_file = get_blend_file_for_package(context, reference.package_name, repository_id)
 
     if blend_file is None:
         print('Failed to find blend file for package reference: ' + reference.package_name)

@@ -900,7 +900,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
             self.report({'ERROR_INVALID_CONTEXT'}, f'Repository with ID "{self.repository_id}" not found.')
             return {'CANCELLED'}
 
-        material_caches = [MaterialCache(Path(repository.cache_directory) / repository.id)]
+        material_cache = MaterialCache(Path(repository.cache_directory) / repository.id)
 
         # Get an Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))
@@ -917,16 +917,12 @@ class BDK_OT_material_import(Operator, ImportHelper):
         node_tree.nodes.clear()
 
         # Try to load the material from the cache.
-        unreal_material = None
-        for material_cache in material_caches:
-            unreal_material = material_cache.load_material(reference)
-            if unreal_material is not None:
-                break
+        unreal_material = material_cache.load_material(reference)
 
         tex_coord_node = node_tree.nodes.new('ShaderNodeTexCoord')
 
         # Build the material.
-        material_builder = MaterialBuilder(material_caches, node_tree)
+        material_builder = MaterialBuilder([material_cache], node_tree)
         outputs = material_builder.build(unreal_material, uv_source_socket=tex_coord_node.outputs['UV'])
 
         # Make a new function to do the conversion from Color & Alpha socket to Shader.

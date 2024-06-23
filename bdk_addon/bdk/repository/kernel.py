@@ -96,11 +96,16 @@ class Manifest:
     def get_package(self, package_path: str) -> Package:
         return self.packages[package_path]
 
-    def invalidate_package_cache(self, package_path: str):
+    def invalidate_package(self, package_path: str):
         package = self.packages.setdefault(package_path, Manifest.Package())
         package.exported_time = None
         package.build_time = None
         package.status = 'NEEDS_EXPORT'
+
+    def invalidate_package_assets(self, package_path: str):
+        package = self.packages.setdefault(package_path, Manifest.Package())
+        package.build_time = None
+        package.status = 'NEEDS_BUILD'
 
     def mark_package_as_exported(self, package_path: str):
         package = self.packages.setdefault(package_path, Manifest.Package())
