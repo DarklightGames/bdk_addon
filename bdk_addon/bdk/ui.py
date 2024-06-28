@@ -3,6 +3,7 @@ from bpy.types import Menu, Panel
 from ..bsp import operators as bsp_operators
 from ..fluid_surface import operators as fluid_surface_operators
 from ..projector import operators as projector_operators
+from ..projector.operators import BDK_OT_projectors_bake
 from ..terrain import operators as terrain_operators
 from ..terrain.doodad import operators as terrain_doodad_operators
 
@@ -62,8 +63,22 @@ class BDK_PT_scene(Panel):
         layout.prop(scene.bdk, 'level_object', text='Level Object')
 
 
+class BDK_PT_bdk(Panel):
+    bl_idname = 'BDK_PT_bdk'
+    bl_label = 'BDK'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'BDK'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator(BDK_OT_projectors_bake.bl_idname, text='Bake Projectors')
+        layout.operator(projector_operators.BDK_OT_projectors_unbake.bl_idname, text='Unbake Projectors')
+
+
 classes = (
     BDK_MT_object_add_menu,
     BDK_PT_node_tree,
     BDK_PT_scene,
+    BDK_PT_bdk,
 )

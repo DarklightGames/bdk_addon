@@ -11,6 +11,7 @@ if 'bpy' in locals():
 
     importlib.reload(repository_kernel)
     importlib.reload(repository_properties)
+    importlib.reload(repository_operators)
     importlib.reload(repository_ui)
 
     importlib.reload(package_reader)
@@ -29,7 +30,9 @@ if 'bpy' in locals():
 
     # Projector
     importlib.reload(projector_builder)
+    importlib.reload(projector_properties)
     importlib.reload(projector_operators)
+    importlib.reload(projector_ui)
 
     # Fluid Surface
     importlib.reload(fluid_surface_builder)
@@ -90,6 +93,7 @@ else:
 
     from .bdk.repository import kernel as repository_kernel
     from .bdk.repository import properties as repository_properties
+    from .bdk.repository import operators as repository_operators
     from .bdk.repository import ui as repository_ui
 
     from .bdk import operators as bdk_operators
@@ -112,7 +116,9 @@ else:
 
     # Projector
     from .projector import builder as projector_builder
+    from .projector import properties as projector_properties
     from .projector import operators as projector_operators
+    from .projector import ui as projector_ui
 
     # Fluid Surface
     from .fluid_surface import builder as fluid_surface_builder
@@ -177,7 +183,9 @@ classes = actor_properties.classes + \
           material_importer.classes + \
           material_operators.classes + \
           material_ui.classes + \
+          projector_properties.classes + \
           projector_operators.classes + \
+          projector_ui.classes + \
           fluid_surface_properties.classes + \
           fluid_surface_operators.classes + \
           fluid_surface_ui.classes + \
@@ -197,6 +205,7 @@ classes = actor_properties.classes + \
           bsp_operators.classes + \
           bsp_ui.classes + \
           repository_properties.classes + \
+          repository_operators.classes + \
           repository_ui.classes + \
           bdk_preferences.classes + \
           bdk_operators.classes + \

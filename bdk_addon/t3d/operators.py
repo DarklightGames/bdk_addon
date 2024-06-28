@@ -14,8 +14,8 @@ from ..data import UReference
 from ..bsp.properties import __poly_flag_keys_to_values__
 from ..bsp.data import POLY_FLAGS_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     ORIGIN_ATTRIBUTE_NAME
-from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, create_terrain_info_actor, \
-    convert_blender_matrix_to_unreal_movement_units
+from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, terrain_info_to_t3d_object, \
+    convert_blender_matrix_to_unreal_movement_units, projector_to_t3d_object
 from .data import T3DObject, Polygon
 from pathlib import Path
 from .importer import import_t3d
@@ -331,7 +331,9 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
                 case 'FLUID_SURFACE':
                     copy_actors.append(fluid_surface_to_t3d_object(context, obj))
                 case 'TERRAIN_INFO':
-                    copy_actors.append(create_terrain_info_actor(obj))
+                    copy_actors.append(terrain_info_to_t3d_object(obj))
+                case 'PROJECTOR':
+                    copy_actors.append(projector_to_t3d_object(obj))
                 case _:
                     # TODO: add handlers for other object types (outside of this function)
                     if obj.type == 'CAMERA':

@@ -1,0 +1,628 @@
+import json
+import os
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+
+from bpy.props import StringProperty, IntProperty, EnumProperty, BoolProperty
+from bpy.types import Operator, Context, Event
+from bpy_extras.io_utils import ImportHelper
+
+from .kernel import load_repository_manifest, repository_runtime_update, repository_asset_library_add, \
+    ensure_default_repository_id, repository_asset_library_unlink, repository_remove, repository_cache_delete, \
+    repository_metadata_delete, repository_package_build, get_repository_package_dependency_graph, \
+    layered_topographical_sort, repository_package_export, is_game_directory_and_mod_valid, repository_metadata_write
+from ...helpers import get_addon_preferences, tag_redraw_all_windows
+
+
+def poll_has_repository_selected(context):
+    addon_prefs = get_addon_preferences(context)
+    return (len(addon_prefs.repositories) > 0 and
+            addon_prefs.repositories_index >= 0 and
+            addon_prefs.repositories_index < len(addon_prefs.repositories))
+
+
+class BDK_OT_repository_scan(Operator):
+    bl_idname = 'bdk.repository_scan'
+    bl_label = 'Scan Repository'
+    bl_description = 'Scan the repository and update the status of each package'
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        addon_prefs = get_addon_preferences(context)
+        return len(addon_prefs.repositories) > 0
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        # Update the runtime information.
+        try:
+            repository_runtime_update(repository)
+        except Exception as e:
+            self.report({'ERROR'}, f'Failed to scan repository: {e}')
+            return {'CANCELLED'}
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_cache_delete(Operator):
+    bl_idname = 'bdk.repository_cache_delete'
+    bl_label = 'Delete Cache'
+    bl_description = 'Delete the repository cache. This will delete all exports, assets and the manifest. This action cannot be undone'
+    bl_options = {'INTERNAL'}
+
+    def invoke(self, context, event):
+        # TODO: probably want a more frightening warning.
+        return context.window_manager.invoke_confirm(self, event)
+
+    @classmethod
+    def poll(cls, context):
+        addon_prefs = get_addon_preferences(context)
+        return len(addon_prefs.repositories) > 0
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        repository_cache_delete(repository)
+        repository_runtime_update(repository)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_package_build(Operator):
+    bl_idname = 'bdk.repository_package_build'
+    bl_label = 'Build Package'
+    bl_description = 'Build the selected package'
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+        package = repository.runtime.packages[repository.runtime.packages_index]
+
+        # Build the export path.
+        context.window_manager.progress_begin(0, 1)
+        process, _ = repository_package_build(repository, package.path, os.path.splitext(package.filename)[0])
+
+        if process.returncode != 0:
+            self.report({'ERROR'}, f'Failed to build package: {package.path}')
+            return {'CANCELLED'}
+        else:
+            context.window_manager.progress_update(1)
+
+        context.window_manager.progress_end()
+
+        # Update the runtime information.
+        repository_runtime_update(repository)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_package_cache_invalidate(Operator):
+    bl_idname = 'bdk.repository_package_cache_invalidate'
+    bl_label = 'Invalidate Package Cache'
+    bl_description = 'Invalidate the cache of the selected package. This will mark the package as needing to be exported and built, but will not delete any files. This action cannot be undone'
+    bl_options = {'INTERNAL'}
+
+    index: IntProperty(name='Index', default=-1)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+        package = repository.runtime.packages[self.index]
+
+        manifest = load_repository_manifest(repository)
+        manifest.invalidate_package(package.path)
+        manifest.write()
+
+        repository_runtime_update(repository)
+
+        return {'FINISHED'}
+
+class BDK_OT_repository_build_asset_library(Operator):
+    bl_idname = 'bdk.repository_build_asset_library'
+    bl_label = 'Build Asset Library'
+    bl_description = 'Export and build all packages in the repository.\n\nDepending on the number of packages, this may take a while'
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        addon_prefs = get_addon_preferences(context)
+        if len(addon_prefs.repositories) == 0:
+            return False
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+        count = repository.runtime.need_export_package_count + repository.runtime.need_build_package_count
+        if count == 0:
+            cls.poll_message_set('All packages are up to date')
+            return False
+        # TODO: Make sure that the PSK/PSA addon is installed and enabled (and meets version requirements)
+        return True
+
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        # Write the enabled status of the packages to the manifest.
+        manifest = load_repository_manifest(repository)
+        for package in repository.runtime.packages:
+            manifest.set_package_enabled(package.path, package.is_enabled)
+        manifest.write()
+
+        repository_runtime_update(repository)
+
+        # Find all the packages that need to be exported first.
+        packages_to_export = {package for package in repository.runtime.packages if package.status == 'NEEDS_EXPORT' and package.is_enabled}
+        packages_to_build = {package for package in repository.runtime.packages if package.status != 'UP_TO_DATE' and package.is_enabled}
+
+        # Get the build order of the packages.
+        print('Building package dependency graph')
+        time = datetime.now()
+        package_dependency_graph = get_repository_package_dependency_graph(repository)
+        print(f'Finished building package dependency graph in {datetime.now() - time}')
+
+        print('Determining build order')
+        time = datetime.now()
+        package_build_levels = layered_topographical_sort(package_dependency_graph)
+        print(f'Finished determining build order in {datetime.now() - time}')
+
+        # Map the package names to the package objects.
+        package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in repository.runtime.packages}
+        package_name_keys = set(package_name_to_package.keys())
+
+        # Some packages in the build levels may not be in the runtime packages, so we need to filter them out.
+        package_build_levels = [level & package_name_keys for level in package_build_levels]
+
+        # Convert the build levels to the package objects.
+        package_build_levels = [{package_name_to_package[package_name.upper()] for package_name in level} for level in package_build_levels]
+
+        # Remove the packages that do not need to be built from the build levels.
+        for level in package_build_levels:
+            level &= packages_to_build
+
+        # Remove any empty levels.
+        package_build_levels = [level for level in package_build_levels if level]
+
+        # Convert package_build_levels to a list of path and filename tuples.
+        package_build_levels = [[(x.path, os.path.splitext(x.filename)[0]) for x in level] for level in package_build_levels]
+
+        # Count the number of commands that will be executed.
+        command_count = len(packages_to_export) + len(packages_to_build)
+
+        if command_count == 0:
+            self.report({'INFO'}, 'All packages are up to date')
+            return {'CANCELLED'}
+
+        progress = 0
+        success_count = 0
+        failure_count = 0
+
+        context.window_manager.progress_begin(0, command_count)
+
+        manifest = load_repository_manifest(repository)
+
+        packages_that_failed_to_export = []
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            jobs = []
+            for package in packages_to_export:
+                jobs.append(executor.submit(repository_package_export, repository, package))
+            for future in as_completed(jobs):
+                process, package = future.result()
+                if process.returncode != 0:
+                    failure_count += 1
+                    packages_that_failed_to_export.append(package)
+                else:
+                    manifest.mark_package_as_exported(package.path)
+                    success_count += 1
+                progress += 1
+                context.window_manager.progress_update(progress)
+
+        if failure_count > 0:
+            self.report({'ERROR'}, f'Failed to export {failure_count} packages. Aborting build step. Check the console for error information.')
+            manifest.write()
+            repository_runtime_update(repository)
+            return {'CANCELLED'}
+
+        # We must write the manifest here because the build step will read from it when linking the assets.
+        manifest.write()
+
+        success_count = 0
+        failure_count = 0
+
+        for level_index, packages in enumerate(package_build_levels):
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                jobs = []
+                for (package_path, package_filename) in packages:
+                    jobs.append(executor.submit(repository_package_build, repository, package_path, package_filename))
+                for future in as_completed(jobs):
+                    process, package_path = future.result()
+                    if process.returncode != 0:
+                        failure_count += 1
+                    else:
+                        manifest.mark_package_as_built(package_path)
+                        success_count += 1
+                    progress += 1
+                    context.window_manager.progress_update(progress)
+
+            manifest.write()
+            repository_runtime_update(repository)
+
+        context.window_manager.progress_end()
+
+        if failure_count > 0:
+            self.report({'ERROR'}, f'Failed to build {failure_count} packages. Check the console for error information.')
+            manifest.write()
+            repository_runtime_update(repository)
+            return {'CANCELLED'}
+
+        manifest.write()
+        repository_runtime_update(repository)
+
+        self.report({'INFO'}, f'Built asset libraries for {success_count} packages, {failure_count} failed')
+
+        tag_redraw_all_windows(context)
+
+        return {'FINISHED'}
+
+class BDK_OT_repository_cache_invalidate(Operator):
+    bl_idname = 'bdk.repository_cache_invalidate'
+    bl_label = 'Invalidate Cache'
+    bl_description = 'Invalidate the cache of the repository. This will mark all packages as needing to be exported and built, but will not delete any files. This action cannot be undone'
+    bl_options = {'INTERNAL'}
+
+    mode: EnumProperty(
+        name='Mode',
+        items=(
+            ('ASSETS_ONLY', 'Assets Only', 'Invalidate only the assets cache'),
+            ('ALL', 'All', 'Invalidate all caches'),
+        ),
+        default='ALL'
+    )
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        manifest = load_repository_manifest(repository)
+
+        match self.mode:
+            case 'ASSETS_ONLY':
+                for package in repository.runtime.packages:
+                    manifest.invalidate_package_assets(package.path)
+            case 'ALL':
+                for package in repository.runtime.packages:
+                    manifest.invalidate_package(package.path)
+
+        manifest.write()
+
+        # Update the runtime information.
+        repository_runtime_update(repository)
+
+        tag_redraw_all_windows(context)
+
+        self.report({'INFO'}, 'Repository cache invalidated')
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_link(Operator, ImportHelper):
+    bl_idname = 'bdk.repository_link'
+    bl_label = 'Link Repository'
+    bl_options = {'INTERNAL'}
+
+    filename_ext = '*.json'
+    filter_glob: StringProperty(default='*.json', options={'HIDDEN'})
+    filepath: StringProperty(subtype='FILE_PATH')
+
+    def execute(self, context):
+
+        import json
+
+        with open(self.filepath, 'r') as f:
+            try:
+                repository_data = json.load(f)
+            except json.JSONDecodeError as e:
+                self.report({'ERROR'}, f'Failed to load repository file: {e}')
+                return {'CANCELLED'}
+
+            required_keys = ['game_directory', 'mod', 'id']
+            for key in required_keys:
+                if key not in repository_data:
+                    self.report({'ERROR'}, f'Invalid repository file (missing key: {key})')
+                    return {'CANCELLED'}
+
+            game_directory = Path(repository_data['game_directory'])
+            mod = repository_data['mod']
+            id = repository_data['id']
+
+            # Make sure there isn't already a repository with the same ID.
+            addon_prefs = get_addon_preferences(context)
+            for repository in addon_prefs.repositories:
+                if repository.id == id:
+                    self.report({'ERROR'}, f'A repository with the same ID already exists ({repository.name})')
+                    return {'CANCELLED'}
+
+            # Add the repository to the list.
+            addon_prefs = get_addon_preferences(context)
+            repository = addon_prefs.repositories.add()
+
+            repository.id = id
+            repository.game_directory = str(game_directory)
+            repository.mod = mod
+
+            repository_name = game_directory.name
+            if mod:
+                repository_name += f' ({mod})'
+            repository.name = repository_name
+            repository.cache_directory = str(Path(self.filepath).parent)
+
+            repository_runtime_update(repository)
+
+            addon_prefs.repositories_index = len(addon_prefs.repositories) - 1
+
+            # Add the repository's asset folder as an asset library in Blender.
+            repository_asset_library_add(context, repository)
+
+            ensure_default_repository_id(context)
+
+            tag_redraw_all_windows(context)
+
+            self.report({'INFO'}, f'Linked repository "{repository.name}"')
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_create(Operator):
+    bl_idname = 'bdk.repository_create'
+    bl_label = 'Create Repository'
+    bl_description = 'Create a new repository'
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    game_directory: StringProperty(name='Game Directory', subtype='DIR_PATH', description='The game\'s root directory')
+    mod: StringProperty(name='Mod', description='The name of the mod directory (optional)')
+    use_custom_cache_directory: BoolProperty(name='Custom Cache Directory', default=False)
+    custom_cache_directory: StringProperty(name='Cache Directory', subtype='DIR_PATH')
+
+    def invoke(self, context: Context, event: Event):
+        context.window_manager.invoke_props_dialog(self)
+        return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        flow = layout.grid_flow()
+        flow.use_property_split = True
+        flow.prop(self, 'game_directory')
+        flow.prop(self, 'mod')
+
+        custom_directory_header, custom_directory_panel = layout.panel_prop(self, 'use_custom_cache_directory')
+        custom_directory_header.prop(self, 'use_custom_cache_directory', text='Custom Cache Directory')
+
+        if custom_directory_panel is not None:
+            flow = custom_directory_panel.grid_flow()
+            flow.use_property_split = True
+            flow.prop(self, 'custom_cache_directory')
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+
+        # Determine the name of the repository from the last folder of the game directory and mod.
+        game_directory = Path(self.game_directory)
+
+        if not game_directory.is_dir():
+            self.report({'ERROR'}, 'Invalid game directory')
+            return {'CANCELLED'}
+
+        repository_name = game_directory.name
+        if self.mod:
+            repository_name += f' ({self.mod})'
+
+        if not is_game_directory_and_mod_valid(self.game_directory, self.mod):
+            self.report({'ERROR'}, 'Invalid game directory or mode configuration. Please check the values and try again.')
+            return {'CANCELLED'}
+
+        repository = addon_prefs.repositories.add()
+        repository.id = uuid.uuid4().hex
+        repository.game_directory = self.game_directory
+        repository.mod = self.mod
+        repository.name = repository_name
+
+        # Cache directory.
+        cache_directory = game_directory / '.bdk'
+
+        if self.use_custom_cache_directory:
+            # Make sure that the custom cache directory exists, throw an error if it can't be created.
+            try:
+                os.makedirs(self.custom_cache_directory)
+            except Exception as e:
+                self.report({'ERROR'}, f'Failed to create cache directory: {e}')
+                return {'CANCELLED'}
+            cache_directory = Path(self.custom_cache_directory)
+
+        repository.cache_directory = str(cache_directory)
+
+        addon_prefs.repositories_index = len(addon_prefs.repositories) - 1
+
+        repository_runtime_update(repository)
+
+        # Create the cache directory.
+        repository_cache_directory = Path(repository.cache_directory) / repository.id
+        repository_cache_directory.mkdir(parents=True, exist_ok=True)
+
+        repository_metadata_write(repository)
+        repository_asset_library_add(context, repository)
+
+        ensure_default_repository_id(addon_prefs)
+
+        # Tag window regions for redraw so that the new layer is displayed in terrain layer lists immediately.
+        tag_redraw_all_windows(context)
+
+        return {'FINISHED'}
+
+class BDK_OT_repository_unlink(Operator):
+    bl_idname = 'bdk.repository_unlink'
+    bl_label = 'Unlink Repository'
+    bl_description = 'Unlink the selected repository and unlink the asset library. This will not alter the files, and you can re-link the asset library later'
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_selected(context)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        repository_asset_library_unlink(context, repository)
+        repository_remove(addon_prefs, addon_prefs.repositories_index)
+
+        tag_redraw_all_windows(context)
+
+        self.report({'INFO'}, f'Unlinked repository "{repository.name}"')
+
+        return {'FINISHED'}
+
+class BDK_OT_repository_delete(Operator):
+    bl_idname = 'bdk.repository_delete'
+    bl_label = 'Delete Repository'
+    bl_description = 'Remove the selected repository and delete all associated data. This operation cannot be undone'
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_selected(context)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        repository_cache_delete(repository)
+        repository_asset_library_unlink(context, repository)
+        repository_metadata_delete(repository)
+        repository_remove(addon_prefs, addon_prefs.repositories_index)
+
+        addon_prefs.repositories.remove(addon_prefs.repositories_index)
+        addon_prefs.repositories_index = min(addon_prefs.repositories_index, len(addon_prefs.repositories) - 1)
+
+        self.report({'INFO'}, f'Deleted repository "{repository.name}"')
+
+        tag_redraw_all_windows(context)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_set_default(Operator):
+    bl_idname = 'bdk.repository_set_default'
+    bl_label = 'Set Default Repository'
+    bl_description = 'Set the default repository to use when the addon is loaded'
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        addon_prefs.default_repository_id = repository.id
+
+        self.report({'INFO'}, f'Set default repository to {repository.name}')
+
+        return {'FINISHED'}
+
+
+from .properties import repository_rule_type_enum_items
+
+
+class BDK_OT_repository_rule_add(Operator):
+    bl_idname = 'bdk.repository_rule_add'
+    bl_label = 'Add Repository Rule'
+    bl_description = 'Add a rule to the selected repository'
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    type: EnumProperty(name='Type', items=repository_rule_type_enum_items)
+    pattern: StringProperty(name='Pattern', default='*')
+    asset_directory: StringProperty(name='Asset Directory', default='')
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'type')
+        layout.prop(self, 'pattern')
+        if self.type == 'SET_ASSET_DIRECTORY':
+            layout.prop(self, 'asset_directory')
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_selected(context)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        rule = repository.rules.add()
+        rule.type = self.type
+        rule.pattern = self.pattern
+        if self.type == 'SET_ASSET_DIRECTORY':
+            rule.asset_directory = self.asset_directory
+
+        repository_metadata_write(repository)
+
+        tag_redraw_all_windows(context)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_rule_remove(Operator):
+    bl_idname = 'bdk.repository_rule_remove'
+    bl_label = 'Remove Ignore Pattern'
+    bl_description = 'Remove the selected ignore pattern'
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_selected(context)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        repository.rules.remove(repository.rules_index)
+
+        repository_metadata_write(repository)
+
+        tag_redraw_all_windows(context)
+
+        return {'FINISHED'}
+
+
+classes = (
+    BDK_OT_repository_scan,
+    BDK_OT_repository_cache_delete,
+    BDK_OT_repository_package_build,
+    BDK_OT_repository_package_cache_invalidate,
+    BDK_OT_repository_build_asset_library,
+    BDK_OT_repository_cache_invalidate,
+    BDK_OT_repository_link,
+    BDK_OT_repository_create,
+    BDK_OT_repository_unlink,
+    BDK_OT_repository_delete,
+    BDK_OT_repository_set_default,
+    BDK_OT_repository_rule_add,
+    BDK_OT_repository_rule_remove,
+)

@@ -3,7 +3,10 @@ from bpy.props import EnumProperty, BoolProperty
 from bpy.types import UIList, Menu
 from fnmatch import fnmatch
 
+from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_build
 from .properties import repository_package_status_enum_items, filter_repository_package_status_enum_items
+from ..preferences import BDK_OT_debug_material_cache_lookup
+from ...helpers import get_addon_preferences
 
 
 def filter_packages(self, packages) -> list[int]:
@@ -102,10 +105,16 @@ class BDK_UL_repositories(UIList):
     bl_idname = 'BDK_UL_repositories'
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        from ..preferences import BdkAddonPreferences
+        addon_prefs = get_addon_preferences(context)
+
         row = layout.row(align=True)
         row.prop(item, 'name', emboss=False, icon='DISK_DRIVE', text='')
         row = row.row()
+        row.enabled = False
         row.alignment = 'RIGHT'
+        if addon_prefs.default_repository_id == item.id:
+            row.label(text='Default')
         if item.id == context.scene.bdk.repository_id:
             row.label(text='', icon='SCENE_DATA')
 
@@ -116,11 +125,12 @@ class BDK_MT_repository_special(Menu):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator('bdk.repository_cache_delete', icon='TRASH')
-        layout.operator_menu_enum('bdk.repository_cache_invalidate', 'mode', icon='FILE_REFRESH')
+        layout.operator(BDK_OT_repository_delete.bl_idname, icon='TRASH')
+        layout.operator_menu_enum(BDK_OT_repository_cache_invalidate.bl_idname, 'mode', icon='FILE_REFRESH')
         layout.separator()
-        layout.operator('bdk.repository_packages_set_enabled_by_pattern')
-        layout.operator('bdk.debug_material_cache_lookup')
+        layout.operator(BDK_OT_debug_material_cache_lookup.bl_idname)
+        layout.separator()
+        op = layout.operator(BDK_OT_repository_package_build.bl_idname, text='Debug Build')
 
 
 
@@ -143,6 +153,20 @@ class BDK_MT_repository_remove(Menu):
         layout.operator('bdk.repository_delete', icon='TRASH')
 
 
+class BDK_UL_repository_rules(UIList):
+    bl_idname = 'BDK_UL_repository_rules'
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        row = layout.row(align=True)
+        row_left = row.row(align=True)
+        row_left.enabled = False
+        row_left.prop(item, 'type', text='', emboss=False)
+        row_left.prop(item, 'pattern', text='', emboss=False)
+        row_right = row.column(align=True)
+        row_right.alignment = 'RIGHT'
+        row_right.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
+
+
 
 
 classes = (
@@ -151,4 +175,5 @@ classes = (
     BDK_MT_repository_special,
     BDK_MT_repository_add,
     BDK_MT_repository_remove,
+    BDK_UL_repository_rules,
 )

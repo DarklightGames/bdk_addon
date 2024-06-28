@@ -14,9 +14,9 @@ from .data import UColorModifier, UCombiner, UConstantColor, UCubemap, UFinalBle
     UTexOscillator, UTexPanner, UTexRotator, UTexScaler, UTexture, UShader, UVariableTexPanner, UVertexColor, \
     UFadeColor, UMaterialSwitch, EAlphaOperation, EColorOperation, EColorFadeType, UMaterial, ETexCoordSrc, \
     ETexEnvMapType, ETexOscillationType, ETexRotationType, ETexClampMode
-from ..bdk.preferences import BdkAddonPreferences
 from ..bdk.repository.properties import BDK_PG_repository
 from ..data import UReference
+from ..helpers import get_addon_preferences
 
 
 class MaterialSocketOutputs:
@@ -887,7 +887,8 @@ class BDK_OT_material_import(Operator, ImportHelper):
     #  current repository.
 
     def execute(self, context: Context):
-        repositories = getattr(context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'repositories')
+        addon_prefs = get_addon_preferences(context)
+        repositories = getattr(addon_prefs, 'repositories')
 
         def find_repository_by_id(repository_id: str) -> Optional[BDK_PG_repository]:
             for repository in repositories:

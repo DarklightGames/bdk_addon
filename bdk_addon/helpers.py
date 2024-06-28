@@ -1,6 +1,5 @@
 import mathutils
 
-from .bdk.preferences import BdkAddonPreferences
 from .bdk.repository.properties import BDK_PG_repository
 from .data import UReference
 from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, ViewLayer, LayerCollection, Collection
@@ -82,17 +81,34 @@ def are_any_selected_objects_bdk_objects(context: Context):
             return True
     return False
 
+
+def is_repository_id_valid(context: Context, repository_id: str) -> bool:
+    addon_prefs = get_addon_preferences(context)
+    for repository in addon_prefs.repositories:
+        if repository.id == repository_id:
+            return True
+    return False
+
+
+def get_repository_index_by_id(context: Context, repository_id: str) -> Optional[int]:
+    addon_prefs = get_addon_preferences(context)
+    for i, repository in enumerate(addon_prefs.repositories):
+        if repository.id == repository_id:
+            return i
+    return None
+
+
 def get_repository_by_id(context: Context, repository_id: str) -> Optional[BDK_PG_repository]:
-    from .bdk.preferences import BdkAddonPreferences
-    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+    addon_prefs = get_addon_preferences(context)
     for repository in addon_prefs.repositories:
         if repository.id == repository_id:
             return repository
     return None
 
 
-
-def get_blend_file_for_package(context: Context, package_name: str, repository_id: str) -> Optional[str]:
+def get_blend_file_for_package(context: Context, package_name: str, repository_id: Optional[str] = None) -> Optional[str]:
+    if repository_id is None:
+        repository_id = get_active_repository_id(context)
     repository = get_repository_by_id(context, repository_id)
     if repository is None:
         return None
@@ -103,7 +119,37 @@ def get_blend_file_for_package(context: Context, package_name: str, repository_i
     return None
 
 
-def load_bdk_material(context: Context, reference: str, repository_id: str = None) -> Optional[Material]:
+def get_addon_preferences(context: Context):
+    """
+    Get the preferences for the BDK addon.
+    """
+    from .bdk.preferences import BdkAddonPreferences
+    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+    return addon_prefs
+
+
+def get_active_repository_id(context: Context) -> Optional[str]:
+    """
+    Get the active repository ID from the scene, or the default repository ID from the addon preferences if the scene
+    repository ID is not set or invalid.
+    """
+    repository_id = None
+    addon_prefs = get_addon_preferences(context)
+
+    if is_repository_id_valid(context, context.scene.bdk.repository_id):
+        repository_id = context.scene.bdk.repository_id
+    elif is_repository_id_valid(context, addon_prefs.default_repository_id):
+        repository_id = addon_prefs.default_repository_id
+
+    return repository_id
+
+
+def get_active_repository(context: Context) -> Optional[BDK_PG_repository]:
+    repository_id = get_active_repository_id(context)
+    return get_repository_by_id(context, repository_id)
+
+
+def load_bdk_material(context: Context, reference: str, repository_id: Optional[str] = None) -> Optional[Material]:
     """
     Loads a material from a BDK repository.
     :param context: The Blender context.
@@ -125,7 +171,7 @@ def load_bdk_material(context: Context, reference: str, repository_id: str = Non
     # See if we already have the material loaded.
 
     if repository_id is None:
-        repository_id = context.scene.bdk.repository_id
+        repository_id = get_active_repository_id(context)
 
     blend_file = get_blend_file_for_package(context, reference.package_name, repository_id)
 
@@ -158,7 +204,7 @@ def load_bdk_material(context: Context, reference: str, repository_id: str = Non
 
 
 # TODO: should actually do the object, not the mesh data
-def load_bdk_static_mesh(reference: str, repository_id: str) -> Optional[Mesh]:
+def load_bdk_static_mesh(context: Context, reference: str, repository_id: Optional[str] = None) -> Optional[Mesh]:
 
     reference = UReference.from_string(reference)
 
@@ -172,13 +218,13 @@ def load_bdk_static_mesh(reference: str, repository_id: str) -> Optional[Mesh]:
         for obj in bpy.data.objects:
             if obj.name.upper() == reference.object_name.upper():
                 return bpy.data.objects[reference.object_name].data
-        # Failed to find object in myLevel package. (handle reporting this errors downstream)
+        # Failed to find object in myLevel package. (handle reporting this error downstream)
         return None
 
     # Strip the group name since we don't use it in the BDK library files.
     reference.group_name = None
 
-    blend_file = get_blend_file_for_package(reference.package_name, repository_id)
+    blend_file = get_blend_file_for_package(context, reference.package_name, repository_id)
 
     if blend_file is None:
         return None
@@ -211,7 +257,8 @@ def copy_simple_property_group(source, target, ignore=None):
 
 
 def should_show_bdk_developer_extras(context: Context):
-    return getattr(context.preferences.addons[BdkAddonPreferences.bl_idname].preferences, 'developer_extras', False)
+    addon_prefs = get_addon_preferences(context)
+    return getattr(addon_prefs, 'developer_extras', False)
 
 
 # TODO: maybe put all these attribute functions in their own file?
@@ -342,3 +389,8 @@ def dfs_view_layer_objects(view_layer: ViewLayer):
         yield from collection_fn(layer_collection.collection)
 
     yield from layer_collection_objects_recursive(view_layer.layer_collection)
+
+
+def tag_redraw_all_windows(context):
+    for region in filter(lambda r: r.type == 'WINDOW', context.area.regions):
+        region.tag_redraw()

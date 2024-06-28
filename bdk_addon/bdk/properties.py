@@ -2,30 +2,34 @@ from bpy.types import PropertyGroup, Object
 from bpy.props import PointerProperty, EnumProperty, StringProperty, IntProperty, CollectionProperty
 
 from ..fluid_surface.properties import BDK_PG_fluid_surface
+from ..projector.properties import BDK_PG_projector
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.doodad.properties import BDK_PG_terrain_doodad
 from ..bsp.properties import BDK_PG_bsp_brush, BDK_PG_level
+
+# NOTE: Do not change the order of these items. If you do, you will break existing projects.
+bdk_object_type_items = (
+    ('NONE', 'None', ''),
+    ('TERRAIN_INFO', 'Terrain Info', ''),
+    ('TERRAIN_DOODAD', 'Terrain Doodad', ''),
+    ('BSP_BRUSH', 'BSP Brush', ''),
+    ('FLUID_SURFACE', 'Fluid Surface', ''),
+    ('LEVEL', 'Level', ''),
+    ('PROJECTOR', 'Projector', '')
+)
 
 
 class BDK_PG_object(PropertyGroup):
     """
     This property group is a container for all the different types of BDK property groups.
     """
-    type: EnumProperty(name='Type',
-                       items=(
-                           ('NONE', 'None', ''),
-                           ('TERRAIN_INFO', 'Terrain Info', ''),
-                           ('TERRAIN_DOODAD', 'Terrain Doodad', ''),
-                           ('BSP_BRUSH', 'BSP Brush', ''),
-                           ('FLUID_SURFACE', 'Fluid Surface', ''),
-                           ('LEVEL', 'Level', ''),
-                       ),
-                       default='NONE')
+    type: EnumProperty(name='Type', items=bdk_object_type_items, default='NONE')
     terrain_info: PointerProperty(type=BDK_PG_terrain_info)
     terrain_doodad: PointerProperty(type=BDK_PG_terrain_doodad)
     bsp_brush: PointerProperty(type=BDK_PG_bsp_brush)
     fluid_surface: PointerProperty(type=BDK_PG_fluid_surface)
     level: PointerProperty(type=BDK_PG_level)
+    projector: PointerProperty(type=BDK_PG_projector)
     package_reference: StringProperty(name='Package Reference', options={'HIDDEN'})
 
 

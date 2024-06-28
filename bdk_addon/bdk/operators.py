@@ -6,6 +6,8 @@ import bpy
 from bpy.types import Operator, Context, Node, Event
 from bpy.props import StringProperty
 
+from ..helpers import get_addon_preferences, tag_redraw_all_windows
+
 
 # TODO: figure out a better name for this operator
 class BDK_OT_select_all_of_active_class(Operator):
@@ -63,7 +65,7 @@ class BDK_OT_generate_node_code(Operator):
 
     def execute(self, context: Context):
         selected_nodes = context.selected_nodes
-        nodes: OrderedDictType[str, Node] = OrderedDict()
+        nodes: OrderedDict[str, Node] = OrderedDict()
 
         for node in selected_nodes:
             if node.label:
@@ -397,6 +399,25 @@ class BDK_OT_asset_import_data_linked(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_scene_repository_set(Operator):
+    bl_idname = 'bdk.scene_repository_set'
+    bl_label = 'Set Scene Repository'
+    bl_description = 'Set the repository for the current scene'
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    def execute(self, context: Context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+
+        context.scene.bdk.repository_id = repository.id
+
+        self.report({'INFO'}, f'Scene repository set to {repository.name}')
+
+        tag_redraw_all_windows(context)
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_select_all_of_active_class,
     BDK_OT_generate_node_code,
@@ -406,4 +427,5 @@ classes = (
     BDK_OT_node_split_group_input_nodes,
     BDK_OT_asset_import_data_linked,
     BDK_OT_toggle_level_visibility,
+    BDK_OT_scene_repository_set,
 )

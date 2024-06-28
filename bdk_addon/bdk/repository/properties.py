@@ -18,8 +18,8 @@ filter_repository_package_status_enum_items = (
 
 
 def repository_package_is_enabled_update_cb(self, context):
-    from ..preferences import BdkAddonPreferences
-    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
+    from ...helpers import get_addon_preferences
+    addon_prefs = get_addon_preferences(context)
     repository = None
     for r in addon_prefs.repositories:
         if r.id == self.repository_id:
@@ -50,6 +50,20 @@ class BDK_PG_repository_package(PropertyGroup):
     build_time: IntProperty(name='Build Time', default=0)
 
 
+repository_rule_type_enum_items = (
+    ('IGNORE', 'Ignore', 'Ignore the package'),
+    ('INCLUDE', 'Include', 'Include the package'),
+    ('SET_ASSET_DIRECTORY', 'Set Asset Directory', 'Set the asset directory for the package. Relative paths are relative to the Game Directory'),
+)
+
+
+class BDK_PG_repository_rule(PropertyGroup):
+    type: EnumProperty(name='Action', items=repository_rule_type_enum_items, default='IGNORE')
+    pattern: StringProperty(name='Pattern', default='*')
+    mute: BoolProperty(name='Mute', default=False)
+    asset_directory: StringProperty(name='Asset Directory', default='', description='The directory where assets are stored', subtype='DIR_PATH')
+
+
 class BDK_PG_repository_runtime(PropertyGroup):
     """
     Runtime repository information, evaluated when necessary.
@@ -72,6 +86,8 @@ class BDK_PG_repository(PropertyGroup):
     game_directory: StringProperty(name='Game Directory', subtype='DIR_PATH',
                                    description='The game\'s root directory')
     mod: StringProperty(name='Mod', description='The name of the mod directory within the game directory (optional)')
+    rules: CollectionProperty(type=BDK_PG_repository_rule, name='Rules')
+    rules_index: IntProperty(name='Index', default=-1)
     cache_directory: StringProperty(name='Cache Directory', subtype='DIR_PATH',
                                     description='The directory where asset exports, manifests and libraries are stored.'
                                                 '\n\n'
@@ -84,5 +100,6 @@ classes = (
     BDK_PG_repository_package_pattern,
     BDK_PG_repository_package,
     BDK_PG_repository_runtime,
+    BDK_PG_repository_rule,
     BDK_PG_repository,
 )

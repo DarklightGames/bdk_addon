@@ -363,8 +363,8 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
 
         capture_attribute_node = node_tree.nodes.new('GeometryNodeCaptureAttribute')
         capture_attribute_node.name = 'Density'
-        capture_attribute_node.data_type = 'FLOAT'
         capture_attribute_node.domain = 'POINT'
+        # capture_attribute_node.data_type = 'FLOAT'
 
         instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
 
@@ -430,10 +430,10 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         node_tree.links.new(instance_on_points_node.inputs['Points'], deco_layer_node.outputs['Points'])
         node_tree.links.new(instance_on_points_node.inputs['Rotation'], deco_layer_node.outputs['Rotation'])
         node_tree.links.new(instance_on_points_node.inputs['Scale'], deco_layer_node.outputs['Scale'])
-        node_tree.links.new(capture_attribute_node.inputs['Value'], named_attribute_node.outputs['Attribute'])
+        node_tree.links.new(capture_attribute_node.inputs[1], named_attribute_node.outputs['Attribute'])
         node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
         node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
-        node_tree.links.new(deco_layer_node.inputs['Density Map'], capture_attribute_node.outputs['Attribute'])
+        node_tree.links.new(deco_layer_node.inputs['Density Map'], capture_attribute_node.outputs[1])
         node_tree.links.new(realize_instances_node.inputs['Geometry'], instance_on_points_node.outputs['Instances'])
 
         # Output

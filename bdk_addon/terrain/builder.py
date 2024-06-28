@@ -7,9 +7,8 @@ from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
-from ..bdk.preferences import BdkAddonPreferences
 from ..bdk.repository.properties import BDK_PG_repository
-from ..helpers import get_terrain_info
+from ..helpers import get_terrain_info, get_addon_preferences, get_active_repository
 from ..node_helpers import ensure_shader_node_tree, ensure_input_and_output_nodes
 from ..data import UReference
 from ..material.cache import MaterialCache
@@ -70,14 +69,6 @@ def _ensure_terrain_paint_layer_uv_group_node() -> NodeTree:
     return ensure_shader_node_tree('BDK TerrainLayerUV', items, build_function, should_force_build=True)
 
 
-def get_scene_repository(context: Context) -> Optional[BDK_PG_repository]:
-    addon_prefs = context.preferences.addons[BdkAddonPreferences.bl_idname].preferences
-    for repository in addon_prefs.repositories:
-        if repository.id == context.scene.bdk.repository_id:
-            return repository
-    return None
-
-
 def build_terrain_material(terrain_info_object: Object):
     terrain_info = get_terrain_info(terrain_info_object)
     if terrain_info is None:
@@ -95,7 +86,7 @@ def build_terrain_material(terrain_info_object: Object):
     last_shader_socket = None
 
     # The scene should probably have a reference to the repository.
-    repository = get_scene_repository(bpy.context)
+    repository = get_active_repository(bpy.context)
 
     material_caches = []
     if repository is not None:

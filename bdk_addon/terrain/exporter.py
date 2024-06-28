@@ -1,4 +1,5 @@
 import io
+import math
 import os
 
 import bmesh
@@ -9,6 +10,7 @@ from typing import cast, Optional, Callable
 
 from mathutils import Vector, Matrix, Euler
 
+from ..projector.properties import blending_op_blender_to_unreal_map
 from ..t3d.data import T3DObject
 from ..t3d.writer import T3DWriter
 from ..helpers import get_terrain_info, sanitize_name_for_unreal
@@ -70,7 +72,27 @@ def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optiona
     return actor
 
 
-def create_terrain_info_actor(terrain_info_object: Object) -> T3DObject:
+def projector_to_t3d_object(projector_object: Object) -> T3DObject:
+    projector = projector_object.bdk.projector
+
+    actor = T3DObject('Actor')
+    actor.properties['Class'] = 'Projector'
+    actor.properties['Name'] = projector_object.name
+    actor.properties['MaxTraceDistance'] = projector.max_trace_distance
+    actor.properties['FOV'] = int(math.degrees(projector.fov))
+    actor.properties['DrawScale'] = projector.draw_scale
+    actor.properties['FrameBufferBlendingOp'] = blending_op_blender_to_unreal_map[projector.frame_buffer_blending_op]
+    actor.properties['MaterialBlendingOp'] = blending_op_blender_to_unreal_map[projector.material_blending_op]
+
+    if projector.proj_texture is not None:
+        actor.properties['ProjTexture'] = projector.proj_texture.bdk.package_reference
+
+    add_movement_properties_to_actor(actor, projector_object, do_scale=False)
+
+    return actor
+
+
+def terrain_info_to_t3d_object(terrain_info_object: Object) -> T3DObject:
     terrain_info = get_terrain_info(terrain_info_object)
 
     terrain_info_name = sanitize_name_for_unreal(terrain_info_object.name)
@@ -319,7 +341,7 @@ def export_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph, 
 
 def write_terrain_t3d(terrain_info_object: Object, depsgraph: Depsgraph, fp: io.TextIOBase):
     t3d = T3DObject('Map')
-    t3d.children.append(create_terrain_info_actor(terrain_info_object))
+    t3d.children.append(terrain_info_to_t3d_object(terrain_info_object))
     T3DWriter(fp).write(t3d)
 
 

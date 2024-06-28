@@ -58,11 +58,11 @@ class DefaultActorImporter(ActorImporter):
     """
 
     @classmethod
-    def _create_static_mesh_object(cls, t3d_actor: T3dObject) -> Optional[Object]:
+    def _create_static_mesh_object(cls, context: Context, t3d_actor: T3dObject) -> Optional[Object]:
         static_mesh_reference = t3d_actor['StaticMesh']
 
         # Load the static mesh data from the BDK asset library.
-        mesh = load_bdk_static_mesh(str(static_mesh_reference))
+        mesh = load_bdk_static_mesh(context, str(static_mesh_reference))
 
         if mesh is None:
             print(f"Failed to load static mesh {static_mesh_reference} for brush_object {t3d_actor['Name']}.")
@@ -79,7 +79,7 @@ class DefaultActorImporter(ActorImporter):
         Creates a new Blender object for the given T3DMap brush_object.
         """
         if 'StaticMesh' in t3d_actor.properties:
-            return cls._create_static_mesh_object(t3d_actor)
+            return cls._create_static_mesh_object(context, t3d_actor)
         else:
             return bpy.data.objects.new(t3d_actor['Name'], None)
 
@@ -345,6 +345,11 @@ class FluidSurfaceInfoImporter(ActorImporter):
         fluid_surface.v_tiles = t3d_actor.properties.get('VTiles', 1)
         fluid_surface.v_offset = t3d_actor.properties.get('VOffset', 0.0)
 
+        skins = t3d_actor.properties.get('Skins', [])
+        if len(skins) > 0:
+            index, texture_reference = skins[0]
+            fluid_surface.material = load_bdk_material(context, str(texture_reference))
+
 
 class ProjectorImporter(ActorImporter):
     @classmethod
@@ -486,8 +491,10 @@ class TerrainInfoImporter(ActorImporter):
 
             # Texture
             texture_reference = layer.get('Texture', None)
+            print(texture_reference)
             if texture_reference is not None:
                 paint_layer.material = load_bdk_material(context, str(texture_reference))
+                print(paint_layer.material)
 
         deco_density_maps: Dict[str, bpy.types.Attribute] = {}
 
@@ -503,7 +510,9 @@ class TerrainInfoImporter(ActorImporter):
             #  want to use (i.e. reuse the deco layers)
             deco_layer = add_terrain_deco_layer(terrain_info_object, name=deco_layer_name)
 
-            static_mesh_data = load_bdk_static_mesh(str(static_mesh_reference))
+            # TODO: put deco statics into a collection
+
+            static_mesh_data = load_bdk_static_mesh(context, str(static_mesh_reference))
             deco_static_mesh_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)
             deco_layer.static_mesh = deco_static_mesh_object
             deco_layer.detail_mode = deco_layer_data.get('DetailMode', 'DM_Low')

@@ -1,9 +1,19 @@
+import bpy
 import os.path
+import subprocess
+from collections import defaultdict
 from configparser import NoOptionError
 from glob import glob
-from .properties import BDK_PG_repository
+
+import networkx
+from bpy.types import Context
+
+from .properties import BDK_PG_repository, BDK_PG_repository_package
 from pathlib import Path
 from typing import Optional, List, Dict
+
+from ...data import UReference
+from ...helpers import get_addon_preferences
 from ...io.config import ConfigParserMultiOpt
 import json
 
@@ -163,6 +173,7 @@ def load_repository_manifest(repository: BDK_PG_repository) -> Manifest:
     return Manifest.from_file(manifest_path)
 
 
+
 def update_repository_package_patterns(repository: BDK_PG_repository):
     repository.runtime.package_patterns.clear()
     repository.runtime.packages.clear()
@@ -267,3 +278,275 @@ def repository_cache_delete(repository: BDK_PG_repository):
     # Delete the cache directory.
     if cache_directory.exists():
         cache_directory.rmdir()
+
+
+# Operator that allows the user to point to a `manifest.json` file and add the repository to the list.
+def repository_asset_library_add(context, repository):
+    assets_directory = Path(repository.cache_directory) / repository.id / 'assets'
+    context.preferences.filepaths.asset_libraries.new(
+        name=repository.name,
+        directory=str(assets_directory)
+    )
+
+
+def repository_asset_library_unlink(context, repository) -> int:
+    removed_count = 0
+    repository_asset_library_path = str((Path(repository.cache_directory) / repository.id / 'assets').resolve())
+    for asset_library in context.preferences.filepaths.asset_libraries:
+        if str(Path(asset_library.path).resolve()) == repository_asset_library_path:
+            context.preferences.filepaths.asset_libraries.remove(asset_library)
+            removed_count += 1
+    return removed_count
+
+
+def get_repository_metadata_file_path(repository: BDK_PG_repository) -> Path:
+    return Path(repository.cache_directory) / f'{repository.id}.json'
+
+def repository_metadata_write(repository):
+    with open(get_repository_metadata_file_path(repository).resolve(), 'w') as f:
+        data = {
+            'id': repository.id,
+            'game_directory': repository.game_directory,
+            'mod': repository.mod,
+            'rules': [
+                {
+                    'pattern': rule.pattern,
+                    'action': rule.type,
+                    'mute': rule.mute,
+                }
+                for rule in repository.rules
+            ],
+        }
+        json.dump(data, f, indent=2)
+
+
+def repository_metadata_delete(repository):
+     repository_metadata_file = get_repository_metadata_file_path(repository).resolve()
+     if repository_metadata_file.exists():
+         repository_metadata_file.unlink()
+
+
+
+def ensure_default_repository_id(context: Context):
+    """
+    Ensure that the default repository is valid. If the default repository is not valid, it will be set to the first
+    repository in the list, or cleared if there are no repositories.
+    """
+    addon_prefs = get_addon_preferences(context)
+    exists = False
+    if addon_prefs.default_repository_id != '':
+        for repository in addon_prefs.repositories:
+            if repository.id == addon_prefs.default_repository_id:
+                exists = True
+                break
+
+    if not exists:
+        if len(addon_prefs.repositories) > 0:
+            addon_prefs.default_repository_id = addon_prefs.repositories[0].id
+        else:
+            addon_prefs.default_repository_id = ''
+
+
+def repository_remove(context: Context, repositories_index: int):
+    """
+    Remove a repository entry from the addon preferences.
+    """
+    addon_prefs = get_addon_preferences(context)
+    addon_prefs.repositories.remove(repositories_index)
+    addon_prefs.repositories_index = min(repositories_index, len(addon_prefs.repositories) - 1)
+
+    ensure_default_repository_id(addon_prefs)
+
+
+def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> networkx.DiGraph:
+    """
+    Returns the build order of the packages in the repository, as well as any cycles that are detected.
+    Note that cycles are removed from the graph by severing all the edges that create the cycle.
+    Note that the names of the packages are converted to uppercase for comparison since Unreal packages (and all names
+    in Unreal) are case-insensitive.
+    """
+    from ...package.reader import get_package_dependencies
+    import networkx
+
+    graph = networkx.DiGraph()
+
+    for package in repository.runtime.packages:
+        package_name = os.path.splitext(os.path.basename(package.path))[0].upper()
+        graph.add_node(package_name)
+
+    for package in repository.runtime.packages:
+        package_name = os.path.splitext(os.path.basename(package.path))[0].upper()
+        package_path = Path(repository.game_directory) / package.path
+        # TODO: Reading these from the packages is expensive, especially with lots of packages. We should cache this
+        #  information in the manifest.
+        dependencies = get_package_dependencies(str(package_path))
+        for dependency in dependencies:
+            dependency = dependency.upper()
+            graph.add_edge(package_name, dependency)
+
+    # Find any cycles in the graph and remove them.
+    cycles = list(networkx.simple_cycles(graph))
+    edges = set()
+    for cycle in cycles:
+        edges |= set([(cycle[i], cycle[i + 1]) for i in range(len(cycle) - 1)] + [(cycle[-1], cycle[0])])
+    for u, v in edges:
+        graph.remove_edge(u, v)
+
+    return graph
+
+
+def _get_build_order_from_package_dependency_graph(repository: BDK_PG_repository, graph: networkx.DiGraph) -> list[BDK_PG_repository_package]:
+    topographical_order = list(reversed(list(networkx.topological_sort(graph))))
+
+    # Create a dictionary of case-insensitive package names to the package objects.
+    package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in repository.runtime.packages}
+
+    return [package_name_to_package[package_name.upper()] for package_name in topographical_order]
+
+
+def layered_topographical_sort(graph: networkx.DiGraph) -> list[set]:
+    # Compute out-degree for each node.
+    out_degree = {node: graph.out_degree(node) for node in graph.nodes()}
+
+    # Find nodes with zero out-degree.
+    zero_out_degree = [node for node in out_degree if out_degree[node] == 0]
+
+    levels = defaultdict(set)
+    level = 0
+
+    while zero_out_degree:
+        next_zero_out_degree = []
+        for node in zero_out_degree:
+            levels[level].add(node)
+            for predecessor in graph.predecessors(node):
+                out_degree[predecessor] -= 1
+                if out_degree[predecessor] == 0:
+                    next_zero_out_degree.append(predecessor)
+        zero_out_degree = next_zero_out_degree
+        level += 1
+
+    return [levels[level] for level in range(level)]
+
+
+def get_addon_path() -> Path:
+    import addon_utils
+    import os
+    from ..preferences import BdkAddonPreferences
+
+    for module in addon_utils.modules():
+        if module.__name__ == BdkAddonPreferences.bl_idname:
+            return Path(os.path.dirname(module.__file__))
+
+    raise RuntimeError('Could not find addon path')
+
+def get_umodel_path() -> Path:
+    return get_addon_path() / 'bin' / 'umodel.exe'
+
+
+def build_cube_map(cube_map_file_path: Path, exports_directory: Path):
+    import re
+    with open(cube_map_file_path, 'r') as f:
+        contents = f.read()
+        textures = re.findall(r'Faces\[\d] = ([\w\d]+\'[\w\d_\-.]+\')', contents)
+        face_paths: list[Path] = []
+        for texture in textures:
+            face_reference = UReference.from_string(texture)
+            image_path = exports_directory / face_reference.type_name / f'{face_reference.object_name}.tga'
+            face_paths.append(image_path)
+        output_path = cube_map_file_path.parent / cube_map_file_path.name.replace('.props.txt', '.png')
+        cube2sphere_blend_path = get_addon_path() / 'bin' / 'cube2sphere.blend'
+        cube2sphere_script_path = get_addon_path() / 'bin' / 'cube2sphere.py'
+        args = [
+            bpy.app.binary_path,
+            cube2sphere_blend_path,
+            '--background',
+            '--python',
+            cube2sphere_script_path,
+            '--'
+        ]
+        args.extend([str(face_path) for face_path in face_paths])
+        args.extend(['--output', str(output_path)])
+        process = subprocess.run(args, capture_output=True)
+        print(process.stdout.decode())
+        return process, output_path
+
+
+def write_process_log_to_file(process: subprocess.CompletedProcess, log_path: Path):
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, 'w') as f:
+        f.write('=' * 80 + '\n')
+        f.write('stdout\n')
+        f.write('=' * 80 + '\n\n')
+        try:
+            f.write(process.stdout.decode())
+        except UnicodeDecodeError:
+            f.write('Failed to decode stdout')
+        f.write('\n')
+
+        f.write('=' * 80 + '\n')
+        f.write('stderr\n')
+        f.write('=' * 80 + '\n\n')
+        try:
+            f.write(process.stderr.decode())
+        except UnicodeDecodeError:
+            f.write('Failed to decode stderr')
+
+
+def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_repository_package):
+    cache_directory = Path(repository.cache_directory).resolve()
+    game_directory = Path(repository.game_directory).resolve()
+    exports_directory = cache_directory / repository.id / 'exports'
+    package_path = game_directory / package.path
+    package_build_directory = os.path.join(str(exports_directory), os.path.dirname(os.path.relpath(str(package_path), str(game_directory))))
+    umodel_path = str(get_umodel_path())
+    args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"', f'-path="{repository.game_directory}"', str(package_path)]
+    process = subprocess.run(args, capture_output=True)
+
+    log_directory = Path(repository.cache_directory) / repository.id / 'exports' / 'logs' / f'{package_path.stem}.log'
+    write_process_log_to_file(process, log_directory)
+
+    # Build any cube maps that were exported.
+    cubemap_file_paths = []
+
+    package_exports_directory = Path(package_build_directory) / os.path.splitext(package.filename)[0]
+
+    for cubemap_file_path in Path(package_exports_directory).glob('**/Cubemap/*.props.txt'):
+        cubemap_file_paths.append(cubemap_file_path)
+
+    print(f'Building {len(cubemap_file_paths)} cubemaps')
+    for cubemap_file_path in cubemap_file_paths:
+        process, output = build_cube_map(cubemap_file_path, package_exports_directory)
+
+    return (process, package)
+
+
+def repository_package_build(repository: BDK_PG_repository, package_path: str, package_filename: str):
+    # TODO: do not allow this if the package is not up-to-date.
+    script_path = get_addon_path() / 'bin' / 'blend.py'
+    cache_directory = Path(repository.cache_directory).resolve()
+    input_directory = cache_directory / repository.id / 'exports' / os.path.splitext(package_path)[0]
+    output_path = cache_directory / repository.id / 'assets' / f'{package_filename}.blend'
+    args = [
+        bpy.app.binary_path, '--background', '--python', str(script_path), '--',
+        'build', str(input_directory), repository.id, '--output_path', str(output_path)
+    ]
+
+    process = subprocess.run(args, capture_output=True)
+
+    log_directory = Path(repository.cache_directory) / repository.id / 'assets' / 'logs'
+    log_directory.mkdir(parents=True, exist_ok=True)
+    log_path = log_directory / f'{package_filename}.log'
+
+    with open(str(log_path), 'w') as f:
+        f.write('=' * 80 + '\n')
+        f.write('stdout\n')
+        f.write('=' * 80 + '\n\n')
+        f.write(process.stdout.decode())
+        f.write('\n')
+
+        f.write('=' * 80 + '\n')
+        f.write('stderr\n')
+        f.write('=' * 80 + '\n\n')
+        f.write(process.stderr.decode())
+
+    return process, package_path

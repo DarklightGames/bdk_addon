@@ -15,7 +15,7 @@ RUN rustup default nightly
 RUN pip install maturin
 
 # Install Blender
-ARG BLENDER_PATH="blender-4.2.0-beta+v42.b73b66330905-linux.x86_64-release"
+ARG BLENDER_PATH="blender-4.2.0-beta+v42.4bde68cdd672-linux.x86_64-release"
 ARG BLENDER_URL=https://cdn.builder.blender.org/download/daily/${BLENDER_PATH}.tar.xz
 RUN mkdir blender
 RUN curl -L $BLENDER_URL -o blender.tar.xz
