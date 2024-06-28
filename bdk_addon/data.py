@@ -28,7 +28,7 @@ class UReference:
         type_name = None
         group_name = None
 
-        pattern = r'(\w+)\'([\w\.\d\-\_]+)\''
+        pattern = r'(\w+)\'([\w\.\d\-\_ ]+)\''
         match = re.match(pattern, string)
 
         if match is not None:
@@ -39,7 +39,7 @@ class UReference:
             # Type-qualified reference match failed, try to parse the incoming string as an object path.
             object_path = string
 
-        reference_pattern = r'([\w\d\-\_]+)'
+        reference_pattern = r'([\w\d\-\_ ]+)'
         values = re.findall(reference_pattern, object_path)
         package_name = values[0]
         object_name = values[-1]
