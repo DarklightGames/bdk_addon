@@ -1,11 +1,20 @@
-import os.path
-from typing import Optional, Iterable, AbstractSet, Tuple, List, Callable, cast, Union, Dict, Sequence, Any
+from typing import Optional, Iterable, Tuple, List, Callable, cast, Union, Dict, Any
 
 import bpy
-from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNode, GeometryNodeRepeatOutput, \
+from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNodeRepeatOutput, \
     NodeTreeInterfaceItem
 
 from .data import map_range_interpolation_type_items
+
+
+def get_socket_identifier_from_name(node_tree: NodeTree, socket_name: str) -> Optional[str]:
+    """
+    Gets the socket identifier from the given node tree and socket name.
+    """
+    for name, socket in node_tree.interface.items_tree.items():
+        if name == socket_name:
+            return socket.identifier
+    return None
 
 
 def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:

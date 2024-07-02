@@ -3,6 +3,7 @@ import math
 from bpy.props import PointerProperty, FloatProperty, BoolProperty, EnumProperty, IntProperty
 from bpy.types import PropertyGroup, Material
 
+from ..node_helpers import get_socket_identifier_from_name
 
 blending_op_items = (
     ('NONE', 'None', ''),
@@ -28,9 +29,16 @@ blending_op_unreal_to_blender_map = {
 
 def projector_proj_texture_update_cb(self, context):
     projector_object = self.id_data
-    # Find the modifier that is associated with the projector.
+
     modifier = projector_object.modifiers['Projector']
-    modifier['Socket_04'] = self.proj_texture
+    node_tree = modifier.node_group
+
+    socket_identifier = get_socket_identifier_from_name(node_tree, 'ProjTexture')
+
+    if socket_identifier is None:
+        return
+
+    setattr(modifier, 'ProjTexture', self.proj_texture)
 
 
 class BDK_PG_projector(PropertyGroup):

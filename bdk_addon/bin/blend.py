@@ -27,17 +27,9 @@ material_class_names = [
 
 
 def build(args):
-    if not os.path.isdir(args.input_directory):
-        raise RuntimeError(f'{args.input_directory} is not a directory')
-
     input_directory = Path(args.input_directory).resolve()
 
     package_name = input_directory.parts[-1]
-
-    # TODO: There is a new bug where a SM in a Texture package references a Texture package
-    #  that has not yet been built.
-    #  It may be wise to do make a dependency graph or simply do the .blend file building
-    #  in two passes (first materials, then statics)
 
     # Packages can hold basically any kind of asset in them.
     # As a result, static meshes can reference textures residing in the same package.
@@ -80,35 +72,32 @@ def build(args):
         object_name = os.path.basename(file).replace('.props.txt', '')
         extensions = ['.pskx', '.psk']
         filenames = [os.path.join(args.input_directory, 'StaticMesh', f'{object_name}{extension}') for extension in extensions]
+        filename = next((filename for filename in filenames if os.path.isfile(filename)), None)
 
-        for filename in filenames:
-            if not os.path.isfile(filename):
-                continue
-            try:
-                bpy.ops.import_scene.psk(
-                    filepath=filename,
-                    should_import_skeleton=False,
-                    should_import_materials=True,
-                    bdk_repository_id=args.repository_id
-                )
-            except Exception as e:
-                print(e)
-                continue
+        if filename is None:
+            warnings.warn(f'Could not find a static mesh file for {object_name}')
+            continue
 
-            package_reference = f'StaticMesh\'{package_name}.{object_name}\''
+        bpy.ops.import_scene.psk(
+            filepath=filename,
+            should_import_skeleton=False,
+            should_import_materials=True,
+            bdk_repository_id=args.repository_id
+        )
 
-            new_object = bpy.data.objects[object_name]
-            new_object.data.name = package_reference
+        package_reference = f'StaticMesh\'{package_name}.{object_name}\''
 
-            # Provide a "stable" reference to the object in the package.
-            # The name of the data block is not stable because the object & data can be duplicated in Blender fairly
-            # easily, thus changing the name of the data block.
-            new_object.bdk.package_reference = package_reference
+        new_object = bpy.data.objects[object_name]
+        new_object.data.name = package_reference
 
-            new_object['Class'] = 'StaticMeshActor'
+        # Provide a "stable" reference to the object in the package.
+        # The name of the data block is not stable because the object & data can be duplicated in Blender fairly
+        # easily, thus changing the name of the data block.
+        new_object.bdk.package_reference = package_reference
 
-            new_ids.append(new_object)
-            break
+        new_object['Class'] = 'StaticMeshActor'
+
+        new_ids.append(new_object)
 
     # Generate previews.
     for new_id in new_ids:
@@ -122,11 +111,11 @@ def build(args):
     output_directory = os.path.join(os.path.dirname(args.output_path))
     os.makedirs(output_directory, exist_ok=True)
 
-    if len(new_ids):
-        bpy.ops.wm.save_as_mainfile(
-            filepath=os.path.abspath(args.output_path),
-            copy=True
-            )
+    # Note that even if there are no new objects, we still save the file.
+    bpy.ops.wm.save_as_mainfile(
+        filepath=os.path.abspath(args.output_path),
+        copy=True
+    )
 
 
 if __name__ == '__main__':
@@ -139,4 +128,10 @@ if __name__ == '__main__':
     build_subparser.set_defaults(func=build)
     args = sys.argv[sys.argv.index('--')+1:]
     args = parser.parse_args(args)
-    args.func(args)
+
+    try:
+        args.func(args)
+    except Exception as e:
+        # Write to stderr.
+        print(e, file=sys.stderr)
+        sys.exit(1)

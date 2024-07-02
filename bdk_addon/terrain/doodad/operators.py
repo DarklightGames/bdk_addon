@@ -427,6 +427,8 @@ class BDK_OT_terrain_doodad_bake(Operator):
 
 
 def poll_has_terrain_doodad_selected(cls, context: Context) -> bool:
+    if context.active_object is None:
+        return False
     terrain_doodad = get_terrain_doodad(context.active_object)
     if terrain_doodad is None:
         cls.poll_message_set('Must have a terrain doodad selected')

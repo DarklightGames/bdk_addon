@@ -1,12 +1,9 @@
-import math
-import uuid
-
 import bpy
 from bpy.types import Operator, Context
 from bpy.props import StringProperty, FloatProperty
 from typing import Union, Set
 
-from .builder import ensure_projector_node_tree
+from .builder import create_projector
 
 
 def bake_projector(projector_object: bpy.types.Object):
@@ -99,46 +96,20 @@ class BDK_OT_projector_add(Operator):
 
     def execute(self, context: Context) -> Union[Set[int], Set[str]]:
 
-        # Add a new mesh object at the 3D cursor.
-        mesh_data = bpy.data.meshes.new(name=uuid.uuid4().hex)
-
-        bpy_object = bpy.data.objects.new("Projector", mesh_data)
-        bpy_object.location = context.scene.cursor.location
-        bpy_object.lock_scale = (True, True, True)
-        bpy_object.bdk.type = 'PROJECTOR'
-
-        # TODO: Set this up.
-        material = bpy.data.materials.get(self.material_name, None)
-        target = bpy.data.objects.get(self.target, None)
-
-        # Rotate the projector so that it is facing down.
-        bpy_object.rotation_euler = (0.0, math.pi / 2, 0.0)
-
-        modifier = bpy_object.modifiers.new(name='Projector', type='NODES')
-        modifier.node_group = ensure_projector_node_tree()
-
-        socket_properties = {
-            'Socket_2': 'draw_scale',
-            'Socket_4': 'fov',
-            'Socket_5': 'max_trace_distance',
-        }
-
-        for socket_name, property_name in socket_properties.items():
-            fcurve = bpy_object.driver_add(f'modifiers["Projector"]["{socket_name}"]')
-            fcurve.driver.type = 'SCRIPTED'
-            fcurve.driver.use_self = True
-            fcurve.driver.expression = f'self.id_data.bdk.projector.{property_name}'
-
-        # Deselect all doodad.
-        for obj in context.selected_objects:
-            obj.select_set(False)
+        obj = create_projector(context)
+        obj.bdk.projector.material = bpy.data.materials.get(self.material_name, None)
+        obj.bdk.projector.fov = self.fov
+        obj.bdk.projector.max_trace_distance = self.max_trace_distance
+        obj.bdk.projector.target = bpy.data.objects.get(self.target, None)
 
         # Add the object into the scene and select it.
-        context.collection.objects.link(bpy_object)
-        context.view_layer.objects.active = bpy_object
-        bpy_object.select_set(True)
+        context.collection.objects.link(obj)
+        context.view_layer.objects.active = obj
+        obj.select_set(True)
 
         return {'FINISHED'}
+
+
 
 
 class BDK_OT_projectors_bake(Operator):

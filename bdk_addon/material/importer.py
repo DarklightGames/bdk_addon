@@ -14,6 +14,7 @@ from .data import UColorModifier, UCombiner, UConstantColor, UCubemap, UFinalBle
     UTexOscillator, UTexPanner, UTexRotator, UTexScaler, UTexture, UShader, UVariableTexPanner, UVertexColor, \
     UFadeColor, UMaterialSwitch, EAlphaOperation, EColorOperation, EColorFadeType, UMaterial, ETexCoordSrc, \
     ETexEnvMapType, ETexOscillationType, ETexRotationType, ETexClampMode
+from ..bdk.repository.kernel import get_repository_cache_directory
 from ..bdk.repository.properties import BDK_PG_repository
 from ..data import UReference
 from ..helpers import get_addon_preferences
@@ -901,7 +902,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
             self.report({'ERROR_INVALID_CONTEXT'}, f'Repository with ID "{self.repository_id}" not found.')
             return {'CANCELLED'}
 
-        material_cache = MaterialCache(Path(repository.cache_directory) / repository.id)
+        material_cache = MaterialCache(get_repository_cache_directory(repository))
 
         # Get an Unreal reference from the file path.
         reference = UReference.from_path(Path(self.filepath))

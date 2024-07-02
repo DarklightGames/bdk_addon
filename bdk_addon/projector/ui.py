@@ -36,10 +36,9 @@ class BDK_PT_projector(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.prop(projector, 'proj_texture')
-        layout.separator()
         layout.prop(projector, 'fov')
-        layout.prop(projector, 'max_trace_distance')
-        layout.prop(projector, 'draw_scale')
+        layout.prop(projector, 'max_trace_distance', text='Distance')
+        layout.prop(projector, 'draw_scale', text='Scale')
         layout.separator()
 
         appearance_header, appearance_panel = layout.panel('Appearance', default_closed=False)

@@ -16,8 +16,9 @@ from ..bsp.data import ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_
     POLY_FLAGS_ATTRIBUTE_NAME
 from ..bsp.builder import ensure_bdk_brush_uv_node_tree
 from ..bsp.properties import get_poly_flags_keys_from_value
+from ..projector.properties import blending_op_unreal_to_blender_map
 from ..terrain.operators import add_terrain_layer_node
-from ..projector.builder import ensure_projector_node_tree
+from ..projector.builder import ensure_projector_node_tree, create_projector
 from ..terrain.builder import create_terrain_info_object
 from ..terrain.layers import add_terrain_paint_layer, add_terrain_deco_layer
 from ..terrain.kernel import ensure_paint_layers, ensure_deco_layers
@@ -355,60 +356,26 @@ class ProjectorImporter(ActorImporter):
     @classmethod
     def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
         name = t3d_actor.properties.get('Name')
-        mesh_data: Mesh = cast(Mesh, bpy.data.meshes.new(name))
-        return bpy.data.objects.new(name, mesh_data)
+        obj = create_projector(context, name)
+        projector = obj.bdk.projector
+        projector.fov = math.radians(t3d_actor.properties.get('FOV', 0.0))
+        projector.max_trace_distance = t3d_actor.properties.get('MaxTraceDistance', 1000.0)
+        projector.proj_texture = load_bdk_material(context, str(t3d_actor.properties.get('ProjTexture', 'None')))
+        projector.gradient = t3d_actor.properties.get('bGradient', False)
+        projector.material_blender_op = blending_op_unreal_to_blender_map.get(t3d_actor.properties.get('MaterialBlenderOp', 'PB_None'), 'NONE')
+        projector.frame_buffer_blender_op = blending_op_unreal_to_blender_map.get(t3d_actor.properties.get('FrameBufferBlenderOp', 'PB_None'), 'NONE')
+        return obj
 
     @classmethod
     def on_properties_hydrated(cls, t3d_actor: T3dObject, bpy_object: Object, context: Context):
-        # Add geometry node modifier to projector_object.
-        geometry_node_modifier = bpy_object.modifiers.new(name="Projector", type="NODES")
-        geometry_node_modifier.node_group = ensure_projector_node_tree()  # TODO: replace
-
-        # T3D STUFF BELOW:
-
-        # value_node = node_tree.nodes.new(type="ShaderNodeValue")
-        # # Add a driver to the default value of the value node corresponding to the projector object's "FOV" property.
-        # driver = value_node.outputs[0].driver_add("default_value").driver
-        # driver.type = 'AVERAGE'
-        # var = driver.variables.new()
-        # var.name = "FOV"
-        # var.type = 'SINGLE_PROP'
-        # var.targets[0].id = bpy_object
-        # var.targets[0].data_path = "[\"FOV\"]"
-
-        # # Load the projector material.
-        # projector_material = t3d_actor.properties.get('ProjTexture', 'None')
-        # material = load_bdk_material(str(projector_material))
-        # if material is not None:
-        #     # Set the material input for the set material node.
-        #     set_material_node.inputs["Material"].default_value = material
-        #
-        # input_names = [
-        #     "MaxTraceDistance",
-        #     "DrawScale"
-        # ]
-        #
-        # # Create drivers on projector node inputs that map to the properties on projector object.
-        # for input_name in input_names:
-        #     # Check that the properties exist on the projector object, and if not, create them.
-        #     # TODO: In the future, we need to do type lookups for these properties and set the correct default value
-        #     #  based on the type.
-        #     if input_name not in bpy_object:
-        #         bpy_object[input_name] = 0.0
-        #     driver = projector_node.inputs[input_name].driver_add("default_value").driver
-        #     driver.type = 'AVERAGE'
-        #     var = driver.variables.new()
-        #     var.name = input_name
-        #     var.type = 'SINGLE_PROP'
-        #     var.targets[0].id = bpy_object
-        #     var.targets[0].data_path = f"[\"{input_name}\"]"
+        pass
 
 
 class TerrainInfoImporter(ActorImporter):
     @classmethod
     def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
         terrain_map_reference = UReference.from_string(str(t3d_actor.properties.get('TerrainMap', 'None')))
-        terrain_scale: Dict[str, float] = t3d_actor.properties.get('TerrainScale', {'X': 0.0, 'Y': 0.0, 'Z': 0.0})
+        terrain_scale: Dict[str, float] = t3d_actor.properties.get('TerrainScale', {'X': 64.0, 'Y': 64.0, 'Z': 64.0})
         layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('Layers', [])
         deco_layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('DecoLayers', [])
         deco_layer_offset: float = t3d_actor.properties.get('DecoLayerOffset', 0.0)
@@ -491,10 +458,8 @@ class TerrainInfoImporter(ActorImporter):
 
             # Texture
             texture_reference = layer.get('Texture', None)
-            print(texture_reference)
             if texture_reference is not None:
                 paint_layer.material = load_bdk_material(context, str(texture_reference))
-                print(paint_layer.material)
 
         deco_density_maps: Dict[str, bpy.types.Attribute] = {}
 
@@ -726,11 +691,11 @@ def import_t3d(window_manager: WindowManager, contents: str, context: Context):
         actor_importer.on_properties_hydrated(t3d_actor, bpy_object, context)
 
         # Link the new object to the scene.
-        if collection is not None:
+        if collection is not None and bpy_object.name not in collection.objects:
             collection.objects.link(bpy_object)
 
-            # Allow the brush_object importer to do any additional work after the object has been linked.
-            actor_importer.on_object_linked(t3d_actor, bpy_object, context)
+        # Allow the brush_object importer to do any additional work after the object has been linked.
+        actor_importer.on_object_linked(t3d_actor, bpy_object, context)
 
         bpy_object.select_set(True)
 

@@ -1,6 +1,41 @@
+import bpy
+import uuid
+import math
 from bpy.types import NodeTree
 
-from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes
+from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, get_socket_identifier_from_name
+
+
+def create_projector(context, name: str = 'Projector'):
+    # Add a new mesh object at the 3D cursor.
+    mesh_data = bpy.data.meshes.new(name=uuid.uuid4().hex)
+    bpy_object = bpy.data.objects.new(name, mesh_data)
+    bpy_object.location = context.scene.cursor.location
+    bpy_object.lock_scale = (True, True, True)
+    bpy_object.bdk.type = 'PROJECTOR'
+
+    # Rotate the projector so that it is facing down. (maybe use delta rotation instead?)
+    bpy_object.rotation_euler = (0.0, math.pi / 2, 0.0)
+    modifier = bpy_object.modifiers.new(name='Projector', type='NODES')
+    modifier.node_group = ensure_projector_node_tree()
+    socket_properties = {
+        'DrawScale': 'draw_scale',
+        'FOV': 'fov',
+        'MaxTraceDistance': 'max_trace_distance',
+    }
+    for socket_name, property_name in socket_properties.items():
+        # Look up the socket ID for the socket name.
+        socket_identifier = get_socket_identifier_from_name(modifier.node_group, socket_name)
+
+        if not socket_identifier:
+            raise ValueError(f'Could not find socket identifier for "{socket_name}"')
+
+        fcurve = bpy_object.driver_add(f'modifiers["Projector"]["{socket_identifier}"]')
+        fcurve.driver.type = 'SCRIPTED'
+        fcurve.driver.use_self = True
+        fcurve.driver.expression = f'self.id_data.bdk.projector.{property_name}'
+
+    return bpy_object
 
 
 def ensure_projector_uv_scale_node_tree() -> NodeTree:
@@ -127,13 +162,16 @@ def ensure_projector_node_tree() -> NodeTree:
         # Internal
         node_tree.links.new(set_material_node.outputs['Geometry'], bake_node.inputs['Geometry'])
         node_tree.links.new(projector_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
-        node_tree.links.new(scale_uv_group_node.outputs['UV Map'], store_named_attribute_node.inputs['Value'])
+        # node_tree.links.new(scale_uv_group_node.outputs['UV Map'], store_named_attribute_node.inputs['Value'])
+        node_tree.links.new(projector_node.outputs['UV Map'], store_named_attribute_node.inputs['Value'])
         node_tree.links.new(store_named_attribute_node.outputs['Geometry'], set_material_node.inputs['Geometry'])
         node_tree.links.new(bake_node.outputs['Geometry'], join_geometry_node.inputs['Geometry'])
         node_tree.links.new(projector_node.outputs['Frustum'], join_geometry_node.inputs['Geometry'])
         node_tree.links.new(material_size_node.outputs['U'], projector_node.inputs['USize'])
         node_tree.links.new(material_size_node.outputs['V'], projector_node.inputs['VSize'])
-        node_tree.links.new(projector_node.outputs['UV Map'], scale_uv_group_node.inputs['UV Map'])
+        # node_tree.links.new(projector_node.outputs['UV Map'], scale_uv_group_node.inputs['UV Map'])
+        # node_tree.links.new(projector_node.outputs['UV Map'], store_named_attribute_node.inputs['UV Map'])
+        # store_named_attribute_node
 
         # Output
         node_tree.links.new(join_geometry_node.outputs['Geometry'], output_node.inputs['Geometry'])

@@ -16,6 +16,7 @@ if 'bpy' in locals():
 
     importlib.reload(package_reader)
 
+    importlib.reload(bdk_data)
     importlib.reload(bdk_helpers)
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
@@ -87,6 +88,7 @@ if 'bpy' in locals():
     importlib.reload(bdk_properties)
     importlib.reload(bdk_ui)
 else:
+    from . import data as bdk_data
     from . import helpers as bdk_helpers
 
     from .actor import properties as actor_properties
@@ -168,10 +170,10 @@ else:
 
     # T3D
     from .t3d import data as t3d_data
-    from .t3d import ui as t3d_ui
-    from .t3d import operators as t3d_operators
     from .t3d import importer as t3d_importer
     from .t3d import writer as t3d_writer
+    from .t3d import operators as t3d_operators
+    from .t3d import ui as t3d_ui
 
 # Ensure the preferences class is registered with the correct package name.
 bdk_preferences.BdkAddonPreferences.bl_idname = __package__

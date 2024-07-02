@@ -1,9 +1,7 @@
 import mathutils
 
-from .bdk.repository.properties import BDK_PG_repository
 from .data import UReference
 from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, ViewLayer, LayerCollection, Collection
-from pathlib import Path
 from typing import Iterable, Optional, Tuple, Set
 import bpy
 import numpy
@@ -98,7 +96,7 @@ def get_repository_index_by_id(context: Context, repository_id: str) -> Optional
     return None
 
 
-def get_repository_by_id(context: Context, repository_id: str) -> Optional[BDK_PG_repository]:
+def get_repository_by_id(context: Context, repository_id: str) -> Optional['BDK_PG_repository']:
     addon_prefs = get_addon_preferences(context)
     for repository in addon_prefs.repositories:
         if repository.id == repository_id:
@@ -107,12 +105,13 @@ def get_repository_by_id(context: Context, repository_id: str) -> Optional[BDK_P
 
 
 def get_blend_file_for_package(context: Context, package_name: str, repository_id: Optional[str] = None) -> Optional[str]:
+    from .bdk.repository.kernel import get_repository_cache_directory
     if repository_id is None:
         repository_id = get_active_repository_id(context)
     repository = get_repository_by_id(context, repository_id)
     if repository is None:
         return None
-    asset_library_path = Path(repository.cache_directory) / repository.id / 'assets'
+    asset_library_path = get_repository_cache_directory(repository) / 'assets'
     blend_files = [fp for fp in asset_library_path.glob(f'**/{package_name}.blend') if fp.is_file()]
     if len(blend_files) > 0:
         return str(blend_files[0])
@@ -144,7 +143,7 @@ def get_active_repository_id(context: Context) -> Optional[str]:
     return repository_id
 
 
-def get_active_repository(context: Context) -> Optional[BDK_PG_repository]:
+def get_active_repository(context: Context) -> Optional['BDK_PG_repository']:
     repository_id = get_active_repository_id(context)
     return get_repository_by_id(context, repository_id)
 

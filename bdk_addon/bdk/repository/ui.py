@@ -3,9 +3,9 @@ from bpy.props import EnumProperty, BoolProperty
 from bpy.types import UIList, Menu
 from fnmatch import fnmatch
 
-from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_build
-from .properties import repository_package_status_enum_items, filter_repository_package_status_enum_items
-from ..preferences import BDK_OT_debug_material_cache_lookup
+from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_build, \
+    BDK_OT_repository_purge_orphaned_assets
+from .properties import repository_package_status_enum_items
 from ...helpers import get_addon_preferences
 
 
@@ -20,28 +20,15 @@ def filter_packages(self, packages) -> list[int]:
                 flt_flags[i] &= ~bitflag_filter_item
 
     # Invert filter flags for all items.
-    if self.filter_status != 'ALL':
-        for i, sequence in enumerate(packages):
-            if sequence.status != self.filter_status:
+    if not self.filter_up_to_date:
+        for i, package in enumerate(packages):
+            if package.status == 'UP_TO_DATE':
                 flt_flags[i] &= ~bitflag_filter_item
 
-    match self.filter_is_enabled:
-        case 'ENABLED':
-            for i, sequence in enumerate(packages):
-                if not sequence.is_enabled:
-                    flt_flags[i] &= ~bitflag_filter_item
-        case 'DISABLED':
-            for i, sequence in enumerate(packages):
-                if sequence.is_enabled:
-                    flt_flags[i] &= ~bitflag_filter_item
-        case 'ALL':
-            pass
-
-    #
-    # if not pg.sequence_filter_asset:
-    #     for i, sequence in enumerate(packages):
-    #         if hasattr(sequence, 'action') and sequence.action is not None and sequence.action.asset_data is not None:
-    #             flt_flags[i] &= ~bitflag_filter_item
+    if not self.filter_excluded:
+        for i, package in enumerate(packages):
+            if package.is_excluded_by_rule:
+                flt_flags[i] &= ~bitflag_filter_item
 
     return flt_flags
 
@@ -49,28 +36,25 @@ def filter_packages(self, packages) -> list[int]:
 class BDK_UL_repository_packages(UIList):
     bl_idname = 'BDK_UL_repository_packages'
 
-    filter_status: EnumProperty(
-        name='Status',
-        items=filter_repository_package_status_enum_items,
-        default='ALL',
-    )
-    filter_is_enabled: EnumProperty(
+    filter_enabled: EnumProperty(
         name='Enabled',
         items=(
-            ('ALL', 'All', 'Show all packages'),
-            ('ENABLED', 'Enabled', 'Show only enabled packages'),
-            ('DISABLED', 'Disabled', 'Show only disabled packages'),
-        ),
+            ('ENABLED', 'Enabled', 'Show enabled packages'),
+            ('DISABLED', 'Disabled', 'Show disabled packages'),
+        ), options={'ENUM_FLAG'}, default={'ENABLED'}
     )
+    filter_up_to_date: BoolProperty(name='Up to Date', default=False)
+    filter_excluded: BoolProperty(name='Excluded', default=False, description='Show packages excluded by rules')
     use_filter_show: BoolProperty(default=True)
 
     def draw_filter(self, context, layout):
-        row = layout.row()
-        row.prop(self, 'filter_name', text='')
-        row.prop(self, 'use_filter_invert', text='', icon='ARROW_LEFTRIGHT')
-        row = layout.row()
-        row.prop(self, 'filter_status', text='Status')
-        row.prop(self, 'filter_is_enabled', text='Enabled', icon='CHECKBOX_HLT')
+        col = layout.column()
+        col.use_property_split = True
+        col.prop(self, 'filter_name', text='Pattern')
+        col.prop(self, 'filter_excluded', text='Show Excluded')
+        col.prop(self, 'filter_up_to_date', text='Show Up-to-Date')
+        row = col.row(align=True)
+        row.prop(self, 'filter_enabled')
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         col = layout.column(align=True)
@@ -85,14 +69,12 @@ class BDK_UL_repository_packages(UIList):
         col = row.column(align=True)
         col.enabled = False
         col.alignment = 'RIGHT'
-        if not item.is_enabled:
-            col.label(text='Disabled')
+        if item.is_excluded_by_rule:
+            col.label(text='Excluded')
         else:
             status_enum_item = next((i for i in repository_package_status_enum_items if i[0] == item.status), None)
             if status_enum_item is not None:
                 col.label(text=status_enum_item[1])
-
-        row.prop(item, 'is_enabled', text='', icon='CHECKBOX_HLT' if item.is_enabled else 'CHECKBOX_DEHLT', emboss=False)
 
     def filter_items(self, context, data, property_):
         packages = getattr(data, property_)
@@ -105,7 +87,6 @@ class BDK_UL_repositories(UIList):
     bl_idname = 'BDK_UL_repositories'
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
-        from ..preferences import BdkAddonPreferences
         addon_prefs = get_addon_preferences(context)
 
         row = layout.row(align=True)
@@ -127,10 +108,10 @@ class BDK_MT_repository_special(Menu):
         layout = self.layout
         layout.operator(BDK_OT_repository_delete.bl_idname, icon='TRASH')
         layout.operator_menu_enum(BDK_OT_repository_cache_invalidate.bl_idname, 'mode', icon='FILE_REFRESH')
+        layout.operator(BDK_OT_repository_purge_orphaned_assets.bl_idname, icon='X')
         layout.separator()
-        layout.operator(BDK_OT_debug_material_cache_lookup.bl_idname)
-        layout.separator()
-        op = layout.operator(BDK_OT_repository_package_build.bl_idname, text='Debug Build')
+        layout.operator(BDK_OT_repository_package_build.bl_idname, text='Build Selected Package', icon='BLENDER')
+
 
 
 
@@ -167,6 +148,13 @@ class BDK_UL_repository_rules(UIList):
         row_right.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
 
+class BDK_UL_repository_orphaned_assets(UIList):
+    bl_idname = 'BDK_UL_repository_orphaned_assets'
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        layout.label(text=item.file_name)
+
+
 
 
 classes = (
@@ -176,4 +164,5 @@ classes = (
     BDK_MT_repository_add,
     BDK_MT_repository_remove,
     BDK_UL_repository_rules,
+    BDK_UL_repository_orphaned_assets,
 )

@@ -7,6 +7,7 @@ from typing import cast, Union, Optional, Tuple, Iterator
 import uuid
 import numpy as np
 
+from ..bdk.repository.kernel import get_repository_cache_directory
 from ..bdk.repository.properties import BDK_PG_repository
 from ..helpers import get_terrain_info, get_addon_preferences, get_active_repository
 from ..node_helpers import ensure_shader_node_tree, ensure_input_and_output_nodes
@@ -90,7 +91,7 @@ def build_terrain_material(terrain_info_object: Object):
 
     material_caches = []
     if repository is not None:
-        material_caches.append(MaterialCache(Path(repository.cache_directory) / repository.id))
+        material_caches.append(MaterialCache(get_repository_cache_directory(repository)))
     material_builder = MaterialBuilder(material_caches, node_tree)
 
     def add_paint_layer_input_driver(node, input_prop: Union[str | int], paint_layer_prop: str):

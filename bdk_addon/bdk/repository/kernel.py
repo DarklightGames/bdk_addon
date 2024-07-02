@@ -1,3 +1,6 @@
+import fnmatch
+from datetime import datetime
+
 import bpy
 import os.path
 import subprocess
@@ -85,16 +88,11 @@ def read_repository_package_patterns(game_directory: Path, mod: Optional[str]) -
     return package_patterns
 
 
-import datetime
-
-datetime.datetime.utcnow().isoformat()
-
 class Manifest:
     class Package:
         def __init__(self):
-            self.exported_time: Optional[datetime.datetime] = None
-            self.build_time: Optional[datetime.datetime] = None
-            self.is_enabled: bool = True
+            self.exported_time: Optional[datetime] = None
+            self.build_time: Optional[datetime] = None
 
     def __init__(self, path: str):
         self.path = path
@@ -119,17 +117,13 @@ class Manifest:
 
     def mark_package_as_exported(self, package_path: str):
         package = self.packages.setdefault(package_path, Manifest.Package())
-        package.exported_time = datetime.datetime.utcnow()
+        package.exported_time = datetime.utcnow()
         package.status = 'NEEDS_BUILD'
 
     def mark_package_as_built(self, package_path: str):
         package = self.packages.setdefault(package_path, Manifest.Package())
-        package.build_time = datetime.datetime.utcnow()
+        package.build_time = datetime.utcnow()
         package.status = 'UP_TO_DATE'
-
-    def set_package_enabled(self, package_path: str, enabled: bool):
-        package = self.packages.setdefault(package_path, Manifest.Package())
-        package.is_enabled = enabled
 
     # Read and write the manifest to a JSON file.
     @staticmethod
@@ -142,12 +136,15 @@ class Manifest:
                     package = manifest.packages.setdefault(package_name, Manifest.Package())
                     exported_time = package_data.get('exported_time', None)
                     if isinstance(exported_time, str):
-                        package.exported_time = datetime.datetime.fromisoformat(exported_time)
+                        package.exported_time = datetime.fromisoformat(exported_time)
                     build_time = package_data.get('build_time', None)
                     if isinstance(build_time, str):
-                        package.build_time = datetime.datetime.fromisoformat(build_time)
-                    package.is_enabled = package_data.get('is_enabled', True)
+                        package.build_time = datetime.fromisoformat(build_time)
         return manifest
+
+    @staticmethod
+    def from_repository(repository: BDK_PG_repository):
+        return Manifest.from_file(get_repository_manifest_path(repository))
 
     def write(self):
         data = {
@@ -155,7 +152,6 @@ class Manifest:
                 package_name: {
                     'exported_time': package.exported_time.isoformat() if package.exported_time is not None else None,
                     'build_time': package.build_time.isoformat() if package.build_time is not None else None,
-                    'is_enabled': package.is_enabled,
                 }
                 for package_name, package in self.packages.items()
             }
@@ -166,11 +162,8 @@ class Manifest:
             json.dump(data, f, indent=2)
 
 
-def load_repository_manifest(repository: BDK_PG_repository) -> Manifest:
-    manifest_path = Path(repository.cache_directory) / repository.id / 'manifest.json'
-    # if not manifest_path.exists():
-    #     return Manifest(manifest_path)
-    return Manifest.from_file(manifest_path)
+def get_repository_manifest_path(repository: BDK_PG_repository) -> Path:
+    return get_repository_cache_directory(repository) / 'manifest.json'
 
 
 
@@ -178,7 +171,7 @@ def update_repository_package_patterns(repository: BDK_PG_repository):
     repository.runtime.package_patterns.clear()
     repository.runtime.packages.clear()
 
-    manifest = load_repository_manifest(repository)
+    manifest = Manifest.from_repository(repository)
 
     for pattern in read_repository_package_patterns(Path(repository.game_directory), repository.mod):
         package_pattern = repository.runtime.package_patterns.add()
@@ -194,7 +187,7 @@ def update_repository_package_patterns(repository: BDK_PG_repository):
             package.filename = Path(package_path).name
 
             # Get the modified time of the package file.
-            modified_time = datetime.datetime.fromtimestamp(os.path.getmtime(package_path))
+            modified_time = datetime.fromtimestamp(os.path.getmtime(package_path))
             package.modified_time = int(modified_time.timestamp())
 
             if manifest.has_package(package.path):
@@ -206,15 +199,11 @@ def update_repository_package_patterns(repository: BDK_PG_repository):
                 package.exported_time = int(exported_time.timestamp()) if exported_time is not None else 0
 
                 build_time = None
-                if manifest.has_package(package.path):
+                # Make sure the package actually exists in the repository cache.
+                if manifest.has_package(package.path) and get_repository_package_asset_path(repository, package.path).is_file():
                     manifest_package = manifest.get_package(package.path)
                     build_time = manifest_package.build_time
                 package.build_time = int(build_time.timestamp()) if build_time is not None else 0
-
-                is_enabled = True
-                if manifest.has_package(package.path):
-                    is_enabled = manifest.get_package(package.path).is_enabled
-                package.is_enabled = is_enabled
 
                 # If the package has been exported more recently than the package file has been modified, mark it as up to date.
                 if exported_time is None or modified_time > exported_time:
@@ -229,13 +218,13 @@ def update_repository_package_patterns(repository: BDK_PG_repository):
 
 def repository_runtime_update_aggregate_stats(repository: BDK_PG_repository):
     runtime = repository.runtime
-    runtime.disabled_package_count = 0
+    runtime.excluded_package_count = 0
     runtime.up_to_date_package_count = 0
     runtime.need_export_package_count = 0
     runtime.need_build_package_count = 0
     for package in runtime.packages:
-        if not package.is_enabled:
-            runtime.disabled_package_count += 1
+        if package.is_excluded_by_rule:
+            runtime.excluded_package_count += 1
         else:
             match package.status:
                 case 'UP_TO_DATE':
@@ -245,9 +234,42 @@ def repository_runtime_update_aggregate_stats(repository: BDK_PG_repository):
                 case 'NEEDS_BUILD':
                     runtime.need_build_package_count += 1
 
+    # Populate the orphaned assets list.
+    asset_library_directory = get_repository_default_asset_library_directory(repository)
+    package_names = {os.path.splitext(package.filename)[0].upper() for package in repository.runtime.packages}
+    repository.runtime.orphaned_assets.clear()
+    for asset_file in asset_library_directory.glob('*.blend'):
+        if os.path.splitext(asset_file.name)[0].upper() not in package_names:
+            orphaned_asset = repository.runtime.orphaned_assets.add()
+            orphaned_asset.file_name = asset_file.name
+
+
+def repository_runtime_packages_update_rule_exclusions(repository):
+    """
+    Apply the rules to the packages in the repository.
+    """
+    # Clear the exclusion flags.
+    for package in repository.runtime.packages:
+        package.is_excluded_by_rule = False
+
+    # Apply the rules to the packages.
+    for rule in filter(lambda x: not x.mute, repository.rules):
+        match rule.type:
+            case 'EXCLUDE':
+                for package in repository.runtime.packages:
+                    if fnmatch.fnmatch(package.path, rule.pattern):
+                        package.is_excluded_by_rule = True
+            case 'INCLUDE':
+                for package in filter(lambda x: x.is_excluded_by_rule, repository.runtime.packages):
+                    if fnmatch.fnmatch(package.path, rule.pattern):
+                        package.is_excluded_by_rule = False
+
+    repository_runtime_update_aggregate_stats(repository)
+
 
 def repository_runtime_update(repository: BDK_PG_repository):
     update_repository_package_patterns(repository)
+    repository_runtime_packages_update_rule_exclusions(repository)
     repository_runtime_update_aggregate_stats(repository)
     repository.runtime.has_been_scanned = True
 
@@ -255,7 +277,7 @@ def repository_runtime_update(repository: BDK_PG_repository):
 def repository_cache_delete(repository: BDK_PG_repository):
     import shutil
 
-    cache_directory = (Path(repository.cache_directory) / repository.id).resolve()
+    cache_directory = get_repository_cache_directory(repository).resolve()
 
     # Because this is a destructive file system operation, we want to only delete files and directories that we
     # expect to be there. This is a safety measure to prevent accidental deletion of important files if the cache
@@ -280,9 +302,9 @@ def repository_cache_delete(repository: BDK_PG_repository):
         cache_directory.rmdir()
 
 
-# Operator that allows the user to point to a `manifest.json` file and add the repository to the list.
+
 def repository_asset_library_add(context, repository):
-    assets_directory = Path(repository.cache_directory) / repository.id / 'assets'
+    assets_directory = get_repository_default_asset_library_directory(repository)
     context.preferences.filepaths.asset_libraries.new(
         name=repository.name,
         directory=str(assets_directory)
@@ -291,7 +313,7 @@ def repository_asset_library_add(context, repository):
 
 def repository_asset_library_unlink(context, repository) -> int:
     removed_count = 0
-    repository_asset_library_path = str((Path(repository.cache_directory) / repository.id / 'assets').resolve())
+    repository_asset_library_path = str(get_repository_default_asset_library_directory(repository).resolve())
     for asset_library in context.preferences.filepaths.asset_libraries:
         if str(Path(asset_library.path).resolve()) == repository_asset_library_path:
             context.preferences.filepaths.asset_libraries.remove(asset_library)
@@ -302,20 +324,43 @@ def repository_asset_library_unlink(context, repository) -> int:
 def get_repository_metadata_file_path(repository: BDK_PG_repository) -> Path:
     return Path(repository.cache_directory) / f'{repository.id}.json'
 
+
+def repository_metadata_read(repository):
+    repository_metadata_file = get_repository_metadata_file_path(repository).resolve()
+    if not repository_metadata_file.exists():
+        return
+
+    with open(repository_metadata_file, 'r') as f:
+        data = json.load(f)
+        repository.game_directory = data['game_directory']
+        repository.mod = data['mod']
+        repository.rules.clear()
+        if 'rules' in data:
+            for rule_data in data['rules']:
+                rule = repository.rules.add()
+                rule.repository_id = repository.id
+                rule.pattern = rule_data['pattern']
+                rule.type = rule_data['action']
+                rule.mute = rule_data['mute']
+                rule.asset_directory = rule_data.get('asset_directory', '')
+
 def repository_metadata_write(repository):
     with open(get_repository_metadata_file_path(repository).resolve(), 'w') as f:
+        rules = []
+        for rule in repository.rules:
+            rule_data = {
+                'pattern': rule.pattern,
+                'action': rule.type,
+                'mute': rule.mute,
+            }
+            if rule.type == 'SET_ASSET_DIRECTORY':
+                rule_data['asset_directory'] = rule.asset_directory
+            rules.append(rule_data)
         data = {
             'id': repository.id,
             'game_directory': repository.game_directory,
             'mod': repository.mod,
-            'rules': [
-                {
-                    'pattern': rule.pattern,
-                    'action': rule.type,
-                    'mute': rule.mute,
-                }
-                for rule in repository.rules
-            ],
+            'rules': rules,
         }
         json.dump(data, f, indent=2)
 
@@ -502,7 +547,7 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"', f'-path="{repository.game_directory}"', str(package_path)]
     process = subprocess.run(args, capture_output=True)
 
-    log_directory = Path(repository.cache_directory) / repository.id / 'exports' / 'logs' / f'{package_path.stem}.log'
+    log_directory = get_repository_cache_directory(repository) / 'exports' / 'logs' / f'{package_path.stem}.log'
     write_process_log_to_file(process, log_directory)
 
     # Build any cube maps that were exported.
@@ -520,12 +565,46 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     return (process, package)
 
 
-def repository_package_build(repository: BDK_PG_repository, package_path: str, package_filename: str):
+def get_repository_cache_directory(repository: BDK_PG_repository) -> Path:
+    return Path(repository.cache_directory) / repository.id
+
+
+def get_repository_default_asset_library_directory(repository: BDK_PG_repository) -> Path:
+    return get_repository_cache_directory(repository) / 'assets'
+
+
+def get_repository_package_asset_directory(repository: BDK_PG_repository, package_path: str) -> Path:
+    for rule in filter(lambda x: x.type == 'SET_ASSET_DIRECTORY' and not x.mute, repository.rules):
+        if fnmatch.fnmatch(package_path, rule.pattern):
+            rule_asset_directory = Path(rule.asset_directory)
+            if rule_asset_directory.is_absolute():
+                return rule_asset_directory
+            else:
+                return get_repository_cache_directory(repository) / rule_asset_directory
+    return get_repository_default_asset_library_directory(repository)
+
+
+def get_repository_package_asset_path(repository: BDK_PG_repository, package_path: str) -> Path:
+    package_filename = os.path.splitext(os.path.basename(package_path))[0]
+    return get_repository_package_asset_directory(repository, package_path) / f'{package_filename}.blend'
+
+
+def get_repository_package_export_directory(repository: BDK_PG_repository, package_path: str) -> Path:
+    package_filename = os.path.splitext(package_path)[0]
+    return get_repository_export_directory(repository) / package_filename
+
+
+def get_repository_export_directory(repository: BDK_PG_repository):
+    return get_repository_cache_directory(repository) / 'exports'
+
+
+def repository_package_build(repository: BDK_PG_repository, package_path: str):
     # TODO: do not allow this if the package is not up-to-date.
     script_path = get_addon_path() / 'bin' / 'blend.py'
-    cache_directory = Path(repository.cache_directory).resolve()
-    input_directory = cache_directory / repository.id / 'exports' / os.path.splitext(package_path)[0]
-    output_path = cache_directory / repository.id / 'assets' / f'{package_filename}.blend'
+    input_directory = get_repository_package_export_directory(repository, package_path)
+    assets_directory = get_repository_package_asset_directory(repository, package_path)
+    output_path = get_repository_package_asset_path(repository,  package_path)
+
     args = [
         bpy.app.binary_path, '--background', '--python', str(script_path), '--',
         'build', str(input_directory), repository.id, '--output_path', str(output_path)
@@ -533,8 +612,9 @@ def repository_package_build(repository: BDK_PG_repository, package_path: str, p
 
     process = subprocess.run(args, capture_output=True)
 
-    log_directory = Path(repository.cache_directory) / repository.id / 'assets' / 'logs'
+    log_directory = assets_directory / 'logs'
     log_directory.mkdir(parents=True, exist_ok=True)
+    package_filename = os.path.splitext(os.path.basename(package_path))[0]
     log_path = log_directory / f'{package_filename}.log'
 
     with open(str(log_path), 'w') as f:
