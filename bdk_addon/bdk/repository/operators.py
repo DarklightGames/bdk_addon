@@ -420,6 +420,7 @@ class BDK_OT_repository_link(Operator, ImportHelper):
             repository.name = repository_name
             repository.cache_directory = str(Path(self.filepath).parent)
 
+            repository_metadata_read(repository)
             repository_runtime_update(repository)
 
             addon_prefs.repositories_index = len(addon_prefs.repositories) - 1
@@ -516,7 +517,7 @@ class BDK_OT_repository_create(Operator):
         repository_metadata_write(repository)
         repository_asset_library_add(context, repository)
 
-        ensure_default_repository_id(addon_prefs)
+        ensure_default_repository_id(context)
 
         # Tag window regions for redraw so that the new layer is displayed in terrain layer lists immediately.
         tag_redraw_all_windows(context)
@@ -542,7 +543,7 @@ class BDK_OT_repository_unlink(Operator):
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
 
         repository_asset_library_unlink(context, repository)
-        repository_remove(addon_prefs, addon_prefs.repositories_index)
+        repository_remove(context, addon_prefs.repositories_index)
 
         tag_redraw_all_windows(context)
 
@@ -571,7 +572,7 @@ class BDK_OT_repository_delete(Operator):
         repository_cache_delete(repository)
         repository_asset_library_unlink(context, repository)
         repository_metadata_delete(repository)
-        repository_remove(addon_prefs, addon_prefs.repositories_index)
+        repository_remove(context, addon_prefs.repositories_index)
 
         addon_prefs.repositories.remove(addon_prefs.repositories_index)
         addon_prefs.repositories_index = min(addon_prefs.repositories_index, len(addon_prefs.repositories) - 1)

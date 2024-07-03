@@ -402,7 +402,7 @@ def repository_remove(context: Context, repositories_index: int):
     addon_prefs.repositories.remove(repositories_index)
     addon_prefs.repositories_index = min(repositories_index, len(addon_prefs.repositories) - 1)
 
-    ensure_default_repository_id(addon_prefs)
+    ensure_default_repository_id(context)
 
 
 def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> networkx.DiGraph:
