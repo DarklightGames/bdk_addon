@@ -8,7 +8,3 @@ def unreal_to_radians(value: int) -> float:
 
 def meters_to_unreal(value: float) -> float:
     return value * 60.352
-
-
-def unreal_to_meters(value: float) -> float:
-    return value / 60.352

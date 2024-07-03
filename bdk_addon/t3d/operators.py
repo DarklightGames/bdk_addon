@@ -74,8 +74,9 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
             return {'CANCELLED'}
         except SyntaxError as e:
             print(e)
-            self.report({'ERROR', 'File contents are not valid T3DMap syntax. Additional debugging information has been '
-                                  'written to the console'})
+            self.report({'ERROR'}, 'File contents are not valid T3DMap syntax. Additional debugging information has '
+                                   'been written to the console')
+            return {'CANCELLED'}
         self.report({'INFO'}, f'T3DMap Imported successfully')
         return {'FINISHED'}
 
@@ -272,7 +273,6 @@ def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Objec
     return actors
 
 
-# TODO: Copying from the outliner
 def fluid_surface_to_t3d_object(context, obj):
     fluid_surface = obj.bdk.fluid_surface
     actor = T3DObject(type_name='Actor')
@@ -319,9 +319,10 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         wm = context.window_manager
         wm.progress_begin(0, len(selected_objects))
 
-        #
         for obj_index, selected_object in enumerate(selected_objects):
             obj, asset_instance, matrix_world = selected_object
+            # TODO: create a list of pattern predicates & handlers for the different types.
+            #  May need special logic for deferred evaluation on things like BSP brushes.
             match obj.bdk.type:
                 case 'BSP_BRUSH':
                     # Add the brush to the list of brushes to copy, we have to sort them by sort order.

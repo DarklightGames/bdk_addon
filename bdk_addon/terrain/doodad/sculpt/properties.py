@@ -43,7 +43,7 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
     id: StringProperty(name='ID', default='')
     name: StringProperty(name='Name', default='Sculpt Layer')
     operation: EnumProperty(name='Operation', items=terrain_doodad_sculpt_layer_operation_items)
-    terrain_doodad_object: PointerProperty(type=Object, options={'HIDDEN'})  # TODO: perhaps replace with "geometry object" and make this work for both doodads & scatter layers
+    terrain_doodad_object: PointerProperty(type=Object, options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
     mute: BoolProperty(name='Mute', default=False)
     radius: FloatProperty(name='Radius', default=meters_to_unreal(1.0), subtype='DISTANCE', min=RADIUS_EPSILON)

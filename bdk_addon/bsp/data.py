@@ -1,6 +1,4 @@
-from bpy.types import Object
 from enum import IntFlag, Enum
-from typing import List
 
 
 class PolyFlags(IntFlag):
@@ -51,3 +49,14 @@ POLY_FLAGS_ATTRIBUTE_NAME = 'bdk.poly_flags'
 TEXTURE_U_ATTRIBUTE_NAME = 'bdk.texture_u'
 TEXTURE_V_ATTRIBUTE_NAME = 'bdk.texture_v'
 READ_ONLY_ATTRIBUTE_NAME = 'bdk.read_only'
+
+bsp_surface_attributes = (
+    (BRUSH_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE'),
+    (BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE'),
+    (ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+    (TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+    (TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE'),
+    (MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE'),
+    (POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE'),
+    (READ_ONLY_ATTRIBUTE_NAME, 'BOOLEAN', 'FACE'),
+)

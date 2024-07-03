@@ -1,6 +1,5 @@
 from typing import Callable, List
 
-import bpy
 from bpy.types import NodeTree, NodeSocket
 
 from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_vector_math_operation_nodes, \

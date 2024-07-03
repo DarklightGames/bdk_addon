@@ -114,7 +114,8 @@ class DefaultActorImporter(ActorImporter):
 
 
 def set_brush_display_properties(bpy_object: Object):
-    # TODO: have a more general "convert to bsp brush" function that does this along with setting the property group data.
+    # TODO: have a more general "convert to bsp brush" function that does this along with setting the property group
+    #  data.
     bpy_object.display_type = 'WIRE'
     bpy_object.show_all_edges = True
     bpy_object.show_wire = True
@@ -151,7 +152,8 @@ def poly_list_to_mesh(context: Context, name: str, poly_list: T3dObject, pre_piv
                     return prop[1]
             return default_value
 
-        # If the origin exists in the vector properties, use it. Otherwise, use the default origin. The get function does not exist for vector properties.
+        # If the origin exists in the vector properties, use it. Otherwise, use the default origin. The get function
+        # does not exist for vector properties.
         origin = find_vector_property('Origin', (0.0, 0.0, 0.0))
         texture_u = find_vector_property('TextureU', (1.0, 0.0, 0.0))
         texture_v = find_vector_property('TextureV', (0.0, 1.0, 0.0))
@@ -449,8 +451,8 @@ class TerrainInfoImporter(ActorImporter):
                     if tuple(terrain_map_image.size) != tuple(alpha_map_image.size):
                         # Print out a warning if the alpha map image is not the same size as the terrain map image.
                         print(f'Warning: Alpha map image {alpha_map_image_name} is not the same size as the terrain map '
-                              f'image {terrain_map_image_name}. The alpha map image will be resized to match the terrain '
-                              f'map image. {tuple(alpha_map_image.size)} -> {tuple(terrain_map_image.size)}')
+                              f'image {terrain_map_image_name}. The alpha map image will be resized to match the '
+                              f'terrain map image. {tuple(alpha_map_image.size)} -> {tuple(terrain_map_image.size)}')
                         # Resize the alpha map image to match the terrain map image.
                         alpha_map_image.scale(terrain_map_image.size[0], terrain_map_image.size[1])
                     alpha_map_attribute = mesh_data.attributes[field_node.id]
@@ -581,7 +583,7 @@ class SpectatorCamImporter(ActorImporter):
     def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
         name = t3d_actor.properties.get('Name')
         camera_data: Camera = cast(Camera, bpy.data.cameras.new(name))
-        camera_data.clip_start = 2
+        camera_data.clip_start = 4
         camera_data.clip_end = 65536
         camera_data.lens = 35.0  # Approximately 90 degrees FOV.
         camera_object = bpy.data.objects.new(name, camera_data)
@@ -603,7 +605,7 @@ __actor_type_importers__ = {
     'Projector': ProjectorImporter,
     'Brush': BrushImporter,
     'Volume': VolumeImporter,
-    # Volume and volume derived classes (going to need some way to handle these more generally, DrawType?)
+    # Volume and volume derived classes (going to need some way to handle these more generally)
 }
 
 

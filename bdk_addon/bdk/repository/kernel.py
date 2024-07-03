@@ -1,4 +1,5 @@
 import fnmatch
+from uuid import uuid5, NAMESPACE_OID
 from datetime import datetime
 
 import bpy
@@ -166,7 +167,6 @@ def get_repository_manifest_path(repository: BDK_PG_repository) -> Path:
     return get_repository_cache_directory(repository) / 'manifest.json'
 
 
-
 def update_repository_package_patterns(repository: BDK_PG_repository):
     repository.runtime.package_patterns.clear()
     repository.runtime.packages.clear()
@@ -183,7 +183,8 @@ def update_repository_package_patterns(repository: BDK_PG_repository):
             package = repository.runtime.packages.add()
             package.repository_id = repository.id
             package.index = index
-            package.path = Path(package_path).resolve().relative_to(Path(repository.game_directory).resolve()).as_posix()
+            package.path = Path(package_path).resolve().relative_to(
+                Path(repository.game_directory).resolve()).as_posix()
             package.filename = Path(package_path).name
 
             # Get the modified time of the package file.
@@ -200,12 +201,14 @@ def update_repository_package_patterns(repository: BDK_PG_repository):
 
                 build_time = None
                 # Make sure the package actually exists in the repository cache.
-                if manifest.has_package(package.path) and get_repository_package_asset_path(repository, package.path).is_file():
+                if manifest.has_package(package.path) and get_repository_package_asset_path(repository,
+                                                                                            package.path).is_file():
                     manifest_package = manifest.get_package(package.path)
                     build_time = manifest_package.build_time
                 package.build_time = int(build_time.timestamp()) if build_time is not None else 0
 
-                # If the package has been exported more recently than the package file has been modified, mark it as up to date.
+                # If the package has been exported more recently than the package file has been modified, mark it as
+                # up-to-date.
                 if exported_time is None or modified_time > exported_time:
                     package.status = 'NEEDS_EXPORT'
                 elif build_time is None or modified_time > build_time:
@@ -302,7 +305,6 @@ def repository_cache_delete(repository: BDK_PG_repository):
         cache_directory.rmdir()
 
 
-
 def repository_asset_library_add(context, repository):
     assets_directory = get_repository_default_asset_library_directory(repository)
     context.preferences.filepaths.asset_libraries.new(
@@ -344,6 +346,7 @@ def repository_metadata_read(repository):
                 rule.mute = rule_data['mute']
                 rule.asset_directory = rule_data.get('asset_directory', '')
 
+
 def repository_metadata_write(repository):
     with open(get_repository_metadata_file_path(repository).resolve(), 'w') as f:
         rules = []
@@ -366,10 +369,9 @@ def repository_metadata_write(repository):
 
 
 def repository_metadata_delete(repository):
-     repository_metadata_file = get_repository_metadata_file_path(repository).resolve()
-     if repository_metadata_file.exists():
-         repository_metadata_file.unlink()
-
+    repository_metadata_file = get_repository_metadata_file_path(repository).resolve()
+    if repository_metadata_file.exists():
+        repository_metadata_file.unlink()
 
 
 def ensure_default_repository_id(context: Context):
@@ -440,11 +442,13 @@ def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> ne
     return graph
 
 
-def _get_build_order_from_package_dependency_graph(repository: BDK_PG_repository, graph: networkx.DiGraph) -> list[BDK_PG_repository_package]:
+def _get_build_order_from_package_dependency_graph(repository: BDK_PG_repository, graph: networkx.DiGraph) -> \
+        list[BDK_PG_repository_package]:
     topographical_order = list(reversed(list(networkx.topological_sort(graph))))
 
     # Create a dictionary of case-insensitive package names to the package objects.
-    package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in repository.runtime.packages}
+    package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in
+                               repository.runtime.packages}
 
     return [package_name_to_package[package_name.upper()] for package_name in topographical_order]
 
@@ -484,6 +488,7 @@ def get_addon_path() -> Path:
 
     raise RuntimeError('Could not find addon path')
 
+
 def get_umodel_path() -> Path:
     return get_addon_path() / 'bin' / 'umodel.exe'
 
@@ -492,7 +497,7 @@ def build_cube_map(cube_map_file_path: Path, exports_directory: Path):
     import re
     with open(cube_map_file_path, 'r') as f:
         contents = f.read()
-        textures = re.findall(r'Faces\[\d] = ([\w\d]+\'[\w\d_\-.]+\')', contents)
+        textures = re.findall(r'Faces\[\d] = (\w+\'[\w_\-.]+\')', contents)
         face_paths: list[Path] = []
         for texture in textures:
             face_reference = UReference.from_string(texture)
@@ -542,9 +547,11 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     game_directory = Path(repository.game_directory).resolve()
     exports_directory = cache_directory / repository.id / 'exports'
     package_path = game_directory / package.path
-    package_build_directory = os.path.join(str(exports_directory), os.path.dirname(os.path.relpath(str(package_path), str(game_directory))))
+    package_build_directory = os.path.join(str(exports_directory),
+                                           os.path.dirname(os.path.relpath(str(package_path), str(game_directory))))
     umodel_path = str(get_umodel_path())
-    args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"', f'-path="{repository.game_directory}"', str(package_path)]
+    args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"',
+            f'-path="{repository.game_directory}"', str(package_path)]
     process = subprocess.run(args, capture_output=True)
 
     log_directory = get_repository_cache_directory(repository) / 'exports' / 'logs' / f'{package_path.stem}.log'
@@ -562,7 +569,7 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     for cubemap_file_path in cubemap_file_paths:
         process, output = build_cube_map(cubemap_file_path, package_exports_directory)
 
-    return (process, package)
+    return process, package
 
 
 def get_repository_cache_directory(repository: BDK_PG_repository) -> Path:
@@ -598,16 +605,25 @@ def get_repository_export_directory(repository: BDK_PG_repository):
     return get_repository_cache_directory(repository) / 'exports'
 
 
+def get_repository_package_catalog_id(repository: BDK_PG_repository, package_path: str) -> str:
+    # Salt the package path with the repository ID.
+    return str(uuid5(NAMESPACE_OID, repository.id + package_path))
+
+
 def repository_package_build(repository: BDK_PG_repository, package_path: str):
     # TODO: do not allow this if the package is not up-to-date.
     script_path = get_addon_path() / 'bin' / 'blend.py'
     input_directory = get_repository_package_export_directory(repository, package_path)
     assets_directory = get_repository_package_asset_directory(repository, package_path)
-    output_path = get_repository_package_asset_path(repository,  package_path)
+    output_path = get_repository_package_asset_path(repository, package_path)
+    catalog_id = get_repository_package_catalog_id(repository, package_path)
 
+    # TODO: It is relative expensive to spin up an entire Blender instance for each package build. We should consider
+    #  refactoring this so that package builds are dispatched to a pool of processes. This would likely be faster, but
+    #  would add quite a bit of complexity.
     args = [
         bpy.app.binary_path, '--background', '--python', str(script_path), '--',
-        'build', str(input_directory), repository.id, '--output_path', str(output_path)
+        'build', str(input_directory), repository.id, catalog_id, '--output_path', str(output_path)
     ]
 
     process = subprocess.run(args, capture_output=True)

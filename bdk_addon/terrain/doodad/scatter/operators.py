@@ -172,7 +172,9 @@ class BDK_OT_terrain_doodad_scatter_layer_duplicate(Operator):
         terrain_doodad = get_terrain_doodad(context.active_object)
         scatter_layer = terrain_doodad.scatter_layers[terrain_doodad.scatter_layers_index]
         scatter_layer_copy = add_terrain_doodad_scatter_layer(terrain_doodad, scatter_layer.name)
-        copy_simple_property_group(scatter_layer, scatter_layer_copy, {'id', 'name', 'planter_object', 'seed_object', 'sprout_object', 'mask_attribute_id'})
+        copy_simple_property_group(scatter_layer, scatter_layer_copy,
+                                   {'id', 'name', 'planter_object', 'seed_object', 'sprout_object', 'mask_attribute_id'}
+                                   )
 
         # Copy the scatter layer objects.
         for scatter_layer_object in scatter_layer.objects:

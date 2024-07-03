@@ -81,7 +81,6 @@ class BDK_OT_terrain_doodad_sculpt_layer_move(Operator):
         return {'FINISHED'}
 
 
-
 class BDK_OT_terrain_doodad_sculpt_layer_remove(Operator):
     bl_label = 'Remove Sculpt Layer'
     bl_idname = 'bdk.terrain_doodad_sculpt_layer_remove'

@@ -7,13 +7,14 @@ from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, ap
 from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects
 from .data import bsp_optimization_items, ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     POLY_FLAGS_ATTRIBUTE_NAME, BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, \
-    MATERIAL_INDEX_ATTRIBUTE_NAME, READ_ONLY_ATTRIBUTE_NAME
+    MATERIAL_INDEX_ATTRIBUTE_NAME, READ_ONLY_ATTRIBUTE_NAME, bsp_surface_attributes
 from .properties import csg_operation_items, poly_flags_items, BDK_PG_bsp_brush, get_poly_flags_keys_from_value
 from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
 from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material, Event
 from collections import OrderedDict
 from enum import Enum
 from typing import cast, List, Optional, Tuple, Set
+from bdk_py import Poly, Brush, csg_rebuild, BspBuildOptions
 import bmesh
 import bpy
 import sys
@@ -66,7 +67,6 @@ class BDK_OT_bsp_brush_add(Operator):
         layout.prop(self, 'size')
 
     def execute(self, context):
-
         # Create a new square mesh object and add it to the scene.
         mesh = bpy.data.meshes.new('Brush')
 
@@ -113,7 +113,8 @@ class BDK_OT_bsp_brush_set_poly_flags(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     poly_flags: EnumProperty(name='Poly Flags', items=poly_flags_items, options={'ENUM_FLAG'})
-    operation: EnumProperty(name='Operation', items=(('SET', 'Set', ''), ('ADD', 'Add', ''), ('REMOVE', 'Remove', '')), default='SET')
+    operation: EnumProperty(name='Operation', items=(('SET', 'Set', ''), ('ADD', 'Add', ''), ('REMOVE', 'Remove', '')),
+                            default='SET')
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
@@ -346,14 +347,17 @@ class BDK_OT_bsp_brush_select_similar(Operator):
         if self.property == 'CSG_OPERATION':
             def filter_csg_operation(obj: Object):
                 return obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
+
             filter_function = filter_csg_operation
         elif self.property == 'POLY_FLAGS':
             def filter_poly_flags(obj: Object):
                 return obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
+
             filter_function = filter_poly_flags
         elif self.property == 'SORT_ORDER':
             def filter_sort_order(obj: Object):
                 return obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
+
             filter_function = filter_sort_order
         else:
             self.report({'ERROR'}, f'Invalid property: {self.property}')
@@ -541,10 +545,10 @@ class BDK_OT_select_brushes_inside(Operator):
     filter: EnumProperty(
         name='Filter',
         items=(
-                ('INSIDE', 'Inside', 'Select brushes that are inside the active brush'),
-                ('INTERSECT', 'Intersect', 'Select brushes that intersect the active brush'),
-                ('DISJOINT', 'Disjoint', 'Select brushes that are disjoint from the active brush'),
-                ('TOUCH', 'Touch', 'Select brushes that touch the active brush'),
+            ('INSIDE', 'Inside', 'Select brushes that are inside the active brush'),
+            ('INTERSECT', 'Intersect', 'Select brushes that intersect the active brush'),
+            ('DISJOINT', 'Disjoint', 'Select brushes that are disjoint from the active brush'),
+            ('TOUCH', 'Touch', 'Select brushes that touch the active brush'),
         ),
         options={'ENUM_FLAG'},
         default={'INSIDE', 'INTERSECT'},
@@ -657,7 +661,6 @@ class BDK_OT_bsp_build(Operator):
                                                    description='Apply the level texturing to the brush polygons before building the level geometry')
     should_optimize_geometry: BoolProperty(name='Optimize Geometry', default=True)
 
-
     def draw(self, context):
         layout = self.layout
 
@@ -704,9 +707,6 @@ class BDK_OT_bsp_build(Operator):
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-        # Now that we know the dependencies are installed, it's safe to import the module.
-        from bdk_py import Poly, Brush, csg_rebuild, BspBuildOptions
-
         # Go to object mode, if we are not already in object mode.
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -755,7 +755,8 @@ class BDK_OT_bsp_build(Operator):
                     return False
             return True
 
-        brush_objects = [(obj, instance_obj, matrix_world) for (obj, instance_obj, matrix_world) in dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj, instance_obj)]
+        brush_objects = [(obj, instance_obj, matrix_world) for (obj, instance_obj, matrix_world) in
+                         dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj, instance_obj)]
 
         # This is a list of the materials used for the brushes. It is populated as we iterate over the brush objects.
         # We then use this at the end to create the materials for the level object.
@@ -838,7 +839,8 @@ class BDK_OT_bsp_build(Operator):
                     vertices.append((x, y, z))
 
                 # Get the material index for the polygon.
-                material = mesh_data.materials[polygon.material_index] if polygon.material_index < len(mesh_data.materials) else None
+                material = mesh_data.materials[polygon.material_index] if polygon.material_index < len(
+                    mesh_data.materials) else None
                 material_index = _get_or_add_material(material)
 
                 polys.append(Poly(
@@ -940,7 +942,8 @@ class BDK_OT_bsp_build(Operator):
             if node.vertex_count == 0:
                 continue
 
-            point_indices = [vert.point_index for vert in vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]]
+            point_indices = [vert.point_index for vert in
+                             vertices[node.vertex_pool_index:node.vertex_pool_index + node.vertex_count]]
 
             try:
                 bm.faces.new(map(lambda i: bm.verts[i], point_indices))
@@ -989,16 +992,9 @@ class BDK_OT_bsp_build(Operator):
         for material in materials:
             mesh_data.materials.append(material)
 
-        # TODO: use ensure method.
         # Add references to brush polygons as face attributes.
-        mesh_data.attributes.new(BRUSH_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
-        mesh_data.attributes.new(BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
-        mesh_data.attributes.new(ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
-        mesh_data.attributes.new(TEXTURE_U_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
-        mesh_data.attributes.new(TEXTURE_V_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
-        mesh_data.attributes.new(MATERIAL_INDEX_ATTRIBUTE_NAME, 'INT', 'FACE')
-        mesh_data.attributes.new(POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE')
-        mesh_data.attributes.new(READ_ONLY_ATTRIBUTE_NAME, 'BOOLEAN', 'FACE')
+        for (name, type, domain) in bsp_surface_attributes:
+            mesh_data.attributes.new(name, type, domain)
 
         # NOTE: Rather than using the reference returned from `attributes.new`, we need to do the lookup again.
         #  This is because references to the attributes are not stable across calls to `attributes.new`.
@@ -1049,24 +1045,6 @@ class BDK_OT_bsp_brush_demote(Operator):
         return {'FINISHED'}
 
 
-
-class BDK_OT_bsp_brush_debug_ensure_attributes(Operator):
-    bl_idname = 'bdk.bsp_brush_debug_ensure_attributes'
-    bl_label = 'Ensure BSP Brush Attributes'
-    bl_description = 'Ensure that the selected BSP brushes have the required attributes'
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        return poll_has_selected_bsp_brushes(cls, context)
-
-    def execute(self, context):
-        for obj in context.selected_objects:
-            if obj.bdk.type == 'BSP_BRUSH':
-                _ensure_bdk_brush_attributes(obj.data)
-        return {'FINISHED'}
-
-
 class BDK_OT_bsp_brush_operation_toggle(Operator):
     bl_idname = 'bdk.bsp_brush_operation_toggle'
     bl_label = 'Toggle BSP Brush Operation'
@@ -1086,11 +1064,13 @@ class BDK_OT_bsp_brush_operation_toggle(Operator):
                 bsp_brush.csg_operation = 'ADD'
         return {'FINISHED'}
 
+
 select_with_poly_flags_mode_items = (
     ('ALL', 'All', 'Select BSP brushes that have all the specified poly flags'),
     ('ANY', 'Any', 'Select BSP brushes that have any of the specified poly flags'),
     ('NONE', 'None', 'Select BSP brushes that do not have any of the specified poly flags'),
 )
+
 
 class BDK_OT_bsp_brush_select_with_poly_flags(Operator):
     bl_idname = 'bdk.bsp_brush_select_with_poly_flags'
@@ -1115,15 +1095,27 @@ class BDK_OT_bsp_brush_select_with_poly_flags(Operator):
 
     def execute(self, context: Context):
         bsp_brush_objects = [obj for obj in context.scene.objects if obj.bdk.type == 'BSP_BRUSH']
+
+        def all_filter_function(poly_flags: int):
+            return poly_flags & self.poly_flags == self.poly_flags
+
+        def any_filter_function(poly_flags: int):
+            return poly_flags & self.poly_flags != 0
+
+        def none_filter_function(poly_flags: int):
+            return poly_flags & self.poly_flags == 0
+
         match self.mode:
             case 'ALL':
-                filter_function = lambda obj: obj.bdk.bsp_brush.poly_flags & self.poly_flags == self.poly_flags
+                filter_function = all_filter_function
             case 'ANY':
-                filter_function = lambda obj: obj.bdk.bsp_brush.poly_flags & self.poly_flags != 0
+                filter_function = any_filter_function
             case _:  # NONE
-                filter_function = lambda obj: obj.bdk.bsp_brush.poly_flags & self.poly_flags == 0
+                filter_function = none_filter_function
 
-        for obj in filter(filter_function, bsp_brush_objects):
+        for obj in bsp_brush_objects:
+            if not filter_function(obj.bdk.bsp_brush.poly_flags):
+                continue
             obj.select_set(True)
 
         return {'FINISHED'}
@@ -1171,7 +1163,6 @@ class BDK_OT_ensure_tool_operators(Operator):
 
 
 classes = (
-    BDK_OT_bsp_brush_debug_ensure_attributes,  # TODO: remove this, was only used for debugging.
     BDK_OT_bsp_brush_add,
     BDK_OT_bsp_brush_check_for_errors,
     BDK_OT_bsp_brush_operation_toggle,

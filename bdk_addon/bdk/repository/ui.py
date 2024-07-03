@@ -56,7 +56,7 @@ class BDK_UL_repository_packages(UIList):
         row = col.row(align=True)
         row.prop(self, 'filter_enabled')
 
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, **kwargs):
         col = layout.column(align=True)
 
         row = col.row(align=True)
@@ -86,7 +86,7 @@ class BDK_UL_repository_packages(UIList):
 class BDK_UL_repositories(UIList):
     bl_idname = 'BDK_UL_repositories'
 
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, **kwargs):
         addon_prefs = get_addon_preferences(context)
 
         row = layout.row(align=True)
@@ -113,8 +113,6 @@ class BDK_MT_repository_special(Menu):
         layout.operator(BDK_OT_repository_package_build.bl_idname, text='Build Selected Package', icon='BLENDER')
 
 
-
-
 class BDK_MT_repository_add(Menu):
     bl_idname = 'BDK_MT_repository_add'
     bl_label = 'Add Repository'
@@ -128,6 +126,7 @@ class BDK_MT_repository_add(Menu):
 class BDK_MT_repository_remove(Menu):
     bl_idname = 'BDK_MT_repository_remove'
     bl_label = 'Remove Repository'
+
     def draw(self, context):
         layout = self.layout
         layout.operator('bdk.repository_unlink', icon='UNLINKED')
@@ -137,7 +136,7 @@ class BDK_MT_repository_remove(Menu):
 class BDK_UL_repository_rules(UIList):
     bl_idname = 'BDK_UL_repository_rules'
 
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, **kwargs):
         row = layout.row(align=True)
         row_left = row.row(align=True)
         row_left.enabled = False
@@ -151,10 +150,8 @@ class BDK_UL_repository_rules(UIList):
 class BDK_UL_repository_orphaned_assets(UIList):
     bl_idname = 'BDK_UL_repository_orphaned_assets'
 
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, **kwargs):
         layout.label(text=item.file_name)
-
-
 
 
 classes = (

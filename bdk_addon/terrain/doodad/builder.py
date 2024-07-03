@@ -11,7 +11,7 @@ from ...units import meters_to_unreal
 from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, \
     add_geometry_node_switch_nodes, ensure_curve_modifier_node_tree
-from ..kernel import ensure_paint_layers, ensure_deco_layers, add_density_from_terrain_layer_nodes
+from ..kernel import ensure_paint_layers, ensure_deco_layers
 from .kernel import get_terrain_doodad_scatter_layer_by_id
 from .sculpt.builder import ensure_sculpt_value_node_group
 from .data import terrain_doodad_operation_items
@@ -439,8 +439,8 @@ def convert_object_to_terrain_doodad(obj: Object, terrain_info_object: Object):
     obj.lock_rotation = (True, True, False)
 
 
-def get_terrain_doodads_for_terrain_info_object(context: Context, terrain_info_object: Object) -> List[
-    'BDK_PG_terrain_doodad']:
+def get_terrain_doodads_for_terrain_info_object(context: Context, terrain_info_object: Object) ->\
+        List['BDK_PG_terrain_doodad']:
     return [obj.bdk.terrain_doodad for obj in context.scene.objects if
             obj.bdk.type == 'TERRAIN_DOODAD' and obj.bdk.terrain_doodad.terrain_info_object == terrain_info_object]
 

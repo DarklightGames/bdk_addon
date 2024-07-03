@@ -41,14 +41,14 @@ class ObjectReference:
         index = struct.unpack('i', stream.read(4))[0]
         if index < 0:
             index = -index - 1
-            type = ObjectReferenceType.IMPORT_TABLE
+            object_reference_type = ObjectReferenceType.IMPORT_TABLE
         elif index > 0:
             index = index - 1
-            type = ObjectReferenceType.EXPORT_TABLE
+            object_reference_type = ObjectReferenceType.EXPORT_TABLE
         else:
-            type = ObjectReferenceType.NULL
+            object_reference_type = ObjectReferenceType.NULL
 
-        return ObjectReference(type, index)
+        return ObjectReference(object_reference_type, index)
 
 
 class UnrealPackageImport:

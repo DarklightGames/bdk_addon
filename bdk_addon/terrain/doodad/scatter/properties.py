@@ -8,9 +8,8 @@ from ....actor.properties import BDK_PG_actor_properties
 from ....helpers import get_terrain_doodad
 from ....property_group_helpers import add_curve_modifier_properties
 from ....units import meters_to_unreal
-from ...properties import BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_name
+from ...properties import get_terrain_info_paint_layer_by_name
 from .builder import ensure_scatter_layer_modifiers
-
 
 axis_enum_items = [
     ('X', 'X', '', 0),
@@ -53,16 +52,18 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     random_weight: FloatProperty(name='Random Weight', default=1.0, min=0.0, soft_max=10.0, subtype='FACTOR')
 
     is_cap: BoolProperty(name='Is Cap', default=False, options=empty_set,
-                            description='The object may only be placed at the end of the curve')
+                         description='The object may only be placed at the end of the curve')
 
     is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
     align_axis: EnumProperty(name='Align Axis', items=axis_signed_enum_items, default='Z')
 
     rotation_offset: FloatVectorProperty(name='Rotation Offset', subtype='EULER', default=(0.0, 0.0, 0.0))
-    rotation_offset_saturation: FloatProperty(name='Rotation Offset Saturation', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
+    rotation_offset_saturation: FloatProperty(name='Rotation Offset Saturation', default=1.0, min=0.0, max=1.0,
+                                              subtype='FACTOR')
     rotation_offset_saturation_seed: IntProperty(name='Rotation Offset Saturation Seed', default=0, min=0)
 
-    random_rotation_max: FloatVectorProperty(name='Random Rotation', subtype='EULER', min=0.0, max=math.pi, default=(0.0, 0.0, 0.0))
+    random_rotation_max: FloatVectorProperty(name='Random Rotation', subtype='EULER', min=0.0, max=math.pi,
+                                             default=(0.0, 0.0, 0.0))
     random_rotation_max_seed: IntProperty(name='Random Rotation Seed', default=0, min=0)
 
     scale_mode: EnumProperty(name='Scale Mode', items=(
@@ -83,7 +84,8 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
 
     # Snap & Align to Terrain
     snap_to_terrain: BoolProperty(name='Snap to Terrain', default=True)
-    align_to_terrain_factor: FloatProperty(name='Align to Terrain', min=0.0, max=1.0, default=1.0, description='Align the Z axis to the terrain normal', subtype='FACTOR')
+    align_to_terrain_factor: FloatProperty(name='Align to Terrain', min=0.0, max=1.0, default=1.0,
+                                           description='Align the Z axis to the terrain normal', subtype='FACTOR')
     terrain_normal_offset_min: FloatProperty(name='Terrain Normal Offset Min', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_max: FloatProperty(name='Terrain Normal Offset Max', default=0.0, subtype='DISTANCE')
     terrain_normal_offset_seed: IntProperty(name='Terrain Normal Offset Seed', default=0, min=0)
@@ -95,11 +97,14 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
     actor_properties: PointerProperty(type=BDK_PG_actor_properties, name='Actor Properties', options={'HIDDEN'})
 
 
-def terrain_doodad_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context, edit_text: str):
+def terrain_doodad_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context,
+                                              edit_text: str):
     paint_layers = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info.paint_layers
     return [paint_layer.name for paint_layer in paint_layers]
 
-def terrain_doodad_scatter_layer_mask_attribute_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
+
+def terrain_doodad_scatter_layer_mask_attribute_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer',
+                                                               context: Context):
     if self.mask_type != 'ATTRIBUTE':
         return
     # TODO: update this when we have named attribute layers
@@ -107,6 +112,7 @@ def terrain_doodad_scatter_layer_mask_attribute_name_update_cb(self: 'BDK_PG_ter
 
     terrain_doodad = self.terrain_doodad_object.bdk.terrain_doodad
     ensure_scatter_layer_modifiers(context, terrain_doodad)
+
 
 def terrain_doodad_mask_paint_layer_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
     if self.mask_type != 'PAINT_LAYER':
@@ -135,19 +141,19 @@ def terrain_doodad_scatter_layer_mask_type_update_cb(self: 'BDK_PG_terrain_dooda
     ensure_scatter_layer_modifiers(context, terrain_doodad)
 
 
-def terrain_doodad_scatter_layer_geometry_source_name_search_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context, edit_text: str):
-    return [scatter_layer.name for scatter_layer in filter(lambda x: x != self, self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers)]
+def terrain_doodad_scatter_layer_geometry_source_name_search_cb(self: 'BDK_PG_terrain_doodad_scatter_layer',
+                                                                context: Context, edit_text: str):
+    return [scatter_layer.name for scatter_layer in
+            filter(lambda x: x != self, self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers)]
 
 
-def terrain_doodad_scatter_layer_geometry_source_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
-    scatter_layer = next((scatter_layer for scatter_layer in self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers if scatter_layer.name == self.geometry_source_name), None)
+def terrain_doodad_scatter_layer_geometry_source_name_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer',
+                                                                context: Context):
+    scatter_layer = next(
+        (scatter_layer for scatter_layer in self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers if
+         scatter_layer.name == self.geometry_source_name), None)
     self.geometry_source_id = scatter_layer.id if scatter_layer else ''
     ensure_scatter_layer_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad)
-
-
-def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer', context: Context):
-    terrain_doodad = self.terrain_doodad_object.bdk.terrain_doodad
-    ensure_scatter_layer_modifiers(context, terrain_doodad)
 
 
 class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
@@ -163,7 +169,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     geometry_source_name: StringProperty(name='Geometry Source Name', default='', options={'HIDDEN'},
                                          search=terrain_doodad_scatter_layer_geometry_source_name_search_cb,
                                          update=terrain_doodad_scatter_layer_geometry_source_name_update_cb)
-    geometry_source_id: StringProperty(name='Geometry Source ID', default='', options={'HIDDEN'}, update=terrain_doodad_scatter_layer_update_cb)
+    geometry_source_id: StringProperty(name='Geometry Source ID', default='', options={'HIDDEN'},
+                                       update=terrain_doodad_scatter_layer_update_cb)
     scatter_type: EnumProperty(name='Scatter Type', items=(
         ('ORDER', 'Order', 'The objects will be scattered in the order that they appear in the object list.'),
         ('RANDOM', 'Random', 'The objects will be scattered randomly based on the probability weight.'),
@@ -199,7 +206,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
         ('RELATIVE', 'Relative', ''),
         ('ABSOLUTE', 'Absolute', ''),
     ), default='RELATIVE')
-    curve_spacing_relative_factor: FloatProperty(name='Spacing Relative Factor', default=1.0, min=0.1, soft_max=10.0, subtype='FACTOR')
+    curve_spacing_relative_factor: FloatProperty(name='Spacing Relative Factor', default=1.0, min=0.1, soft_max=10.0,
+                                                 subtype='FACTOR')
     curve_spacing_absolute: FloatProperty(name='Spacing', default=meters_to_unreal(1.0), min=1, subtype='DISTANCE')
     curve_spacing_relative_axis: EnumProperty(name='Spacing Relative Axis', items=axis_enum_items, default='X')
 
@@ -210,7 +218,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     curve_tangent_offset_seed: IntProperty(name='Tangent Offset Seed', default=0, min=0)
 
     fence_mode: BoolProperty(name='Fence Mode', default=False, options=empty_set,
-                             description='Adjacent objects will always be the same distance apart and will face towards the next object.\n\nUse this when creating fences or walls')
+                             description='Adjacent objects will always be the same distance apart and will face '
+                                         'towards the next object.\n\nUse this when creating fences or walls')
 
     # Mesh Settings
     mesh_element_mode: EnumProperty(name='Element Mode', items=(
@@ -220,7 +229,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     mesh_face_distribute_method: EnumProperty(name='Distribution Method', items=(
         ('RANDOM', 'Random', 'Points will be distributed randomly'),
         ('POISSON_DISK', 'Poisson Disk', 'Poisson-disc sampling produces points that are tightly-packed, but no closer '
-         'to each other than a specified minimum distance, resulting in a more natural pattern'),
+                                         'to each other than a specified minimum distance, resulting in a more '
+                                         'natural pattern'),
     ), default='POISSON_DISK')
     mesh_face_distribute_random_density: FloatProperty(name='Density', default=0.001, min=0.0, soft_max=0.1)
     mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(2.0),
@@ -228,7 +238,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     # TODO:  We could make this a more sensible unit. IIRC, the current unit is the number of points per square meter.
     #  This causes issues when the object is scaled, causing the program to freeze even with small increases to this
     #  number.
-    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.0001, min=0.0, max=0.001, options={'HIDDEN'})
+    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.0001, min=0.0, max=0.001,
+                                                            options={'HIDDEN'})
     mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, max=1.0,
                                                                subtype='FACTOR')
     mesh_face_distribute_seed: IntProperty(name='Distribution Seed', default=0, min=0)
@@ -236,17 +247,23 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     # Snap to Vertex
     snap_to_vertex_factor: FloatProperty(name='Snap to Vertex Factor', default=0.0, min=0.0, max=1.0, subtype='FACTOR',
                                          options=empty_set,
-                                         description='Bias the objects towards the nearest vertex on the terrain along the X and Y axes.\n\nThis is useful when you want each object to make full sculpt or paint contributions to nearest vertex')
+                                         description='Bias the objects towards the nearest vertex on the terrain '
+                                                     'along the X and Y axes.\n\nThis is useful when you want each '
+                                                     'object to make full sculpt or paint contributions to nearest '
+                                                     'vertex')
 
     # Position Deviation
-    use_position_deviation: BoolProperty(name='Use Position Deviation', default=False, options=empty_set, description='Randomly offset the position of the scatter object in a circle around the scatter point')
+    use_position_deviation: BoolProperty(name='Use Position Deviation', default=False, options=empty_set,
+                                         description='Randomly offset the position of the scatter object in a circle '
+                                                     'around the scatter point')
     position_deviation_min: FloatProperty(name='Position Deviation Min', subtype='DISTANCE')
     position_deviation_max: FloatProperty(name='Position Deviation Max', subtype='DISTANCE')
     position_deviation_seed: IntProperty(name='Position Offset Seed', default=0, min=0)
 
     # Mask Settings
     use_mask: BoolProperty(name='Use Mask', default=False, options=empty_set,
-                           description='Use a layer or attribute mask to control where the scatter objects will be placed')
+                           description='Use a layer or attribute mask to control where the scatter objects will be '
+                                       'placed')
     mask_type: EnumProperty(name='Mask Type', items=(
         ('ATTRIBUTE', 'Attribute', ''),
         ('PAINT_LAYER', 'Paint Layer', ''),
@@ -266,7 +283,6 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
 
 
 add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
-
 
 classes = (
     BDK_PG_terrain_doodad_scatter_layer_object,

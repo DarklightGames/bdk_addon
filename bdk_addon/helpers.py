@@ -240,7 +240,7 @@ def load_bdk_static_mesh(context: Context, reference: str, repository_id: Option
 
 
 # https://blenderartists.org/t/duplicating-pointerproperty-propertygroup-and-collectionproperty/1419096/2
-def copy_simple_property_group(source, target, ignore=None):
+def copy_simple_property_group(source, target, ignore: Optional[Set[str]] = None):
     if ignore is None:
         ignore = set()
     if not hasattr(source, "__annotations__"):

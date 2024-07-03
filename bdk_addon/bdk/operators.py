@@ -1,9 +1,9 @@
 from collections import OrderedDict
 from pathlib import Path
-from typing import Set
+from typing import Set, cast
 
 import bpy
-from bpy.types import Operator, Context, Node, Event
+from bpy.types import Operator, Context, Node, Event, Armature, Mesh
 from bpy.props import StringProperty
 
 from ..helpers import get_addon_preferences, tag_redraw_all_windows
@@ -45,7 +45,7 @@ class BDK_OT_force_node_tree_rebuild(Operator):
 
     def execute(self, context: Context):
         for node_tree in bpy.data.node_groups:
-            node_tree.bdk.build_hash =''
+            node_tree.bdk.build_hash = ''
         return {'FINISHED'}
 
 
@@ -117,7 +117,8 @@ class BDK_OT_generate_node_code(Operator):
             for socket in node.inputs:
                 if socket.is_linked or socket.is_unavailable:
                     continue
-                if hasattr(socket, 'default_value') and socket.default_value:  # TODO: this is imprecise but should work for now
+                # TODO: this is imprecise but should work for now
+                if hasattr(socket, 'default_value') and socket.default_value:
                     default_value = socket.default_value
                     if type(socket.default_value) == str:
                         default_value = f'\'{default_value}\''
@@ -202,7 +203,8 @@ class BDK_OT_generate_node_code(Operator):
 def vertex_group_name_search_cb(self, context: Context, edit_text: str):
     # List all the bones in the armature.
     armature_object = context.object
-    return [bone.name for bone in armature_object.data.bones if edit_text.lower() in bone.name.lower()]
+    armature_data: Armature = cast(Armature, armature_object.data)
+    return [bone.name for bone in armature_data.bones if edit_text.lower() in bone.name.lower()]
 
 
 class BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier(Operator):
@@ -242,7 +244,8 @@ class BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier(Opera
             if vertex_group is None:
                 vertex_group = bpy_object.vertex_groups.new(name=self.vertex_group_name)
             # Add all vertices to the vertex group.
-            vertex_group.add(range(len(bpy_object.data.vertices)), 1.0, 'REPLACE')
+            mesh_data = cast(Mesh, bpy_object.data)
+            vertex_group.add(range(len(mesh_data.vertices)), 1.0, 'REPLACE')
             # Add an armature modifier if it doesn't exist.
             armature_modifier = bpy_object.modifiers.get('Armature', None)
             if armature_modifier is None:

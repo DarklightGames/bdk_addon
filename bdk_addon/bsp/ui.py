@@ -5,17 +5,13 @@ from ..bsp.operators import BDK_OT_apply_level_texturing_to_brushes, BDK_OT_ensu
 
 
 def poll_is_active_object_bsp_brush(cls, context: Context):
-    if context.active_object is None:
-        return False
-    if context.active_object.bdk.type != 'BSP_BRUSH':
+    if context.active_object is None or context.active_object.bdk.type != 'BSP_BRUSH':
         return False
     return True
 
 
 def poll_is_active_object_level(cls, context: Context):
-    if context.object is None:
-        return False
-    if context.object.bdk.type != 'LEVEL':
+    if context.object is None or context.active_object.bdk.type != 'LEVEL':
         return False
     return True
 

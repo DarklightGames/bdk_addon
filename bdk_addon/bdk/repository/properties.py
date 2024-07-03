@@ -15,7 +15,6 @@ repository_package_status_enum_items = (
 )
 
 
-
 class BDK_PG_repository_package(PropertyGroup):
     repository_id: StringProperty(name='Repository ID', options={'HIDDEN'})
     index: IntProperty()
@@ -31,7 +30,8 @@ class BDK_PG_repository_package(PropertyGroup):
 repository_rule_type_enum_items = (
     ('EXCLUDE', 'Exclude', 'Ignore the package'),
     ('INCLUDE', 'Include', 'Include the package'),
-    ('SET_ASSET_DIRECTORY', 'Set Asset Directory', 'Set the asset directory for the package. Relative paths are relative to the repository cache directory'),
+    ('SET_ASSET_DIRECTORY', 'Set Asset Directory', 'Set the asset directory for the package. Relative paths are '
+                                                   'relative to the repository cache directory'),
 )
 
 
@@ -48,7 +48,8 @@ class BDK_PG_repository_rule(PropertyGroup):
     type: EnumProperty(name='Action', items=repository_rule_type_enum_items, default='EXCLUDE')
     pattern: StringProperty(name='Pattern', default='*')
     mute: BoolProperty(name='Mute', default=False, update=repository_rule_mute_update_cb)
-    asset_directory: StringProperty(name='Asset Directory', default='', description='The directory where assets are stored', subtype='DIR_PATH')
+    asset_directory: StringProperty(name='Asset Directory', default='', subtype='DIR_PATH',
+                                    description='The directory where assets are stored')
 
 
 class BDK_PG_repository_orphaned_asset(PropertyGroup):

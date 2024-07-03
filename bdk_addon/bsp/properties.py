@@ -1,7 +1,7 @@
 from .data import PolyFlags, bsp_optimization_items
 from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProperty, FloatProperty, \
-    FloatVectorProperty, BoolProperty, StringProperty
-from bpy.types import PropertyGroup, Object, Context, Material
+     BoolProperty, StringProperty
+from bpy.types import PropertyGroup, Object, Context
 from enum import Enum
 from typing import Set
 
@@ -81,7 +81,7 @@ def get_poly_flags_keys_from_value(values: int) -> Set[str]:
     return poly_flags
 
 
-def bsp_brush_update(self, context: Context):
+def bsp_brush_update(self, _: Context):
     self.object.color = get_brush_color(self.csg_operation, self.poly_flags)
 
 
@@ -114,9 +114,12 @@ class BDK_PG_bsp_brush(PropertyGroup):
     )
     sort_order: IntProperty(
         name='Sort Order',
-        description='Used for resolving sort order for brushes at the same object hierarchy level (i.e., siblings). Lower values are sorted first.\n\n'
-                    'This is primarily used for maintaining the original brush order when importing brushes from the SDK.\n\n'
-                    'For new levels, it is highly recommended to use collection and object hierarchy to control the brush order',
+        description='Used for resolving sort order for brushes at the same object hierarchy level (i.e., siblings). '
+                    'Lower values are sorted first.\n\n'
+                    'This is primarily used for maintaining the original brush order when importing brushes from the '
+                    'SDK.\n\n'
+                    'For new levels, it is highly recommended to use collection and object hierarchy to control the '
+                    'brush order',
         default=0,
         min=0,
     )

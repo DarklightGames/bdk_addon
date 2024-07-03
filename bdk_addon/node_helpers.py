@@ -171,12 +171,20 @@ def ensure_geometry_node_tree(name: str, items: Iterable[Tuple[str, str, str]], 
     return ensure_node_tree(name, 'GeometryNodeTree', items, build_function, should_force_build)
 
 
-def ensure_shader_node_tree(
-    name: str, items: Iterable[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
+def ensure_shader_node_tree(name: str, items: Iterable[Tuple[str, str, str]],
+                            build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
     """
     Ensures that a shader node tree with the given name, inputs and outputs exists.
     """
     return ensure_node_tree(name, 'ShaderNodeTree', items, build_function, should_force_build)
+
+
+def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str,
+                                        socket_type: str) -> Optional[NodeTreeInterfaceItem]:
+    for index, item in enumerate(node_tree.interface.items_tree):
+        if item.item_type == 'SOCKET' and item.in_out == in_out and item.name == name and item.socket_type == socket_type:
+            return item
+    return None
 
 
 def ensure_node_tree(name: str,
@@ -192,12 +200,6 @@ def ensure_node_tree(name: str,
         node_tree = bpy.data.node_groups[name]
     else:
         node_tree = bpy.data.node_groups.new(name=name, type=node_group_type)
-
-    def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str, socket_type: str) -> Optional[NodeTreeInterfaceItem]:
-        for index, item in enumerate(node_tree.interface.items_tree):
-            if item.item_type == 'SOCKET' and item.in_out ==  in_out and item.name == name and item.socket_type == socket_type:
-                return item
-        return None
 
     # Compare the inputs and outputs of the node tree with the given inputs and outputs.
     # If they are different, remove the ones that are now missing and add the new ones.

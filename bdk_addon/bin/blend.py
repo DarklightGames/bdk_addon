@@ -102,6 +102,7 @@ def build(args):
     # Generate previews.
     for new_id in new_ids:
         new_id.asset_mark()
+        new_id.asset_data.catalog_id = args.catalog_id
         new_id.asset_generate_preview()
 
     # Save the file to disk.
@@ -124,6 +125,7 @@ if __name__ == '__main__':
     build_subparser = subparsers.add_parser('build')
     build_subparser.add_argument('input_directory')
     build_subparser.add_argument('repository_id')
+    build_subparser.add_argument('catalog_id')
     build_subparser.add_argument('--output_path', required=False, default=None)
     build_subparser.set_defaults(func=build)
     args = sys.argv[sys.argv.index('--')+1:]

@@ -13,29 +13,31 @@ from .kernel import Manifest, repository_runtime_update, repository_asset_librar
     repository_metadata_delete, repository_package_build, get_repository_package_dependency_graph, \
     layered_topographical_sort, repository_package_export, is_game_directory_and_mod_valid, repository_metadata_write, \
     repository_metadata_read, repository_runtime_packages_update_rule_exclusions, get_repository_cache_directory, \
-    get_repository_default_asset_library_directory
+    get_repository_default_asset_library_directory, get_repository_package_asset_directory, \
+    get_repository_package_catalog_id
 from .properties import repository_rule_type_enum_items
+from ...catalog import AssetCatalogFile
 from ...helpers import get_addon_preferences, tag_redraw_all_windows
 
 
 def poll_has_repository_selected(context):
     addon_prefs = get_addon_preferences(context)
     return (len(addon_prefs.repositories) > 0 and
-            addon_prefs.repositories_index >= 0 and
-            addon_prefs.repositories_index < len(addon_prefs.repositories))
+            0 <= addon_prefs.repositories_index < len(addon_prefs.repositories))
 
 
 def poll_has_repository_package_selected(context):
     addon_prefs = get_addon_preferences(context)
     return (poll_has_repository_selected(context) and
-            addon_prefs.repositories[addon_prefs.repositories_index].runtime.packages_index >= 0 and
-            addon_prefs.repositories[addon_prefs.repositories_index].runtime.packages_index < len(addon_prefs.repositories[addon_prefs.repositories_index].runtime.packages))
+            0 <= addon_prefs.repositories[addon_prefs.repositories_index].runtime.packages_index < len(
+                addon_prefs.repositories[addon_prefs.repositories_index].runtime.packages))
+
 
 def poll_has_repository_rule_selected(context):
     addon_prefs = get_addon_preferences(context)
     return (poll_has_repository_selected(context) and
-            addon_prefs.repositories[addon_prefs.repositories_index].rules_index >= 0 and
-            addon_prefs.repositories[addon_prefs.repositories_index].rules_index < len(addon_prefs.repositories[addon_prefs.repositories_index].rules))
+            0 <= addon_prefs.repositories[addon_prefs.repositories_index].rules_index < len(
+                addon_prefs.repositories[addon_prefs.repositories_index].rules))
 
 
 class BDK_OT_repository_scan(Operator):
@@ -67,7 +69,8 @@ class BDK_OT_repository_scan(Operator):
 class BDK_OT_repository_cache_delete(Operator):
     bl_idname = 'bdk.repository_cache_delete'
     bl_label = 'Delete Cache'
-    bl_description = 'Delete the repository cache. This will delete all exports, assets and the manifest. This action cannot be undone'
+    bl_description = 'Delete the repository cache. This will delete all exports, assets, and the manifest. This ' \
+                     'action cannot be undone'
     bl_options = {'INTERNAL'}
 
     def invoke(self, context, event):
@@ -129,7 +132,8 @@ class BDK_OT_repository_package_build(Operator):
 class BDK_OT_repository_package_cache_invalidate(Operator):
     bl_idname = 'bdk.repository_package_cache_invalidate'
     bl_label = 'Invalidate Package Cache'
-    bl_description = 'Invalidate the cache of the selected package. This will mark the package as needing to be exported and built, but will not delete any files. This action cannot be undone'
+    bl_description = 'Invalidate the cache of the selected package. This will mark the package as needing to be ' \
+                     'exported and built, but will not delete any files. This action cannot be undone'
     bl_options = {'INTERNAL'}
 
     index: IntProperty(name='Index', default=-1)
@@ -147,10 +151,12 @@ class BDK_OT_repository_package_cache_invalidate(Operator):
 
         return {'FINISHED'}
 
+
 class BDK_OT_repository_build_asset_library(Operator):
     bl_idname = 'bdk.repository_build_asset_library'
     bl_label = 'Build Asset Library'
-    bl_description = 'Export and build all packages in the repository.\n\nDepending on the number of packages, this may take a while'
+    bl_description = 'Export and build all packages in the repository.\n\nDepending on the number of packages, ' \
+                     'this may take a while'
     bl_options = {'INTERNAL'}
 
     @classmethod
@@ -166,7 +172,6 @@ class BDK_OT_repository_build_asset_library(Operator):
         # TODO: Make sure that the PSK/PSA addon is installed and enabled (and meets version requirements)
         return True
 
-
     def invoke(self, context, event):
         return context.window_manager.invoke_confirm(self, event)
 
@@ -177,8 +182,10 @@ class BDK_OT_repository_build_asset_library(Operator):
         repository_runtime_update(repository)
 
         # Find all the packages that need to be exported first.
-        packages_to_export = {package for package in repository.runtime.packages if package.status == 'NEEDS_EXPORT' and not package.is_excluded_by_rule}
-        packages_to_build = {package for package in repository.runtime.packages if package.status != 'UP_TO_DATE' and not package.is_excluded_by_rule}
+        packages_to_export = {package for package in repository.runtime.packages if
+                              package.status == 'NEEDS_EXPORT' and not package.is_excluded_by_rule}
+        packages_to_build = {package for package in repository.runtime.packages if
+                             package.status != 'UP_TO_DATE' and not package.is_excluded_by_rule}
 
         # Get the build order of the packages.
         print('Building package dependency graph')
@@ -192,14 +199,16 @@ class BDK_OT_repository_build_asset_library(Operator):
         print(f'Finished determining build order in {datetime.now() - time}')
 
         # Map the package names to the package objects.
-        package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in repository.runtime.packages}
+        package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in
+                                   repository.runtime.packages}
         package_name_keys = set(package_name_to_package.keys())
 
         # Some packages in the build levels may not be in the runtime packages, so we need to filter them out.
         package_build_levels = [level & package_name_keys for level in package_build_levels]
 
         # Convert the build levels to the package objects.
-        package_build_levels = [{package_name_to_package[package_name.upper()] for package_name in level} for level in package_build_levels]
+        package_build_levels = [{package_name_to_package[package_name.upper()] for package_name in level} for level in
+                                package_build_levels]
 
         # Remove the packages that do not need to be built from the build levels.
         for level in package_build_levels:
@@ -209,7 +218,8 @@ class BDK_OT_repository_build_asset_library(Operator):
         package_build_levels = [level for level in package_build_levels if level]
 
         # Convert package_build_levels to a list of path and filename tuples.
-        package_build_levels = [[(x.path, os.path.splitext(x.filename)[0]) for x in level] for level in package_build_levels]
+        package_build_levels = [[(x.path, os.path.splitext(x.filename)[0]) for x in level] for level in
+                                package_build_levels]
 
         # Count the number of commands that will be executed.
         command_count = len(packages_to_export) + len(packages_to_build)
@@ -225,6 +235,28 @@ class BDK_OT_repository_build_asset_library(Operator):
         context.window_manager.progress_begin(0, command_count)
 
         manifest = Manifest.from_repository(repository)
+
+        # TODO: Purge Orphaned Assets should also delete the catalog.
+
+        # Populate the asset catalog.
+        # We do this ahead of time to avoid needing to use file locking to make sure that the different Blender
+        # processes don't try to write to the same file at the same time.
+        # TODO: extract this to a function.
+        asset_directory_packages = dict()
+        for package in repository.runtime.packages:
+            asset_directory = get_repository_package_asset_directory(repository, package.path)
+            if asset_directory not in asset_directory_packages:
+                asset_directory_packages[asset_directory] = []
+            asset_directory_packages[asset_directory].append(package)
+
+        for asset_directory, packages in asset_directory_packages.items():
+            catalog_file = AssetCatalogFile(asset_directory)
+            for package in packages:
+                catalog_path = os.path.splitext(package.path)[0]
+                catalog_name = os.path.basename(catalog_path)
+                catalog_id = get_repository_package_catalog_id(repository, package.path)
+                catalog_file.add_catalog(catalog_name, catalog_path, catalog_id)
+            catalog_file.write()
 
         packages_that_failed_to_export = []
 
@@ -244,7 +276,9 @@ class BDK_OT_repository_build_asset_library(Operator):
                 context.window_manager.progress_update(progress)
 
         if failure_count > 0:
-            self.report({'ERROR'}, f'Failed to export {failure_count} packages. Aborting build step. Check logs for more information.')
+            self.report({'ERROR'},
+                        f'Failed to export {failure_count} packages. Aborting build step. Check logs for more '
+                        f'information.')
             manifest.write()
             repository_runtime_update(repository)
             return {'CANCELLED'}
@@ -289,6 +323,7 @@ class BDK_OT_repository_build_asset_library(Operator):
         tag_redraw_all_windows(context)
 
         return {'FINISHED'}
+
 
 class BDK_OT_repository_cache_invalidate(Operator):
     bl_idname = 'bdk.repository_cache_invalidate'
@@ -362,12 +397,12 @@ class BDK_OT_repository_link(Operator, ImportHelper):
 
             game_directory = Path(repository_data['game_directory'])
             mod = repository_data['mod']
-            id = repository_data['id']
+            id_ = repository_data['id']
 
             # Make sure there isn't already a repository with the same ID.
             addon_prefs = get_addon_preferences(context)
             for repository in addon_prefs.repositories:
-                if repository.id == id:
+                if repository.id == id_:
                     self.report({'ERROR'}, f'A repository with the same ID already exists ({repository.name})')
                     return {'CANCELLED'}
 
@@ -375,7 +410,7 @@ class BDK_OT_repository_link(Operator, ImportHelper):
             addon_prefs = get_addon_preferences(context)
             repository = addon_prefs.repositories.add()
 
-            repository.id = id
+            repository.id = id_
             repository.game_directory = str(game_directory)
             repository.mod = mod
 
@@ -446,7 +481,8 @@ class BDK_OT_repository_create(Operator):
             repository_name += f' ({self.mod})'
 
         if not is_game_directory_and_mod_valid(self.game_directory, self.mod):
-            self.report({'ERROR'}, 'Invalid game directory or mode configuration. Please check the values and try again.')
+            self.report({'ERROR'},
+                        'Invalid game directory or mode configuration. Please check the values and try again.')
             return {'CANCELLED'}
 
         repository = addon_prefs.repositories.add()
@@ -487,6 +523,7 @@ class BDK_OT_repository_create(Operator):
 
         return {'FINISHED'}
 
+
 class BDK_OT_repository_unlink(Operator):
     bl_idname = 'bdk.repository_unlink'
     bl_label = 'Unlink Repository'
@@ -512,6 +549,7 @@ class BDK_OT_repository_unlink(Operator):
         self.report({'INFO'}, f'Unlinked repository "{repository.name}"')
 
         return {'FINISHED'}
+
 
 class BDK_OT_repository_delete(Operator):
     bl_idname = 'bdk.repository_delete'
@@ -701,7 +739,8 @@ class BDK_OT_repository_purge_orphaned_assets(Operator):
         layout = self.layout
         layout.label(text=f'{len(repository.runtime.orphaned_assets)} orphaned assets')
         if len(repository.runtime.orphaned_assets) > 0:
-            layout.template_list(BDK_UL_repository_orphaned_assets.bl_idname, '', repository.runtime, 'orphaned_assets', repository.runtime, 'orphaned_assets_index', rows=3)
+            layout.template_list(BDK_UL_repository_orphaned_assets.bl_idname, '', repository.runtime, 'orphaned_assets',
+                                 repository.runtime, 'orphaned_assets_index', rows=3)
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
