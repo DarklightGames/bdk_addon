@@ -574,9 +574,6 @@ class BDK_OT_repository_delete(Operator):
         repository_metadata_delete(repository)
         repository_remove(context, addon_prefs.repositories_index)
 
-        addon_prefs.repositories.remove(addon_prefs.repositories_index)
-        addon_prefs.repositories_index = min(addon_prefs.repositories_index, len(addon_prefs.repositories) - 1)
-
         self.report({'INFO'}, f'Deleted repository "{repository.name}"')
 
         tag_redraw_all_windows(context)
