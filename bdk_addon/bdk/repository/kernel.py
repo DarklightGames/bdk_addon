@@ -342,7 +342,7 @@ def repository_metadata_read(repository):
                 rule = repository.rules.add()
                 rule.repository_id = repository.id
                 rule.pattern = rule_data['pattern']
-                rule.type = rule_data['action']
+                rule.type = rule_data['type']
                 rule.mute = rule_data['mute']
                 rule.asset_directory = rule_data.get('asset_directory', '')
 
@@ -353,7 +353,7 @@ def repository_metadata_write(repository):
         for rule in repository.rules:
             rule_data = {
                 'pattern': rule.pattern,
-                'action': rule.type,
+                'type': rule.type,
                 'mute': rule.mute,
             }
             if rule.type == 'SET_ASSET_DIRECTORY':

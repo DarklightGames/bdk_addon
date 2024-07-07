@@ -45,7 +45,7 @@ def repository_rule_mute_update_cb(self, context):
 
 class BDK_PG_repository_rule(PropertyGroup):
     repository_id: StringProperty(name='Repository ID', options={'HIDDEN'})
-    type: EnumProperty(name='Action', items=repository_rule_type_enum_items, default='EXCLUDE')
+    type: EnumProperty(name='Type', items=repository_rule_type_enum_items, default='EXCLUDE')
     pattern: StringProperty(name='Pattern', default='*')
     mute: BoolProperty(name='Mute', default=False, update=repository_rule_mute_update_cb)
     asset_directory: StringProperty(name='Asset Directory', default='', subtype='DIR_PATH',

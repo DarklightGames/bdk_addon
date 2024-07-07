@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -446,9 +447,13 @@ class BDK_OT_repository_create(Operator):
     game_directory: StringProperty(name='Game Directory', subtype='DIR_PATH', description='The game\'s root directory')
     mod: StringProperty(name='Mod', description='The name of the mod directory (optional)')
     use_custom_cache_directory: BoolProperty(name='Custom Cache Directory', default=False)
+    use_custom_id: BoolProperty(name='Use Custom Identifier', default=False, description='Use a custom identifier for the repository. Do not use this unless you know what you are doing')
+    custom_id: StringProperty(name='Custom ID', default='', description='Custom ID for the repository')
     custom_cache_directory: StringProperty(name='Cache Directory', subtype='DIR_PATH')
+    use_defaults: BoolProperty(name='Use Defaults', default=True, description='Use default settings for the repository as defined in the bdk-default.json file within the game directory and mod directory')
 
     def invoke(self, context: Context, event: Event):
+        self.custom_id = uuid.uuid4().hex
         context.window_manager.invoke_props_dialog(self)
         return {'RUNNING_MODAL'}
 
@@ -458,14 +463,24 @@ class BDK_OT_repository_create(Operator):
         flow.use_property_split = True
         flow.prop(self, 'game_directory')
         flow.prop(self, 'mod')
+        flow.prop(self, 'use_defaults')
 
-        custom_directory_header, custom_directory_panel = layout.panel_prop(self, 'use_custom_cache_directory')
-        custom_directory_header.prop(self, 'use_custom_cache_directory', text='Custom Cache Directory')
+        advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
+        advanced_header.label(text='Advanced')
+        if advanced_panel is not None:
+            custom_id_header, custom_id_panel = advanced_panel.panel_prop(self, 'use_custom_id')
+            custom_id_header.prop(self, 'use_custom_id', text='Custom ID')
+            if custom_id_panel is not None:
+                advanced_panel.prop(self, 'custom_id')
 
-        if custom_directory_panel is not None:
-            flow = custom_directory_panel.grid_flow()
-            flow.use_property_split = True
-            flow.prop(self, 'custom_cache_directory')
+            custom_directory_header, custom_directory_panel = advanced_panel.panel_prop(self, 'use_custom_cache_directory')
+            custom_directory_header.prop(self, 'use_custom_cache_directory', text='Custom Cache Directory')
+
+            if custom_directory_panel is not None:
+                flow = custom_directory_panel.grid_flow()
+                flow.use_property_split = True
+                flow.prop(self, 'custom_cache_directory')
+
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
@@ -478,6 +493,7 @@ class BDK_OT_repository_create(Operator):
             return {'CANCELLED'}
 
         repository_name = game_directory.name
+
         if self.mod:
             repository_name += f' ({self.mod})'
 
@@ -487,10 +503,43 @@ class BDK_OT_repository_create(Operator):
             return {'CANCELLED'}
 
         repository = addon_prefs.repositories.add()
-        repository.id = uuid.uuid4().hex
+
+        # By default, the ID should be generated from the mod name, or the game directory if no mod is specified.
+        repository_id = self.mod if self.mod else game_directory.name
+        if self.use_custom_id:
+            repository_id = self.custom_id
+
+        if not repository_id:
+            self.report({'ERROR'}, 'Invalid repository ID. Please check the values and try again')
+            return {'CANCELLED'}
+
+        repository.id = repository_id
         repository.game_directory = self.game_directory
         repository.mod = self.mod
         repository.name = repository_name
+
+        # Check for `bdk-repository-default.json` file in the game directory, then the mod directory.
+        # These files contain default settings for the repository, and should be applied additively.
+        repository_default_file_paths = [
+            game_directory / 'bdk-default.json'
+        ]
+        if self.mod:
+            repository_default_file_paths.append(game_directory / self.mod / 'bdk-default.json')
+
+        for repository_default_file_paths in repository_default_file_paths:
+            if not repository_default_file_paths.is_file():
+                continue
+            data = json.loads(repository_default_file_paths.read_text())
+            repository_data = data.get('repository', None)
+            if repository_data is None:
+                continue
+            if 'rules' in repository_data:
+                for rule_data in repository_data['rules']:
+                    rule = repository.rules.add()
+                    rule.type = rule_data['type']
+                    rule.pattern = rule_data['pattern']
+                    if 'asset_directory' in rule_data:
+                        rule.asset_directory = rule_data['asset_directory']
 
         # Cache directory.
         cache_directory = game_directory / '.bdk'
