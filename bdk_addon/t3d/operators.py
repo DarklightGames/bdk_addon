@@ -364,6 +364,10 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         for bsp_brush_object, matrix_world in bsp_brush_objects:
             copy_actors.append(bsp_brush_to_actor(context, bsp_brush_object, matrix_world))
 
+        # Mark all the actors as selected.
+        for actor in copy_actors:
+            actor.properties['bSelected'] = True
+
         for actor in copy_actors:
             map_object.children.append(actor)
 
