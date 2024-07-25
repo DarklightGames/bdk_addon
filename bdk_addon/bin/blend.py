@@ -97,7 +97,17 @@ def build(args):
 
         new_object['Class'] = 'StaticMeshActor'
 
-        new_ids.append(new_object)
+        # Add the object to a collection with the name of the object.
+        collection = bpy.data.collections.new(name=object_name)
+
+        # Link the object to the collection.
+        collection.objects.link(new_object)
+
+        # Link the collection to the scene.
+        bpy.context.scene.collection.children.link(collection)
+
+        # Add the collection to the new_ids list.
+        new_ids.append(collection)
 
     # Generate previews.
     for new_id in new_ids:

@@ -63,14 +63,16 @@ class DefaultActorImporter(ActorImporter):
         static_mesh_reference = t3d_actor['StaticMesh']
 
         # Load the static mesh data from the BDK asset library.
-        mesh = load_bdk_static_mesh(context, str(static_mesh_reference))
+        collection = load_bdk_static_mesh(context, str(static_mesh_reference))
 
-        if mesh is None:
+        if collection is None:
             print(f"Failed to load static mesh {static_mesh_reference} for brush_object {t3d_actor['Name']}.")
             return None
 
-        # Create a new mesh object, matching the name of the brush_object.
-        bpy_object = bpy.data.objects.new(t3d_actor['Name'], mesh)
+        # Create a new instance object, matching the name of the brush_object.
+        bpy_object = bpy.data.objects.new(t3d_actor['Name'], None)
+        bpy_object.instance_type = 'COLLECTION'
+        bpy_object.instance_collection = collection
 
         return bpy_object
 
@@ -722,7 +724,7 @@ def import_t3d(window_manager: WindowManager, contents: str, context: Context):
         bsp_brush_sort_order = 0
         for t3d_object in t3d_map.children:
             is_brush = is_t3d_object_a_brush(t3d_object)
-            collection = brushes_collection if is_brush else context.scene.collection
+            collection = brushes_collection if is_brush else context.collection
             obj = import_t3d_object(t3d_object, context, collection)
             if is_brush and obj is not None:
                 obj.bdk.bsp_brush.sort_order = bsp_brush_sort_order

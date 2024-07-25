@@ -28,7 +28,6 @@ def get_instance_offset(asset_instance: Object) -> Matrix:  # TODO: move to gene
 def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, Euler, Vector):
     """
     Converts a Blender world matrix to units suitable for exporting to Unreal Engine.
-    This also corrects for the offset that occurs when pasting a brush object into the Unreal Editor.
     :param matrix: The Blender world matrix.
     :return: The location, rotation and scale.
     """
@@ -38,13 +37,7 @@ def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, 
     return loc, matrix.to_euler('XYZ'), matrix.to_scale()
 
 
-# TODO: kind of ugly
-def add_movement_properties_to_actor(actor: T3DObject, bpy_object: Object, asset_instance: Optional[Object] = None, do_location = True, do_rotation = True, do_scale = True) -> None:
-    if asset_instance:
-        matrix_world: Matrix = asset_instance.matrix_world @ get_instance_offset(asset_instance) @ bpy_object.matrix_local
-    else:
-        matrix_world = bpy_object.matrix_world
-
+def add_movement_properties_to_actor(actor: T3DObject, matrix_world: Matrix, do_location = True, do_rotation = True, do_scale = True) -> None:
     location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix_world)
     if do_location:
         actor.properties['Location'] = location
@@ -54,47 +47,8 @@ def add_movement_properties_to_actor(actor: T3DObject, bpy_object: Object, asset
         actor.properties['DrawScale3D'] = scale
 
 
-def create_static_mesh_actor(static_mesh_object: Object, asset_instance: Optional[Object] = None) -> T3DObject:
-    actor = T3DObject('Actor')
-    actor.properties['Class'] = 'StaticMeshActor'
-    actor.properties['Name'] = static_mesh_object.name
-    actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
-
-    add_movement_properties_to_actor(actor, static_mesh_object, asset_instance)
-
-    # Skin Overrides
-    for material_index, material_slot in enumerate(static_mesh_object.material_slots):
-        if material_slot.link == 'OBJECT' \
-                and material_slot.material is not None \
-                and material_slot.material.bdk.package_reference:
-            actor.properties[f'Skins({material_index})'] = material_slot.material.bdk.package_reference
-
-    return actor
-
-
-def projector_to_t3d_object(projector_object: Object) -> T3DObject:
-    projector = projector_object.bdk.projector
-
-    actor = T3DObject('Actor')
-    actor.properties['Class'] = 'Projector'
-    actor.properties['Name'] = projector_object.name
-    actor.properties['MaxTraceDistance'] = projector.max_trace_distance
-    actor.properties['FOV'] = int(math.degrees(projector.fov))
-    actor.properties['DrawScale'] = projector.draw_scale
-    actor.properties['FrameBufferBlendingOp'] = blending_op_blender_to_unreal_map[projector.frame_buffer_blending_op]
-    actor.properties['MaterialBlendingOp'] = blending_op_blender_to_unreal_map[projector.material_blending_op]
-
-    if projector.proj_texture is not None:
-        actor.properties['ProjTexture'] = projector.proj_texture.bdk.package_reference
-
-    add_movement_properties_to_actor(actor, projector_object, do_scale=False)
-
-    return actor
-
-
-def terrain_info_to_t3d_object(terrain_info_object: Object) -> T3DObject:
+def terrain_info_to_t3d_object(terrain_info_object: Object, matrix_world: Matrix) -> T3DObject:
     terrain_info = get_terrain_info(terrain_info_object)
-
     terrain_info_name = sanitize_name_for_unreal(terrain_info_object.name)
 
     actor = T3DObject('Actor')
@@ -205,7 +159,7 @@ def terrain_info_to_t3d_object(terrain_info_object: Object) -> T3DObject:
         terrain_info.terrain_scale_z))
     actor.properties['DecoLayerOffset'] = terrain_info_object.bdk.terrain_info.deco_layer_offset
 
-    add_movement_properties_to_actor(actor, terrain_info_object)
+    add_movement_properties_to_actor(actor, matrix_world)
 
     return actor
 
@@ -339,9 +293,9 @@ def export_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph, 
     write_bmp_g16(path, pixels=heightmap)
 
 
-def write_terrain_t3d(terrain_info_object: Object, depsgraph: Depsgraph, fp: io.TextIOBase):
+def write_terrain_t3d(terrain_info_object: Object, fp: io.TextIOBase):
     t3d = T3DObject('Map')
-    t3d.children.append(terrain_info_to_t3d_object(terrain_info_object))
+    t3d.children.append(terrain_info_to_t3d_object(terrain_info_object, terrain_info_object.matrix_world))
     T3DWriter(fp).write(t3d)
 
 

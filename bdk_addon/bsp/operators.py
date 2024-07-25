@@ -744,19 +744,19 @@ class BDK_OT_bsp_build(Operator):
             for error in result.errors:
                 self.report({'WARNING'}, str(error))
 
-        def brush_object_filter(obj: Object, instance_obj: Optional[Object] = None):
+        def brush_object_filter(obj: Object, instance_objects: List[Object]):
             if not obj.bdk.type == 'BSP_BRUSH':
                 return False
             if self.should_do_only_visible:
-                if instance_obj is not None:
-                    if not instance_obj.visible_get():
+                if instance_objects:
+                    if not instance_objects[0].visible_get():
                         return False
                 elif not obj.visible_get():
                     return False
             return True
 
-        brush_objects = [(obj, instance_obj, matrix_world) for (obj, instance_obj, matrix_world) in
-                         dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj, instance_obj)]
+        brush_objects = [(obj, instance_objects, matrix_world) for (obj, instance_objects, matrix_world) in
+                         dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj, instance_objects)]
 
         # This is a list of the materials used for the brushes. It is populated as we iterate over the brush objects.
         # We then use this at the end to create the materials for the level object.
