@@ -167,7 +167,7 @@ def get_repository_manifest_path(repository: BDK_PG_repository) -> Path:
     return get_repository_cache_directory(repository) / 'manifest.json'
 
 
-def update_repository_package_patterns(repository: BDK_PG_repository):
+def update_repository_runtime(repository: BDK_PG_repository):
     repository.runtime.package_patterns.clear()
     repository.runtime.packages.clear()
 
@@ -271,7 +271,7 @@ def repository_runtime_packages_update_rule_exclusions(repository):
 
 
 def repository_runtime_update(repository: BDK_PG_repository):
-    update_repository_package_patterns(repository)
+    update_repository_runtime(repository)
     repository_runtime_packages_update_rule_exclusions(repository)
     repository_runtime_update_aggregate_stats(repository)
     repository.runtime.has_been_scanned = True
@@ -407,12 +407,12 @@ def repository_remove(context: Context, repositories_index: int):
 
 def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> networkx.DiGraph:
     """
-    Returns the build order of the packages in the repository, as well as any cycles that are detected.
+    Returns the dependency graph of the packages in the repository.
     Note that cycles are removed from the graph by severing all the edges that create the cycle.
     Note that the names of the packages are converted to uppercase for comparison since Unreal packages (and all names
     in Unreal) are case-insensitive.
     """
-    from ...package.reader import get_package_dependencies
+    from ...package.reader import read_package_dependencies
     import networkx
 
     graph = networkx.DiGraph()
@@ -426,7 +426,7 @@ def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> ne
         package_path = Path(repository.game_directory) / package.path
         # TODO: Reading these from the packages is expensive, especially with lots of packages. We should cache this
         #  information in the manifest.
-        dependencies = get_package_dependencies(str(package_path))
+        dependencies = read_package_dependencies(str(package_path))
         for dependency in dependencies:
             dependency = dependency.upper()
             graph.add_edge(package_name, dependency)

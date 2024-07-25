@@ -113,7 +113,7 @@ def name_from_buffer(package_version: int, stream: BinaryIO) -> str:
     return name.decode('windows-1252')
 
 
-def get_package_dependencies(path: str):
+def read_package_dependencies(path: str):
     """
     Load an Unreal package file.
     """
