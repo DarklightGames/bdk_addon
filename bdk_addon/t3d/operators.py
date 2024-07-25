@@ -11,16 +11,17 @@ from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
 from ..data import UReference
-from ..bsp.properties import __poly_flag_keys_to_values__
+from ..bsp.properties import get_poly_flags_value_from_keys
 from ..bsp.data import POLY_FLAGS_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     ORIGIN_ATTRIBUTE_NAME
-from ..terrain.exporter import create_static_mesh_actor, add_movement_properties_to_actor, terrain_info_to_t3d_object, \
-    convert_blender_matrix_to_unreal_movement_units, projector_to_t3d_object
+from ..projector.properties import blending_op_blender_to_unreal_map
+from ..terrain.exporter import add_movement_properties_to_actor, terrain_info_to_t3d_object, \
+    convert_blender_matrix_to_unreal_movement_units
 from .data import T3DObject, Polygon
 from pathlib import Path
 from .importer import import_t3d
 from .writer import T3DWriter
-from ..helpers import dfs_view_layer_objects
+from ..helpers import dfs_view_layer_objects, sanitize_name_for_unreal, humanize_size
 
 
 class BDK_OT_t3d_import_from_clipboard(Operator):
@@ -81,213 +82,308 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
         return {'FINISHED'}
 
 
-def sanitize_name(name: str) -> str:
-    return name.replace('.', '_')
+class ObjectToT3DConverter:
+    def can_convert(self, _obj: Object) -> bool:
+        return False
+
+    def convert(self, _context: Context, _obj: Object, _matrix_world: Matrix) -> List[T3DObject]:
+        raise NotImplementedError
 
 
-def get_poly_flags_int(poly_flags: set[str]) -> int:
-    poly_flags_int = 0
-    for flag in poly_flags:
-        poly_flags_int |= __poly_flag_keys_to_values__[flag]
-    return poly_flags_int
+class TerrainDoodadToT3DConverter(ObjectToT3DConverter):
+    def can_convert(self, obj: Object) -> bool:
+        return obj.bdk.type == 'TERRAIN_DOODAD'
+
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+        # Look up the seed object for the terrain doodad.
+        depsgraph = context.evaluated_depsgraph_get()
+        terrain_doodad = obj.bdk.terrain_doodad
+
+        actors = []
+
+        for scatter_layer in terrain_doodad.scatter_layers:
+            if scatter_layer.mute:
+                continue
+
+            # Get evaluated mesh data for the seed object.
+            mesh_data = scatter_layer.seed_object.evaluated_get(depsgraph).data
+            vertex_count = len(mesh_data.vertices)
+
+            # Position
+            attribute = mesh_data.attributes['position']
+            position_data = [0.0] * vertex_count * 3
+            attribute.data.foreach_get('vector', position_data)
+            positions = numpy.array(position_data).reshape((vertex_count, 3))
+
+            # Rotation
+            attribute = mesh_data.attributes['rotation']
+            rotation_data = [0.0] * vertex_count * 3
+            attribute.data.foreach_get('vector', rotation_data)
+            rotations = numpy.array(rotation_data).reshape((vertex_count, 3))
+
+            # Scale
+            attribute = mesh_data.attributes['scale']
+            scale_data = [0.0] * vertex_count * 3
+            attribute.data.foreach_get('vector', scale_data)
+            scales = numpy.array(scale_data).reshape((vertex_count, 3))
+
+            # Object Index
+            attribute = mesh_data.attributes['object_index']
+            object_index_data = [0] * vertex_count
+            attribute.data.foreach_get('value', object_index_data)
+            object_indices = numpy.array(object_index_data)
+
+            for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
+                matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(
+                    scale).to_4x4()
+                scatter_layer_object = scatter_layer.objects[object_index]
+                static_mesh_object = scatter_layer.objects[object_index].object
+
+                actor = T3DObject(type_name='Actor')
+                actor.properties['Name'] = static_mesh_object.name
+                actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
+
+                # Skin Overrides
+                for material_slot_index, material_slot in enumerate(static_mesh_object.material_slots):
+                    if material_slot.link == 'OBJECT' \
+                            and material_slot.material is not None \
+                            and material_slot.material.bdk.package_reference is not None:
+                        actor.properties[f'Skins({material_slot_index})'] = material_slot.material.bdk.package_reference
+
+                location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
+                actor.properties['Location'] = location
+                actor.properties['Rotation'] = rotation
+                actor.properties['DrawScale3D'] = scale
+
+                actor_properties = scatter_layer_object.actor_properties
+                actor.properties['Class'] = actor_properties.class_name
+                if actor_properties.should_use_cull_distance:
+                    actor.properties['CullDistance'] = actor_properties.cull_distance
+
+                collision_flags = actor_properties.collision_flags
+                actor.properties['bBlockActors'] = 'BLOCK_ACTORS' in collision_flags
+                actor.properties['bBlockKarma'] = 'BLOCK_KARMA' in collision_flags
+                actor.properties['bBlockNonZeroExtentTraces'] = 'BLOCK_NON_ZERO_EXTENT_TRACES' in collision_flags
+                actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
+                actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
+
+                actor.properties['bAcceptsProjectors'] = actor_properties.accepts_projectors
+
+                # TODO: Individual actors should also have their own group. Just append the groups.
+                #  Also make sure that there are no commas, since it's used as a delimiter.
+                if scatter_layer.actor_group != '':
+                    actor.properties['Group'] = scatter_layer.actor_group
+
+                actors.append(actor)
+
+        return actors
 
 
-def bsp_brush_to_actor(context: Context, bsp_brush_object: Object, matrix_world: Matrix) -> T3DObject:
-    object_name = sanitize_name(bsp_brush_object.name)
+class ProjectorToT3DConverter(ObjectToT3DConverter):
+    def can_convert(self, obj: Object) -> bool:
+        return obj.bdk.type == 'PROJECTOR'
 
-    bsp_brush = bsp_brush_object.bdk.bsp_brush
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+        projector = obj.bdk.projector
 
-    actor = T3DObject('Actor')
-    actor.properties['Class'] = 'Brush'
-    actor.properties['Name'] = object_name
+        actor = T3DObject('Actor')
+        actor.properties['Class'] = 'Projector'
+        actor.properties['Name'] = obj.name
+        actor.properties['MaxTraceDistance'] = projector.max_trace_distance
+        actor.properties['FOV'] = int(math.degrees(projector.fov))
+        actor.properties['DrawScale'] = projector.draw_scale
+        actor.properties['FrameBufferBlendingOp'] = blending_op_blender_to_unreal_map[projector.frame_buffer_blending_op]
+        actor.properties['MaterialBlendingOp'] = blending_op_blender_to_unreal_map[projector.material_blending_op]
 
-    # TODO: Bidirectional mapping would be nice!
-    csg_oper = 'CSG_Add'
-    match bsp_brush.csg_operation:
-        case 'ADD':
-            csg_oper = 'CSG_Add'
-        case 'SUBTRACT':
-            csg_oper = 'CSG_Subtract'
+        if projector.proj_texture is not None:
+            actor.properties['ProjTexture'] = projector.proj_texture.bdk.package_reference
 
-    actor.properties['CsgOper'] = csg_oper
-    actor.properties['PolyFlags'] = get_poly_flags_int(bsp_brush.poly_flags)
+        add_movement_properties_to_actor(actor, matrix_world, do_scale=False)
 
-    point_transform_matrix = matrix_world @ bsp_brush_object.matrix_local
-    location = point_transform_matrix.translation
-    location.y = -location.y
-    actor.properties['Location'] = location
-
-    brush = T3DObject('Brush')
-    brush.properties['Name'] = object_name
-
-    poly_list = T3DObject('PolyList')
-
-    bm = bmesh.new()
-    bm.from_object(bsp_brush_object, context.evaluated_depsgraph_get())
-
-    bdk_poly_flags_layer = bm.faces.layers.int.get(POLY_FLAGS_ATTRIBUTE_NAME, None)
-    bdk_texture_u_layer = bm.faces.layers.float_vector.get(TEXTURE_U_ATTRIBUTE_NAME, None)
-    bdk_texture_v_layer = bm.faces.layers.float_vector.get(TEXTURE_V_ATTRIBUTE_NAME, None)
-    bdk_origin_layer = bm.faces.layers.float_vector.get(ORIGIN_ATTRIBUTE_NAME, None)
-
-    """
-    In the engine, BSP brushes ignore scale & rotation during the CSG build.
-    Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
-    We let the actor's location handle the translation.
-    """
-    translation, rotation, scale = point_transform_matrix.decompose()
-    point_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
-    vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
-
-    # Calculate normals.
-    bm.normal_update()
-
-    for face_index, face in enumerate(bm.faces):
-        material = bsp_brush_object.material_slots[face.material_index].material if face.material_index < len(bsp_brush_object.material_slots) else None
-        # T3D texture references only have the package and object name.
-        texture = UReference.from_string(material.bdk.package_reference) if material else None
-        if texture:
-            texture = f'{texture.package_name}.{texture.object_name}'
-
-        poly = T3DObject('Polygon')
-        poly.properties['Texture'] = texture if texture else 'None'
-        poly.properties['Link'] = face_index
-        poly.properties['Flags'] = face[bdk_poly_flags_layer] if bdk_poly_flags_layer is not None else 0
-
-        # Apply the transformation matrix to the vertices of the face. Also reverse the order of the vertices to match
-        # Unreal's winding order.
-        vertices = [point_transform_matrix @ Vector(vert.co) for vert in reversed(face.verts)]
-        # Reverse the Y component of the vertices to match Unreal's coordinate system.
-        vertices = [(vert.x, -vert.y, vert.z) for vert in vertices]
-
-        texture_u = face[bdk_texture_u_layer] if bdk_texture_u_layer is not None else (1.0, 0.0, 0.0)
-        texture_v = face[bdk_texture_v_layer] if bdk_texture_v_layer is not None else (0.0, 1.0, 0.0)
-        origin = face[bdk_origin_layer] if bdk_origin_layer is not None else (0.0, 0.0, 0.0)
-
-        # Apply the transformation matrix to the texture U, texture V, and origin.
-        texture_u = vector_transform_matrix @ Vector(texture_u)
-        texture_v = vector_transform_matrix @ Vector(texture_v)
-        origin = point_transform_matrix @ Vector(origin)
-
-        # Reverse the Y component of the TextureU, TextureV, and Origin to match Unreal's coordinate system.
-        poly.polygon = Polygon(
-            link=face_index,
-            origin=Vector((origin.x, -origin.y, origin.z)),
-            normal=face.normal,
-            texture_u=Vector((texture_u.x, -texture_u.y, texture_u.z)),
-            texture_v=Vector((texture_v.x, -texture_v.y, texture_v.z)),
-            vertices=vertices,
-        )
-
-        poly_list.children.append(poly)
-
-    brush.children.append(poly_list)
-    actor.children.append(brush)
-
-    actor.properties['Brush'] = f'Model\'myLevel.{object_name}\''
-
-    return actor
+        return [actor]
 
 
-def terrain_doodad_to_t3d_objects(context: Context, terrain_doodad_object: Object) -> List[T3DObject]:
-    # Look up the seed object for the terrain doodad.
-    depsgraph = context.evaluated_depsgraph_get()
-    terrain_doodad = terrain_doodad_object.bdk.terrain_doodad
+class FluidSurfaceToT3DConverter(ObjectToT3DConverter):
+    def can_convert(self, obj: Object) -> bool:
+        return obj.bdk.type == 'FLUID_SURFACE'
 
-    actors = []
-
-    for scatter_layer in terrain_doodad.scatter_layers:
-        if scatter_layer.mute:
-            continue
-
-        # Get evaluated mesh data for the seed object.
-        mesh_data = scatter_layer.seed_object.evaluated_get(depsgraph).data
-        vertex_count = len(mesh_data.vertices)
-
-        # Position
-        attribute = mesh_data.attributes['position']
-        position_data = [0.0] * vertex_count * 3
-        attribute.data.foreach_get('vector', position_data)
-        positions = numpy.array(position_data).reshape((vertex_count, 3))
-
-        # Rotation
-        attribute = mesh_data.attributes['rotation']
-        rotation_data = [0.0] * vertex_count * 3
-        attribute.data.foreach_get('vector', rotation_data)
-        rotations = numpy.array(rotation_data).reshape((vertex_count, 3))
-
-        # Scale
-        attribute = mesh_data.attributes['scale']
-        scale_data = [0.0] * vertex_count * 3
-        attribute.data.foreach_get('vector', scale_data)
-        scales = numpy.array(scale_data).reshape((vertex_count, 3))
-
-        # Object Index
-        attribute = mesh_data.attributes['object_index']
-        object_index_data = [0] * vertex_count
-        attribute.data.foreach_get('value', object_index_data)
-        object_indices = numpy.array(object_index_data)
-
-        for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
-            matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
-            scatter_layer_object = scatter_layer.objects[object_index]
-            static_mesh_object = scatter_layer.objects[object_index].object
-
-            actor = T3DObject(type_name='Actor')
-            actor.properties['Name'] = static_mesh_object.name
-            actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
-
-            # Skin Overrides
-            for material_slot_index, material_slot in enumerate(static_mesh_object.material_slots):
-                if material_slot.link == 'OBJECT' \
-                        and material_slot.material is not None \
-                        and material_slot.material.bdk.package_reference is not None:
-                    actor.properties[f'Skins({material_slot_index})'] = material_slot.material.bdk.package_reference
-
-            location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
-            actor.properties['Location'] = location
-            actor.properties['Rotation'] = rotation
-            actor.properties['DrawScale3D'] = scale
-
-            actor_properties = scatter_layer_object.actor_properties
-            actor.properties['Class'] = actor_properties.class_name
-            if actor_properties.should_use_cull_distance:
-                actor.properties['CullDistance'] = actor_properties.cull_distance
-
-            collision_flags = actor_properties.collision_flags
-            actor.properties['bBlockActors'] = 'BLOCK_ACTORS' in collision_flags
-            actor.properties['bBlockKarma'] = 'BLOCK_KARMA' in collision_flags
-            actor.properties['bBlockNonZeroExtentTraces'] = 'BLOCK_NON_ZERO_EXTENT_TRACES' in collision_flags
-            actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
-            actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
-
-            actor.properties['bAcceptsProjectors'] = actor_properties.accepts_projectors
-
-            # TODO: Individual actors should also have their own group. Just append the groups.
-            #  Also make sure that there are no commas, since it's used as a delimiter.
-            if scatter_layer.actor_group != '':
-                actor.properties['Group'] = scatter_layer.actor_group
-
-            actors.append(actor)
-
-    return actors
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+        fluid_surface = obj.bdk.fluid_surface
+        actor = T3DObject(type_name='Actor')
+        add_movement_properties_to_actor(actor, matrix_world, do_scale=False)
+        actor.properties['Class'] = 'FluidSurfaceInfo'
+        actor.properties['FluidXSize'] = fluid_surface.fluid_x_size
+        actor.properties['FluidYSize'] = fluid_surface.fluid_y_size
+        actor.properties['FluidGridSpacing'] = fluid_surface.fluid_grid_spacing
+        actor.properties['UOffset'] = fluid_surface.u_offset
+        actor.properties['VOffset'] = fluid_surface.v_offset
+        actor.properties['UTiles'] = fluid_surface.u_tiles
+        actor.properties['VTiles'] = fluid_surface.v_tiles
+        if fluid_surface.material is not None:
+            actor.properties['Skins'] = [fluid_surface.material.bdk.package_reference]
+        return [actor]
 
 
-def fluid_surface_to_t3d_object(context, obj):
-    fluid_surface = obj.bdk.fluid_surface
-    actor = T3DObject(type_name='Actor')
-    add_movement_properties_to_actor(actor, obj, do_scale=False)
-    actor.properties['Class'] = 'FluidSurfaceInfo'
-    actor.properties['FluidXSize'] = fluid_surface.fluid_x_size
-    actor.properties['FluidYSize'] = fluid_surface.fluid_y_size
-    actor.properties['FluidGridSpacing'] = fluid_surface.fluid_grid_spacing
-    actor.properties['UOffset'] = fluid_surface.u_offset
-    actor.properties['VOffset'] = fluid_surface.v_offset
-    actor.properties['UTiles'] = fluid_surface.u_tiles
-    actor.properties['VTiles'] = fluid_surface.v_tiles
-    if fluid_surface.material is not None:
-        actor.properties['Skins'] = [fluid_surface.material.bdk.package_reference]
-    return actor
+class TerrainInfoToT3DConverter(ObjectToT3DConverter):
+    def can_convert(self, obj: Object) -> bool:
+        return obj.bdk.type == 'TERRAIN_INFO'
+
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+        actor = terrain_info_to_t3d_object(obj, matrix_world)
+        return [actor]
+
+
+class CameraToT3DConverter(ObjectToT3DConverter):
+    def can_convert(self, obj: Object) -> bool:
+        return obj.type == 'CAMERA'
+
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+        # Create a SpectatorCam brush_object
+        actor = T3DObject('Actor')
+        actor.properties['Class'] = 'SpectatorCam'
+        actor.properties['Name'] = obj.name
+        add_movement_properties_to_actor(actor, matrix_world)
+        rotation_euler = actor.properties['Rotation']
+        # TODO: make corrective matrix a constant
+        # Adjust the camera's rotation to match the Unreal coordinate system.
+        # Correct the rotation here since the blender cameras point down -Z with +X up by default.
+        rotation_euler.z += math.pi / 2
+        rotation_euler.x -= math.pi / 2
+        return [actor]
+
+
+class StaticMeshToT3DConverter(ObjectToT3DConverter):
+    def can_convert(self, obj: Object) -> bool:
+        return obj.type == 'MESH' and obj.get('Class', None) == 'StaticMeshActor'
+
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+        actor = T3DObject('Actor')
+        actor.properties['Class'] = 'StaticMeshActor'
+        actor.properties['Name'] = obj.name
+        actor.properties['StaticMesh'] = obj.bdk.package_reference
+
+        add_movement_properties_to_actor(actor, matrix_world)
+
+        # Skin Overrides
+        for material_index, material_slot in enumerate(obj.material_slots):
+            if material_slot.link == 'OBJECT' \
+                    and material_slot.material is not None \
+                    and material_slot.material.bdk.package_reference:
+                actor.properties[f'Skins({material_index})'] = material_slot.material.bdk.package_reference
+
+        return [actor]
+
+
+class BspBrushToT3DConverter(ObjectToT3DConverter):
+    def can_convert(self, obj: Object) -> bool:
+        return obj.bdk.type == 'BSP_BRUSH'
+
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+        object_name = sanitize_name_for_unreal(obj.name)
+
+        bsp_brush = obj.bdk.bsp_brush
+
+        actor = T3DObject('Actor')
+        actor.properties['Class'] = 'Brush'
+        actor.properties['Name'] = object_name
+
+        # TODO: Bidirectional mapping would be nice!
+        csg_oper = 'CSG_Add'
+        match bsp_brush.csg_operation:
+            case 'ADD':
+                csg_oper = 'CSG_Add'
+            case 'SUBTRACT':
+                csg_oper = 'CSG_Subtract'
+
+        actor.properties['CsgOper'] = csg_oper
+        actor.properties['PolyFlags'] = get_poly_flags_value_from_keys(bsp_brush.poly_flags)
+
+        point_transform_matrix = matrix_world @ obj.matrix_local
+        location = point_transform_matrix.translation
+        location.y = -location.y
+        actor.properties['Location'] = location
+
+        brush = T3DObject('Brush')
+        brush.properties['Name'] = object_name
+
+        poly_list = T3DObject('PolyList')
+
+        bm = bmesh.new()
+        bm.from_object(obj, context.evaluated_depsgraph_get())
+
+        bdk_poly_flags_layer = bm.faces.layers.int.get(POLY_FLAGS_ATTRIBUTE_NAME, None)
+        bdk_texture_u_layer = bm.faces.layers.float_vector.get(TEXTURE_U_ATTRIBUTE_NAME, None)
+        bdk_texture_v_layer = bm.faces.layers.float_vector.get(TEXTURE_V_ATTRIBUTE_NAME, None)
+        bdk_origin_layer = bm.faces.layers.float_vector.get(ORIGIN_ATTRIBUTE_NAME, None)
+
+        """
+        In the engine, BSP brushes ignore scale & rotation during the CSG build.
+        Therefore, we need to apply the scale and rotation to the vertices of the brush before exporting.
+        We let the actor's location handle the translation.
+        """
+        translation, rotation, scale = point_transform_matrix.decompose()
+        point_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).to_4x4()
+        vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
+
+        # Calculate normals.
+        bm.normal_update()
+
+        for face_index, face in enumerate(bm.faces):
+            material = obj.material_slots[face.material_index].material if face.material_index < len(obj.material_slots) else None
+            # T3D texture references only have the package and object name.
+            texture = UReference.from_string(material.bdk.package_reference) if material else None
+            if texture:
+                texture = f'{texture.package_name}.{texture.object_name}'
+
+            poly = T3DObject('Polygon')
+            poly.properties['Texture'] = texture if texture else 'None'
+            poly.properties['Link'] = face_index
+            poly.properties['Flags'] = face[bdk_poly_flags_layer] if bdk_poly_flags_layer is not None else 0
+
+            # Apply the transformation matrix to the vertices of the face. Also reverse the order of the vertices to match
+            # Unreal's winding order.
+            vertices = [point_transform_matrix @ Vector(vert.co) for vert in reversed(face.verts)]
+            # Reverse the Y component of the vertices to match Unreal's coordinate system.
+            vertices = [(vert.x, -vert.y, vert.z) for vert in vertices]
+
+            texture_u = face[bdk_texture_u_layer] if bdk_texture_u_layer is not None else (1.0, 0.0, 0.0)
+            texture_v = face[bdk_texture_v_layer] if bdk_texture_v_layer is not None else (0.0, 1.0, 0.0)
+            origin = face[bdk_origin_layer] if bdk_origin_layer is not None else (0.0, 0.0, 0.0)
+
+            # Apply the transformation matrix to the texture U, texture V, and origin.
+            texture_u = vector_transform_matrix @ Vector(texture_u)
+            texture_v = vector_transform_matrix @ Vector(texture_v)
+            origin = point_transform_matrix @ Vector(origin)
+
+            # Reverse the Y component of the TextureU, TextureV, and Origin to match Unreal's coordinate system.
+            poly.polygon = Polygon(
+                link=face_index,
+                origin=Vector((origin.x, -origin.y, origin.z)),
+                normal=face.normal,
+                texture_u=Vector((texture_u.x, -texture_u.y, texture_u.z)),
+                texture_v=Vector((texture_v.x, -texture_v.y, texture_v.z)),
+                vertices=vertices,
+            )
+
+            poly_list.children.append(poly)
+
+        brush.children.append(poly_list)
+        actor.children.append(brush)
+
+        actor.properties['Brush'] = f'Model\'myLevel.{object_name}\''
+
+        return [actor]
+
+
+object_to_t3d_converters: List[ObjectToT3DConverter] = [
+    TerrainDoodadToT3DConverter(),
+    ProjectorToT3DConverter(),
+    FluidSurfaceToT3DConverter(),
+    TerrainInfoToT3DConverter(),
+    CameraToT3DConverter(),
+    StaticMeshToT3DConverter(),
+    BspBrushToT3DConverter(),
+]
 
 
 class BDK_OT_t3d_copy_to_clipboard(Operator):
@@ -304,70 +400,45 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         return True
 
     def execute(self, context: Context):
-        copy_actors: list[T3DObject] = []
+        # Use the depth-first iterator to get all the objects in the view layer.
+        dfs_objects = list(dfs_view_layer_objects(context.view_layer))
 
-        map_object = T3DObject('Map')
+        # Filter only the selected objects.
+        selected_objects: List[Tuple[Object, Matrix]] = list()
+        for obj, instance_objects, matrix_world in dfs_objects:
+            if instance_objects:
+                if instance_objects[0].select_get():
+                    selected_objects.append((obj, matrix_world))
+            else:
+                if obj.select_get():
+                    selected_objects.append((obj, matrix_world))
 
-        def can_copy(bpy_object: Object) -> bool:
-            # TODO: SpectatorCam, Projector, FluidSurface etc.
-            return bpy_object.bdk.type != 'NONE' and bpy_object.type == 'MESH' and bpy_object.data is not None
-
-        selected_objects = list(filter(lambda obj: obj[0].select_get(), dfs_view_layer_objects(context.view_layer)))
-        bsp_brush_objects: List[Tuple[Object, Matrix]] = []
+        # selected_objects = list(filter(lambda obj: obj[0].select_get() or (obj[1] is not None and obj[1].select_get()), dfs_objects))
 
         # Start a progress bar.
         wm = context.window_manager
         wm.progress_begin(0, len(selected_objects))
 
+        # Iterate over all the selected objects and attempt to convert them to T3D actors using the registered
+        # converters. Note that the order of the converters is important, and that the first converter that can
+        # convert the object will be used. Any objects that cannot be converted will be ignored.
+        copy_actors: list[T3DObject] = []
         for obj_index, selected_object in enumerate(selected_objects):
-            obj, asset_instance, matrix_world = selected_object
-            # TODO: create a list of pattern predicates & handlers for the different types.
-            #  May need special logic for deferred evaluation on things like BSP brushes.
-            match obj.bdk.type:
-                case 'BSP_BRUSH':
-                    # Add the brush to the list of brushes to copy, we have to sort them by sort order.
-                    bsp_brush_objects.append((obj, matrix_world))
-                case 'TERRAIN_DOODAD':
-                    copy_actors += terrain_doodad_to_t3d_objects(context, obj)
-                case 'FLUID_SURFACE':
-                    copy_actors.append(fluid_surface_to_t3d_object(context, obj))
-                case 'TERRAIN_INFO':
-                    copy_actors.append(terrain_info_to_t3d_object(obj))
-                case 'PROJECTOR':
-                    copy_actors.append(projector_to_t3d_object(obj))
-                case _:
-                    # TODO: add handlers for other object types (outside of this function)
-                    if obj.type == 'CAMERA':
-                        # Create a SpectatorCam brush_object
-                        camera_actor = T3DObject('Actor')
-                        camera_actor.properties['Class'] = 'SpectatorCam'
-                        camera_actor.properties['Name'] = obj.name
-                        add_movement_properties_to_actor(camera_actor, obj)
-                        rotation_euler = camera_actor['Rotation']
-                        # TODO: make corrective matrix a constant
-                        # Correct the rotation here since the blender cameras point down -Z with +X up by default.
-                        rotation_euler.z += math.pi / 2
-                        rotation_euler.x -= math.pi / 2
-                        # Adjust the camera's rotation to match the Unreal coordinate system.
-                        map_object.children.append(camera_actor)
-                    else:
-                        # TODO: DFS iterator should already handle this, but double-check.
-                        if obj.instance_collection:
-                            copy_actors += [create_static_mesh_actor(o, obj)
-                                            for o in obj.instance_collection.all_objects
-                                            if can_copy(o)]
-                        elif can_copy(obj):
-                            copy_actors.append(create_static_mesh_actor(obj))
+            obj, matrix_world = selected_object
+
+            for converter in object_to_t3d_converters:
+                if converter.can_convert(obj):
+                    copy_actors.extend(converter.convert(context, obj, matrix_world))
+                    break
 
             wm.progress_update(obj_index)
-
-        for bsp_brush_object, matrix_world in bsp_brush_objects:
-            copy_actors.append(bsp_brush_to_actor(context, bsp_brush_object, matrix_world))
 
         # Mark all the actors as selected.
         for actor in copy_actors:
             actor.properties['bSelected'] = True
 
+        # Add the actors to the map object.
+        map_object = T3DObject('Map')
         for actor in copy_actors:
             map_object.children.append(actor)
 
@@ -376,13 +447,12 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         T3DWriter(string_io).write(map_object)
         size = string_io.tell()
         string_io.seek(0)
+        self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({humanize_size(size)})')
 
         # Copy the string to the clipboard.
         bpy.context.window_manager.clipboard = string_io.read()
 
         wm.progress_end()
-
-        self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({size} bytes)')
 
         return {'FINISHED'}
 

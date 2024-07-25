@@ -1,8 +1,8 @@
-import mathutils
+from mathutils import Matrix
 
 from .data import UReference
 from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, ViewLayer, LayerCollection, Collection
-from typing import Iterable, Optional, Tuple, Set
+from typing import Iterable, Optional, Tuple, Set, List
 import bpy
 import numpy
 import re
@@ -203,7 +203,7 @@ def load_bdk_material(context: Context, reference: str, repository_id: Optional[
 
 
 # TODO: should actually do the object, not the mesh data
-def load_bdk_static_mesh(context: Context, reference: str, repository_id: Optional[str] = None) -> Optional[Mesh]:
+def load_bdk_static_mesh(context: Context, reference: str, repository_id: Optional[str] = None) -> Optional[Collection]:
 
     reference = UReference.from_string(reference)
 
@@ -229,14 +229,14 @@ def load_bdk_static_mesh(context: Context, reference: str, repository_id: Option
         return None
 
     with bpy.data.libraries.load(blend_file, link=True, relative=False, assets_only=False) as (data_in, data_out):
-        if str(reference) in data_in.meshes:
-            data_out.meshes = [str(reference)]
+        if reference.object_name in data_in.collections:
+            data_out.collections = [reference.object_name]
         else:
             return None
 
-    mesh = bpy.data.meshes[str(reference)]
+    collection = bpy.data.collections[reference.object_name]
 
-    return mesh
+    return collection
 
 
 # https://blenderartists.org/t/duplicating-pointerproperty-propertygroup-and-collectionproperty/1419096/2
@@ -338,7 +338,7 @@ def padded_roll(array, shift):
     return array
 
 
-def dfs_view_layer_objects(view_layer: ViewLayer):
+def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List[Object], Matrix]]:
     """
     A BDK-specific depth-first iterator of objects in a view layer meant to provide a means
     for level authors to create and maintain stable CSG brush ordering.
@@ -358,32 +358,34 @@ def dfs_view_layer_objects(view_layer: ViewLayer):
     def layer_collection_objects_recursive(layer_collection: LayerCollection):
         for child in layer_collection.children:
             yield from layer_collection_objects_recursive(child)
-        # TODO: extract the logic below to a function that can be called for asset instances.
         # Iterate only the top-level objects in this collection first.
         def collection_fn(
-            collection: Collection,
-            instance_object: Optional[Object] = None,
-            matrix_world: mathutils.Matrix = mathutils.Matrix.Identity(4)
+                collection: Collection,
+                instance_objects: Optional[List[Object]] = None,
+                matrix_world: Matrix = Matrix.Identity(4)
         ):
+            # TODO: We want to also yield the top-level instance object so that callers can inspect the selection status etc.
+            if instance_objects is None:
+                instance_objects = list()
             for obj in collection.objects:
                 if obj.parent is None or obj.parent not in set(collection.objects) and obj not in visited:
                     # If this an instance, we need to recurse into it.
                     if obj.instance_collection is not None:
                         # Calculate the instance transform.
-                        instance_offset_matrix = mathutils.Matrix.Translation(-obj.instance_collection.instance_offset)
+                        instance_offset_matrix = Matrix.Translation(-obj.instance_collection.instance_offset)
                         # Recurse into the instance collection.
-                        yield from collection_fn(obj.instance_collection, obj, (obj.matrix_local @ instance_offset_matrix) @ matrix_world)
+                        yield from collection_fn(obj.instance_collection, instance_objects + [obj], matrix_world @ (obj.matrix_local @ instance_offset_matrix))
                     else:
-                        yield (obj, instance_object, matrix_world)
-                        visited.add((obj, instance_object))
+                        yield (obj, instance_objects, matrix_world)
+                        visited.add((obj, instance_objects[0] if instance_objects else None))
                         # `children_recursive` returns objects regardless of collection, so we need to make sure
                         # that the children are in this collection.
                         # TODO: this needs to be changed so that we walk the hierarchy. this may have instances inside.
                         #  Also, the obj.matrix_local is only relevant for direct descendants of `obj`.
                         for child_obj in obj.children_recursive:
                             if child_obj not in visited and child_obj in set(collection.objects):
-                                yield (child_obj, instance_object, matrix_world @ obj.matrix_local)
-                                visited.add((child_obj, instance_object))
+                                yield (child_obj, instance_objects, matrix_world @ obj.matrix_local)
+                                visited.add((child_obj, instance_objects[0] if instance_objects else None))
 
         yield from collection_fn(layer_collection.collection)
 
@@ -393,3 +395,18 @@ def dfs_view_layer_objects(view_layer: ViewLayer):
 def tag_redraw_all_windows(context):
     for region in filter(lambda r: r.type == 'WINDOW', context.area.regions):
         region.tag_redraw()
+
+
+def humanize_size(bytes: int):
+    """
+    Convert a byte count to a human-readable size string.
+    """
+    for unit in ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']:
+        if bytes < 1024.0:
+            break
+        bytes /= 1024.0
+    # Don't show decimal places for whole numbers.
+    if isinstance(bytes, int):
+        return f"{int(bytes)} {unit}"
+    else:
+        return f"{bytes:.2f} {unit}"

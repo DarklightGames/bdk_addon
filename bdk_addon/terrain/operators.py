@@ -307,7 +307,7 @@ class BDK_OT_terrain_info_export(Operator, ExportHelper):
         depsgraph = context.evaluated_depsgraph_get()
 
         with open(t3d_path, 'w') as fp:
-            write_terrain_t3d(context.active_object, depsgraph, fp)
+            write_terrain_t3d(context.active_object, fp)
             progress_increment()
 
         # Export the heightmap and paint layers.
