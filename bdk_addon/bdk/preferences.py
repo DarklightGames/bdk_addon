@@ -3,7 +3,7 @@ from bpy.props import CollectionProperty, IntProperty, BoolProperty
 
 from .repository.properties import BDK_PG_repository
 from .repository.ui import BDK_UL_repositories, BDK_UL_repository_packages, BDK_MT_repository_special, \
-    BDK_MT_repository_add, BDK_MT_repository_remove, BDK_UL_repository_rules
+    BDK_MT_repository_add, BDK_MT_repository_remove, BDK_UL_repository_rules, BDK_MT_repositories_special
 from ..bdk.operators import BDK_OT_scene_repository_set
 from ..bdk.repository.operators import BDK_OT_repository_set_default, BDK_OT_repository_scan, \
     BDK_OT_repository_build_asset_library, BDK_OT_repository_package_cache_invalidate, BDK_OT_repository_rule_add, \
@@ -39,8 +39,7 @@ class BdkAddonPreferences(AddonPreferences):
             col.menu(BDK_MT_repository_add.bl_idname, icon='ADD', text='')
             col.menu(BDK_MT_repository_remove.bl_idname, icon='REMOVE', text='')
             col.separator()
-            col.operator(BDK_OT_scene_repository_set.bl_idname, icon='SCENE_DATA', text='')
-            col.operator(BDK_OT_repository_set_default.bl_idname, icon='RESTRICT_VIEW_OFF', text='')
+            col.menu(BDK_MT_repositories_special.bl_idname, icon='DOWNARROW_HLT', text='')
 
             repository = self.repositories[
                 self.repositories_index] if self.repositories_index >= 0 and self.repositories_index < len(
@@ -97,11 +96,6 @@ class BdkAddonPreferences(AddonPreferences):
                                                rows=5)
 
                     col = row.column(align=True)
-
-                    if self.developer_extras:
-                        op = col.operator(BDK_OT_repository_package_cache_invalidate.bl_idname, icon='ERROR', text='')
-                        op.index = repository.runtime.packages_index
-                        col.separator()
 
                     col.menu(BDK_MT_repository_special.bl_idname, icon='DOWNARROW_HLT', text='')
 

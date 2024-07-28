@@ -91,6 +91,8 @@ class AssetCatalogFile:
     def ensure_exists(self):
         """Ensure that this catalog file exists"""
         if not self.catalog_file.exists():
+            # Make sure the directory exists.
+            self.catalog_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.catalog_file, "w") as f:
                 f.write(CATALOG_HEADER)
 

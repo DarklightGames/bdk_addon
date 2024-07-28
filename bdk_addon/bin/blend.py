@@ -145,5 +145,6 @@ if __name__ == '__main__':
         args.func(args)
     except Exception as e:
         # Write to stderr.
+        print('An error occurred while running the script.\n\n', file=sys.stderr)
         print(e, file=sys.stderr)
         sys.exit(1)

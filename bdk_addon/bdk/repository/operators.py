@@ -298,6 +298,7 @@ class BDK_OT_repository_build_asset_library(Operator):
                 for future in as_completed(jobs):
                     process, package_path = future.result()
                     if process.returncode != 0:
+                        print('Failed to build package:', package_path)
                         failure_count += 1
                     else:
                         manifest.mark_package_as_built(package_path)

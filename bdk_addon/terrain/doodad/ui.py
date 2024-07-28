@@ -5,13 +5,12 @@ from bpy.types import Panel, Context, UIList, UILayout, Curve, AnyType
 
 from .sculpt.operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
     BDK_OT_terrain_doodad_sculpt_layer_duplicate, BDK_OT_terrain_doodad_sculpt_layer_move
-from ..ui import draw_terrain_layer_node_list, draw_terrain_layer_node_settings, draw_terrain_layer_node_item
+from ..ui import draw_terrain_layer_node_item
 from ...helpers import should_show_bdk_developer_extras, get_terrain_doodad, is_active_object_terrain_doodad
 from .paint.operators import BDK_OT_terrain_doodad_paint_layer_add, BDK_OT_terrain_doodad_paint_layer_remove, \
     BDK_OT_terrain_doodad_paint_layer_duplicate, BDK_OT_terrain_doodad_paint_layer_move
 from .operators import BDK_OT_terrain_doodad_bake, BDK_OT_terrain_doodad_duplicate, BDK_OT_terrain_doodad_delete, \
-    BDK_OT_terrain_doodad_demote, BDK_OT_terrain_doodad_save_preset, BDK_OT_terrain_doodad_load_preset, \
-    BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze
+    BDK_OT_terrain_doodad_demote, BDK_OT_terrain_doodad_unfreeze, BDK_OT_terrain_doodad_freeze
 from .scatter.operators import BDK_OT_terrain_doodad_scatter_layer_add, BDK_OT_terrain_doodad_scatter_layer_remove, \
     BDK_OT_terrain_doodad_scatter_layer_objects_add, BDK_OT_terrain_doodad_scatter_layer_objects_remove, \
     BDK_OT_terrain_doodad_scatter_layer_duplicate, BDK_OT_terrain_doodad_scatter_layer_objects_duplicate
@@ -137,6 +136,7 @@ class BDK_PT_terrain_doodad_paint_layers(Panel):
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_doodad'
     bl_order = 1
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context: Context):
@@ -350,7 +350,7 @@ class BDK_PT_terrain_doodad_sculpt_layers(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_doodad'
-    bl_order = 0
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context: Context):
