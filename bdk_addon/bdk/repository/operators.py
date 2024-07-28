@@ -9,7 +9,7 @@ from bpy.props import StringProperty, IntProperty, EnumProperty, BoolProperty
 from bpy.types import Operator, Context, Event
 from bpy_extras.io_utils import ImportHelper
 
-from .kernel import Manifest, repository_runtime_update, repository_asset_library_add, \
+from .kernel import Manifest, repository_runtime_update, ensure_repository_asset_library, \
     ensure_default_repository_id, repository_asset_library_unlink, repository_remove, repository_cache_delete, \
     repository_metadata_delete, repository_package_build, get_repository_package_dependency_graph, \
     layered_topographical_sort, repository_package_export, is_game_directory_and_mod_valid, repository_metadata_write, \
@@ -428,7 +428,7 @@ class BDK_OT_repository_link(Operator, ImportHelper):
             addon_prefs.repositories_index = len(addon_prefs.repositories) - 1
 
             # Add the repository's asset folder as an asset library in Blender.
-            repository_asset_library_add(context, repository)
+            ensure_repository_asset_library(context, repository)
 
             ensure_default_repository_id(context)
 
@@ -565,7 +565,7 @@ class BDK_OT_repository_create(Operator):
         repository_cache_directory.mkdir(parents=True, exist_ok=True)
 
         repository_metadata_write(repository)
-        repository_asset_library_add(context, repository)
+        ensure_repository_asset_library(context, repository)
 
         ensure_default_repository_id(context)
 

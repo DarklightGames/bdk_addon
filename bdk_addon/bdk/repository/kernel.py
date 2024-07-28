@@ -305,12 +305,21 @@ def repository_cache_delete(repository: BDK_PG_repository):
         cache_directory.rmdir()
 
 
-def repository_asset_library_add(context, repository):
+def ensure_repository_asset_library(context, repository):
     assets_directory = get_repository_default_asset_library_directory(repository)
-    asset_library = context.preferences.filepaths.asset_libraries.new(
-        name=repository.name,
-        directory=str(assets_directory)
-    )
+
+    # Check if the asset library already exists.
+    for asset_library in context.preferences.filepaths.asset_libraries:
+        if Path(asset_library.path).resolve() == assets_directory.resolve():
+            # Asset library already linked, skip.
+            return
+    else:
+        asset_library = context.preferences.filepaths.asset_libraries.new(
+            name=repository.name,
+            directory=str(assets_directory)
+        )
+
+    # Ensure the default import method is set to LINK.
     asset_library.import_method = 'LINK'
 
 
