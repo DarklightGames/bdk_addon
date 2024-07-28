@@ -160,14 +160,30 @@ def load_bdk_material(context: Context, reference: str, repository_id: Optional[
     if reference is None:
         return None
 
+    # Strip the group name (useless for materials).
+    reference.group_name = None
+
     if reference.package_name == 'myLevel':
         # The second argument is a library, which we pass as None to get the local material.
         # https://blender.stackexchange.com/questions/238342/how-to-recognize-local-and-linked-material-with-python
-        return bpy.data.materials.get((reference.object_name, None), None)
+        material = bpy.data.materials.get((reference.object_name, None), None)
+    else:
+        # See if we already have the material linked from elsewhere.
+        material = bpy.data.materials.get(reference.object_name, None)
+        # Make sure the material reference matches the package reference.
+        # TODO: for some reason I can't remember, the full reference is not passed in here (the class type is missing).
+        #  Which is why we only check the package name and object name.
+        material_package_reference = UReference.from_string(material.bdk.package_reference)
+        if material_package_reference.package_name == reference.package_name and material_package_reference.object_name == reference.object_name:
+            return material
+        # TODO: There is a bug here where if you linked a material with the same name as another package, depending on the
+        #  order it may try to load the "wrong" one, then it will always go and fetch the linked material instead of the
+        #  local one. Not the end of the world, but it makes things slightly slower.
+        #  A strategy here would be to traverse all the materials and check if the package reference matches, then return
+        #  that material if it does. Traversing all the materials is still faster than trying to load from a file.
 
-    # TODO: This can be very slow when called in a loop. We should be checking if we already have the material linked
-    #  before trying to load it.
-    # See if we already have the material loaded.
+    if material is not None and material.bdk.package_reference == str(reference):
+        return material
 
     if repository_id is None:
         repository_id = get_active_repository_id(context)
@@ -204,21 +220,17 @@ def load_bdk_material(context: Context, reference: str, repository_id: Optional[
 
 # TODO: should actually do the object, not the mesh data
 def load_bdk_static_mesh(context: Context, reference: str, repository_id: Optional[str] = None) -> Optional[Collection]:
-
     reference = UReference.from_string(reference)
 
     if reference is None:
         return None
 
     if reference.package_name == 'myLevel':
-        if reference.object_name in bpy.data.objects:
-            return bpy.data.objects[reference.object_name].data
-        # Name look-up failed, sometimes the names can differ only by case, so manually check the names of each object
-        for obj in bpy.data.objects:
-            if obj.name.upper() == reference.object_name.upper():
-                return bpy.data.objects[reference.object_name].data
         # Failed to find object in myLevel package. (handle reporting this error downstream)
-        return None
+        return bpy.data.collections.get(reference.object_name, None)
+
+    # TODO: we need to check if the collection is already linked into the scene (make sure the package reference matches as well!)
+    # This will dramatically improve the performance of this because it won't need to do any File I/O.
 
     # Strip the group name since we don't use it in the BDK library files.
     reference.group_name = None
