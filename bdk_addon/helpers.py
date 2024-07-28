@@ -170,12 +170,13 @@ def load_bdk_material(context: Context, reference: str, repository_id: Optional[
     else:
         # See if we already have the material linked from elsewhere.
         material = bpy.data.materials.get(reference.object_name, None)
-        # Make sure the material reference matches the package reference.
-        # TODO: for some reason I can't remember, the full reference is not passed in here (the class type is missing).
-        #  Which is why we only check the package name and object name.
-        material_package_reference = UReference.from_string(material.bdk.package_reference)
-        if material_package_reference.package_name == reference.package_name and material_package_reference.object_name == reference.object_name:
-            return material
+        if material is not None:
+            # Make sure the material reference matches the package reference.
+            # TODO: for some reason I can't remember, the full reference is not passed in here (the class type is missing).
+            #  Which is why we only check the package name and object name.
+            material_package_reference = UReference.from_string(material.bdk.package_reference)
+            if material_package_reference.package_name == reference.package_name and material_package_reference.object_name == reference.object_name:
+                return material
         # TODO: There is a bug here where if you linked a material with the same name as another package, depending on the
         #  order it may try to load the "wrong" one, then it will always go and fetch the linked material instead of the
         #  local one. Not the end of the world, but it makes things slightly slower.
