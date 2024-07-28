@@ -479,10 +479,16 @@ class TerrainInfoImporter(ActorImporter):
             #  want to use (i.e. reuse the deco layers)
             deco_layer = add_terrain_deco_layer(terrain_info_object, name=deco_layer_name)
 
-            # TODO: put deco statics into a collection
+            load_bdk_static_mesh(context, str(static_mesh_reference))
 
-            static_mesh_data = load_bdk_static_mesh(context, str(static_mesh_reference))
-            deco_static_mesh_object = bpy.data.objects.new(uuid.uuid4().hex, static_mesh_data)
+            deco_mesh_data = bpy.data.meshes.get(str(static_mesh_reference), None)
+
+            if deco_mesh_data is None:
+                print(f'Could not find static mesh data for deco layer {deco_mesh_data} ({static_mesh_reference})')
+
+            # TODO: this is not correct! deco is not important rn though, get this fixed later.
+            deco_static_mesh_object = bpy.data.objects.new(uuid.uuid4().hex, deco_mesh_data)
+
             deco_layer.static_mesh = deco_static_mesh_object
             deco_layer.detail_mode = deco_layer_data.get('DetailMode', 'DM_Low')
             deco_layer.show_on_terrain = deco_layer_data.get('ShowOnTerrain', 0)
