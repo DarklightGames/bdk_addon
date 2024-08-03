@@ -41,12 +41,10 @@ class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
         # Set the sculpting component index to the new sculpting component.
         terrain_doodad.sculpt_layers_index = len(terrain_doodad.sculpt_layers) - 1
 
+        terrain_doodad_object.update_tag()
+
         # Update the geometry node tree.
         ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
-
-        # Mark the terrain info object as needing to be updated in the dependency graph.
-        terrain_doodad_object.update_tag()
-        terrain_doodad.terrain_info_object.update_tag()
 
         return {'FINISHED'}
 
