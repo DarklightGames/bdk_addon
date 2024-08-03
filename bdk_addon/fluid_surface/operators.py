@@ -34,6 +34,9 @@ class BDK_OT_fluid_surface_add(Operator):
 
         context.collection.objects.link(fluid_surface_object)
 
+        fluid_surface_object.select_set(True)
+        context.view_layer.objects.active = fluid_surface_object
+
         return {'FINISHED'}
 
 
