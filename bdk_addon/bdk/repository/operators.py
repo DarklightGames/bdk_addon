@@ -1,3 +1,4 @@
+import bpy
 import json
 import os
 import uuid
