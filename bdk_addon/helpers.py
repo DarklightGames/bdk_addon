@@ -380,7 +380,14 @@ def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List
             # TODO: We want to also yield the top-level instance object so that callers can inspect the selection status etc.
             if instance_objects is None:
                 instance_objects = list()
-            for obj in collection.objects:
+
+            # Sort the objects in the collection to return non-BSP brushes first.
+            # Next, return the BSP brushes in ascending order of their sort order.
+            collection_objects = list(collection.objects)
+            collection_objects.sort(
+                key=lambda obj: (obj.bdk.type != 'BSP_BRUSH', obj.bdk.bsp_brush.sort_order if obj.bdk.type == 'BSP_BRUSH' else 0))
+
+            for obj in collection_objects:
                 if obj.parent is None or obj.parent not in set(collection.objects) and obj not in visited:
                     # If this an instance, we need to recurse into it.
                     if obj.instance_collection is not None:
