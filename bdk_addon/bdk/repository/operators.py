@@ -160,6 +160,15 @@ class BDK_OT_repository_build_asset_library(Operator):
                      'this may take a while'
     bl_options = {'INTERNAL'}
 
+    max_workers_mode: EnumProperty(
+        name='Max Workers',
+        items=(
+            ('AUTO', 'Auto', 'Automatically determine the number of workers based on the number of CPU cores'),
+            ('MANUAL', 'Manual', 'Manually specify the number of workers'),
+        )
+    )
+    max_workers: IntProperty(name='Max Workers', default=8, min=1, soft_max=8)
+
     @classmethod
     def poll(cls, context):
         addon_prefs = get_addon_preferences(context)
@@ -174,7 +183,19 @@ class BDK_OT_repository_build_asset_library(Operator):
         return True
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_confirm(self, event)
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        flow = self.layout
+        flow.use_property_split = True
+        flow.prop(self, 'max_workers_mode')
+        match self.max_workers_mode:
+            case 'MANUAL':
+                flow.prop(self, 'max_workers', text=' ')
+                if self.max_workers > os.cpu_count():
+                    flow.label(text='Worker count exceeds CPU core count', icon='ERROR')
+            case _:
+                pass
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
@@ -261,7 +282,15 @@ class BDK_OT_repository_build_asset_library(Operator):
 
         packages_that_failed_to_export = []
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        match self.max_workers_mode:
+            case 'AUTO':
+                max_workers = os.cpu_count() / 2
+            case 'MANUAL':
+                max_workers = self.max_workers
+
+        max_workers = max(1, max_workers)
+
+        with ThreadPoolExecutor(max_workers) as executor:
             jobs = []
             for package in packages_to_export:
                 jobs.append(executor.submit(repository_package_export, repository, package))
