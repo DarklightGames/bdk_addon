@@ -554,30 +554,6 @@ class BDK_OT_convert_to_terrain_doodad(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_doodad_bake_debug(Operator):
-    bl_label = 'Bake Debug'
-    bl_idname = 'bdk.terrain_doodad_bake_debug'
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context: Context):
-        return is_active_object_terrain_doodad(context) and should_show_bdk_developer_extras(context)
-
-    def execute(self, context: Context):
-        terrain_doodad = get_terrain_doodad(context.active_object)
-        if terrain_doodad is None:
-            return {'CANCELLED'}
-
-        node_tree, attribute_map = create_terrain_doodad_bake_node_tree(terrain_doodad)
-
-        # Add a muted modifier to the active object.
-        modifier = terrain_doodad.terrain_info_object.modifiers.new(name='Bake', type='NODES')
-        modifier.node_group = node_tree
-        modifier.show_viewport = True
-
-        return {'FINISHED'}
-
-
 class BDK_OT_terrain_doodad_demote(Operator):
     bl_idname = 'bdk.terrain_doodad_demote'
     bl_label = 'Demote Terrain Doodad'
@@ -682,7 +658,6 @@ classes = (
     BDK_OT_terrain_doodad_freeze,
     BDK_OT_terrain_doodad_unfreeze,
     BDK_OT_terrain_doodad_bake,
-    BDK_OT_terrain_doodad_bake_debug,
     BDK_OT_terrain_doodad_delete,
     BDK_OT_terrain_doodad_duplicate,
     BDK_OT_terrain_doodad_demote,
