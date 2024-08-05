@@ -1,3 +1,4 @@
+import bpy
 import json
 import os
 import uuid
@@ -253,6 +254,10 @@ class BDK_OT_repository_build_asset_library(Operator):
         progress = 0
         success_count = 0
         failure_count = 0
+
+        # Ensure that the user preferences are saved before we spawn any Blender processes.
+        # The repository data must be present in the preferences during the build process.
+        bpy.ops.wm.save_userpref()
 
         context.window_manager.progress_begin(0, command_count)
 

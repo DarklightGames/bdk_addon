@@ -116,8 +116,8 @@ class BDK_OT_terrain_doodad_duplicate(Operator):
         ensure_scatter_layer_modifiers(context, terrain_doodad)
 
         # Add a new modifier to the terrain info object.
-        terrain_info_object = terrain_doodad.terrain_info_object
-        ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)
+        object_copy.update_tag()
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
 
         # Deselect the active object.
         terrain_doodad_object.select_set(False)
@@ -644,7 +644,8 @@ class BDK_OT_terrain_doodad_load_preset(Operator):
         return poll_has_terrain_doodad_selected(cls, context)
 
     def execute(self, context: Context):
-        terrain_doodad = get_terrain_doodad(context.active_object)
+        terrain_doodad_object = context.active_object
+        terrain_doodad = get_terrain_doodad(terrain_doodad_object)
 
         terrain_info_object = terrain_doodad.terrain_info_object
 
@@ -666,6 +667,8 @@ class BDK_OT_terrain_doodad_load_preset(Operator):
                     new_scatter_layer = add_terrain_doodad_scatter_layer(terrain_doodad, scatter_layer.name)
                     copy_simple_property_group(scatter_layer, new_scatter_layer, ignore={'id', 'objects', 'terrain_doodad_object'})
                 break
+
+        terrain_doodad_object.update_tag()
 
         # Ensure the modifiers
         ensure_terrain_info_modifiers(context, terrain_info_object.bdk.terrain_info)

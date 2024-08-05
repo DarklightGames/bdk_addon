@@ -29,11 +29,16 @@ class BDK_OT_terrain_doodad_paint_layer_add(Operator):
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)
 
-        # Update the geometry node tree.
-        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
-
         # Set the paint layer index to the new paint layer.
         terrain_doodad.paint_layers_index = len(terrain_doodad.paint_layers) - 1
+
+        # Mark the terrain info object as needing to be updated in the dependency graph.
+        # This needs to happen *before* the geometry node tree is updated, since the drivers in the geometry node tree
+        # depend on the data in the terrain info object.
+        terrain_doodad_object.update_tag()
+
+        # Update the geometry node tree.
+        ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
 
         return {'FINISHED'}
 
@@ -54,7 +59,8 @@ class BDK_OT_terrain_doodad_paint_layer_move(Operator):
         return poll_has_terrain_doodad_selected_paint_layer(cls, context)
 
     def execute(self, context: Context):
-        terrain_doodad = get_terrain_doodad(context.active_object)
+        terrain_doodad_object = context.active_object
+        terrain_doodad = get_terrain_doodad(terrain_doodad_object)
         paint_layers = terrain_doodad.paint_layers
         paint_layers_index = terrain_doodad.paint_layers_index
 
@@ -64,6 +70,8 @@ class BDK_OT_terrain_doodad_paint_layer_move(Operator):
         elif self.direction == 'DOWN' and paint_layers_index < len(paint_layers) - 1:
             paint_layers.move(paint_layers_index, paint_layers_index + 1)
             terrain_doodad.paint_layers_index += 1
+
+        terrain_doodad_object.update_tag()
 
         ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
 
@@ -89,6 +97,8 @@ class BDK_OT_terrain_doodad_paint_layer_remove(Operator):
 
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)
+
+        terrain_doodad_object.update_tag()
 
         # Update the geometry node tree.
         ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)
@@ -125,6 +135,8 @@ class BDK_OT_terrain_doodad_paint_layer_duplicate(Operator):
 
         # Update all the indices of the components.
         ensure_terrain_doodad_layer_indices(terrain_doodad)
+
+        terrain_doodad_object.update_tag()
 
         # Update the geometry node tree.
         ensure_terrain_info_modifiers(context, terrain_doodad.terrain_info_object.bdk.terrain_info)

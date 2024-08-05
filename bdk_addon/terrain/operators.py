@@ -218,7 +218,7 @@ class BDK_OT_terrain_paint_layer_add(Operator):
 
 
 def quad_size_get(self):
-    return get_terrain_quad_size(self.size, self.resolution)
+    return get_terrain_quad_size(self.size, int(self.resolution))
 
 
 class BDK_OT_terrain_info_add(Operator):
@@ -226,8 +226,19 @@ class BDK_OT_terrain_info_add(Operator):
     bl_label = 'Add Terrain Info'
     bl_options = {'REGISTER', 'UNDO'}
 
-    resolution: IntProperty(name='Resolution', default=512, min=2, soft_max=512, max=1024,
-                            description='The number of quads')
+    resolution: EnumProperty(name='Resolution', items=(
+        ('1', '1', '1 quad'),
+        ('2', '2', '2 quads'),
+        ('4', '4', '4 quads'),
+        ('8', '8', '8 quads'),
+        ('16', '16', '16 quads'),
+        ('32', '32', '32 quads'),
+        ('64', '64', '64 quads'),
+        ('128', '128', '128 quads'),
+        ('256', '256', '256 quads'),
+        ('512', '512', '512 quads'),
+        ('1024', '1024', '1024 quads'),
+    ), default='512')
     size: FloatProperty(name='Size', default=500 * 60.352, subtype='DISTANCE',
                         description='The length and width of the terrain')
     quad_size: FloatProperty(name='Quad Size', get=quad_size_get, set=None, subtype='DISTANCE')
@@ -239,10 +250,10 @@ class BDK_OT_terrain_info_add(Operator):
         return True
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event):
-        return self.execute(context)
+        return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context: bpy.types.Context):
-        terrain_info_object = create_terrain_info_object(name='TerrainInfo', resolution=self.resolution, size=self.size)
+        terrain_info_object = create_terrain_info_object(name='TerrainInfo', resolution=int(self.resolution), size=self.size)
         terrain_info_object.location = self.location
 
         if self.lock_transforms:
