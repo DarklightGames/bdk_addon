@@ -363,7 +363,7 @@ class BDK_OT_bsp_brush_select_similar(Operator):
             self.report({'ERROR'}, f'Invalid property: {self.property}')
             return {'CANCELLED'}
 
-        for obj in filter(filter_function, filter(lambda x: obj.bdk.type == 'BSP_BRUSH', context.scene.objects)):
+        for obj in filter(filter_function, filter(lambda x: x.bdk.type == 'BSP_BRUSH', context.scene.objects)):
             obj.select_set(True)
 
         return {'FINISHED'}
