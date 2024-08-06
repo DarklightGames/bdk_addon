@@ -461,9 +461,6 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
     if terrain_info.doodad_deco_modifier_name == '':
         terrain_info.doodad_deco_modifier_name = uuid.uuid4().hex
 
-    if terrain_info.doodad_mask_modifier_name == '':
-        terrain_info.doodad_mask_modifier_name = uuid.uuid4().hex
-
     # Gather and sort the terrain doodad by the sort order and ID.
     terrain_doodads = get_terrain_doodads_for_terrain_info_object(context, terrain_info.terrain_info_object)
     terrain_doodads.sort(key=lambda x: (x.sort_order, x.id))
@@ -474,7 +471,6 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
         terrain_info.doodad_attribute_modifier_name,
         terrain_info.doodad_paint_modifier_name,
         terrain_info.doodad_deco_modifier_name,
-        terrain_info.doodad_mask_modifier_name,
     ]
 
     for modifier_name in modifier_names:
@@ -518,7 +514,6 @@ def ensure_terrain_info_modifiers(context: Context, terrain_info: 'BDK_PG_terrai
     modifier_ids.extend(map(lambda deco_layer: deco_layer.modifier_name,
                             terrain_info.deco_layers))  # TODO: something weird going down here, we shouldn't be using the deco layer ID
     modifier_ids.append(terrain_info.doodad_deco_modifier_name)
-    modifier_ids.append(terrain_info.doodad_mask_modifier_name)
 
     # Make note of what the current mode is so that we can restore it later.
     current_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'

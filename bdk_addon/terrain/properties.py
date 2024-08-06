@@ -402,13 +402,11 @@ class BDK_PG_terrain_info(PropertyGroup):
     doodad_attribute_modifier_name: StringProperty(options={'HIDDEN'}, name='Attribute Modifier Name')
     doodad_paint_modifier_name: StringProperty(options={'HIDDEN'}, name='Paint Modifier Name')
     doodad_deco_modifier_name: StringProperty(options={'HIDDEN'}, name='Deco Modifier Name')
-    doodad_mask_modifier_name: StringProperty(options={'HIDDEN'}, name='Mask Modifier Name')
 
     is_sculpt_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Sculpt Modifier')
     is_attribute_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Attribute Modifier')
     is_paint_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Paint Modifier')
     is_deco_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Deco Modifier')
-    is_mask_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Mask Modifier')
 
 
 def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> Optional[BDK_PG_terrain_paint_layer]:
