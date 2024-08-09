@@ -774,8 +774,8 @@ class BDK_OT_bsp_build(Operator):
         # TODO: We can now have multiple brushes with the same object. We must only add the object once, and only if it
         #  is not part of an instance collection.
         # TODO: this may even need to be done at the level of the data pointer.
-        concrete_brush_objects = filter(lambda x: x[1] is None, brush_objects)
-        for brush_index, (brush_object, instance_object, _) in enumerate(concrete_brush_objects):
+        concrete_brush_objects = filter(lambda x: len(x[1]) == 0, brush_objects)
+        for brush_index, (brush_object, _, _) in enumerate(concrete_brush_objects):
             level_brush = level_object.bdk.level.brushes.add()
             level_brush.index = brush_index
             level_brush.brush_object = brush_object
@@ -788,9 +788,9 @@ class BDK_OT_bsp_build(Operator):
         instanced_brush_indices = []
 
         brushes: List[Brush] = []
-        for brush_index, (brush_object, asset_instance, matrix_world) in enumerate(brush_objects):
+        for brush_index, (brush_object, asset_instances, matrix_world) in enumerate(brush_objects):
 
-            if asset_instance is not None:
+            if asset_instances:
                 instanced_brush_indices.append(brush_index)
 
             # Create a new Poly object for each face of the brush.
