@@ -134,7 +134,9 @@ def poly_list_to_mesh(context: Context, name: str, poly_list: T3dObject, pre_piv
 
     bm = bmesh.new()
 
-    for polygon in filter(lambda x: x.type_ == 'Polygon', poly_list.children):
+    invalid_polygon_indices = []
+
+    for polygon_index, polygon in enumerate(filter(lambda x: x.type_ == 'Polygon', poly_list.children)):
         material_reference = polygon.properties.get('Texture', None)
 
         if material_reference is not None:
@@ -186,7 +188,13 @@ def poly_list_to_mesh(context: Context, name: str, poly_list: T3dObject, pre_piv
             vertex_indices.append(vertex_index)
 
         bm.verts.ensure_lookup_table()
-        bm_face = bm.faces.new(map(lambda vi: bm.verts[vi], reversed(vertex_indices)))
+
+        try:
+            bm_face = bm.faces.new(map(lambda vi: bm.verts[vi], reversed(vertex_indices)))
+        except ValueError:
+            invalid_polygon_indices.append(polygon_index)
+            continue
+
         bm_face.material_index = material_index
 
     bm.to_mesh(mesh_data)
@@ -194,6 +202,13 @@ def poly_list_to_mesh(context: Context, name: str, poly_list: T3dObject, pre_piv
     # Materials
     for key, material in materials.items():
         mesh_data.materials.append(material)
+
+    # Remove data for the invalid polygons.
+    for index in reversed(invalid_polygon_indices):
+        origins.pop(index)
+        texture_us.pop(index)
+        texture_vs.pop(index)
+        poly_flags.pop(index)
 
     # Create the attributes for texturing.
     origin_attribute = mesh_data.attributes.new(ORIGIN_ATTRIBUTE_NAME, 'FLOAT_VECTOR', 'FACE')
