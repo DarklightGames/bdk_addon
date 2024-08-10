@@ -680,13 +680,14 @@ class BDK_OT_bsp_build(Operator):
             bsp_panel.prop(self, 'bsp_balance')
             bsp_panel.prop(self, 'bsp_portal_bias')
 
-        lighting_header, lighting_panel = layout.panel_prop(self, 'should_do_lighting')
-        lighting_header.prop(self, 'should_do_lighting', text='Lighting')
-        if lighting_panel is not None:
-            lighting_panel.use_property_split = True
-            lighting_panel.use_property_decorate = False
-            lighting_panel.prop(self, 'lightmap_format')
-            lighting_panel.prop(self, 'should_dither_lightmaps')
+        # TODO: Lighting is not yet implemented, so this is disabled.
+        # lighting_header, lighting_panel = layout.panel_prop(self, 'should_do_lighting')
+        # lighting_header.prop(self, 'should_do_lighting', text='Lighting')
+        # if lighting_panel is not None:
+        #     lighting_panel.use_property_split = True
+        #     lighting_panel.use_property_decorate = False
+        #     lighting_panel.prop(self, 'lightmap_format')
+        #     lighting_panel.prop(self, 'should_dither_lightmaps')
 
         advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
         advanced_header.label(text='Advanced')
