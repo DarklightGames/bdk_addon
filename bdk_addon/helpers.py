@@ -44,13 +44,13 @@ def is_bdk_static_mesh_actor(obj: Object) -> bool:
 
 
 def get_terrain_info(terrain_info_object: Object):
-    if terrain_info_object.bdk.type == 'TERRAIN_INFO':
+    if terrain_info_object is not None and terrain_info_object.bdk.type == 'TERRAIN_INFO':
         return terrain_info_object.bdk.terrain_info
     return None
 
 
 def get_terrain_doodad(terrain_doodad_object: Object):
-    if terrain_doodad_object.bdk.type == 'TERRAIN_DOODAD':
+    if terrain_doodad_object is not None and terrain_doodad_object.bdk.type == 'TERRAIN_DOODAD':
         return terrain_doodad_object.bdk.terrain_doodad
     return None
 
