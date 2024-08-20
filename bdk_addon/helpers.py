@@ -1,7 +1,7 @@
 from mathutils import Matrix
 
 from .data import UReference
-from bpy.types import Material, Object, Context, Mesh, ByteColorAttribute, ViewLayer, LayerCollection, Collection
+from bpy.types import Material, Object, Context, ByteColorAttribute, ViewLayer, LayerCollection, Collection
 from typing import Iterable, Optional, Tuple, Set, List
 import bpy
 import numpy
@@ -430,3 +430,29 @@ def humanize_size(bytes: int):
         return f"{int(bytes)} {unit}"
     else:
         return f"{bytes:.2f} {unit}"
+
+
+def humanize_time(seconds: float):
+    """
+    Convert a time duration in seconds to a human-readable time string (from nanoseconds to minutes).
+    """
+    if seconds < 1e-6:
+        return f"{seconds * 1e9:.2f} ns"
+    elif seconds < 1e-3:
+        return f"{seconds * 1e6:.2f} µs"
+    elif seconds < 1:
+        return f"{seconds * 1e3:.2f} ms"
+    elif seconds < 60:
+        return f"{seconds:.2f} s"
+    elif seconds < 3600:
+        # Minutes and seconds.
+        minutes = int(seconds // 60)
+        seconds = seconds % 60
+        return f"{minutes}m {seconds:.2f}s"
+    else:
+        # Hours, minutes, and seconds.
+        hours = int(seconds // 3600)
+        seconds = seconds % 3600
+        minutes = int(seconds // 60)
+        seconds = seconds % 60
+        return f"{hours}h {minutes}m {seconds:.2f}s"
