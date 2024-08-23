@@ -378,6 +378,7 @@ def terrain_info_max_elevation_get(self: 'BDK_PG_terrain_info') -> float:
     return self.terrain_scale_z * 256 * 2
 
 def terrain_info_heightmap_resolution_get(self: 'BDK_PG_terrain_info') -> float:
+    # TODO: should be based on the scene units, not arbitrary values.
     return self.max_elevation / 65536.0
 
 class BDK_PG_terrain_info(PropertyGroup):
