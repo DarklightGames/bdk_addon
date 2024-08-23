@@ -3,9 +3,10 @@ from bpy.types import Menu, Panel
 from ..bsp import operators as bsp_operators
 from ..fluid_surface import operators as fluid_surface_operators
 from ..projector import operators as projector_operators
-from ..projector.operators import BDK_OT_projectors_bake
+from ..projector.operators import BDK_OT_projectors_bake, BDK_OT_projectors_unbake
 from ..terrain import operators as terrain_operators
 from ..terrain.doodad import operators as terrain_doodad_operators
+from ..t3d import operators as t3d_operators
 
 
 class BDK_MT_object_add_menu(Menu):
@@ -72,8 +73,23 @@ class BDK_PT_bdk(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator(BDK_OT_projectors_bake.bl_idname, text='Bake Projectors')
-        layout.operator(projector_operators.BDK_OT_projectors_unbake.bl_idname, text='Unbake Projectors')
+
+        # Projectors
+        projectors_header, projectors_panel = layout.panel('Projectors', default_closed=True)
+        projectors_header.label(text='Projectors')
+        if projectors_panel:
+            row = projectors_panel.row(align=True)
+            row.operator(BDK_OT_projectors_bake.bl_idname, text='Bake')
+            row.operator(BDK_OT_projectors_unbake.bl_idname, text='Unbake')
+
+        # T3D
+        t3d_header, t3d_panel = layout.panel('T3D', default_closed=True)
+        t3d_header.label(text='T3D')
+        if t3d_panel:
+            col = t3d_panel.column(align=True)
+            col.operator(t3d_operators.BDK_OT_t3d_copy_to_clipboard.bl_idname, text='Copy to Clipboard', icon='COPYDOWN')
+            col.operator(t3d_operators.BDK_OT_t3d_import_from_clipboard.bl_idname, text='Import from Clipboard', icon='PASTEDOWN')
+
 
 
 classes = (
