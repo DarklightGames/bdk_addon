@@ -840,10 +840,6 @@ class BDK_PT_terrain_doodad_scatter_layer_mask(Panel):
         flow.prop(scatter_layer, 'mask_threshold', text='Threshold')
         flow.prop(scatter_layer, 'mask_invert', text='Invert')
 
-        flow.separator()
-
-        flow.prop(scatter_layer, 'mask_attribute_id', emboss=False)
-
 
 # TODO: rename this "actor properties" or something
 class BDK_PT_terrain_doodad_scatter_layer_advanced(Panel):
