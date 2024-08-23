@@ -1192,7 +1192,7 @@ class BDK_OT_terrain_info_heightmap_import(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     filepath: StringProperty(name='File Path', subtype='FILE_PATH')
-    filter_glob: StringProperty(default='*.tga;*.bmp', options={'HIDDEN'})
+    filter_glob: StringProperty(default='*.tga;*.bmp;*.png;*.jpg;*.jpeg', options={'HIDDEN'})
 
     terrain_scale_z: FloatProperty(name='Heightmap Scale', default=64.0, min=0, soft_min=16.0, soft_max=128.0, max=512)
 
@@ -1205,33 +1205,51 @@ class BDK_OT_terrain_info_heightmap_import(Operator):
         return {'RUNNING_MODAL'}
 
     def execute(self, context: Context):
+        terrain_info = get_terrain_info(context.active_object)
+
         extension = os.path.splitext(self.filepath)[1]
 
-        if extension == '.tga':
-            # TODO: assume we are dealing with a UModel TGA file, where the heights are stored in the RGB channels.
-            self.report({'ERROR'}, 'TGA files are not supported yet')
-            return {'CANCELLED'}
-        elif extension == '.bmp':
-            # Read the G16 BMP file.
-            try:
-                heightmap = read_bmp_g16(self.filepath)
-            except IOError as e:
-                self.report({'ERROR'}, str(e))
-                return {'CANCELLED'}
+        match extension.lower():
+            case '.tga' | '.png' | '.jpg' | '.jpeg':
+                # Load the image file temporarily so that we can read the data.
+                try:
+                    image = bpy.data.images.load(self.filepath)
+                except Exception as e:
+                    self.report({'ERROR'}, str(e))
+                    return {'CANCELLED'}
 
-            # Make sure the heightmap is the correct size.
-            terrain_info = get_terrain_info(context.active_object)
-            if heightmap.shape != (terrain_info.x_size, terrain_info.y_size):
-                self.report({'ERROR'}, f'Heightmap is the wrong size. Expected {terrain_info.x_size}x{terrain_info.y_size}, got {heightmap.shape[0]}x{heightmap.shape[1]}')
-                return {'CANCELLED'}
+                # Resize the image to the terrain size.
+                if image.size != (terrain_info.x_size, terrain_info.y_size):
+                    self.report({'WARNING'}, f'Image size ({image.size[0]}x{image.size[1]}) does not match terrain size ({terrain_info.x_size}x{terrain_info.y_size}). The image will be resized and may lose quality.')
+                    image.scale(terrain_info.x_size, terrain_info.y_size)
 
-            # Convert the heightmap to floating point values.
-            heightmap = heightmap.astype(float)
-            # De-quantize the heightmap.
-            heightmap = (heightmap / 65535.0) - 0.5
-        else:
-            self.report({'ERROR'}, f'Unsupported file extension {extension}')
-            return {'CANCELLED'}
+                # Extract the heightmap data from the image.
+                data = numpy.array(image.pixels)
+
+                # Get the red channel of each pixel, then convert it to a 2D array.
+                heightmap = data[::4].reshape((terrain_info.x_size, terrain_info.y_size))
+
+                bpy.data.images.remove(image)
+            case '.bmp':
+                # Read the G16 BMP file.
+                try:
+                    heightmap = read_bmp_g16(self.filepath)
+                except IOError as e:
+                    self.report({'ERROR'}, str(e))
+                    return {'CANCELLED'}
+
+                # Make sure the heightmap is the correct size.
+                if heightmap.shape != (terrain_info.x_size, terrain_info.y_size):
+                    self.report({'ERROR'}, f'Heightmap is the wrong size. Expected {terrain_info.x_size}x{terrain_info.y_size}, got {heightmap.shape[0]}x{heightmap.shape[1]}')
+                    return {'CANCELLED'}
+
+                # Convert the heightmap to floating point values.
+                heightmap = heightmap.astype(float)
+                # De-quantize the heightmap.
+                heightmap = (heightmap / 65535.0) - 0.5
+            case _:
+                self.report({'ERROR'}, f'Unsupported file extension {extension}')
+                return {'CANCELLED'}
 
         # Apply the heightmap to the mesh.
         mesh_data = cast(Mesh, context.active_object.data)
