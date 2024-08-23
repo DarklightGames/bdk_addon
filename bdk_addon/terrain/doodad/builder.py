@@ -10,7 +10,7 @@ from itertools import chain
 from ...units import meters_to_unreal
 from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, \
-    add_geometry_node_switch_nodes, ensure_curve_modifier_node_tree
+    add_geometry_node_switch_nodes, ensure_curve_modifier_node_tree, add_clamp_node
 from ..kernel import ensure_paint_layers, ensure_deco_layers
 from .kernel import get_terrain_doodad_scatter_layer_by_id
 from .sculpt.builder import ensure_sculpt_value_node_group
@@ -88,12 +88,16 @@ def ensure_terrain_doodad_paint_operation_node_group() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        value_socket = add_operation_switch_nodes(
+        # Clamp the result of the operation.
+        value_socket = add_clamp_node(
             node_tree,
-            input_node.outputs['Operation'],
-            input_node.outputs['Value 1'],
-            input_node.outputs['Value 2'],
-            [x[0] for x in terrain_doodad_operation_items]
+            add_operation_switch_nodes(
+                node_tree,
+                input_node.outputs['Operation'],
+                input_node.outputs['Value 1'],
+                input_node.outputs['Value 2'],
+                [x[0] for x in terrain_doodad_operation_items]
+            )
         )
 
         node_tree.links.new(value_socket, output_node.inputs['Output'])

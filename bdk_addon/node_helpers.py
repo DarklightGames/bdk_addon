@@ -39,6 +39,22 @@ def ensure_terrain_layer_node_operation_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Terrain Layer Node Operation', items, build_function)
 
 
+def add_clamp_node(node_tree: NodeTree, value_socket: NodeSocket, min_value: NodeSocket | float = 0.0, max_value: NodeSocket | float = 1.0) -> NodeSocket:
+    clamp_node = node_tree.nodes.new(type='ShaderNodeClamp')
+    clamp_node.inputs['Min'].default_value = min_value if isinstance(min_value, float) else 0.0
+    clamp_node.inputs['Max'].default_value = max_value if isinstance(max_value, float) else 1.0
+
+    if isinstance(min_value, NodeSocket):
+        node_tree.links.new(min_value, clamp_node.inputs['Min'])
+
+    if isinstance(max_value, NodeSocket):
+        node_tree.links.new(max_value, clamp_node.inputs['Max'])
+
+    node_tree.links.new(value_socket, clamp_node.inputs['Value'])
+
+    return clamp_node.outputs['Result']
+
+
 def add_operation_switch_nodes(
         node_tree: NodeTree,
         operation_socket: NodeSocket,
