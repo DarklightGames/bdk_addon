@@ -164,7 +164,7 @@ class BDK_PT_terrain_paint_layer_settings(Panel):
         flow.column(align=True).prop(paint_layer, 'material')
 
         col = flow.row().column(align=True)
-        col.prop(paint_layer, 'u_scale', text='U Scale')
+        col.prop(paint_layer, 'u_scale', text='Scale U')
         col.prop(paint_layer, 'v_scale', text='V')
         col.prop(paint_layer, 'texel_density')
 
