@@ -268,14 +268,19 @@ def ensure_node_tree(name: str,
         node_tree.bdk.build_hash = build_hash
 
         # If there are default values or subtypes, set them.
-        # TODO: doesn't work.
         for item_index, item in enumerate(items):
-            if len(item) <= 3:
+            if len(item) < 4:
                 continue
-            default_value = item[3]
             in_out, socket_type, name = item[:3]
-            item = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
-            item.default_value = default_value
+            socket = get_node_tree_socket_interface_item(node_tree, in_out, name, socket_type)
+            if socket is None:
+                continue
+            subtype = item[3]
+            default_value = item[4] if len(item) > 4 else None
+            if subtype is not None:
+                socket.subtype = subtype
+            if default_value is not None:
+                socket.default_value = default_value
 
     return node_tree
 

@@ -748,8 +748,8 @@ def ensure_bdk_bsp_surface_alignment_translation_matrix_node_tree() -> NodeTree:
         ('OUTPUT', 'NodeSocketMatrix', 'Matrix'),
         ('OUTPUT', 'NodeSocketVector', 'Extents'),
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
-        ('INPUT', 'NodeSocketMenu', 'Horizontal', 'Left'),
-        ('INPUT', 'NodeSocketMenu', 'Vertical', 'Bottom'),
+        ('INPUT', 'NodeSocketMenu', 'Horizontal'),
+        ('INPUT', 'NodeSocketMenu', 'Vertical'),
     )
 
     def build_function(node_tree: NodeTree):
@@ -965,7 +965,7 @@ def ensure_bdk_bsp_surface_scale_uv_and_offset_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketVector', 'V'),
         ('INPUT', 'NodeSocketVector', 'Location'),
         ('INPUT', 'NodeSocketInt', 'Edge Index'),
-        ('INPUT', 'NodeSocketMenu', 'Fit', 'Maximum'),
+        ('INPUT', 'NodeSocketMenu', 'Fit'),
         ('INPUT', 'NodeSocketVector', 'Face Extents'),
     )
 
