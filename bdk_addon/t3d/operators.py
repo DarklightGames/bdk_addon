@@ -41,6 +41,8 @@ class BDK_OT_t3d_import_from_clipboard(Operator):
     def execute(self, context: Context):
         try:
             import_t3d(context.window_manager, context.window_manager.clipboard, context)
+            self.report({'INFO'}, f'Imported actors from clipboard')
+            return {'FINISHED'}
         except RuntimeError as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
@@ -49,8 +51,6 @@ class BDK_OT_t3d_import_from_clipboard(Operator):
             self.report({'ERROR'}, 'Clipboard data is not valid T3DMap syntax. Additional debugging information has been '
                                    'written to the console')
             return {'CANCELLED'}
-        self.report({'INFO'}, f'T3DMap Imported successfully')
-        return {'FINISHED'}
 
 
 class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
@@ -388,7 +388,7 @@ object_to_t3d_converters: List[ObjectToT3DConverter] = [
 
 class BDK_OT_t3d_copy_to_clipboard(Operator):
     bl_idname = 'bdk.t3d_copy_objects_to_clipboard'
-    bl_description = 'Copy to clipboard as Unreal T3DMap doodad'
+    bl_description = 'Copy to clipboard as Unreal T3DMap'
     bl_label = 'Copy as Unreal T3DMap'
 
     @classmethod
@@ -433,6 +433,8 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
             wm.progress_update(obj_index)
 
+        wm.progress_end()
+
         # Mark all the actors as selected.
         for actor in copy_actors:
             actor.properties['bSelected'] = True
@@ -447,12 +449,14 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         T3DWriter(string_io).write(map_object)
         size = string_io.tell()
         string_io.seek(0)
-        self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({humanize_size(size)})')
+
+        if len(copy_actors) == 0:
+            self.report({'WARNING'}, 'Current selection does not contain any objects that can be converted to T3D actors')
+        else:
+            self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({humanize_size(size)})')
 
         # Copy the string to the clipboard.
         bpy.context.window_manager.clipboard = string_io.read()
-
-        wm.progress_end()
 
         return {'FINISHED'}
 
