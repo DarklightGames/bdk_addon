@@ -567,28 +567,32 @@ class BDK_PT_terrain_doodad_scatter_layer_curve_settings(Panel):
         flow.prop(scatter_layer, 'fence_mode')
         flow.separator()
 
-        # Curve settings
-        draw_curve_modifier_settings(flow, scatter_layer, curve_data=terrain_doodad.object.data)
+        # Curve Modifiers
+        draw_curve_modifier_settings(flow, scatter_layer)
 
-        flow.separator()
-        flow.prop(scatter_layer, 'curve_spacing_method')
+        # Spacing
+        spacing_header, spacing_panel = flow.panel('Spacing', default_closed=True)
+        spacing_header.label(text='Spacing')
+        if spacing_panel:
+            col = spacing_panel.column(align=True)
+            col.prop(scatter_layer, 'curve_spacing_method')
+            match scatter_layer.curve_spacing_method:
+                case'RELATIVE':
+                    col.prop(scatter_layer, 'curve_spacing_relative_axis', text='Axis')
+                    col.prop(scatter_layer, 'curve_spacing_relative_factor', text='Factor')
+                case 'ABSOLUTE':
+                    col.prop(scatter_layer, 'curve_spacing_absolute', text='Distance')
 
-        match scatter_layer.curve_spacing_method:
-            case'RELATIVE':
-                flow.prop(scatter_layer, 'curve_spacing_relative_axis', text='Axis')
-                flow.prop(scatter_layer, 'curve_spacing_relative_factor', text='Factor')
-            case 'ABSOLUTE':
-                flow.prop(scatter_layer, 'curve_spacing_absolute', text='Distance')
-
-        flow.separator()
-
-        flow.prop(scatter_layer, 'curve_normal_offset_max', text='Normal Offset Max')
-        flow.prop(scatter_layer, 'curve_normal_offset_seed', text='Seed')
-
-        flow.separator()
-
-        flow.prop(scatter_layer, 'curve_tangent_offset_max', text='Tangent Offset Max')
-        flow.prop(scatter_layer, 'curve_tangent_offset_seed', text='Seed')
+        # Offsets
+        offsets_header, offsets_panel = flow.panel('Offsets', default_closed=True)
+        offsets_header.label(text='Offsets')
+        if offsets_panel:
+            col = offsets_panel.column(align=True)
+            col.prop(scatter_layer, 'curve_normal_offset_max', text='Normal Offset Max')
+            col.prop(scatter_layer, 'curve_normal_offset_seed', text='Seed')
+            col.separator()
+            col.prop(scatter_layer, 'curve_tangent_offset_max', text='Tangent Offset Max')
+            col.prop(scatter_layer, 'curve_tangent_offset_seed', text='Seed')
 
 
 def get_selected_terrain_doodad_scatter_layer_object(context: Context):
@@ -867,24 +871,27 @@ class BDK_PT_terrain_doodad_scatter_layer_advanced(Panel):
         flow.prop(scatter_layer, 'actor_group', text='Group')
 
 
-def draw_curve_modifier_settings(layout: UILayout, data, curve_data: Curve = None):
-    layout.prop(data, 'is_curve_reversed')
-    layout.prop(data, 'curve_normal_offset')
+def draw_curve_modifier_settings(layout: UILayout, data):
+    curve_modifier_header, curve_modifier_panel = layout.panel('Curve Modifiers', default_closed=True)
+    curve_modifier_header.use_property_split = False
+    curve_modifier_header.prop(data, 'use_curve_modifiers', text='Curve Modifiers')
+    if curve_modifier_panel:
+        curve_modifier_panel.prop(data, 'is_curve_reversed')
+        curve_modifier_panel.prop(data, 'curve_normal_offset')
+        curve_modifier_panel.separator()
+        curve_modifier_panel.prop(data, 'curve_trim_mode')
 
-    layout.separator()
-
-    layout.prop(data, 'curve_trim_mode')
-
-    if data.curve_trim_mode == 'FACTOR':
-        col = layout.column(align=True)
-        col.prop(data, 'curve_trim_factor_start', text='Trim Start')
-        col.prop(data, 'curve_trim_factor_end', text='End')
-        if data.curve_trim_factor_start >= data.curve_trim_factor_end:
-            layout.label(text='Trim start should be less than trim end', icon='ERROR')
-    elif data.curve_trim_mode == 'LENGTH':
-        col = layout.column(align=True)
-        col.prop(data, 'curve_trim_length_start', text='Trim Start')
-        col.prop(data, 'curve_trim_length_end', text='End')
+        match data.curve_trim_mode:
+            case 'FACTOR':
+                col = curve_modifier_panel.column(align=True)
+                col.prop(data, 'curve_trim_factor_start', text='Trim Start')
+                col.prop(data, 'curve_trim_factor_end', text='End')
+                if data.curve_trim_factor_start >= data.curve_trim_factor_end:
+                    curve_modifier_panel.label(text='Trim start should be less than trim end', icon='ERROR')
+            case 'LENGTH':
+                col = curve_modifier_panel.column(align=True)
+                col.prop(data, 'curve_trim_length_start', text='Trim Start')
+                col.prop(data, 'curve_trim_length_end', text='End')
 
 
 class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):

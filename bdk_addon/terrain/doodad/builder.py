@@ -604,32 +604,43 @@ def add_distance_to_doodad_layer_nodes(node_tree: NodeTree, layer, layer_type: s
 
     match terrain_doodad.object.type:
         case 'CURVE':
-            curve_modifier_node = node_tree.nodes.new(type='GeometryNodeGroup')
-            curve_modifier_node.node_tree = ensure_curve_modifier_node_tree()
+            def add_curve_modifier_nodes(node_tree: NodeTree, layer, layer_type, curve_socket: NodeSocket) -> NodeSocket:
+                switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+                switch_node.input_type = 'GEOMETRY'
+
+                add_doodad_layer_driver(switch_node.inputs['Switch'], layer, layer_type, 'use_curve_modifiers')
+
+                modifier_node = node_tree.nodes.new(type='GeometryNodeGroup')
+                modifier_node.node_tree = ensure_curve_modifier_node_tree()
+
+                def add_curve_modifier_driver(input_name: str, data_path: str):
+                    add_doodad_layer_driver(modifier_node.inputs[input_name], layer, layer_type, data_path)
+
+                # Drivers
+                add_curve_modifier_driver('Is Curve Reversed', 'is_curve_reversed')
+                add_curve_modifier_driver('Trim Mode', 'curve_trim_mode')
+                add_curve_modifier_driver('Trim Factor Start', 'curve_trim_factor_start')
+                add_curve_modifier_driver('Trim Factor End', 'curve_trim_factor_end')
+                add_curve_modifier_driver('Trim Length Start', 'curve_trim_length_start')
+                add_curve_modifier_driver('Trim Length End', 'curve_trim_length_end')
+                add_curve_modifier_driver('Normal Offset', 'curve_normal_offset')
+
+                # Links
+                node_tree.links.new(curve_socket, modifier_node.inputs['Curve'])
+                node_tree.links.new(curve_socket, switch_node.inputs['False'])
+                node_tree.links.new(modifier_node.outputs['Curve'], switch_node.inputs['True'])
+
+                return switch_node.outputs['Output']
 
             distance_to_curve_node = node_tree.nodes.new(type='GeometryNodeGroup')
             distance_to_curve_node.node_tree = ensure_distance_to_curve_node_group()
 
-            def add_curve_modifier_driver(input_name: str, data_path: str):
-                add_doodad_layer_driver(curve_modifier_node.inputs[input_name], layer, layer_type, data_path)
+            curve_socket = add_curve_modifier_nodes(node_tree, layer, layer_type, terrain_doodad_object_info_node.outputs['Geometry'])
 
-            # Drivers
-            add_curve_modifier_driver('Is Curve Reversed', 'is_curve_reversed')
-            add_curve_modifier_driver('Trim Mode', 'curve_trim_mode')
-            add_curve_modifier_driver('Trim Factor Start', 'curve_trim_factor_start')
-            add_curve_modifier_driver('Trim Factor End', 'curve_trim_factor_end')
-            add_curve_modifier_driver('Trim Length Start', 'curve_trim_length_start')
-            add_curve_modifier_driver('Trim Length End', 'curve_trim_length_end')
-            add_curve_modifier_driver('Normal Offset', 'curve_normal_offset')
-
-            # Links
-            node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'],
-                                curve_modifier_node.inputs['Curve'])
-            node_tree.links.new(curve_modifier_node.outputs['Curve'], distance_to_curve_node.inputs['Curve'])
+            node_tree.links.new(curve_socket, distance_to_curve_node.inputs['Curve'])
 
             return distance_to_curve_node.outputs['Distance']
         case 'MESH':
-            # TODO: set up a switch for points vs. faces
             distance_to_mesh_node_group = ensure_distance_to_mesh_node_group()
 
             # Add a new node group node.
