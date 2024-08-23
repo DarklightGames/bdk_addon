@@ -15,6 +15,6 @@ terrain_doodad_type_items = [
 ]
 
 terrain_doodad_geometry_source_items = (
-    ('DOODAD', 'Doodad', ''),
-    ('SCATTER_LAYER', 'Scatter Layer', '')
+    ('DOODAD', 'Doodad', 'Use the terrain doodad object\'s geometry'),
+    ('SCATTER_LAYER', 'Scatter Layer', 'Use the points of a scatter layer')
 )

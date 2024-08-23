@@ -4,6 +4,7 @@ from bpy.props import StringProperty, IntProperty, BoolProperty, EnumProperty, P
     FloatProperty, FloatVectorProperty
 from bpy.types import PropertyGroup, Object, Context
 
+from ..data import terrain_doodad_geometry_source_items
 from ....actor.properties import BDK_PG_actor_properties
 from ....helpers import get_terrain_doodad
 from ....property_group_helpers import add_curve_modifier_properties
@@ -162,10 +163,8 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
     name: StringProperty(name='Name', default='Scatter Layer')
     mute: BoolProperty(name='Mute', default=False)
     terrain_doodad_object: PointerProperty(type=Object, name='Terrain Doodad Object', options={'HIDDEN'})
-    geometry_source: EnumProperty(name='Geometry Source', items=(
-        ('DOODAD', 'Doodad', 'Use the terrain doodad geometry'),
-        ('SCATTER_LAYER', 'Scatter Layer', 'Use the points of another scatter layer as the basis for the scatter')
-    ), default='DOODAD', update=terrain_doodad_scatter_layer_update_cb)
+    geometry_source: EnumProperty(name='Geometry Source', items=terrain_doodad_geometry_source_items,
+                                  default='DOODAD', update=terrain_doodad_scatter_layer_update_cb)
     geometry_source_name: StringProperty(name='Geometry Source Name', default='', options={'HIDDEN'},
                                          search=terrain_doodad_scatter_layer_geometry_source_name_search_cb,
                                          update=terrain_doodad_scatter_layer_geometry_source_name_update_cb)
