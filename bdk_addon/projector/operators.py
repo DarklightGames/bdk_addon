@@ -123,7 +123,10 @@ class BDK_OT_projectors_bake(Operator):
             if obj.bdk.type == 'PROJECTOR' and not obj.bdk.projector.is_baked:
                 bake_projector(obj)
                 count += 1
-        self.report({'INFO'}, f'Baked {count} projectors')
+        if count == 0:
+            self.report({'WARNING'}, 'No projectors to bake')
+        else:
+            self.report({'INFO'}, f'Baked {count} projectors')
         return {'FINISHED'}
 
 
@@ -138,7 +141,10 @@ class BDK_OT_projectors_unbake(Operator):
             if obj.bdk.type == 'PROJECTOR' and obj.bdk.projector.is_baked:
                 unbake_projector(obj)
                 count += 1
-        self.report({'INFO'}, f'Unbaked {count} projectors')
+        if count == 0:
+            self.report({'WARNING'}, 'No projectors to unbake')
+        else:
+            self.report({'INFO'}, f'Unbaked {count} projectors')
         return {'FINISHED'}
 
 
