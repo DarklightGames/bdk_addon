@@ -469,6 +469,16 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
 
+def add_bitwise_operation_node(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> NodeSocket:
+    operation_node = node_tree.nodes.new(type='FunctionNodeBitwiseOperation')
+    operation_node.operation = operation
+
+    for index, value_socket in enumerate(value_sockets):
+        node_tree.links.new(value_socket, operation_node.inputs[index])
+
+    return operation_node.outputs[0]
+
+
 def add_chained_bitwise_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
     if not value_sockets:
         return None
@@ -721,3 +731,71 @@ def add_curve_spline_loop_nodes(node_tree: NodeTree, curve_socket: NodeSocket, i
     inner_loop_nodes_function(node_tree, sockets)
 
     return repeat_output_node.outputs['Geometry']
+
+
+def link_sockets_or_set_default_value(node_tree: NodeTree, value: NodeSocket | float, input_socket: NodeSocket):
+    if isinstance(value, NodeSocket):
+        node_tree.links.new(value, input_socket)
+    elif isinstance(value, float):
+        input_socket.default_value = value
+
+def add_combine_xyz_node(node_tree: NodeTree,
+                         x_socket: Optional[NodeSocket | float] = None,
+                         y_socket: Optional[NodeSocket | float] = None,
+                         z_socket: Optional[NodeSocket | float] = None) -> NodeSocket:
+    combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
+    if x_socket:
+        link_sockets_or_set_default_value(node_tree, x_socket, combine_xyz_node.inputs['X'])
+    if y_socket:
+        link_sockets_or_set_default_value(node_tree, y_socket, combine_xyz_node.inputs['Y'])
+    if z_socket:
+        link_sockets_or_set_default_value(node_tree, z_socket, combine_xyz_node.inputs['Z'])
+    return combine_xyz_node.outputs['Vector']
+
+
+def add_separate_xyz_node(node_tree: NodeTree, vector_socket: NodeSocket) -> Tuple[NodeSocket, NodeSocket, NodeSocket]:
+    separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
+    node_tree.links.new(vector_socket, separate_xyz_node.inputs['Vector'])
+    return separate_xyz_node.outputs['X'], separate_xyz_node.outputs['Y'], separate_xyz_node.outputs['Z']
+
+
+def add_vector_node(node_tree: NodeTree, vector: Tuple[float, float, float]) -> NodeSocket:
+    vector_node = node_tree.nodes.new(type='ShaderNodeVector')
+    vector_node.outputs['Vector'].default_value = vector
+    return vector_node.outputs['Vector']
+
+
+def add_value_node(node_tree: NodeTree, value: float) -> NodeSocket:
+    value_node = node_tree.nodes.new(type='ShaderNodeValue')
+    value_node.outputs['Value'].default_value = value
+    return value_node.outputs['Value']
+
+
+def add_invert_matrix_node(node_tree: NodeTree, matrix_socket: NodeSocket) -> NodeSocket:
+    invert_matrix_node = node_tree.nodes.new(type='FunctionNodeInvertMatrix')
+    node_tree.links.new(matrix_socket, invert_matrix_node.inputs['Matrix'])
+    return invert_matrix_node.outputs['Matrix']
+
+
+def add_multiply_matrices_operation_node(node_tree: NodeTree, lhs: NodeSocket, rhs: NodeSocket):
+    multiply_matrices_node = node_tree.nodes.new(type='FunctionNodeMatrixMultiply')
+    node_tree.links.new(lhs, multiply_matrices_node.inputs[0])
+    node_tree.links.new(rhs, multiply_matrices_node.inputs[1])
+    return multiply_matrices_node.outputs['Matrix']
+
+
+def add_separate_transform_node(node_tree: NodeTree, transform_socket: NodeSocket) -> Tuple[NodeSocket, NodeSocket, NodeSocket]:
+    separate_transform_node = node_tree.nodes.new(type='FunctionNodeSeparateTransform')
+    node_tree.links.new(transform_socket, separate_transform_node.inputs['Transform'])
+    return (
+        separate_transform_node.outputs['Translation'],
+        separate_transform_node.outputs['Rotation'],
+        separate_transform_node.outputs['Scale'],
+    )
+
+
+def add_project_point_node(node_tree: NodeTree, vector_socket: NodeSocket, transform_socket: NodeSocket) -> NodeSocket:
+    project_point_node = node_tree.nodes.new(type='FunctionNodeProjectPoint')
+    node_tree.links.new(vector_socket, project_point_node.inputs['Vector'])
+    node_tree.links.new(transform_socket, project_point_node.inputs['Transform'])
+    return project_point_node.outputs['Vector']
