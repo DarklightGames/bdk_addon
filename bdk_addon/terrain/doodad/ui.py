@@ -77,55 +77,62 @@ class BDK_PT_terrain_doodad_paint_layer_settings(Panel):
         flow.use_property_split = True
         flow.use_property_decorate = False
 
-        flow.separator()
-
-        flow.prop(paint_layer, 'geometry_source')
-
-        match paint_layer.geometry_source:
-            case 'SCATTER_LAYER':
-                flow.prop(paint_layer, 'scatter_layer_name')
-            case 'DOODAD':
-                if terrain_doodad.object.type == 'MESH':
-                    flow.prop(paint_layer, 'element_mode')
-
         row = flow.row()
-
         row.prop(paint_layer, 'layer_type')
 
-        if paint_layer.layer_type == 'PAINT':
-            flow.prop(paint_layer, 'paint_layer_name')
-        elif paint_layer.layer_type == 'DECO':
-            row = flow.row()
-            row.prop(paint_layer, 'deco_layer_name')
-            deco_layer_object = bpy.data.objects[paint_layer.deco_layer_id] if paint_layer.deco_layer_id in bpy.data.objects else None
-            if deco_layer_object:
-                row.prop(deco_layer_object, 'hide_viewport', icon_only=True)
-        elif paint_layer.layer_type == 'ATTRIBUTE':
-            flow.prop(paint_layer, 'attribute_layer_id')
+        match paint_layer.layer_type:
+            case 'PAINT':
+                flow.prop(paint_layer, 'paint_layer_name')
+            case 'DECO':
+                row = flow.row()
+                row.prop(paint_layer, 'deco_layer_name')
+                deco_layer_object = bpy.data.objects[paint_layer.deco_layer_id] if paint_layer.deco_layer_id in bpy.data.objects else None
+                if deco_layer_object:
+                    row.prop(deco_layer_object, 'hide_viewport', icon_only=True)
+            case 'ATTRIBUTE':
+                flow.prop(paint_layer, 'attribute_layer_id')
 
         flow.separator()
 
-        flow.prop(paint_layer, 'interpolation_type')
+        flow.prop(paint_layer, 'strength')
+        flow.prop(paint_layer, 'interpolation_type', text='Interpolation')
 
-        col = flow.column()
-
+        col = flow.column(align=True)
         col.prop(paint_layer, 'radius')
         col.prop(paint_layer, 'falloff_radius')
-        col.prop(paint_layer, 'strength')
 
+        # Curve Modifiers
         if terrain_doodad.object.type == 'CURVE':
             draw_curve_modifier_settings(flow, paint_layer)
             flow.separator()
 
-        flow.prop(paint_layer, 'use_distance_noise')
-
-        if paint_layer.use_distance_noise:
-            col = flow.column(align=True)
+        # Distance Noise
+        distance_noise_header, distance_noise_panel = flow.panel_prop(paint_layer, 'use_distance_noise')
+        distance_noise_header.use_property_split = False
+        distance_noise_header.prop(paint_layer, 'use_distance_noise')
+        if distance_noise_panel:
+            col = distance_noise_panel.column(align=True)
             col.prop(paint_layer, 'noise_type', icon='MOD_NOISE')
+            col.separator()
             col.prop(paint_layer, 'distance_noise_offset', text='Offset')
             col.prop(paint_layer, 'distance_noise_factor', text='Factor')
             if paint_layer.noise_type == 'PERLIN':
                 col.prop(paint_layer, 'distance_noise_distortion', text='Distortion')
+
+        # Advanced
+        advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
+        advanced_header.label(text='Advanced')
+        if advanced_panel:
+            advanced_panel.use_property_split = True
+            advanced_panel.use_property_decorate = False
+            col = advanced_panel.column(align=True)
+            col.prop(paint_layer, 'geometry_source')
+            match paint_layer.geometry_source:
+                case 'SCATTER_LAYER':
+                    col.prop(paint_layer, 'scatter_layer_name', text='Scatter Layer')
+                case 'DOODAD':
+                    if terrain_doodad.object.type == 'MESH':
+                        col.prop(paint_layer, 'element_mode')
 
 
 class BDK_PT_terrain_doodad_paint_layers(Panel):
@@ -154,17 +161,22 @@ class BDK_PT_terrain_doodad_paint_layers(Panel):
             'BDK_UL_terrain_doodad_paint_layers', '',
             terrain_doodad, 'paint_layers',
             terrain_doodad, 'paint_layers_index',
-            sort_lock=True, rows=3)
+            sort_lock=True, rows=5)
 
         col = row.column(align=True)
+
         col.operator(BDK_OT_terrain_doodad_paint_layer_add.bl_idname, icon='ADD', text='')
         col.operator(BDK_OT_terrain_doodad_paint_layer_remove.bl_idname, icon='REMOVE', text='')
+
         col.separator()
+
         operator = col.operator(BDK_OT_terrain_doodad_paint_layer_move.bl_idname, icon='TRIA_UP', text='')
         operator.direction = 'UP'
         operator = col.operator(BDK_OT_terrain_doodad_paint_layer_move.bl_idname, icon='TRIA_DOWN', text='')
         operator.direction = 'DOWN'
+
         col.separator()
+
         col.operator(BDK_OT_terrain_doodad_paint_layer_duplicate.bl_idname, icon='DUPLICATE', text='')
 
 
@@ -916,6 +928,7 @@ class BDK_PT_terrain_doodad_scatter_layer_settings(Panel):
         flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
+
         flow.prop(scatter_layer, 'geometry_source')
 
         if scatter_layer.geometry_source == 'SCATTER_LAYER':
