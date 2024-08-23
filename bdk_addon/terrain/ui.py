@@ -578,7 +578,7 @@ class BDK_UL_terrain_deco_layers(UIList):
 
 def draw_terrain_layer_node_item(layout: UILayout, item, mesh):
     color_attribute_index = mesh.color_attributes.find(item.id)
-    is_active_color_attribute = color_attribute_index == mesh.color_attributes.active_color_index
+    is_active_color_attribute = color_attribute_index != -1 and color_attribute_index == mesh.color_attributes.active_color_index
 
     row = layout.row()
     # Display an icon if this is the active color attribute.
