@@ -656,9 +656,6 @@ class BDK_OT_bsp_build(Operator):
         default='RGB8',
     )
 
-    # TODO: add some sort of property to the faces of the level to track if it has been modified since the last build.
-    apply_level_texturing_to_brushes: BoolProperty(name='Apply Texturing to Brushes', default=True,
-                                                   description='Apply the level texturing to the brush polygons before building the level geometry')
     should_optimize_geometry: BoolProperty(name='Optimize Geometry', default=True)
 
     def draw(self, context):
@@ -688,13 +685,6 @@ class BDK_OT_bsp_build(Operator):
         #     lighting_panel.use_property_decorate = False
         #     lighting_panel.prop(self, 'lightmap_format')
         #     lighting_panel.prop(self, 'should_dither_lightmaps')
-
-        advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
-        advanced_header.label(text='Advanced')
-        if advanced_panel:
-            advanced_panel.use_property_split = True
-            advanced_panel.use_property_decorate = False
-            advanced_panel.prop(self, 'apply_level_texturing_to_brushes')
 
         if should_show_bdk_developer_extras(context):
             debug_header, debug_panel = layout.panel('Debug', default_closed=True)
@@ -1122,35 +1112,6 @@ class BDK_OT_bsp_brush_select_with_poly_flags(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_apply_level_texturing_to_brushes(Operator):
-    bl_idname = 'bdk.apply_level_texturing_to_brushes'
-    bl_label = 'Apply Texturing to Brushes'
-    bl_description = 'Apply the level texturing to BSP brushes'
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        # Make sure that we are in object mode.
-        if context.mode != 'OBJECT':
-            cls.poll_message_set('Must be in object mode')
-            return False
-        # Make sure that the scene has a level object.
-        if context.scene.bdk.level_object is None:
-            cls.poll_message_set('No level object in the scene')
-            return False
-        return True
-
-    def execute(self, context):
-        result = apply_level_to_brush_mapping(context.scene.bdk.level_object)
-
-        for error in result.errors:
-            self.report({'WARNING'}, str(error))
-
-        self.report({'INFO'}, f'Applied level texturing to {result.brush_count} brushes ({result.face_count} faces)')
-
-        return {'FINISHED'}
-
-
 class BDK_OT_ensure_tool_operators(Operator):
     bl_idname = 'bdk.ensure_tool_operators'
     bl_label = 'Ensure Tool Operators'
@@ -1176,6 +1137,5 @@ classes = (
     BDK_OT_convert_to_bsp_brush,
     BDK_OT_select_brushes_inside,
     BDK_OT_bsp_brush_demote,
-    BDK_OT_apply_level_texturing_to_brushes,
     BDK_OT_ensure_tool_operators,
 )
