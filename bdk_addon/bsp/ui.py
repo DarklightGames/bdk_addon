@@ -1,7 +1,7 @@
 from bpy.types import Panel, Context
 
 from ..helpers import should_show_bdk_developer_extras
-from ..bsp.operators import BDK_OT_apply_level_texturing_to_brushes, BDK_OT_ensure_tool_operators, BDK_OT_bsp_build
+from ..bsp.operators import BDK_OT_ensure_tool_operators, BDK_OT_bsp_build
 
 
 def poll_is_active_object_bsp_brush(cls, context: Context):
@@ -121,7 +121,6 @@ class BDK_PT_level(Panel):
         operators_header.label(text='Operators')
 
         if operators_panel is not None:
-            operators_panel.operator(BDK_OT_apply_level_texturing_to_brushes.bl_idname, icon='TEXTURE')
             operators_panel.operator(BDK_OT_bsp_build.bl_idname, icon='MOD_BUILD')
 
         if should_show_bdk_developer_extras(context):
