@@ -730,10 +730,9 @@ class BDK_OT_bsp_build(Operator):
         level_object = scene.bdk.level_object
 
         # Apply the texturing to the brushes, if the option is enabled.
-        if self.apply_level_texturing_to_brushes:
-            result = apply_level_to_brush_mapping(level_object)
-            for error in result.errors:
-                self.report({'WARNING'}, str(error))
+        result = apply_level_to_brush_mapping(level_object)
+        for error in result.errors:
+            self.report({'WARNING'}, str(error))
 
         def brush_object_filter(obj: Object, instance_objects: List[Object]):
             if not obj.bdk.type == 'BSP_BRUSH':
