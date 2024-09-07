@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
 id = "bdk_addon"
-version = "1.0.0"
+version = "1.0.1"
 name = "Unreal BDK"
 tagline = "Makes Blender a level editor for games running on Unreal 1 and 2"
 maintainer = "Colin Basnett <cmbasnett@gmail.com>"
