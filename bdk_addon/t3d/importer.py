@@ -632,8 +632,11 @@ __actor_type_importers__ = {
 }
 
 
-def get_actor_type_importer(actor_type: str) -> Type[ActorImporter]:
-    return __actor_type_importers__.get(actor_type, DefaultActorImporter)
+def get_actor_type_importer(actor_class: str) -> Type[ActorImporter]:
+    # In forked versions of UnrealEd, the actor class name is prefixed with the package name.
+    # We only care about the class name for now, so we'll split the string on the last period.
+    actor_class = actor_class.split('.')[-1]
+    return __actor_type_importers__.get(actor_class, DefaultActorImporter)
 
 
 def height_map_data_from_image(image: Image) -> np.array:

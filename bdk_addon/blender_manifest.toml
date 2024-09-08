@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 # Example of manifest file for a Blender extension
 # Change the values according to your extension
 id = "bdk_addon"
-version = "1.0.1"
+version = "1.0.2"
 name = "Unreal BDK"
 tagline = "Makes Blender a level editor for games running on Unreal 1 and 2"
 maintainer = "Colin Basnett <cmbasnett@gmail.com>"
@@ -40,7 +40,7 @@ platforms = ["windows-x64"]
 # https://docs.blender.org/manual/en/dev/extensions/python_wheels.html
 wheels = [
   "./wheels/bdk_py-0.1.0-cp311-none-win_amd64.whl",
-  "./wheels/t3dpy-0.1.6-cp311-none-win_amd64.whl",
+  "./wheels/t3dpy-0.1.7-cp311-none-win_amd64.whl",
   "./wheels/networkx-3.3-py3-none-any.whl",
 ]
 
