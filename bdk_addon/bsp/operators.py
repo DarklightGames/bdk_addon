@@ -4,7 +4,7 @@ from mathutils import Vector, Matrix
 
 from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping, \
     ensure_bdk_level_visibility_modifier
-from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects
+from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects, humanize_time
 from .data import bsp_optimization_items, ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     POLY_FLAGS_ATTRIBUTE_NAME, BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, \
     MATERIAL_INDEX_ATTRIBUTE_NAME, READ_ONLY_ATTRIBUTE_NAME, bsp_surface_attributes
@@ -729,8 +729,9 @@ class BDK_OT_bsp_build(Operator):
 
         level_object = scene.bdk.level_object
 
-        # Apply the texturing to the brushes, if the option is enabled.
+        # Apply the texturing to the brushes.
         result = apply_level_to_brush_mapping(level_object)
+        brush_faces_textured_count = result.face_count
         for error in result.errors:
             self.report({'WARNING'}, str(error))
 
@@ -761,11 +762,12 @@ class BDK_OT_bsp_build(Operator):
 
         # Add the brushes to the level object.
         level_object.bdk.level.brushes.clear()
-        # TODO: We can now have multiple brushes with the same object. We must only add the object once, and only if it
-        #  is not part of an instance collection.
-        # TODO: this may even need to be done at the level of the data pointer.
-        concrete_brush_objects = filter(lambda x: len(x[1]) == 0, brush_objects)
-        for brush_index, (brush_object, _, _) in enumerate(concrete_brush_objects):
+
+        for brush_index, (brush_object, instance_collections, _) in enumerate(brush_objects):
+            is_instanced_brush = len(instance_collections) > 0
+            if is_instanced_brush:
+                # Skip brushes that are instanced, as we cannot change their texturing.
+                continue
             level_brush = level_object.bdk.level.brushes.add()
             level_brush.index = brush_index
             level_brush.brush_object = brush_object
@@ -850,6 +852,12 @@ class BDK_OT_bsp_build(Operator):
                           )
 
             brushes.append(brush)
+
+        if not brushes:
+            self.report({'WARNING'}, 'No brushes to build')
+            return {'CANCELLED'}
+
+        # TODO: Display a warning if the first brush's operation is not a subtraction.
 
         level = level_object.bdk.level
         level.performance.object_serialization_duration = time.time() - timer
@@ -1004,8 +1012,7 @@ class BDK_OT_bsp_build(Operator):
         end_time = time.time()
         duration = end_time - start_time
 
-        # TODO: humanize the duration.
-        self.report({'INFO'}, f'Level built in {duration:.4f} seconds')
+        self.report({'INFO'}, f'Level built in {humanize_time(duration)} | {brush_faces_textured_count} brush faces changed')
 
         for region in context.area.regions:
             region.tag_redraw()

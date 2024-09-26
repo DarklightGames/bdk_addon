@@ -2,21 +2,22 @@ import uuid
 from typing import cast
 
 import bpy
-import mathutils
 from bpy.types import Operator, Context, Collection, Event, Object, Mesh
 from bpy.props import EnumProperty, StringProperty, BoolProperty
 
 from .kernel import add_terrain_doodad_sculpt_layer, add_terrain_doodad_paint_layer
-from .properties import ensure_terrain_info_modifiers, BDK_PG_terrain_doodad_scatter_layer
+from .properties import ensure_terrain_info_modifiers
 from .scatter.builder import ensure_scatter_layer_modifiers, add_terrain_doodad_scatter_layer, \
     ensure_scatter_layer
 from ..operators import merge_down_terrain_layer_node_data
 from ..properties import BDK_PG_terrain_layer_node, get_terrain_info_paint_layer_by_id, \
-    get_terrain_info_deco_layer_by_id, node_type_item_names
+    get_terrain_info_deco_layer_by_id
 from ...helpers import is_active_object_terrain_info, copy_simple_property_group, get_terrain_doodad, \
-    is_active_object_terrain_doodad, should_show_bdk_developer_extras, ensure_name_unique
+    is_active_object_terrain_doodad, should_show_bdk_developer_extras
 from .builder import create_terrain_doodad_object, create_terrain_doodad_bake_node_tree, \
     convert_object_to_terrain_doodad, ensure_terrain_doodad_freeze_node_group
+from ...t3d.importer import import_t3d_object
+from ...t3d.operators import TerrainDoodadToT3DConverter
 
 
 class BDK_OT_terrain_doodad_add(Operator):
@@ -351,29 +352,16 @@ class BDK_OT_terrain_doodad_bake(Operator):
             else:
                 scatter_object_collection = terrain_doodad_object.users_collection[0]
 
-            for scatter_layer in terrain_doodad.scatter_layers:
-                seed_object_eval = scatter_layer.seed_object.evaluated_get(depsgraph)
-
-                # Create a new linked duplicate for each scatter layer object.
-                mesh_data: Mesh = seed_object_eval.data
-                for vertex_index, vertex in enumerate(mesh_data.vertices):
-                    object_index = mesh_data.attributes['object_index'].data[vertex_index].value
-
-                    location = vertex.co
-                    rotation = mathutils.Euler(mesh_data.attributes['rotation'].data[vertex_index].vector)
-                    scale = mesh_data.attributes['scale'].data[vertex_index].vector
-
-                    new_object = bpy.data.objects.new('StaticMesh', scatter_layer.objects[object_index].object.data)
-                    new_object.matrix_local = mathutils.Matrix.LocRotScale(location, rotation, scale)
-
-                    # Link the new object to scatter object collection.
-                    scatter_object_collection.objects.link(new_object)
+            # Convert the scatter objects to T3D objects and add them to the scatter object collection.
+            t3d_objects = TerrainDoodadToT3DConverter().convert(context, terrain_doodad_object, terrain_info_object.matrix_world)
+            for t3d_object in t3d_objects:
+                import_t3d_object(context, t3d_object, scatter_object_collection)
 
         # Create a new modifier for the terrain doodad bake.
-        bake_node_tree, paint_layer_attribute_map = create_terrain_doodad_bake_node_tree(terrain_doodad, self.layers)
+        bake_result = create_terrain_doodad_bake_node_tree(terrain_doodad, self.layers)
 
         modifier = terrain_info_object.modifiers.new(terrain_doodad.id, 'NODES')
-        modifier.node_group = bake_node_tree
+        modifier.node_group = bake_result.bake_node_tree
 
         # Move the modifier to the top of the stack and apply it.
         # TODO: use the data API instead of the operator API
@@ -390,7 +378,7 @@ class BDK_OT_terrain_doodad_bake(Operator):
                 node.terrain_info_object = terrain_info_object
                 # The node ID is synonymous with the attribute ID.
                 # Set this new node's name to the attribute ID of the baked paint layer.
-                node.id = paint_layer_attribute_map[doodad_paint_layer.id]
+                node.id = bake_result.attribute_map[doodad_paint_layer.id]
                 node.type = 'PAINT'
                 node.operation = doodad_paint_layer.operation
                 node.name = terrain_doodad_object.name
@@ -408,7 +396,7 @@ class BDK_OT_terrain_doodad_bake(Operator):
                         merge_down_terrain_layer_node_data(terrain_info_object, nodes, 0)
 
         # Delete the bake node tree.
-        bpy.data.node_groups.remove(bake_node_tree)
+        bpy.data.node_groups.remove(bake_result.bake_node_tree)
 
         if self.should_delete_terrain_doodad:
             # Delete the terrain doodad object.

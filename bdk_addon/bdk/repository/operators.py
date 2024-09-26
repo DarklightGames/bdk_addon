@@ -480,7 +480,8 @@ class BDK_OT_repository_create(Operator):
     bl_options = {'INTERNAL', 'UNDO'}
 
     game_directory: StringProperty(name='Game Directory', subtype='DIR_PATH', description='The game\'s root directory')
-    mod: StringProperty(name='Mod', description='The name of the mod directory (optional)')
+    use_mod: BoolProperty(name='Use Mod', default=False, description='Use a mod directory')
+    mod: StringProperty(name='Mod', description='The name of the mod directory, relative to the game directory')
     use_custom_cache_directory: BoolProperty(name='Custom Cache Directory', default=False)
     use_custom_id: BoolProperty(name='Use Custom Identifier', default=False, description='Use a custom identifier for the repository. Do not use this unless you know what you are doing')
     custom_id: StringProperty(name='Custom ID', default='', description='Custom ID for the repository')
@@ -497,8 +498,14 @@ class BDK_OT_repository_create(Operator):
         flow = layout.grid_flow()
         flow.use_property_split = True
         flow.prop(self, 'game_directory')
-        flow.prop(self, 'mod')
         flow.prop(self, 'use_defaults')
+
+        mod_header, mod_panel = layout.panel_prop(self, 'use_mod')
+        mod_header.prop(self, 'use_mod', text='Mod')
+        if mod_panel is not None:
+            flow = mod_panel.grid_flow()
+            flow.use_property_split = True
+            flow.prop(self, 'mod', text='Mod Directory')
 
         advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
         advanced_header.label(text='Advanced')
@@ -529,10 +536,12 @@ class BDK_OT_repository_create(Operator):
 
         repository_name = game_directory.name
 
-        if self.mod:
-            repository_name += f' ({self.mod})'
+        mod = self.mod if self.use_mod else ''
 
-        if not is_game_directory_and_mod_valid(self.game_directory, self.mod):
+        if mod:
+            repository_name += f' ({mod})'
+
+        if not is_game_directory_and_mod_valid(self.game_directory, mod):
             self.report({'ERROR'},
                         'Invalid game directory or mode configuration. Please check the values and try again.')
             return {'CANCELLED'}
@@ -540,7 +549,8 @@ class BDK_OT_repository_create(Operator):
         repository = addon_prefs.repositories.add()
 
         # By default, the ID should be generated from the mod name, or the game directory if no mod is specified.
-        repository_id = self.mod if self.mod else game_directory.name
+        repository_id = mod if mod else game_directory.name
+
         if self.use_custom_id:
             repository_id = self.custom_id
 
@@ -550,7 +560,7 @@ class BDK_OT_repository_create(Operator):
 
         repository.id = repository_id
         repository.game_directory = self.game_directory
-        repository.mod = self.mod
+        repository.mod = mod
         repository.name = repository_name
 
         # Check for `bdk-repository-default.json` file in the game directory, then the mod directory.
@@ -558,8 +568,8 @@ class BDK_OT_repository_create(Operator):
         repository_default_file_paths = [
             game_directory / 'bdk-default.json'
         ]
-        if self.mod:
-            repository_default_file_paths.append(game_directory / self.mod / 'bdk-default.json')
+        if mod:
+            repository_default_file_paths.append(game_directory / mod / 'bdk-default.json')
 
         for repository_default_file_paths in repository_default_file_paths:
             if not repository_default_file_paths.is_file():

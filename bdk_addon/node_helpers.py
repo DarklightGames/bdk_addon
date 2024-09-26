@@ -205,7 +205,7 @@ def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: 
 
 def ensure_node_tree(name: str,
                      node_group_type: str,
-                     items: Iterable[Union[Tuple[str, str, str], Tuple[str, str, str, Any]]],
+                     items: Iterable[Union[Tuple[str, str, str], Tuple[str, str, str, str], Tuple[str, str, str, str, str]]],
                      build_function: Callable[[NodeTree], None],
                      should_force_build: bool = False
                      ) -> NodeTree:

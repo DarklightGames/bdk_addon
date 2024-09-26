@@ -16,20 +16,21 @@ class BrushColors(Enum):
 
 
 def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, float, float, float]:
-    if csg_operation == 'ADD':
-        if 'PORTAL' in poly_flags:
-            return BrushColors.Portal.value
-        elif 'NOT_SOLID' in poly_flags:
-            return BrushColors.NotSolid.value
-        elif 'SEMI_SOLID' in poly_flags:
-            return BrushColors.SemiSolid.value
-        else:
-            return BrushColors.Add.value
-    elif csg_operation == 'SUBTRACT':
-        return BrushColors.Subtract.value
-    else:
-        # This should never happen, but it was used for intersect and de-intersect brushes in the original editor.
-        return BrushColors.Grey.value
+    match csg_operation:
+        case 'ADD':
+            if 'PORTAL' in poly_flags:
+                return BrushColors.Portal.value
+            elif 'NOT_SOLID' in poly_flags:
+                return BrushColors.NotSolid.value
+            elif 'SEMI_SOLID' in poly_flags:
+                return BrushColors.SemiSolid.value
+            else:
+                return BrushColors.Add.value
+        case 'SUBTRACT':
+            return BrushColors.Subtract.value
+        case _:
+            # This should never happen, but it was used for intersect and de-intersect brushes in the original editor.
+            return BrushColors.Grey.value
 
 
 csg_operation_items = (
@@ -143,14 +144,15 @@ class BDK_PG_level_statistics(PropertyGroup):
 
 
 class BDK_PG_level_visibility(PropertyGroup):
-    fake_backdrop: BoolProperty(name='Fake Backdrop', default=False)
-    invisible: BoolProperty(name='Invisible', default=False)
-    portal: BoolProperty(name='Portal', default=False)
+    fake_backdrop: BoolProperty(name='Fake Backdrop', default=True)
+    invisible: BoolProperty(name='Invisible', default=True)
+    portal: BoolProperty(name='Portal', default=True)
 
 
 class BDK_PG_level(PropertyGroup):
     brushes: CollectionProperty(type=BDK_PG_level_brush, options={'HIDDEN'},
-                                description='The list of brush objects used in generating the level geometry. '
+                                description='The list of non-instanced brush objects used in generating the level '
+                                            'geometry. '
                                             'This is used as a look-up table so that texturing work done on the '
                                             'level geometry can be applied to the associated brush polygons')
     statistics: PointerProperty(type=BDK_PG_level_statistics, options={'HIDDEN'})

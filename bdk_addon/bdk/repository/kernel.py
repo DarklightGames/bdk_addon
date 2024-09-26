@@ -418,7 +418,8 @@ def repository_remove(context: Context, repositories_index: int):
 def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> networkx.DiGraph:
     """
     Returns the dependency graph of the packages in the repository.
-    Note that cycles are removed from the graph by severing all the edges that create the cycle.
+    Note that cycles are removed from the graph by severing all the edges that create the cycle. This is done to ensure
+    that the graph is a Directed Acyclic Graph (DAG) which is required for topological sorting.
     Note that the names of the packages are converted to uppercase for comparison since Unreal packages (and all names
     in Unreal) are case-insensitive.
     """

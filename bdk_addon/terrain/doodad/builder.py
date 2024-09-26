@@ -1179,8 +1179,13 @@ def _ensure_terrain_doodad_attribute_modifier_node_group(
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
-def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: Set[str]) -> (
-NodeTree, Dict[str, str]):
+class DoodadBakeResult:
+    def __init__(self, attribute_map: Dict[str, str], bake_node_tree: NodeTree):
+        self.attribute_map = attribute_map
+        self.bake_node_tree = bake_node_tree
+
+
+def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: Set[str]) -> DoodadBakeResult:
     """
     Creates a node tree for baking a terrain doodad.
     :param terrain_doodad: The terrain doodad to make a baking node tree for.
@@ -1245,7 +1250,10 @@ NodeTree, Dict[str, str]):
 
         node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
 
-    return ensure_geometry_node_tree(uuid.uuid4().hex, items, build_function, should_force_build=True), attribute_map
+    return DoodadBakeResult(
+        attribute_map=attribute_map,
+        bake_node_tree=ensure_geometry_node_tree(uuid.uuid4().hex, items, build_function, should_force_build=True)
+    )
 
 
 def ensure_terrain_doodad_freeze_attribute_ids(terrain_doodad: 'BDK_PG_terrain_doodad'):

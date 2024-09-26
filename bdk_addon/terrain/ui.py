@@ -576,13 +576,13 @@ class BDK_UL_terrain_deco_layers(UIList):
         row.prop(item.object, 'hide_viewport', icon=('HIDE_OFF' if not item.object.hide_viewport else 'HIDE_ON'), text='', emboss=False)
 
 
-def draw_terrain_layer_node_item(layout: UILayout, item, mesh):
-    color_attribute_index = mesh.color_attributes.find(item.id)
-    is_active_color_attribute = color_attribute_index != -1 and color_attribute_index == mesh.color_attributes.active_color_index
+def draw_terrain_layer_node_item(layout: UILayout, item, obj: Object):
+    vertex_group_index = obj.vertex_groups.find(item.id)
+    is_active_vertex_group = vertex_group_index != -1 and vertex_group_index == obj.vertex_groups.active_index
 
     row = layout.row()
     # Display an icon if this is the active color attribute.
-    row.label(text='', icon='VPAINT_HLT' if is_active_color_attribute else 'BLANK1')
+    row.label(text='', icon='GROUP_VERTEX' if is_active_vertex_group else 'BLANK1')
 
     col = row.column(align=True)
 
@@ -603,8 +603,7 @@ class BDK_UL_terrain_layer_nodes(UIList):
 
     def draw_item(self, context: Context, layout: UILayout, data: AnyType, item: AnyType, icon: int,
                   active_data: AnyType, active_property: str, index: int = 0, flt_flag: int = 0):
-        mesh = cast(Mesh, context.active_object.data)
-        draw_terrain_layer_node_item(layout, item, mesh)
+        draw_terrain_layer_node_item(layout, item, context.active_object)
 
 
 classes = (
