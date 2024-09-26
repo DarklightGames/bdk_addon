@@ -91,9 +91,18 @@ class BDK_PT_bdk(Panel):
             col.operator(t3d_operators.BDK_OT_t3d_import_from_clipboard.bl_idname, text='Import from Clipboard', icon='PASTEDOWN')
 
 
+class BDK_MT_object_menu(Menu):
+    bl_idname = 'BDK_MT_object_menu'
+    bl_label = 'BDK'
+
+    def draw(self, context):
+        self.layout.operator(bsp_operators.BDK_OT_convert_to_bsp_brush.bl_idname)
+        self.layout.operator(terrain_doodad_operators.BDK_OT_convert_to_terrain_doodad.bl_idname)
+
 
 classes = (
     BDK_MT_object_add_menu,
+    BDK_MT_object_menu,
     BDK_PT_node_tree,
     BDK_PT_scene,
     BDK_PT_bdk,

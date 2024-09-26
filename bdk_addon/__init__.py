@@ -231,7 +231,7 @@ def bdk_select_menu_func(self, _context: bpy.types.Context):
 
 def bdk_object_menu_func(self, _context: bpy.types.Context):
     self.layout.separator()
-    self.layout.operator(terrain_doodad_operators.BDK_OT_convert_to_terrain_doodad.bl_idname)
+    self.layout.menu(bdk_ui.BDK_MT_object_menu.bl_idname, text='BDK')
 
 
 def bdk_t3d_copy_func(self, _context: bpy.types.Context):
