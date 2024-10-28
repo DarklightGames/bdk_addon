@@ -124,7 +124,7 @@ def build(args):
 
     # Note that even if there are no new objects, we still save the file.
     bpy.ops.wm.save_as_mainfile(
-        filepath=os.path.abspath(args.output_path),
+        filepath=str(Path(args.output_path).resolve()),
         copy=True
     )
 
