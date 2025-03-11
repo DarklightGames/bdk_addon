@@ -78,7 +78,7 @@ def build(args):
             warnings.warn(f'Could not find a static mesh file for {object_name}')
             continue
 
-        bpy.ops.import_scene.psk(
+        bpy.ops.psk.import_file(
             filepath=filename,
             should_import_skeleton=False,
             should_import_materials=True,
@@ -100,8 +100,11 @@ def build(args):
         # Add the object to a collection with the name of the object.
         collection = bpy.data.collections.new(name=object_name)
 
-        # Link the object to the collection.
+        # Link the object and its children to the collection.
         collection.objects.link(new_object)
+
+        for child in new_object.children_recursive:
+            collection.objects.link(child)
 
         # Link the collection to the scene.
         bpy.context.scene.collection.children.link(collection)

@@ -501,7 +501,7 @@ def get_addon_path() -> Path:
 
 
 def get_umodel_path() -> Path:
-    return get_addon_path() / 'bin' / 'umodel_64.exe'
+    return get_addon_path() / 'bin' / 'umodel.exe'
 
 
 def build_cube_map(cube_map_file_path: Path, exports_directory: Path):
