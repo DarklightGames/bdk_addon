@@ -624,6 +624,8 @@ def get_repository_package_catalog_id(repository: BDK_PG_repository, package_pat
 def repository_package_build(repository: BDK_PG_repository, package_path: str):
     # TODO: do not allow this if the package is not up-to-date.
     script_path = get_addon_path() / 'bin' / 'blend.py'
+
+    # TODO: Refactor this to have just one function that takes the repository and package as arguments.
     input_directory = get_repository_package_export_directory(repository, package_path)
     assets_directory = get_repository_package_asset_directory(repository, package_path)
     output_path = get_repository_package_asset_path(repository, package_path)

@@ -115,7 +115,7 @@ def ensure_bdk_bsp_copy_material_from_face_node_tree() -> NodeTree:
         # Internal
         node_tree.links.new(compare_node.outputs['Result'], set_material_index_node.inputs['Selection'])
         node_tree.links.new(copy_attributes_node.outputs['Geometry'], switch_node.inputs['True'])
-        node_tree.links.new(set_material_index_node.outputs['Geometry'], copy_attributes_node.inputs['Socket_1'])
+        node_tree.links.new(set_material_index_node.outputs['Geometry'], copy_attributes_node.inputs['Geometry'])
         node_tree.links.new(index_node.outputs['Index'], compare_node.inputs['B'])
         node_tree.links.new(raycast_node.outputs['Attribute'], copy_attributes_node.inputs['Face Index'])
         node_tree.links.new(raycast_node.outputs['Attribute'], compare_node.inputs['A'])

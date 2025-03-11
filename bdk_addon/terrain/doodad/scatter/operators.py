@@ -208,6 +208,8 @@ class BDK_OT_terrain_doodad_scatter_layer_objects_duplicate(Operator):
 
         scatter_layer_object = scatter_layer.objects[scatter_layer.objects_index]
         scatter_layer_object_copy = add_scatter_layer_object(scatter_layer)
+
+        # TODO: This doesn't do a recursive copy on PointerProperties.
         copy_simple_property_group(scatter_layer_object, scatter_layer_object_copy, {'id'})
 
         # Set the scatter layer object index to the new scatter layer object.

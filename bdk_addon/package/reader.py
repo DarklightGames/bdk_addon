@@ -120,9 +120,7 @@ def read_package_dependencies(path: str):
     # Load the package file.
     with open(path, 'rb') as stream:
         # Parse the header.
-        offset = 0
         header = UnrealPackageHeader.from_buffer_copy(stream.read(sizeof(UnrealPackageHeader)))
-        offset += sizeof(UnrealPackageHeader)
 
         # Read the name table.
         stream.seek(header.name_offset)

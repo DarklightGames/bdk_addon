@@ -258,7 +258,9 @@ def copy_simple_property_group(source, target, ignore: Optional[Set[str]] = None
         ignore = set()
     if not hasattr(source, "__annotations__"):
         return
-    # TODO: this doesn't work for inherited annotations or PointerProperty types
+    # TODO: this doesn't work for inherited annotations or PointerProperty types.
+    #  Top have this work, we'll need to inspect the type of the property. If it's a PointerProperty, drill into it
+    #  and copy all the properties to the target.
     for prop_name in source.__annotations__.keys():
         if prop_name in ignore:
             continue
@@ -434,7 +436,7 @@ def humanize_size(bytes: int):
 
 def humanize_time(seconds: float):
     """
-    Convert a time duration in seconds to a human-readable time string (from nanoseconds to minutes).
+    Convert a time duration in seconds to a human-readable time string (from nanoseconds to hours).
     """
     if seconds < 1e-6:
         return f"{seconds * 1e9:.2f} ns"

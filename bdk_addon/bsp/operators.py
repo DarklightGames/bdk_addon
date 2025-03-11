@@ -91,7 +91,7 @@ class BDK_OT_bsp_brush_add(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_bsp_brush_set_sort_order(Operator):
+class BDK_OT_bsp_brush_sort_order_set(Operator):
     bl_idname = 'bdk.set_sort_order'
     bl_label = 'Set BSP Sort Order'
     bl_description = 'Set the sort order of selected BSP brushes'
@@ -106,7 +106,7 @@ class BDK_OT_bsp_brush_set_sort_order(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_bsp_brush_set_poly_flags(Operator):
+class BDK_OT_bsp_brush_poly_flags_set(Operator):
     bl_idname = 'bdk.set_poly_flags'
     bl_label = 'Set BSP Poly Flags'
     bl_description = 'Set the poly flags of selected BSP brushes'
@@ -1136,8 +1136,8 @@ classes = (
     BDK_OT_bsp_brush_operation_toggle,
     BDK_OT_bsp_brush_select_similar,
     BDK_OT_bsp_brush_select_with_poly_flags,
-    BDK_OT_bsp_brush_set_poly_flags,
-    BDK_OT_bsp_brush_set_sort_order,
+    BDK_OT_bsp_brush_poly_flags_set,
+    BDK_OT_bsp_brush_sort_order_set,
     BDK_OT_bsp_brush_snap_to_grid,
     BDK_OT_bsp_build,
     BDK_OT_convert_to_bsp_brush,

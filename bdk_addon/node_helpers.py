@@ -625,7 +625,7 @@ def add_boolean_math_operation_nodes(node_tree: NodeTree, operation: str, inputs
 def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Union[
         Dict[str, Union[int, float, Tuple[float, float, float], NodeSocket]],
         List[Union[int, float, Tuple[float, float, float], NodeSocket]]
-    ]) -> NodeSocket:
+    ], output_socket_name: str = 'Vector') -> NodeSocket:
     vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
     vector_math_node.operation = operation
 
@@ -642,7 +642,7 @@ def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs:
             else:
                 vector_math_node.inputs[index].default_value = input_
 
-    return vector_math_node.outputs['Vector']
+    return vector_math_node.outputs[output_socket_name]
 
 
 def add_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, NodeSocket]]) -> NodeSocket:

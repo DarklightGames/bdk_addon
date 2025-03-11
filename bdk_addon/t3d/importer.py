@@ -65,7 +65,7 @@ class DefaultActorImporter(ActorImporter):
         collection = load_bdk_static_mesh(context, str(static_mesh_reference))
 
         if collection is None:
-            print(f"Failed to load static mesh {static_mesh_reference} for brush_object {t3d_actor['Name']}.")
+            print(f"Failed to load static mesh {static_mesh_reference} for T3D actor {t3d_actor['Name']}.")
             return None
 
         # Create a new instance object, matching the name of the brush_object.

@@ -132,6 +132,7 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
 
 
 # Add the children property to the node property group (this must be done after the class is defined).
+# This is because the parent/child relationship is a circular reference.
 BDK_PG_terrain_layer_node.__annotations__["parent"] = PointerProperty(name='Parent', type=BDK_PG_terrain_layer_node,
                                                                        options={'HIDDEN'})
 BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name='Children',
