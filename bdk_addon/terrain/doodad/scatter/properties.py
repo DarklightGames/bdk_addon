@@ -31,6 +31,11 @@ empty_set = set()
 
 
 def terrain_doodad_scatter_layer_object_object_poll_cb(_self, bpy_object: Object):
+    # TODO: we also need to allow collection instances here.
+    if bpy_object is None:
+        return False
+    if bpy_object.type == 'EMPTY' and bpy_object.instance_collection is not None:
+        return True
     # Only allow objects that are static meshes.
     return bpy_object.type == 'MESH' and bpy_object.get('Class', None) == 'StaticMeshActor'
 
@@ -157,7 +162,7 @@ def terrain_doodad_scatter_layer_geometry_source_name_update_cb(self: 'BDK_PG_te
     ensure_scatter_layer_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad)
 
 
-class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
+class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup, CurveModifierMixin):
     id: StringProperty(name='ID', options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
     name: StringProperty(name='Name', default='Scatter Layer')

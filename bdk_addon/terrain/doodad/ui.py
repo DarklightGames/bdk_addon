@@ -959,6 +959,7 @@ class BDK_PT_terrain_doodad_paint_layer_debug(Panel):
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_doodad_paint_layers'
     bl_order = 100
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context: 'Context'):

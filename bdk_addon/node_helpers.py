@@ -660,6 +660,28 @@ def add_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterab
     return math_node.outputs['Value']
 
 
+def add_switch_node(node_tree: NodeTree, input_type: str, switch_value: Union[bool, NodeSocket], false_value: Union[int, float, NodeSocket], true_value: Union[int, float, NodeSocket]) -> NodeSocket:
+    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_node.input_type = input_type
+
+    if isinstance(switch_value, NodeSocket):
+        node_tree.links.new(switch_value, switch_node.inputs['Switch'])
+    else:
+        switch_node.inputs['Switch'].default_value = switch_value
+
+    if isinstance(false_value, NodeSocket):
+        node_tree.links.new(false_value, switch_node.inputs['False'])
+    else:
+        switch_node.inputs['False'].default_value = false_value
+
+    if isinstance(true_value, NodeSocket):
+        node_tree.links.new(true_value, switch_node.inputs['True'])
+    else:
+        switch_node.inputs['True'].default_value = true_value
+
+    return switch_node.outputs['Output']
+
+
 def add_comparison_nodes(node_tree: NodeTree, data_type: str, operation: str, a: Union[int, float, NodeSocket], b: Union[int, float, NodeSocket]) -> NodeSocket:
     compare_node = node_tree.nodes.new(type='FunctionNodeCompare')
     compare_node.operation = operation

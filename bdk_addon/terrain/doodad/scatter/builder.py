@@ -7,7 +7,7 @@ from ....helpers import ensure_name_unique
 from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_operation_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
     add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes, \
-    CurveSplineLoopSockets
+    CurveSplineLoopSockets, add_vector_math_operation_nodes, add_boolean_math_operation_nodes
 
 
 def add_terrain_doodad_scatter_layer(terrain_doodad: 'BDK_PG_terrain_doodad', name: str = 'Scatter Layer') -> \
@@ -399,19 +399,21 @@ def ensure_geometry_size_node_tree() -> NodeTree:
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         bounding_box_node = node_tree.nodes.new(type='GeometryNodeBoundBox')
-
-        subtract_vector_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
-        subtract_vector_node.operation = 'SUBTRACT'
+        realize_instances_node = node_tree.nodes.new(type='GeometryNodeRealizeInstances')
 
         # Input
-        node_tree.links.new(input_node.outputs['Geometry'], bounding_box_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Geometry'], realize_instances_node.inputs['Geometry'])
 
         # Internal
-        node_tree.links.new(bounding_box_node.outputs['Max'], subtract_vector_node.inputs[0])
-        node_tree.links.new(bounding_box_node.outputs['Min'], subtract_vector_node.inputs[1])
+        node_tree.links.new(realize_instances_node.outputs['Geometry'], bounding_box_node.inputs['Geometry'])
+
+        extends_socket = add_vector_math_operation_nodes(node_tree, 'SUBTRACT', [
+            bounding_box_node.outputs['Max'],
+            bounding_box_node.outputs['Min']
+        ])
 
         # Output
-        node_tree.links.new(subtract_vector_node.outputs['Vector'], output_node.inputs['Size'])
+        node_tree.links.new(extends_socket, output_node.inputs['Size'])
 
     return ensure_geometry_node_tree('BDK Bounding Box Size', items, build_function)
 
@@ -1546,6 +1548,20 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
         add_scatter_layer_driver(deviation_node.inputs['Global Seed'], 'global_seed')
 
         if points_socket:
+            # Density modifier.
+            select_random_node = node_tree.nodes.new(type='GeometryNodeGroup')
+            select_random_node.node_tree = ensure_select_random_node_tree()
+            add_scatter_layer_driver(select_random_node.inputs['Factor'], 'density')
+            add_scatter_layer_driver(select_random_node.inputs['Seed'], 'density_seed')
+            add_scatter_layer_driver(select_random_node.inputs['Global Seed'], 'global_seed')
+            delete_geometry_node = node_tree.nodes.new(type='GeometryNodeDeleteGeometry')
+            node_tree.links.new(points_socket, delete_geometry_node.inputs['Geometry'])
+            node_tree.links.new(
+                add_boolean_math_operation_nodes(node_tree, 'NOT', [select_random_node.outputs['Selection']]),
+                delete_geometry_node.inputs['Selection']
+            )
+            points_socket = delete_geometry_node.outputs['Geometry']
+
             node_tree.links.new(points_socket, use_deviation_switch_node.inputs['False'])
             node_tree.links.new(points_socket, deviation_node.inputs['Points'])
         node_tree.links.new(deviation_node.outputs['Points'], use_deviation_switch_node.inputs['True'])
@@ -1786,17 +1802,9 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
 
         node_tree.links.new(mask_node.outputs['Points'], mask_switch_node.inputs['True'])
 
-        # Pass through density.
-        select_random_points_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        select_random_points_node.node_tree = ensure_select_random_node_tree()
-        add_scatter_layer_driver(select_random_points_node.inputs['Factor'], 'density')
-        add_scatter_layer_driver(select_random_points_node.inputs['Seed'], 'density_seed')
-        add_scatter_layer_driver(select_random_points_node.inputs['Global Seed'], 'global_seed')
-
         # Convert the point cloud to a mesh so that we can inspect the attributes for T3D export.
         points_to_vertices_node = node_tree.nodes.new(type='GeometryNodePointsToVertices')
         node_tree.links.new(join_geometry_node.outputs['Geometry'], points_to_vertices_node.inputs['Points'])
-        node_tree.links.new(select_random_points_node.outputs['Selection'], points_to_vertices_node.inputs['Selection'])
 
         # Add a mute switch.
         mute_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
