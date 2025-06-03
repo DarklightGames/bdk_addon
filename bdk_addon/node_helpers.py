@@ -474,8 +474,8 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
 
-def add_bitwise_operation_node(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> NodeSocket:
-    operation_node = node_tree.nodes.new(type='FunctionNodeBitwiseOperation')
+def add_bit_math_node(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> NodeSocket:
+    operation_node = node_tree.nodes.new(type='FunctionNodeBitMath')
     operation_node.operation = operation
 
     for index, value_socket in enumerate(value_sockets):
@@ -484,12 +484,12 @@ def add_bitwise_operation_node(node_tree: NodeTree, operation: str, value_socket
     return operation_node.outputs[0]
 
 
-def add_chained_bitwise_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
+def add_chained_bit_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
     if not value_sockets:
         return None
     output_socket = value_sockets[0]
     for value_socket in value_sockets[1:]:
-        operation_node = node_tree.nodes.new(type='FunctionNodeBitwiseOperation')
+        operation_node = node_tree.nodes.new(type='FunctionNodeBitMath')
         operation_node.operation = operation
         node_tree.links.new(output_socket, operation_node.inputs[0])
         node_tree.links.new(value_socket, operation_node.inputs[1])
@@ -497,7 +497,7 @@ def add_chained_bitwise_operation_nodes(node_tree: NodeTree, operation: str, val
     return output_socket
 
 
-def add_chained_math_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
+def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
     if not value_sockets:
         return None
     output_socket = value_sockets[0]

@@ -106,6 +106,9 @@ class BDK_OT_bsp_brush_sort_order_set(Operator):
         return {'FINISHED'}
 
 
+brush_poly_flags_operation_items = (('SET', 'Set', ''), ('ADD', 'Add', ''), ('REMOVE', 'Remove', ''))
+
+
 class BDK_OT_bsp_brush_poly_flags_set(Operator):
     bl_idname = 'bdk.set_poly_flags'
     bl_label = 'Set BSP Poly Flags'
@@ -113,8 +116,7 @@ class BDK_OT_bsp_brush_poly_flags_set(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     poly_flags: EnumProperty(name='Poly Flags', items=poly_flags_items, options={'ENUM_FLAG'})
-    operation: EnumProperty(name='Operation', items=(('SET', 'Set', ''), ('ADD', 'Add', ''), ('REMOVE', 'Remove', '')),
-                            default='SET')
+    operation: EnumProperty(name='Operation', items=brush_poly_flags_operation_items, default='SET')
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)

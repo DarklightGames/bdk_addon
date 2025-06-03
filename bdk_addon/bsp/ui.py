@@ -40,11 +40,9 @@ class BDK_PT_bsp_brush(Panel):
         poly_flags_header.label(text='Poly Flags')
 
         if poly_flags_panel is not None:
-            flow = poly_flags_panel.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
-            flow.use_property_split = True
-            flow.use_property_decorate = False
-
-            flow.prop(brush, 'poly_flags')
+            poly_flags_panel.use_property_split = True
+            poly_flags_panel.use_property_decorate = False
+            poly_flags_panel.prop(brush, 'poly_flags')
 
         advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
         advanced_header.label(text='Advanced')

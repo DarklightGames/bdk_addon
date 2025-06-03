@@ -4,7 +4,7 @@ import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 
 from ....helpers import ensure_name_unique
-from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_operation_nodes, \
+from ....node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
     add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes, \
     CurveSplineLoopSockets, add_vector_math_operation_nodes, add_boolean_math_operation_nodes
@@ -1418,7 +1418,7 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
                             add_scatter_layer_driver(vector_component_group_node.inputs['Index'],
                                                      'curve_spacing_relative_axis')
                             length_sockets.append(vector_component_group_node.outputs['Value'])
-                        spacing_length_socket = add_chained_math_operation_nodes(node_tree, 'MAXIMUM', length_sockets)
+                        spacing_length_socket = add_chained_math_nodes(node_tree, 'MAXIMUM', length_sockets)
 
                         spacing_mode_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
                         spacing_mode_switch_node.input_type = 'FLOAT'

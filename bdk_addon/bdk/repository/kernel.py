@@ -501,7 +501,10 @@ def get_addon_path() -> Path:
 
 
 def get_umodel_path() -> Path:
-    return get_addon_path() / 'bin' / 'umodel.exe'
+    if sys.platform == 'win32':
+        return get_addon_path() / 'bin' / 'umodel.exe'
+    elif sys.platform == 'linux':
+        return get_addon_path() / 'bin' / 'umodel'
 
 
 def build_cube_map(cube_map_file_path: Path, exports_directory: Path):

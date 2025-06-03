@@ -11,12 +11,12 @@ from .data import BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME
 from .properties import poly_flags_items
 from .tools import ensure_bdk_bsp_surface_attributes_node_tree
 from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree, \
-    add_chained_bitwise_operation_nodes, add_bitwise_operation_node
-from mathutils import Vector, Quaternion
+    add_chained_bit_math_nodes, add_bit_math_node
+from mathutils import Vector, Quaternion, Matrix
 from bmesh.types import BMFace
 from bpy.types import Object, Mesh, NodeTree, bpy_struct
 from math import isnan
-from typing import Optional, Dict, cast, List
+from typing import Optional, Dict, Tuple, List, cast
 import mathutils
 import numpy as np
 
@@ -52,38 +52,38 @@ class LevelFaceData:
         self.origins.shape = (self.face_count, 3)
         self.texture_us.shape = (self.face_count, 3)
         self.texture_vs.shape = (self.face_count, 3)
+    
+    @staticmethod
+    def from_level_object(level_object: Object) -> 'LevelFaceData':
+        """
+        Get the origin, texture U, and texture V data for the faces of the level object.
+        """
+        mesh_data = cast(Mesh, level_object.data)
 
+        level_face_data = LevelFaceData(face_count=len(mesh_data.polygons))
 
-def read_level_face_data(level_object: Object) -> LevelFaceData:
-    """
-    Get the origin, texture U, and texture V data for the faces of the level object.
-    """
-    mesh_data = cast(Mesh, level_object.data)
+        if ORIGIN_ATTRIBUTE_NAME in mesh_data.attributes:
+            mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_get('vector', level_face_data.origins)
 
-    level_face_data = LevelFaceData(face_count=len(mesh_data.polygons))
+        if TEXTURE_U_ATTRIBUTE_NAME in mesh_data.attributes:
+            mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_get('vector', level_face_data.texture_us)
 
-    if ORIGIN_ATTRIBUTE_NAME in mesh_data.attributes:
-        mesh_data.attributes[ORIGIN_ATTRIBUTE_NAME].data.foreach_get('vector', level_face_data.origins)
+        if TEXTURE_V_ATTRIBUTE_NAME in mesh_data.attributes:
+            mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_get('vector', level_face_data.texture_vs)
 
-    if TEXTURE_U_ATTRIBUTE_NAME in mesh_data.attributes:
-        mesh_data.attributes[TEXTURE_U_ATTRIBUTE_NAME].data.foreach_get('vector', level_face_data.texture_us)
+        if POLY_FLAGS_ATTRIBUTE_NAME in mesh_data.attributes:
+            mesh_data.attributes[POLY_FLAGS_ATTRIBUTE_NAME].data.foreach_get('value', level_face_data.poly_flags)
 
-    if TEXTURE_V_ATTRIBUTE_NAME in mesh_data.attributes:
-        mesh_data.attributes[TEXTURE_V_ATTRIBUTE_NAME].data.foreach_get('vector', level_face_data.texture_vs)
+        if MATERIAL_INDEX_ATTRIBUTE_NAME in mesh_data.attributes:
+            mesh_data.attributes[MATERIAL_INDEX_ATTRIBUTE_NAME].data.foreach_get('value', level_face_data.material_indices)
 
-    if POLY_FLAGS_ATTRIBUTE_NAME in mesh_data.attributes:
-        mesh_data.attributes[POLY_FLAGS_ATTRIBUTE_NAME].data.foreach_get('value', level_face_data.poly_flags)
+        if DIRTY_ATTRIBUTE_NAME in mesh_data.attributes:
+            mesh_data.attributes[DIRTY_ATTRIBUTE_NAME].data.foreach_get('value', level_face_data.dirty_flags)
 
-    if MATERIAL_INDEX_ATTRIBUTE_NAME in mesh_data.attributes:
-        mesh_data.attributes[MATERIAL_INDEX_ATTRIBUTE_NAME].data.foreach_get('value', level_face_data.material_indices)
+        # Reshape in-place.
+        level_face_data.reshape()
 
-    if DIRTY_ATTRIBUTE_NAME in mesh_data.attributes:
-        mesh_data.attributes[DIRTY_ATTRIBUTE_NAME].data.foreach_get('value', level_face_data.dirty_flags)
-
-    # Reshape in-place.
-    level_face_data.reshape()
-
-    return level_face_data
+        return level_face_data
 
 
 class BrushMappingErrorType(Enum):
@@ -122,7 +122,7 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
 
     mapping = build_level_polygon_to_brush_polygon_mapping(level_object)
 
-    level_face_data = read_level_face_data(level_object)
+    level_face_data = LevelFaceData.from_level_object(level_object)
     # Possible scenarios where this will break:
     # 1. If the brush mesh topology has changed since the mapping was created.
     # 2. If the brush has been deleted (in this case it's just a no-op).
@@ -196,7 +196,7 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
 
             # Transform the texturing plane from level-space to brush space.
             inverse_brush_world_matrix = brush_object.matrix_world.inverted()
-            translation, rotation, scale = inverse_brush_world_matrix.decompose()
+            _, rotation, scale = inverse_brush_world_matrix.decompose()
             rotation_matrix = rotation.to_matrix().to_4x4()
             scale_matrix = mathutils.Matrix.Diagonal(scale.to_4d()).inverted()  # The scale matrix is inverted again.
             points_matrix = inverse_brush_world_matrix
@@ -414,7 +414,7 @@ def ensure_bdk_bsp_poly_flags_node_tree():
 
             flag_value_sockets.append(poly_flag_switch_node.outputs['Output'])
 
-        output_socket = add_chained_bitwise_operation_nodes(node_tree, 'OR', flag_value_sockets)
+        output_socket = add_chained_bit_math_nodes(node_tree, 'OR', flag_value_sockets)
 
         node_tree.links.new(output_socket, output_node.inputs['Poly Flags'])
 
@@ -478,8 +478,8 @@ def ensure_bdk_level_visibility_node_tree(level_object: Object):
         compare_node.operation = 'NOT_EQUAL'
         compare_node.inputs[1].default_value = 0
 
-        node_tree.links.new(add_chained_bitwise_operation_nodes(node_tree, 'AND', [
-                add_bitwise_operation_node(node_tree, 'COMPLEMENT', [poly_flags_group_node.outputs['Poly Flags']]),
+        node_tree.links.new(add_chained_bit_math_nodes(node_tree, 'AND', [
+                add_bit_math_node(node_tree, 'NOT', [poly_flags_group_node.outputs['Poly Flags']]),
                 bsp_surface_attributes_node.outputs['Poly Flags']
             ]), compare_node.inputs['A'])
         node_tree.links.new(compare_node.outputs['Result'], delete_geometry_node.inputs['Selection'])
@@ -495,8 +495,12 @@ def ensure_bdk_level_visibility_node_tree(level_object: Object):
 
 # TODO: We can use this, or something like it, when we to create a brush from an existing mesh that doesn't have the BDK
 #  brush attributes. It's logic may even be able to be converted to a geonode operator.
-def create_bsp_brush_polygon(texture_width: int, texture_height: int, uv_layer, face: BMFace, transform_matrix) -> (
-Vector, Quaternion, Vector):
+def create_bsp_brush_polygon(
+        texture_width: int, 
+        texture_height: int, 
+        uv_layer,
+        face: BMFace,
+        transform_matrix: Matrix) -> Tuple[Vector, Quaternion, Vector]:
     texture_coordinates = [loop[uv_layer].uv for loop in face.loops[0:3]]
 
     u_tiling = 1
