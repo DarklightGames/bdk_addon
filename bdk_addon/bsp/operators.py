@@ -386,11 +386,21 @@ def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> List[Tuple[BspBru
     bm = bmesh.new()
     bm.from_object(evaluated_obj, depsgraph)
 
-    for edge_index, edge in enumerate(bm.edges):
-        if not edge.is_manifold:
-            errors.append((BspBrushError.NOT_MANIFOLD, edge_index))
-        if not edge.is_convex:
-            errors.append((BspBrushError.NOT_CONVEX, edge_index))
+    poly_flags = obj.bdk.bsp_brush.poly_flags
+
+    should_check_manifold = poly_flags.isdisjoint({'PORTAL'})
+    if should_check_manifold:
+        for edge_index, edge in enumerate(bm.edges):
+            if not edge.is_manifold:
+                errors.append((BspBrushError.NOT_MANIFOLD, edge_index))
+                break
+
+    should_check_convex = poly_flags.isdisjoint({'PORTAL', 'SEMI_SOLID'})
+    if should_check_convex:
+        for edge_index, edge in enumerate(bm.edges):
+            if not edge.is_convex:
+                errors.append((BspBrushError.NOT_CONVEX, edge_index))
+                break
 
     # This value is copied from the BSP build code.
     # TODO: Have these constants available to import from bdk_py.
@@ -430,6 +440,7 @@ def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> List[Tuple[BspBru
     for face_index, face in enumerate(bm.faces):
         if _is_face_twisted(face):
             errors.append((BspBrushError.TWISTED_FACE, face_index))
+            break
 
     bm.free()
 
@@ -635,11 +646,7 @@ class BDK_OT_bsp_build(Operator):
     bl_description = 'Build the level'
     bl_options = {'REGISTER', 'UNDO', 'PRESET'}
 
-    bsp_optimization: EnumProperty(
-        name='Optimization',
-        items=bsp_optimization_items,
-        default='LAME',
-    )
+    bsp_optimization: EnumProperty(name='Optimization', items=bsp_optimization_items, default='LAME')
     bsp_balance: IntProperty(name='Balance', default=15, min=0, max=100, description='Balance of the BSP tree')
     bsp_portal_bias: IntProperty(name='Portal Bias', default=70, min=0, max=100, description='Portal cutting strength')
 
