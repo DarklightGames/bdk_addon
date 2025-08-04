@@ -26,7 +26,7 @@ class BDK_OT_terrain_doodad_sculpt_layer_add(Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.active_object.bdk.type == 'TERRAIN_DOODAD'
+        return poll_has_terrain_doodad_selected(cls, context)
 
     def execute(self, context: Context):
         terrain_doodad_object = context.active_object
