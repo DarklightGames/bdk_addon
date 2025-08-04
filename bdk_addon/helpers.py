@@ -394,9 +394,11 @@ def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List
                         # Calculate the instance transform.
                         instance_offset_matrix = Matrix.Translation(-obj.instance_collection.instance_offset)
                         # Recurse into the instance collection.
-                        yield from collection_fn(obj.instance_collection, instance_objects + [obj], matrix_world @ (obj.matrix_local @ instance_offset_matrix))
+                        yield from collection_fn(collection=obj.instance_collection,
+                                                 instance_objects=instance_objects + [obj],
+                                                 matrix_world=matrix_world @ (obj.matrix_local @ instance_offset_matrix))
                     else:
-                        yield (obj, instance_objects, matrix_world)
+                        yield (obj, instance_objects, matrix_world @ obj.matrix_local)
                         visited.add((obj, instance_objects[0] if instance_objects else None))
                         # `children_recursive` returns objects regardless of collection, so we need to make sure
                         # that the children are in this collection.
@@ -404,7 +406,7 @@ def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List
                         #  Also, the obj.matrix_local is only relevant for direct descendants of `obj`.
                         for child_obj in obj.children_recursive:
                             if child_obj not in visited and child_obj in set(collection.objects):
-                                yield (child_obj, instance_objects, matrix_world @ obj.matrix_local)
+                                yield (child_obj, instance_objects, matrix_world @ obj.matrix_local @ child_obj.matrix_local)
                                 visited.add((child_obj, instance_objects[0] if instance_objects else None))
 
         yield from collection_fn(layer_collection.collection)
