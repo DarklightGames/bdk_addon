@@ -294,7 +294,7 @@ class BspBrushToT3DConverter(ObjectToT3DConverter):
         actor.properties['CsgOper'] = csg_oper
         actor.properties['PolyFlags'] = get_poly_flags_value_from_keys(bsp_brush.poly_flags)
 
-        point_transform_matrix = matrix_world @ obj.matrix_local
+        point_transform_matrix = matrix_world
         location = point_transform_matrix.translation
         location.y = -location.y
         actor.properties['Location'] = location
