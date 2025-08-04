@@ -73,8 +73,8 @@ def ensure_bdk_fluid_surface_hexagonal_node_tree() -> NodeTree:
     
         nt.links.new(size_x_socket, grid_node.inputs['Size X'])
         nt.links.new(size_y_socket, grid_node.inputs['Size Y'])
-        nt.links.new(input_node.outputs['Size X'], grid_node.inputs['Size X'])
-        nt.links.new(input_node.outputs['Size Y'], grid_node.inputs['Size Y'])
+        nt.links.new(input_node.outputs['Size X'], grid_node.inputs['Vertices X'])
+        nt.links.new(input_node.outputs['Size Y'], grid_node.inputs['Vertices Y'])
         nt.links.new(grid_node.outputs['Mesh'], output_node.inputs['Geometry'])
 
         # Finalize
@@ -82,7 +82,7 @@ def ensure_bdk_fluid_surface_hexagonal_node_tree() -> NodeTree:
         nt.links.new(set_position_node.outputs['Geometry'], triangulate_node.inputs['Mesh'])
         nt.links.new(triangulate_node.outputs['Mesh'], output_node.inputs['Geometry'])
 
-    return ensure_geometry_node_tree('BDK Fluid Surface Square', items, build_function)
+    return ensure_geometry_node_tree('BDK Fluid Surface Hexagonal', items, build_function)
 
 
 def ensure_bdk_fluid_surface_node_tree() -> NodeTree:
@@ -119,12 +119,12 @@ def ensure_bdk_fluid_surface_node_tree() -> NodeTree:
 
         node_tree.links.new(input_node.outputs['Grid Type'], grid_type_switch_node.inputs['Menu'])
         
-        for menu_switch, type_node in type_nodes.items():
+        for menu_switch_input, type_node in type_nodes.items():
             # Links
             node_tree.links.new(input_node.outputs['Size X'], type_node.inputs['Size X'])
             node_tree.links.new(input_node.outputs['Size Y'], type_node.inputs['Size Y'])
             node_tree.links.new(input_node.outputs['Grid Spacing'], type_node.inputs['Grid Spacing'])
-            node_tree.links.new(input_node.outputs['Geometry'], menu_switch.inputs[menu_switch])
+            node_tree.links.new(type_node.outputs['Geometry'], grid_type_switch_node.inputs[menu_switch_input])
         
         node_tree.links.new(grid_type_switch_node.outputs['Output'], output_node.inputs['Geometry'])
 
@@ -167,7 +167,13 @@ def ensure_fluid_surface_node_tree(fluid_surface: 'BDK_PG_fluid_surface') -> Nod
 
         set_material_node.inputs['Material'].default_value = fluid_surface.material
 
-        add_fluid_surface_driver(fluid_surface_node.inputs['Grid Type'], 'fluid_grid_type')
+        index_switch_node = node_tree.nodes.new('GeometryNodeIndexSwitch')
+        index_switch_node.data_type = 'MENU'
+        node_tree.links.new(index_switch_node.outputs['Output'], fluid_surface_node.inputs['Grid Type'])
+        index_switch_node.inputs[1].default_value = 'Square'
+        index_switch_node.inputs[2].default_value = 'Hexagonal'
+
+        add_fluid_surface_driver(index_switch_node.inputs['Index'], 'fluid_grid_type')
         add_fluid_surface_driver(fluid_surface_node.inputs['Size X'], 'fluid_x_size')
         add_fluid_surface_driver(fluid_surface_node.inputs['Size Y'], 'fluid_y_size')
         add_fluid_surface_driver(fluid_surface_node.inputs['Grid Spacing'], 'fluid_grid_spacing')
