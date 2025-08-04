@@ -645,7 +645,27 @@ def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs:
     return vector_math_node.outputs[output_socket_name]
 
 
+def add_index_node(node_tree: NodeTree) -> NodeSocket:
+    return node_tree.nodes.new('GeometryNodeInputIndex').outputs['Index']
+
+
+def add_integer_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, NodeSocket]]) -> NodeSocket:
+    math_node = node_tree.nodes.new(type='FunctionNodeIntegerMath')
+    math_node.operation = operation
+    math_node.inputs[0].default_value = 0
+    math_node.inputs[1].default_value = 0
+
+    for index, input in enumerate(inputs):
+        if isinstance(input, NodeSocket):
+            node_tree.links.new(input, math_node.inputs[index])
+        else:
+            math_node.inputs[index].default_value = input
+
+    return math_node.outputs['Value']
+
+
 def add_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, NodeSocket]]) -> NodeSocket:
+    # TODO: choose the right math node type
     math_node = node_tree.nodes.new(type='ShaderNodeMath')
     math_node.operation = operation
     math_node.inputs[0].default_value = 0

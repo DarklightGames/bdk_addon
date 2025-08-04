@@ -863,6 +863,28 @@ def ensure_bdk_bsp_surface_sample_face_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK BSP Surface Sample Face', items, build_function)
 
 
+def ensure_bdk_object_material_size_node_tree() -> NodeTree:
+    # TODO: transitionary node to replace:
+    # bdk_object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+
+    items = (
+        ('INPUT', 'NodeSocketObject', 'Object'),
+        ('INPUT', 'NodeSocketInteger', 'Material Index'),
+        ('OUTPUT', 'NodeSocketBoolean', 'Exists'),
+        ('OUTPUT', 'NodeSocketFloat', 'U'),
+        ('OUTPUT', 'NodeSocketFloat', 'V'),
+    )
+
+    def build_function(node_tree: NodeSocket):
+        _, output_node = ensure_input_and_output_nodes(node_tree)
+        
+        output_node.inputs['Exists'].default_value = True
+        output_node.inputs['U'].default_value = 512
+        output_node.inputs['V'].default_value = 512
+
+    return ensure_geometry_node_tree('BDK Object Material Size', items, build_function)
+
+
 def ensure_bdk_bsp_surface_texture_world_scale_node_tree() -> NodeTree:
     items = (
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),

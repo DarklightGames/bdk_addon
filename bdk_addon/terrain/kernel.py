@@ -337,7 +337,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
     )
 
     def build_function(node_tree: NodeTree):
-        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+        _, output_node = ensure_input_and_output_nodes(node_tree)
 
         terrain_info = get_terrain_info(terrain_info_object)
         # TODO: don't we store the index in the deco layer itself?
