@@ -299,20 +299,6 @@ def write_terrain_t3d(terrain_info_object: Object, fp: io.TextIOBase):
     T3DWriter(fp).write(t3d)
 
 
-def get_terrain_height_range(heightmap: np.ndarray) -> (float, float):
-    height_max = np.max(heightmap)
-    height_min = np.min(heightmap)
-    max_extent = max(np.fabs(height_max), np.fabs(height_min))
-    height_max = max_extent
-    height_min = -max_extent
-    return height_min, height_max
-
-
-def get_best_terrain_scale_z(heightmap: np.ndarray) -> float:
-    height_min, height_max = get_terrain_height_range(heightmap)
-    return height_max - height_min
-
-
 def quantize_heightmap(heightmap: np.array, terrain_scale_z: float) -> np.array:
     if terrain_scale_z == 0:
         heightmap.fill(0.5)
