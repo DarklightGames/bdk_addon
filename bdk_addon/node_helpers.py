@@ -846,3 +846,10 @@ def add_project_point_node(node_tree: NodeTree, vector_socket: NodeSocket, trans
     node_tree.links.new(vector_socket, project_point_node.inputs['Vector'])
     node_tree.links.new(transform_socket, project_point_node.inputs['Transform'])
     return project_point_node.outputs['Vector']
+
+
+def add_float_to_integer_node(node_tree: NodeTree, rounding_mode: str, float_socket: NodeSocket) -> NodeSocket:
+    float_to_integer_node = node_tree.nodes.new(type='FunctionNodeFloatToInt')
+    float_to_integer_node.rounding_mode = rounding_mode
+    node_tree.links.new(float_socket, float_to_integer_node.inputs['Float'])
+    return float_to_integer_node.outputs['Integer']
