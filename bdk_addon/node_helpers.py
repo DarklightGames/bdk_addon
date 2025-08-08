@@ -2,7 +2,7 @@ from typing import Optional, Iterable, Tuple, List, Callable, cast, Union, Dict,
 
 import bpy
 from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNodeRepeatOutput, \
-    NodeTreeInterfaceItem
+    NodeTreeInterfaceItem, NodeInputs, NodeOutputs
 
 from .data import map_range_interpolation_type_items
 
@@ -306,6 +306,11 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
     output_node = node_tree.nodes.new(type='NodeGroupOutput') if output_node is None else output_node
 
     return input_node, output_node
+
+
+def ensure_inputs_and_outputs(node_tree: NodeTree) -> Tuple[NodeOutputs, NodeInputs]:
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+    return (input_node.outputs, output_node.inputs)
 
 
 def ensure_curve_modifier_node_tree() -> NodeTree:
@@ -853,3 +858,30 @@ def add_float_to_integer_node(node_tree: NodeTree, rounding_mode: str, float_soc
     float_to_integer_node.rounding_mode = rounding_mode
     node_tree.links.new(float_socket, float_to_integer_node.inputs['Float'])
     return float_to_integer_node.outputs['Integer']
+
+
+def add_invert_matrix_node(node_tree: NodeTree, matrix_socket: NodeSocket) -> NodeSocket:
+    node = node_tree.nodes.new('FunctionNodeInvertMatrix')
+    node_tree.links.new(matrix_socket, node.inputs['Matrix'])
+    return node.outputs['Matrix']
+
+
+def add_transform_point_node(node_tree: NodeTree, vector_socket: NodeSocket, transform_socket: NodeSocket) -> NodeSocket:
+    node = node_tree.nodes.new('FunctionNodeTransformPoint')
+    node_tree.links.new(vector_socket, node.inputs['Vector'])
+    node_tree.links.new(transform_socket, node.inputs['Transform'])
+    return node.outputs['Vector']
+
+
+def add_node(node_tree: NodeTree, type: str, inputs: Iterable[Tuple[str, NodeSocket | None]] = None):
+    node = node_tree.nodes.new(type)
+    if inputs:
+        for key, socket in inputs:
+            node_tree.links.new(node.inputs[key], socket)
+    return node
+
+
+def add_group_node(node_tree: NodeTree, node_tree_function, inputs: Iterable[Tuple[str, NodeSocket | None]] = None, **kwargs) -> Node:
+    node = add_node(node_tree, 'GeometryNodeGroup', inputs)
+    node.node_tree = node_tree_function(**kwargs)
+    return node
