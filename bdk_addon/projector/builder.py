@@ -3,6 +3,8 @@ import uuid
 import math
 from bpy.types import NodeTree
 
+from ..bsp.tools import ensure_bdk_object_material_size_node_tree
+
 from ..node_helpers import ensure_geometry_node_tree, ensure_input_and_output_nodes, get_socket_identifier_from_name
 
 
@@ -50,7 +52,8 @@ def ensure_projector_uv_scale_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        material_size_node = node_tree.nodes.new(type='GeometryNodeBDKMaterialSize')
+        material_size_node = node_tree.nodes.new('GeometryNodeGroup')
+        material_size_node.node_tree = ensure_bdk_object_material_size_node_tree()
 
         divide_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
         divide_node.operation = 'DIVIDE'
@@ -117,6 +120,29 @@ def ensure_projector_uv_scale_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Projector UV Scale', items, build_function)
 
 
+def ensure_bdk_projector_node_tree():
+    """
+    TODO: This was turned into a no-op node when we made the decision to drop the BDK fork.
+          When possible, remake this entirely within geometry nodes.
+    """
+    items = (
+        ('INPUT', 'NodeSocketObject', 'Target'),
+        ('INPUT', 'NodeSocketFloat', 'FOV'),
+        ('INPUT', 'NodeSocketFloat', 'MaxTraceDistance'),
+        ('INPUT', 'NodeSocketFloat', 'DrawScale'),
+        ('INPUT', 'NodeSocketFloat', 'USize'),
+        ('INPUT', 'NodeSocketFloat', 'VSize'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
+        ('OUTPUT', 'NodeSocketVector', 'UV Map'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Frustum'),
+    )
+
+    def build_function(node_tree: NodeTree):
+        input_node, output_node = ensure_input_and_output_nodes(node_tree)
+    
+    return ensure_geometry_node_tree('BDK Projector', items, build_function)
+
+
 
 def ensure_projector_node_tree() -> NodeTree:
     items = (
@@ -131,7 +157,8 @@ def ensure_projector_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        projector_node = node_tree.nodes.new(type='GeometryNodeBDKProjector')
+        projector_node = node_tree.nodes.new(type='GeometryNodeGroup')
+        projector_node.node_tree = ensure_bdk_projector_node_tree()
         set_material_node = node_tree.nodes.new(type='GeometryNodeSetMaterial')
         join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
 
@@ -143,7 +170,8 @@ def ensure_projector_node_tree() -> NodeTree:
         scale_uv_group_node = node_tree.nodes.new(type='GeometryNodeGroup')
         scale_uv_group_node.node_tree = ensure_projector_uv_scale_node_tree()
 
-        material_size_node = node_tree.nodes.new(type='GeometryNodeBDKMaterialSize')
+        material_size_node = node_tree.nodes.new('GeometryNodeGroup')
+        material_size_node.node_tree = ensure_bdk_object_material_size_node_tree()
 
         bake_node = node_tree.nodes.new(type='GeometryNodeBake')
 
