@@ -63,7 +63,7 @@ class BDK_OT_terrain_doodad_scatter_layer_remove(Operator):
                 return
             # Delete the node trees for all modifiers.
             for modifier in obj.modifiers:
-                if modifier.type == 'NODES':
+                if modifier.type == 'NODES' and modifier.node_group is not None:
                     bpy.data.node_groups.remove(modifier.node_group)
                 bpy.data.meshes.remove(obj.data)
 
