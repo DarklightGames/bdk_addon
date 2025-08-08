@@ -611,7 +611,9 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
 
         def add_fence_mode_spline_loop_nodes(node_tree: NodeTree, loop_sockets: CurveSplineLoopSockets):
             curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
-            curve_to_points_node.mode = 'EQUIDISTANT'
+            # TODO: This "EQUIDISTANT" mode was implemented in the BDK fork. Reimplement it in native nodes.
+            # curve_to_points_node.mode = 'EQUIDISTANT'
+            curve_to_points_node.mode = 'LENGTH'
 
             domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
             domain_size_node.component = 'POINTCLOUD'
