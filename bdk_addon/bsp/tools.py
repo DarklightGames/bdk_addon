@@ -864,20 +864,20 @@ def ensure_bdk_bsp_surface_sample_face_node_tree() -> NodeTree:
 
 
 def ensure_bdk_object_material_size_node_tree() -> NodeTree:
-    # TODO: transitionary node to replace:
-    # bdk_object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
-
+    """
+    TODO: This node used to be part of the BDK fork, but we ain't using it anymore.
+        Reimplement this in native nodes.
+    """
     items = (
         ('INPUT', 'NodeSocketObject', 'Object'),
-        ('INPUT', 'NodeSocketInteger', 'Material Index'),
-        ('OUTPUT', 'NodeSocketBoolean', 'Exists'),
+        ('INPUT', 'NodeSocketInt', 'Material Index'),
+        ('OUTPUT', 'NodeSocketBool', 'Exists'),
         ('OUTPUT', 'NodeSocketFloat', 'U'),
         ('OUTPUT', 'NodeSocketFloat', 'V'),
     )
 
     def build_function(node_tree: NodeSocket):
         _, output_node = ensure_input_and_output_nodes(node_tree)
-        
         output_node.inputs['Exists'].default_value = True
         output_node.inputs['U'].default_value = 512
         output_node.inputs['V'].default_value = 512
@@ -896,7 +896,8 @@ def ensure_bdk_bsp_surface_texture_world_scale_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        bdk_object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+        bdk_object_material_size_node = node_tree.nodes.new('GeometryNodeGroup')
+        bdk_object_material_size_node.node_tree = ensure_bdk_object_material_size_node_tree()
 
         self_object_node = node_tree.nodes.new(type='GeometryNodeSelfObject')
 
@@ -1383,7 +1384,8 @@ def ensure_bdk_bsp_surface_active_face_material_size_node_tree() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
-        bdk_object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+        bdk_object_material_size_node = node_tree.nodes.new('GeometryNodeGroup')
+        bdk_object_material_size_node.node_tree = ensure_bdk_object_material_size_node_tree()
 
         active_element_node = node_tree.nodes.new(type='GeometryNodeToolActiveElement')
         active_element_node.domain = 'FACE'

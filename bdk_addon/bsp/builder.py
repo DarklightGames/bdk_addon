@@ -9,7 +9,7 @@ from .data import BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME
     TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, POLY_FLAGS_ATTRIBUTE_NAME, MATERIAL_INDEX_ATTRIBUTE_NAME, \
     LIGHT_MAP_SCALE_ATTRIBUTE_NAME, DIRTY_ATTRIBUTE_NAME
 from .properties import poly_flags_items
-from .tools import ensure_bdk_bsp_surface_attributes_node_tree
+from .tools import ensure_bdk_bsp_surface_attributes_node_tree, ensure_bdk_object_material_size_node_tree
 from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree, \
     add_chained_bit_math_nodes, add_bit_math_node
 from mathutils import Vector, Quaternion, Matrix
@@ -331,7 +331,8 @@ def ensure_bdk_brush_uv_node_tree():
         material_size_fallback_vector_node.vector = (512.0, 512.0, 0.0)
 
         try:
-            object_material_size_node = node_tree.nodes.new(type='GeometryNodeBDKObjectMaterialSize')
+            object_material_size_node = node_tree.nodes.new('GeometryNodeGroup')
+            object_material_size_node.node_tree = ensure_bdk_object_material_size_node_tree()
             combine_material_size_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
             evaluate_at_index_material_index_node = node_tree.nodes.new(type='GeometryNodeFieldAtIndex')
             evaluate_at_index_material_index_node.data_type = 'INT'

@@ -13,12 +13,12 @@ def ensure_triangle_normal_node_tree() -> NodeTree:
     def build_function(nt: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(nt)
 
-        result_socket = add_vector_math_operation_nodes(nt, 'NORMALIZE', (
+        result_socket = add_vector_math_operation_nodes(nt, 'NORMALIZE', [
             add_vector_math_operation_nodes(nt,'CROSS_PRODUCT', (
                 add_vector_math_operation_nodes(nt, 'SUBTRACT', (input_node.outputs['A'], input_node.outputs['B'])),
                 add_vector_math_operation_nodes(nt, 'SUBTRACT', (input_node.outputs['B'], input_node.outputs['C'])),
             ))
-        ))
+        ])
 
         nt.links.new(result_socket, output_node.inputs['Normal'])
         
@@ -38,18 +38,18 @@ def ensure_bdk_terrain_quad_coordinate_node_tree() -> NodeTree:
     def build_function(nt: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(nt)
         x, y, _ = add_separate_xyz_node(nt, 
-            add_vector_math_operation_nodes(nt, 'SCALE', (
-                add_vector_math_operation_nodes(nt, 'DIVIDE', (
+            add_vector_math_operation_nodes(nt, 'SCALE', {
+                'Vector': add_vector_math_operation_nodes(nt, 'DIVIDE', (
                     add_vector_math_operation_nodes(nt, 'SUBTRACT', (input_node.outputs['Position'], input_node.outputs['Min'])),
                     add_vector_math_operation_nodes(nt, 'SUBTRACT', (input_node.outputs['Max'], input_node.outputs['Min'])),
                 )),
-                add_integer_math_operation_nodes(nt, 'SUBTRACT', (input_node.outputs['Terrain Resolution'], 1))
-            ))
+                'Scale': add_integer_math_operation_nodes(nt, 'SUBTRACT', (input_node.outputs['Terrain Resolution'], 1))
+            })
         )
-        nt.links.new(add_float_to_integer_node(x, 'TRUNCATE'), output_node.inputs['X'])
-        nt.links.new(add_float_to_integer_node(y, 'TRUNCATE'), output_node.inputs['Y'])
+        nt.links.new(add_float_to_integer_node(nt, 'TRUNCATE', x), output_node.inputs['X'])
+        nt.links.new(add_float_to_integer_node(nt, 'TRUNCATE', y), output_node.inputs['Y'])
 
-    return ensure_geometry_node_tree('BDK Terrain Squad Coordinate', items, build_function)
+    return ensure_geometry_node_tree('BDK Terrain Quad Coordinate', items, build_function)
 
 
 def ensure_bdk_terrain_quad_is_edge_turned() -> NodeTree:
@@ -69,16 +69,16 @@ def ensure_bdk_terrain_quad_is_edge_turned() -> NodeTree:
         vertex_of_corner_node_2 = nt.nodes.new('GeometryNodeVertexOfCorner')
         nt.links.new(corners_of_face_node_2.outputs['Corner Index'], vertex_of_corner_node_2.inputs['Corner Index'])
 
+        # TODO: this was mistranscribed
         nt.links.new(
-            add_comparison_nodes(nt, 'INT', 'NOT_EQUAL', (
-                add_integer_math_operation_nodes(nt, 'ABSOLUTE', (
-                    add_integer_math_operation_nodes(nt, 'SUBTRACT', (
-                        vertex_of_corner_node_1.outputs['Vertex Index'],
-                        vertex_of_corner_node_2.outputs['Vertex Index'],
-                    ))
-                )),
-                1
-            )),
+            add_comparison_nodes(nt, 'INT', 'NOT_EQUAL', 
+                                 a=(add_integer_math_operation_nodes(nt, 'ABSOLUTE', (
+                                     add_integer_math_operation_nodes(nt, 'SUBTRACT', (
+                                         vertex_of_corner_node_1.outputs['Vertex Index'],
+                                         vertex_of_corner_node_2.outputs['Vertex Index'],
+                                         )),
+                                         ))
+                                    ), b=1),
             output_node.inputs['Result']
         )
 
@@ -104,12 +104,12 @@ def ensure_bdk_terrain_position_is_inside() -> NodeTree:
             output_node.inputs["Is Inside"],
             add_boolean_math_operation_nodes(nt, 'AND', (
                 add_boolean_math_operation_nodes(nt, 'AND', (
-                    add_comparison_nodes(nt, 'FLOAT', 'GREATER_THAN_OR_EQUAL', (pos_x, min_x)),
-                    add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', (pos_x, max_x)),
+                    add_comparison_nodes(nt, 'FLOAT', 'GREATER_EQUAL', pos_x, min_x),
+                    add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', pos_x, max_x),
                 )),
                 add_boolean_math_operation_nodes(nt, 'AND', (
-                    add_comparison_nodes(nt, 'FLOAT', 'GREATER_THAN_OR_EQUAL', (pos_y, min_y)),
-                    add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', (pos_y, max_y)),
+                    add_comparison_nodes(nt, 'FLOAT', 'GREATER_EQUAL', pos_y, min_y),
+                    add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', pos_y, max_y),
                 ))
             ))
         )
@@ -195,44 +195,44 @@ def ensure_bdk_terrain_quad_triangle() -> NodeTree:
         ('INPUT', 'NodeSocketVector', 'B'),
         ('INPUT', 'NodeSocketVector', 'C'),
         ('INPUT', 'NodeSocketVector', 'D'),
+        ('OUTPUT', 'NodeSocketVector', 'A'),
+        ('OUTPUT', 'NodeSocketVector', 'B'),
+        ('OUTPUT', 'NodeSocketVector', 'C'),
+        ('OUTPUT', 'NodeSocketVector', 'D'),
     )
 
-
     def build_function(nt: NodeTree):
-        input_node, output_node = ensure_input_and_output_nodes(nt)
+        inputs, outputs = ensure_inputs_and_outputs(nt)
 
-        a = input_node.outputs['A']
-        b = input_node.outputs['B']
-        c = input_node.outputs['C']
-        d = input_node.outputs['D']
-        qu = input_node.outputs['Quad U']
-        qv = input_node.outputs['Quad V']
-        is_edge_turned = input_node.outputs['Is Edge Turned']
+        a = inputs['A']
+        b = inputs['B']
+        c = inputs['C']
+        d = inputs['D']
+        qu = inputs['Quad U']
+        qv = inputs['Quad V']
+        is_edge_turned = inputs['Is Edge Turned']
 
         # A
-        nt.links.new(
-            output_node.inputs['A'],
-            add_switch_node(nt, 'VECTOR', is_edge_turned, b, a)
-            )
+        nt.links.new(outputs['A'], add_switch_node(nt, 'VECTOR', is_edge_turned, b, a))
         
         # B
         nt.links.new(
-            output_node.inputs['B'],
+            outputs['B'],
             add_switch_node(nt,
                             'VECTOR', 
                             is_edge_turned,
                             add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'GREATER_THAN', qu, qv), d, b),
-                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', add_math_operation_nodes(nt, 'SUBTRACT', 1.0, qu), qv), c, d)
+                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', add_math_operation_nodes(nt, 'SUBTRACT', (1.0, qu)), qv), c, d)
             ))
 
         # C
         nt.links.new(
-            output_node.inputs['C'],
+            outputs['C'],
             add_switch_node(nt,
                             'VECTOR', 
                             is_edge_turned,
                             add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'GREATER_THAN', qu, qv), d, b),
-                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', add_math_operation_nodes(nt, 'SUBTRACT', 1.0, qu), qv), c, d)
+                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', add_math_operation_nodes(nt, 'SUBTRACT', (1.0, qu)), qv), c, d)
         ))
 
     return ensure_geometry_node_tree('BDK Terrain Quad Triangle', items, build_function)
@@ -252,7 +252,7 @@ def ensure_scalar_cross_product_node_tree() -> NodeTree:
         bx, by, _ = add_separate_xyz_node(nt, input_node.outputs['B'])
         cx, cy, _ = add_separate_xyz_node(nt, input_node.outputs['C'])
         nt.links.new(
-            output_node.inputs['Result'],
+            output_node.inputs['Value'],
             add_math_operation_nodes(nt, 'ADD', (
                 add_math_operation_nodes(nt, 'MULTIPLY', (
                     add_math_operation_nodes(nt, 'SUBTRACT', (ax, bx)),
@@ -280,7 +280,7 @@ def ensure_barycentric_weights_node_tree() -> NodeTree:
 
     def build_function(nt: NodeTree):
         def scalar_cross_product(a: NodeSocket, b: NodeSocket, c: NodeSocket) -> NodeSocket:
-            node = nt.nodes.new('GeometryNodeGroup')
+            node = add_group_node(nt, ensure_scalar_cross_product_node_tree)
             nt.links.new(node.inputs['A'], a)
             nt.links.new(node.inputs['B'], b)
             nt.links.new(node.inputs['C'], c)
@@ -289,8 +289,8 @@ def ensure_barycentric_weights_node_tree() -> NodeTree:
         input_node, output_node = ensure_input_and_output_nodes(nt)
 
         a = input_node.outputs['A']
-        b = input_node.outputs['A']
-        c = input_node.outputs['A']
+        b = input_node.outputs['B']
+        c = input_node.outputs['C']
         position = input_node.outputs['Position']
 
         sx = scalar_cross_product(b, c, position)
@@ -298,16 +298,17 @@ def ensure_barycentric_weights_node_tree() -> NodeTree:
         sz = scalar_cross_product(a, b, position)
 
         x, y, _ = add_separate_xyz_node(nt, 
-                    add_vector_math_operation_nodes(nt, 'SCALE', (
-                        add_combine_xyz_node(nt, sx, sy, sz),
-                        add_math_operation_nodes(nt, 'DIVIDE', (
+                    add_vector_math_operation_nodes(nt, 'SCALE', {
+                        'Vector': add_combine_xyz_node(nt, sx, sy, sz),
+                        'Scale': add_math_operation_nodes(nt, 'DIVIDE', (
                             1.0,
                             add_math_operation_nodes(nt, 'ADD', (
                                 add_math_operation_nodes(nt, 'ADD', (sx, sy)),
                                 sz
                             ))
                         ))
-        )))
+                    }
+                    ))
         nt.links.new(x, output_node.inputs['X'])
         nt.links.new(y, output_node.inputs['Y'])
 
@@ -319,8 +320,8 @@ def ensure_barycentric_interpolation_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketVector', 'A'),
         ('INPUT', 'NodeSocketVector', 'B'),
         ('INPUT', 'NodeSocketVector', 'C'),
-        ('INPUT', 'NodeSocketFloat', 'X'),
-        ('INPUT', 'NodeSocketFloat', 'Y'),
+        ('INPUT', 'NodeSocketFloat', 'U'),
+        ('INPUT', 'NodeSocketFloat', 'V'),
         ('OUTPUT', 'NodeSocketVector', 'Result'),
     )
 
@@ -337,15 +338,14 @@ def ensure_barycentric_interpolation_node_tree() -> NodeTree:
             outputs['Result'],
             add_vector_math_operation_nodes(nt, 'ADD', (
                 add_vector_math_operation_nodes(nt, 'ADD', (
-                    add_vector_math_operation_nodes(nt, 'SCALE', (a, u)),
-                    add_vector_math_operation_nodes(nt, 'SCALE', (b, v)),
+                    add_vector_math_operation_nodes(nt, 'SCALE', {'Vector': a, 'Scale': u}),
+                    add_vector_math_operation_nodes(nt, 'SCALE', {'Vector': b, 'Scale': v}),
                 )),
-                add_vector_math_operation_nodes(nt, 'SCALE', (c,
-                    add_math_operation_nodes(nt, 'SUBTRACT', (
+                add_vector_math_operation_nodes(nt, 'SCALE', {'Vector': c, 'Scale': add_math_operation_nodes(nt, 'SUBTRACT', (
                         add_math_operation_nodes(nt, 'SUBTRACT', (1.0, u)),
                         v
-                    ))
-                ))
+                    ))}
+                )
             ))
         )
 
@@ -423,12 +423,15 @@ def ensure_bdk_terrain_quad_vertices() -> NodeTree:
     def build_function(nt: NodeTree):
         inputs, outputs = ensure_inputs_and_outputs(nt)
 
-        quad_vertex_indices_node = add_group_node(nt, ensure_bdk_terrain_quad_vertex_indices)
+        quad_vertex_indices_node = add_group_node(nt, ensure_bdk_terrain_quad_vertex_indices, inputs=(
+            ('Terrain Resolution', inputs['Terrain Resolution']),
+            ('Vertex Index', inputs['Vertex Index'])
+        ))
         
         def sample_index(index: NodeSocket) -> NodeSocket:
             position_node = nt.nodes.new('GeometryNodeInputPosition')
             sample_index_node = nt.nodes.new('GeometryNodeSampleIndex')
-            sample_index_node.data_type = 'VECTOR'
+            sample_index_node.data_type = 'FLOAT_VECTOR'
             sample_index_node.domain = 'POINT'
             nt.links.new(inputs['Terrain'], sample_index_node.inputs['Geometry'])
             nt.links.new(position_node.outputs['Position'], sample_index_node.inputs['Value'])
@@ -453,7 +456,7 @@ def ensure_bdk_terrain_sample_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketObject', 'Terrain Object'),
         ('INPUT', 'NodeSocketInt', 'Terrain Resolution'),
         ('INPUT', 'NodeSocketVector', 'Position'),
-        ('OUTPUT', 'NodeSocketVector', 'Is Inside'),
+        ('OUTPUT', 'NodeSocketBool', 'Is Inside'),
         ('OUTPUT', 'NodeSocketVector', 'Normal'),
         ('OUTPUT', 'NodeSocketVector', 'Position'),
         ('OUTPUT', 'NodeSocketInt', 'Face Index'),
@@ -467,7 +470,7 @@ def ensure_bdk_terrain_sample_node_tree() -> NodeTree:
 
         object_info_relative_node = nt.nodes.new('GeometryNodeObjectInfo')
         object_info_relative_node.transform_space = 'RELATIVE'
-        nt.links.new(inputs['Terrain Info'], object_info_relative_node.inputs['Object'])
+        nt.links.new(inputs['Terrain Object'], object_info_relative_node.inputs['Object'])
 
         relative_transform_matrix = object_info_relative_node.outputs['Transform']
 
@@ -475,12 +478,13 @@ def ensure_bdk_terrain_sample_node_tree() -> NodeTree:
 
         object_info_original_node = nt.nodes.new('GeometryNodeObjectInfo')
         object_info_original_node.transform_space = 'ORIGINAL'
+        nt.links.new(inputs['Terrain Object'], object_info_original_node.inputs['Object'])
 
         terrain_resolution = inputs['Terrain Resolution']
         terrain_geometry = object_info_original_node.outputs['Geometry']
 
         # Bounding Box
-        bounding_box = add_node(nt, 'GeometryNodeBoundingBox', inputs=(('Geometry', terrain_geometry)))
+        bounding_box = add_node(nt, 'GeometryNodeBoundBox', inputs=(('Geometry', terrain_geometry),))
         bounding_box_min = bounding_box.outputs['Min']
         bounding_box_max = bounding_box.outputs['Max']
 
@@ -494,7 +498,8 @@ def ensure_bdk_terrain_sample_node_tree() -> NodeTree:
         quad_coordinate_node = add_group_node(nt, ensure_bdk_terrain_quad_coordinate_node_tree, inputs=(
             ('Min', bounding_box_min),
             ('Max', bounding_box_max),
-            ('Terrain Resolution', terrain_resolution)
+            ('Terrain Resolution', terrain_resolution),
+            ('Position', position)
         ))
 
         quad_indices_node = add_group_node(nt, ensure_bdk_terrain_quad_indices, inputs=(
@@ -503,8 +508,8 @@ def ensure_bdk_terrain_sample_node_tree() -> NodeTree:
             ('Terrain Resolution', terrain_resolution)
         ))
 
-        vertex_index = quad_indices_node.output['Vertex Index']
-        face_index = quad_indices_node.output['Face Index']
+        vertex_index = quad_indices_node.outputs['Vertex Index']
+        face_index = quad_indices_node.outputs['Face Index']
 
         quad_vertices_node = add_group_node(nt, ensure_bdk_terrain_quad_vertices, inputs=(
             ('Terrain', terrain_geometry),
@@ -519,13 +524,16 @@ def ensure_bdk_terrain_sample_node_tree() -> NodeTree:
             ('C', quad_vertices_node.outputs['C']),
         ))
 
-        is_edge_turned = add_node(nt, 'GeometryNodeSampleIndex', items=(
+        is_edge_turned_node = add_node(nt, 'GeometryNodeSampleIndex', inputs=(
             ('Geometry', terrain_geometry),
             ('Value', add_group_node(nt, ensure_bdk_terrain_quad_is_edge_turned).outputs['Result']),
             ('Index', face_index)
-        )).outputs['Value']
+        ))
+        is_edge_turned_node.data_type = 'BOOLEAN'
+        is_edge_turned_node.domain = 'FACE'
+        is_edge_turned = is_edge_turned_node.outputs['Value']
 
-        quad_triangle_node = add_group_node(nt, ensure_bdk_terrain_quad_triangle, items=(
+        quad_triangle_node = add_group_node(nt, ensure_bdk_terrain_quad_triangle, inputs=(
             ('Is Edge Turned', is_edge_turned),
             ('Quad U', quad_uv_node.outputs['U']),
             ('Quad V', quad_uv_node.outputs['V']),

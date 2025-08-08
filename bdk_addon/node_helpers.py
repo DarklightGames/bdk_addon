@@ -502,15 +502,21 @@ def add_chained_bit_math_nodes(node_tree: NodeTree, operation: str, value_socket
     return output_socket
 
 
-def add_chained_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
-    if not value_sockets:
+def add_chained_math_nodes(node_tree: NodeTree, operation: str, values: List[NodeSocket | float | int]) -> Optional[NodeSocket]:
+    if not values:
         return None
-    output_socket = value_sockets[0]
-    for value_socket in value_sockets[1:]:
+    output_socket = values[0]
+    for value_socket in values[1:]:
         operation_node = node_tree.nodes.new(type='ShaderNodeMath')
         operation_node.operation = operation
-        node_tree.links.new(output_socket, operation_node.inputs[0])
-        node_tree.links.new(value_socket, operation_node.inputs[1])
+        if isinstance(output_socket, NodeSocket):
+            node_tree.links.new(output_socket, operation_node.inputs[0])
+        else:
+            operation_node.inputs[0].default_value = output_socket
+        if isinstance(value_socket, NodeSocket):
+            node_tree.links.new(value_socket, operation_node.inputs[1])
+        else:
+            operation_node.inputs[1].default_value = value_socket
         output_socket = operation_node.outputs[0]
     return output_socket
 
@@ -640,12 +646,14 @@ def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs:
                 node_tree.links.new(input_, vector_math_node.inputs[key])
             else:
                 vector_math_node.inputs[key].default_value = input_
-    elif isinstance(inputs, list):
+    elif isinstance(inputs, list) or isinstance(inputs, tuple):
         for index, input_ in enumerate(inputs):
             if isinstance(input_, NodeSocket):
                 node_tree.links.new(input_, vector_math_node.inputs[index])
             else:
                 vector_math_node.inputs[index].default_value = input_
+    else:
+        raise ValueError(f'Invalid type for inputs ({type(inputs)})')
 
     return vector_math_node.outputs[output_socket_name]
 
@@ -882,6 +890,9 @@ def add_node(node_tree: NodeTree, type: str, inputs: Iterable[Tuple[str, NodeSoc
 
 
 def add_group_node(node_tree: NodeTree, node_tree_function, inputs: Iterable[Tuple[str, NodeSocket | None]] = None, **kwargs) -> Node:
-    node = add_node(node_tree, 'GeometryNodeGroup', inputs)
+    node = node_tree.nodes.new('GeometryNodeGroup')
     node.node_tree = node_tree_function(**kwargs)
+    if inputs:
+        for key, socket in inputs:
+            node_tree.links.new(node.inputs[key], socket)
     return node
