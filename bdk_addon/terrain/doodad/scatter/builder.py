@@ -5,7 +5,7 @@ from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 
 from ...terrain_sample import ensure_bdk_terrain_sample_node_tree
 from ....helpers import ensure_name_unique
-from ....node_helpers import add_group_node, ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
+from ....node_helpers import add_group_node, add_position_input_node, ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
     add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes, \
     CurveSplineLoopSockets, add_vector_math_operation_nodes, add_boolean_math_operation_nodes
@@ -294,6 +294,7 @@ def ensure_snap_to_terrain_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketGeometry', 'Geometry'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketMatrix', 'Terrain Transform'),
+        ('INPUT', 'NodeSocketInt', 'Terrain Resolution'),
         ('INPUT', 'NodeSocketBool', 'Mute'),
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
     )
@@ -315,11 +316,13 @@ def ensure_snap_to_terrain_node_tree() -> NodeTree:
 
         # Input
         node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs['Switch'])
-        node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
+        node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain Geometry'])
         node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Terrain Transform'], terrain_sample_node.inputs['Terrain Transform'])
+        node_tree.links.new(input_node.outputs['Terrain Resolution'], terrain_sample_node.inputs['Terrain Resolution'])
 
         # Internal
+        node_tree.links.new(add_position_input_node(node_tree), terrain_sample_node.inputs['Position'])
         node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
         node_tree.links.new(mute_switch_node.outputs['Output'], store_terrain_normal_attribute_node.inputs['Geometry'])
         node_tree.links.new(terrain_sample_node.outputs['Normal'], store_terrain_normal_attribute_node.inputs['Value'])
@@ -1094,6 +1097,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketGeometry', 'Points'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketMatrix', 'Terrain Transform'),
+        ('INPUT', 'NodeSocketInt', 'Terrain Resolution'),
         ('INPUT', 'NodeSocketInt', 'Object Index'),
         ('INPUT', 'NodeSocketInt', 'Scale Mode'),
         ('INPUT', 'NodeSocketFloat', 'Scale Uniform'),
@@ -1188,6 +1192,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
                             align_to_terrain_node_group_node.inputs['Factor'])
         node_tree.links.new(input_node.outputs['Terrain Geometry'],
                             snap_to_terrain_group_node.inputs['Terrain Geometry'])
+        node_tree.links.new(input_node.outputs['Terrain Resolution'], snap_to_terrain_group_node.inputs['Terrain Resolution'])
         node_tree.links.new(input_node.outputs['Snap to Terrain'], snap_to_terrain_group_node.inputs['Mute'])
         node_tree.links.new(input_node.outputs['Object Index'], compare_node.inputs[3])
         node_tree.links.new(input_node.outputs['Points'], separate_geometry_node.inputs['Geometry'])
@@ -1469,6 +1474,7 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
 
                         shrinkwrap_curve_to_terrain_node = node_tree.nodes.new(type='GeometryNodeGroup')
                         shrinkwrap_curve_to_terrain_node.node_tree = ensure_shrinkwrap_curve_to_terrain_node_tree()
+                        shrinkwrap_curve_to_terrain_node.inputs['Terrain Resolution'].default_value = terrain_info.x_size
 
                         shrinkwrap_curve_to_terrain_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
                         shrinkwrap_curve_to_terrain_switch_node.input_type = 'GEOMETRY'
@@ -1476,7 +1482,7 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
                         add_scatter_layer_driver(shrinkwrap_curve_to_terrain_switch_node.inputs['Switch'], 'fence_mode')
 
                         terrain_info_object_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
-                        terrain_info_object_node.inputs['Object'].default_value = terrain_info.terrain_info_objsect
+                        terrain_info_object_node.inputs['Object'].default_value = terrain_info.terrain_info_object
 
                         node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_node.inputs['Curve'])
                         node_tree.links.new(terrain_info_object_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_node.inputs['Terrain Geometry'])
@@ -1648,6 +1654,7 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
 def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer') -> NodeTree:
     terrain_doodad_object = scatter_layer.terrain_doodad_object
     terrain_info_object = scatter_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object
+    terrain_info = terrain_info_object.bdk.terrain_info
 
     items = (
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -1693,6 +1700,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
             scatter_layer_object_node_group_node.node_tree = ensure_scatter_layer_object_node_tree()
 
             scatter_layer_object_node_group_node.inputs['Object Index'].default_value = scatter_layer_object_index
+            scatter_layer_object_node_group_node.inputs['Terrain Resolution'].default_value = terrain_info.x_size
 
             inputs = scatter_layer_object_node_group_node.inputs
 
@@ -1942,6 +1950,7 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketGeometry', 'Terrain Geometry'),
         ('INPUT', 'NodeSocketMatrix', 'Terrain Transform'),
+        ('INPUT', 'NodeSocketInt', 'Terrain Resolution'),
     )
 
     def build_function(node_tree: NodeTree):
@@ -1966,7 +1975,7 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
         spline_index_compare_node.data_type = 'INT'
         spline_index_compare_node.operation = 'EQUAL'
 
-        spline_indnx_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
+        spline_index_node = node_tree.nodes.new(type='GeometryNodeInputIndex')
 
         join_geometry_node = node_tree.nodes.new(type='GeometryNodeJoinGeometry')
 
@@ -1977,10 +1986,12 @@ def ensure_shrinkwrap_curve_to_terrain_node_tree() -> NodeTree:
         # Input
         node_tree.links.new(input_node.outputs['Curve'], separate_geometry_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Curve'], domain_size_node.inputs['Geometry'])
-        node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
+        node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain Geometry'])
         node_tree.links.new(input_node.outputs['Terrain Transform'], terrain_sample_node.inputs['Terrain Transform'])
+        node_tree.links.new(input_node.outputs['Terrain Resolution'], terrain_sample_node.inputs['Terrain Resolution'])
 
         # Internal
+        node_tree.links.new(add_position_input_node(node_tree), terrain_sample_node.inputs['Position'])
         node_tree.links.new(separate_geometry_node.outputs['Selection'], curve_to_points_node.inputs['Curve'])
         node_tree.links.new(curve_to_points_node.outputs['Points'], set_position_node.inputs['Geometry'])
         node_tree.links.new(terrain_sample_node.outputs['Position'], set_position_node.inputs['Position'])
@@ -2035,13 +2046,14 @@ def ensure_scatter_layer_mask_node_tree() -> NodeTree:
 
         # Input
         node_tree.links.new(input_node.outputs['Points'], delete_geometry_node.inputs['Geometry'])
-        node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain'])
+        node_tree.links.new(input_node.outputs['Terrain Geometry'], terrain_sample_node.inputs['Terrain Geometry'])
         node_tree.links.new(input_node.outputs['Terrain Geometry'], sample_index_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Threshold'], compare_node.inputs['B'])
         node_tree.links.new(input_node.outputs['Invert'], invert_switch_node.inputs['Switch'])
         node_tree.links.new(input_node.outputs['Attribute Name'], named_attribute_node.inputs['Name'])
 
         # Internal
+        node_tree.links.new(add_position_input_node(node_tree), terrain_sample_node.inputs['Position'])
         node_tree.links.new(terrain_sample_node.outputs['Vertex Index'], sample_index_node.inputs['Index'])
         node_tree.links.new(named_attribute_node.outputs['Attribute'], sample_index_node.inputs['Value'])
         node_tree.links.new(sample_index_node.outputs['Value'], compare_node.inputs['A'])

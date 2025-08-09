@@ -268,6 +268,7 @@ def ensure_node_tree(name: str,
         node_tree.bdk.build_hash = build_hash
 
         # If there are default values or subtypes, set them.
+        # TODO: The interface for this in totally inscrutible. Come up with something better.
         for item_index, item in enumerate(items):
             if len(item) < 4:
                 continue
@@ -896,3 +897,7 @@ def add_group_node(node_tree: NodeTree, node_tree_function, inputs: Iterable[Tup
         for key, socket in inputs:
             node_tree.links.new(node.inputs[key], socket)
     return node
+
+
+def add_position_input_node(node_tree: NodeTree) -> NodeSocket:
+    return add_node(node_tree, 'GeometryNodeInputPosition').outputs['Position']
