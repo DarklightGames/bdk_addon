@@ -80,7 +80,7 @@ def build(args):
 
         bpy.ops.psk.import_file(
             filepath=filename,
-            should_import_skeleton=False,
+            components='MESH',
             should_import_materials=True,
             bdk_repository_id=args.repository_id
         )
