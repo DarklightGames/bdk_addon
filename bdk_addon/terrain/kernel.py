@@ -2,7 +2,7 @@ from bpy.types import Object, NodeTree, NodeSocket, bpy_struct, ID
 from typing import Optional, Iterable, Callable
 
 from ..helpers import get_terrain_info
-from ..node_helpers import ensure_input_and_output_nodes, ensure_geometry_node_tree, \
+from ..node_helpers import add_group_node, ensure_input_and_output_nodes, ensure_geometry_node_tree, \
     ensure_terrain_layer_node_operation_node_tree
 
 
@@ -331,6 +331,34 @@ def add_density_from_terrain_layer_nodes(node_tree: NodeTree, target_id: ID, dat
     return last_density_socket
 
 
+def ensure_bdk_deco_layer_node_group() -> NodeTree:
+    items = (
+        ('INPUT', 'NodeSocketGeometry', 'Terrain'),
+        ('INPUT', 'NodeSocketFloat', 'Density Map'),
+        ('INPUT', 'NodeSocketInt', 'Heightmap X'),
+        ('INPUT', 'NodeSocketInt', 'Heightmap Y'),
+        ('INPUT', 'NodeSocketInt', 'Density Map Y'),
+        ('INPUT', 'NodeSocketInt', 'Max Per Quad'),
+        ('INPUT', 'NodeSocketInt', 'Seed'),
+        ('INPUT', 'NodeSocketFloat', 'Offset'),
+        ('INPUT', 'NodeSocketBool', 'Show On Invisible Terrain'),
+        ('INPUT', 'NodeSocketBool', 'Align To Terrain'),
+        ('INPUT', 'NodeSocketFloat', 'Random Yaw'),
+        ('INPUT', 'NodeSocketFloat', 'Density Multiplier Min'),
+        ('INPUT', 'NodeSocketFloat', 'Density Multiplier Max'),
+        ('INPUT', 'NodeSocketVector', 'Scale Multiplier Min'),
+        ('INPUT', 'NodeSocketVector', 'Scale Multiplier Max'),
+        ('OUTPUT', 'NodeSocketGeometry', 'Points'),
+        ('OUTPUT', 'NodeSocketRotation', 'Rotation'),
+        ('OUTPUT', 'NodeSocketFloat', 'Scale'),
+    )
+
+    def build_function(nt: NodeTree):
+        pass
+
+    return ensure_geometry_node_tree('BDK Deco Layer', items, build_function, should_force_build=True)
+
+
 def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> NodeTree:
     items = (
         ('OUTPUT', 'NodeSocketGeometry', 'Geometry'),
@@ -347,7 +375,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         terrain_doodad_info_node = node_tree.nodes.new('GeometryNodeObjectInfo')
         terrain_doodad_info_node.inputs[0].default_value = terrain_info_object
 
-        deco_layer_node = node_tree.nodes.new('GeometryNodeBDKDecoLayer')
+        deco_layer_node = add_group_node(node_tree, ensure_bdk_deco_layer_node_group)
         deco_layer_node.inputs['Heightmap X'].default_value = terrain_info.x_size
         deco_layer_node.inputs['Heightmap Y'].default_value = terrain_info.y_size
         deco_layer_node.inputs['Density Map'].default_value = 0.0
@@ -364,7 +392,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         capture_attribute_node = node_tree.nodes.new('GeometryNodeCaptureAttribute')
         capture_attribute_node.name = 'Density'
         capture_attribute_node.domain = 'POINT'
-        # capture_attribute_node.data_type = 'FLOAT'
+        capture_attribute_node.capture_items.new('FLOAT', 'Density Map')
 
         instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
 
@@ -430,7 +458,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         node_tree.links.new(instance_on_points_node.inputs['Points'], deco_layer_node.outputs['Points'])
         node_tree.links.new(instance_on_points_node.inputs['Rotation'], deco_layer_node.outputs['Rotation'])
         node_tree.links.new(instance_on_points_node.inputs['Scale'], deco_layer_node.outputs['Scale'])
-        node_tree.links.new(capture_attribute_node.inputs[1], named_attribute_node.outputs['Attribute'])
+        node_tree.links.new(capture_attribute_node.inputs['Density Map'], named_attribute_node.outputs['Attribute'])
         node_tree.links.new(capture_attribute_node.inputs['Geometry'], terrain_doodad_info_node.outputs['Geometry'])
         node_tree.links.new(deco_layer_node.inputs['Terrain'], capture_attribute_node.outputs['Geometry'])
         node_tree.links.new(deco_layer_node.inputs['Density Map'], capture_attribute_node.outputs[1])
