@@ -3,7 +3,7 @@ from bpy.props import EnumProperty, BoolProperty
 from bpy.types import UIList, Menu
 from fnmatch import fnmatch
 
-from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_build, \
+from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_blend_open, BDK_OT_repository_package_build, \
     BDK_OT_repository_purge_orphaned_assets, BDK_OT_repository_set_default
 from .properties import repository_package_status_enum_items
 from ..operators import BDK_OT_scene_repository_set
@@ -107,6 +107,8 @@ class BDK_MT_repository_special(Menu):
 
     def draw(self, context):
         layout = self.layout
+        layout.operator(BDK_OT_repository_package_blend_open.bl_idname, icon='BLENDER')
+        layout.separator()
         layout.operator(BDK_OT_repository_delete.bl_idname, icon='TRASH')
         layout.operator_menu_enum(BDK_OT_repository_cache_invalidate.bl_idname, 'mode', icon='FILE_REFRESH')
         layout.operator(BDK_OT_repository_purge_orphaned_assets.bl_idname, icon='X')

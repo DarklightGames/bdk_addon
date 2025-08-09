@@ -10,7 +10,7 @@ from bpy.props import StringProperty, IntProperty, EnumProperty, BoolProperty
 from bpy.types import Operator, Context, Event
 from bpy_extras.io_utils import ImportHelper
 
-from .kernel import Manifest, repository_runtime_update, ensure_repository_asset_library, \
+from .kernel import Manifest, get_repository_package_asset_path, repository_runtime_update, ensure_repository_asset_library, \
     ensure_default_repository_id, repository_asset_library_unlink, repository_remove, repository_cache_delete, \
     repository_metadata_delete, repository_package_build, get_repository_package_dependency_graph, \
     layered_topographical_sort, repository_package_export, is_game_directory_and_mod_valid, repository_metadata_write, \
@@ -127,6 +127,40 @@ class BDK_OT_repository_package_build(Operator):
 
         # Update the runtime information.
         repository_runtime_update(repository)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_package_blend_open(Operator):
+    bl_idname = 'bdk.repository_package_blend_open'
+    bl_label = 'Open .blend File'
+    bl_description = 'Open the .blend file for the selected package in another Blender instance'
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        if not poll_has_repository_package_selected(context):
+            cls.poll_message_set('No package selected')
+            return False
+        return True
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+        package = repository.runtime.packages[repository.runtime.packages_index]
+
+        # Build the export path.
+        context.window_manager.progress_begin(0, 1)
+
+        asset_path = get_repository_package_asset_path(repository, package.path)
+
+        if not asset_path.is_file():
+            self.report({'ERROR'}, f'Could not open .blend file. File does not exist.')
+            return {'CANCELLED'}
+
+        import subprocess
+
+        subprocess.Popen([bpy.app.binary_path, asset_path])
 
         return {'FINISHED'}
 
@@ -854,6 +888,7 @@ class BDK_OT_repository_purge_orphaned_assets(Operator):
 classes = (
     BDK_OT_repository_scan,
     BDK_OT_repository_cache_delete,
+    BDK_OT_repository_package_blend_open,
     BDK_OT_repository_package_build,
     BDK_OT_repository_package_cache_invalidate,
     BDK_OT_repository_build_asset_library,
