@@ -17,7 +17,7 @@ def filter_packages(self, packages) -> list[int]:
     if self.filter_name:
         # Filter name is non-empty.
         for i, package in enumerate(packages):
-            if not fnmatch(package.path, f'*{self.filter_name}*'):
+            if not fnmatch(package.path.lower(), f'*{self.filter_name.lower()}*'):
                 flt_flags[i] &= ~bitflag_filter_item
 
     # Invert filter flags for all items.
