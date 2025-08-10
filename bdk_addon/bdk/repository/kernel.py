@@ -453,17 +453,6 @@ def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> ne
     return graph
 
 
-def _get_build_order_from_package_dependency_graph(repository: BDK_PG_repository, graph: networkx.DiGraph) -> \
-        list[BDK_PG_repository_package]:
-    topographical_order = list(reversed(list(networkx.topological_sort(graph))))
-
-    # Create a dictionary of case-insensitive package names to the package objects.
-    package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in
-                               repository.runtime.packages}
-
-    return [package_name_to_package[package_name.upper()] for package_name in topographical_order]
-
-
 def layered_topographical_sort(graph: networkx.DiGraph) -> list[set]:
     # Compute out-degree for each node.
     out_degree = {node: graph.out_degree(node) for node in graph.nodes()}
