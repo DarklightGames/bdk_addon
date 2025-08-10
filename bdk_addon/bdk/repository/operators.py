@@ -682,7 +682,7 @@ class BDK_OT_repository_unlink(Operator):
 
 class BDK_OT_repository_delete(Operator):
     bl_idname = 'bdk.repository_delete'
-    bl_label = 'Delete Repository'
+    bl_label = 'Delete Repository...'
     bl_description = 'Remove the selected repository and delete all associated data. This operation cannot be undone'
     bl_options = {'INTERNAL', 'UNDO'}
 

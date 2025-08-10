@@ -1,6 +1,7 @@
 import fnmatch
 from uuid import uuid5, NAMESPACE_OID
 from datetime import datetime
+import sys
 
 import bpy
 import os.path
@@ -490,10 +491,13 @@ def get_addon_path() -> Path:
 
 
 def get_umodel_path() -> Path:
-    if sys.platform == 'win32':
-        return get_addon_path() / 'bin' / 'umodel.exe'
-    elif sys.platform == 'linux':
-        return get_addon_path() / 'bin' / 'umodel'
+    match sys.platform:
+        case 'win32':
+            return get_addon_path() / 'bin' / 'umodel.exe'
+        case 'linux':
+            return get_addon_path() / 'bin' / 'umodel'
+        case _:
+            raise ValueError(f'Unhandled platform "{sys.platform}"')
 
 
 def build_cube_map(cube_map_file_path: Path, exports_directory: Path):
@@ -553,6 +557,10 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     package_build_directory = os.path.join(str(exports_directory),
                                            os.path.dirname(os.path.relpath(str(package_path), str(game_directory))))
     umodel_path = str(get_umodel_path())
+
+    if not os.access(umodel_path, os.X_OK):
+        raise PermissionError('umodel executable is not executable')
+
     args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"',
             f'-path="{repository.game_directory}"', str(package_path)]
     process = subprocess.run(args, capture_output=True)
