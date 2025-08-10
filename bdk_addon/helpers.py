@@ -2,6 +2,7 @@ from mathutils import Matrix
 
 from .data import UReference
 from bpy.types import Material, Object, Context, ByteColorAttribute, ViewLayer, LayerCollection, Collection
+from pathlib import Path
 from typing import Iterable, Optional, Tuple, Set, List
 import bpy
 import numpy
@@ -197,7 +198,9 @@ def load_bdk_material(context: Context, reference: str, repository_id: Optional[
 
     print(f'Loading material {reference} from blend file: {blend_file}')
 
-    with bpy.data.libraries.load(blend_file, link=True, relative=False, assets_only=True) as (data_in, data_out):
+    blend_file = Path(blend_file).resolve().absolute()
+
+    with bpy.data.libraries.load(str(blend_file), link=True, relative=True, assets_only=True) as (data_in, data_out):
         if reference.object_name in data_in.materials:
             data_out.materials = [reference.object_name]
         else:
@@ -241,7 +244,9 @@ def load_bdk_static_mesh(context: Context, reference: str, repository_id: Option
     if blend_file is None:
         return None
 
-    with bpy.data.libraries.load(blend_file, link=True, relative=False, assets_only=False) as (data_in, data_out):
+    blend_file = Path(blend_file).resolve().absolute()
+
+    with bpy.data.libraries.load(str(blend_file), link=True, relative=True, assets_only=False) as (data_in, data_out):
         if reference.object_name in data_in.collections:
             data_out.collections = [reference.object_name]
         else:
