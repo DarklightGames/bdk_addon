@@ -118,14 +118,35 @@ class BdkAddonPreferences(AddonPreferences):
                 paths_header.label(text='Paths')
 
                 if paths_panel is not None:
-                    col = repositories_panel.column()
-                    col.enabled = False
-                    col.use_property_split = True
-                    col.prop(repository, 'id', emboss=False)
-                    col.prop(repository, 'game_directory')
+                    sub = paths_panel.row()
+                    split = sub.split(factor=0.25)
+                    col_a = split.column()
+                    col_b = split.column()
+
+                    col_a.alignment = 'RIGHT'
+                    
+                    # ID
+                    col_a.label(text='ID')
+                    col_b.label(text=repository.id)
+
+                    # Game Directory
+                    col_a.label(text='Game Directory')
+                    row = col_b.row()
+                    row.label(text=repository.game_directory, translate=False)
+                    op = row.operator('wm.path_open', icon='FILE_FOLDER', text='')
+                    op.filepath = repository.game_directory
+
+                    # Mod
                     if repository.mod:
-                        col.prop(repository, 'mod', emboss=False)
-                    col.prop(repository, 'cache_directory')
+                        col_a.label(text='Mod')
+                        col_b.label(text=repository.mod, translate=False)
+                    
+                    # Cache Directory
+                    col_a.label(text='Cache Directory')
+                    row = col_b.row()
+                    row.label(text=repository.cache_directory, translate=False)
+                    op = row.operator('wm.path_open', icon='FILE_FOLDER', text='')
+                    op.filepath = repository.cache_directory
 
         layout.prop(self, 'developer_extras')
 
