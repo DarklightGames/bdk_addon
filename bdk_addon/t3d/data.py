@@ -12,10 +12,10 @@ class T3DObject:
 
 class Polygon:
     def __init__(self, link: int,
-                 origin: (float, float, float),
-                 normal: (float, float, float),
-                 texture_u: (float, float, float),
-                 texture_v: (float, float, float),
+                 origin: Tuple[float, float, float],
+                 normal: Tuple[float, float, float],
+                 texture_u: Tuple[float, float, float],
+                 texture_v: Tuple[float, float, float],
                  vertices: List[Tuple[float, float, float]]
                  ):
         self.link = link

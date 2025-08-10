@@ -78,9 +78,9 @@ def build(args):
             warnings.warn(f'Could not find a static mesh file for {object_name}')
             continue
 
-        bpy.ops.import_scene.psk(
+        bpy.ops.psk.import_file(
             filepath=filename,
-            should_import_skeleton=False,
+            components='MESH',
             should_import_materials=True,
             bdk_repository_id=args.repository_id
         )
@@ -100,8 +100,11 @@ def build(args):
         # Add the object to a collection with the name of the object.
         collection = bpy.data.collections.new(name=object_name)
 
-        # Link the object to the collection.
+        # Link the object and its children to the collection.
         collection.objects.link(new_object)
+
+        for child in new_object.children_recursive:
+            collection.objects.link(child)
 
         # Link the collection to the scene.
         bpy.context.scene.collection.children.link(collection)
@@ -124,7 +127,7 @@ def build(args):
 
     # Note that even if there are no new objects, we still save the file.
     bpy.ops.wm.save_as_mainfile(
-        filepath=os.path.abspath(args.output_path),
+        filepath=str(Path(args.output_path).resolve()),
         copy=True
     )
 

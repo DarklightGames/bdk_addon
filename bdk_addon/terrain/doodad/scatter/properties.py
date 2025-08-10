@@ -7,7 +7,7 @@ from bpy.types import PropertyGroup, Object, Context
 from ..data import terrain_doodad_geometry_source_items
 from ....actor.properties import BDK_PG_actor_properties
 from ....helpers import get_terrain_doodad
-from ....property_group_helpers import add_curve_modifier_properties
+from ....property_group_helpers import CurveModifierMixin
 from ....units import meters_to_unreal
 from ...properties import get_terrain_info_paint_layer_by_name
 from .builder import ensure_scatter_layer_modifiers
@@ -31,6 +31,11 @@ empty_set = set()
 
 
 def terrain_doodad_scatter_layer_object_object_poll_cb(_self, bpy_object: Object):
+    # TODO: we also need to allow collection instances here.
+    if bpy_object is None:
+        return False
+    if bpy_object.type == 'EMPTY' and bpy_object.instance_collection is not None:
+        return True
     # Only allow objects that are static meshes.
     return bpy_object.type == 'MESH' and bpy_object.get('Class', None) == 'StaticMeshActor'
 
@@ -40,7 +45,7 @@ def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_
     ensure_scatter_layer_modifiers(context, terrain_doodad)
 
 
-class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup):
+class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup, CurveModifierMixin):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Name')
     mute: BoolProperty(name='Mute', default=False)
@@ -157,7 +162,7 @@ def terrain_doodad_scatter_layer_geometry_source_name_update_cb(self: 'BDK_PG_te
     ensure_scatter_layer_modifiers(context, self.terrain_doodad_object.bdk.terrain_doodad)
 
 
-class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
+class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup, CurveModifierMixin):
     id: StringProperty(name='ID', options={'HIDDEN'})
     index: IntProperty(options={'HIDDEN'})
     name: StringProperty(name='Name', default='Scatter Layer')
@@ -279,9 +284,6 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup):
 
     # Actor Settings
     actor_group: StringProperty(name='Group', default='', options={'HIDDEN'}, description='')
-
-
-add_curve_modifier_properties(BDK_PG_terrain_doodad_scatter_layer)
 
 classes = (
     BDK_PG_terrain_doodad_scatter_layer_object,

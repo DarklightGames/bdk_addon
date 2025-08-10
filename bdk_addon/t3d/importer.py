@@ -18,7 +18,7 @@ from ..bsp.builder import ensure_bdk_brush_uv_node_tree
 from ..bsp.properties import get_poly_flags_keys_from_value
 from ..projector.properties import blending_op_unreal_to_blender_map
 from ..terrain.operators import add_terrain_layer_node
-from ..projector.builder import ensure_projector_node_tree, create_projector
+from ..projector.builder import create_projector
 from ..terrain.builder import create_terrain_info_object
 from ..terrain.layers import add_terrain_paint_layer, add_terrain_deco_layer
 from ..terrain.kernel import ensure_paint_layers, ensure_deco_layers
@@ -57,7 +57,6 @@ class DefaultActorImporter(ActorImporter):
     """
     Default brush_object importer used when no other importer is found.
     """
-
     @classmethod
     def _create_static_mesh_object(cls, context: Context, t3d_actor: T3dObject) -> Optional[Object]:
         static_mesh_reference = t3d_actor['StaticMesh']
@@ -66,7 +65,7 @@ class DefaultActorImporter(ActorImporter):
         collection = load_bdk_static_mesh(context, str(static_mesh_reference))
 
         if collection is None:
-            print(f"Failed to load static mesh {static_mesh_reference} for brush_object {t3d_actor['Name']}.")
+            print(f"Failed to load static mesh {static_mesh_reference} for T3D actor {t3d_actor['Name']}.")
             return None
 
         # Create a new instance object, matching the name of the brush_object.
@@ -661,110 +660,109 @@ def get_alpha_data_from_image(image: Image) -> np.array:
     return np.array(list(image.pixels)[3::4], dtype=float)
 
 
-def import_t3d(window_manager: WindowManager, contents: str, context: Context):
-    def set_custom_properties(t3d_actor: T3dObject, bpy_object: Object):
-        location = mathutils.Vector((0.0, 0.0, 0.0))
-        rotation_euler = mathutils.Euler((0.0, 0.0, 0.0))
-        scale = mathutils.Vector((1.0, 1.0, 1.0))
-        for key, value in t3d_actor.properties.items():
-            if key == 'Location':
+def import_t3d_object(context: Context, t3d_object: T3dObject, collection: Optional[Collection]) -> Optional[Object]:
+    match t3d_object.type_:
+        case 'Map':
+            return import_t3d_map(context, t3d_object)
+        case 'Actor':
+            return import_t3d_actor(context, t3d_object, collection)
+
+
+def import_t3d_actor(context: Context, t3d_actor, collection: Optional[Collection]) -> Optional[Object]:
+    actor_class = t3d_actor.properties.get('Class', None)
+
+    if actor_class is None:
+        print('Failed to import actor: ' + str(t3d_actor['Name']) + ' (no class)')
+        return None
+
+    # Get the brush_object importer for this brush_object type.
+    actor_importer = get_actor_type_importer(actor_class)
+
+    bpy_object = actor_importer.create_object(t3d_actor, context)
+
+    if bpy_object is None:
+        print('Failed to import actor: ' + str(t3d_actor['Name']) + ' (' + str(actor_class) + ')')
+        return None
+
+    set_custom_properties(t3d_actor, bpy_object)
+
+    # Allow the brush_object importer to do any additional work after the properties have been set.
+    actor_importer.on_properties_hydrated(t3d_actor, bpy_object, context)
+
+    # Link the new object to the scene.
+    if collection is not None and bpy_object.name not in collection.objects:
+        collection.objects.link(bpy_object)
+
+    # Allow the brush_object importer to do any additional work after the object has been linked.
+    actor_importer.on_object_linked(t3d_actor, bpy_object, context)
+
+    bpy_object.select_set(True)
+
+    return bpy_object
+
+def import_t3d_map(context: Context, t3d_map):
+    # For BSP brushes, we need to maintain the order of the brushes.
+    # Since Blender orders objects by their name, we must force the order of the brushes by prefixing them with
+    # their index into the list of brushes.
+    def is_t3d_object_a_brush(t3d_object):
+        return t3d_object.type_ == 'Actor' and t3d_object.properties.get('Class', None) == 'Brush'
+
+    has_brushes = any(child.type_ == 'Actor' and child.properties.get('Class', None) == 'Brush' for child in t3d_map.children)
+    brushes_collection = context.scene.collection
+    if has_brushes:
+        # Make a new collection for the brushes.
+        brushes_collection = bpy.data.collections.new('Brushes')
+        context.scene.collection.children.link(brushes_collection)
+
+    # Import all the objects in the T3D map.
+    # TODO: not very clean.
+    bsp_brush_sort_order = 0
+    for t3d_object in t3d_map.children:
+        is_brush = is_t3d_object_a_brush(t3d_object)
+        collection = brushes_collection if is_brush else context.collection
+        obj = import_t3d_object(context, t3d_object, collection)
+        if is_brush and obj is not None:
+            obj.bdk.bsp_brush.sort_order = bsp_brush_sort_order
+            bsp_brush_sort_order += 1
+
+
+def set_custom_properties(t3d_actor: T3dObject, bpy_object: Object):
+    location = mathutils.Vector((0.0, 0.0, 0.0))
+    rotation_euler = mathutils.Euler((0.0, 0.0, 0.0))
+    scale = mathutils.Vector((1.0, 1.0, 1.0))
+    for key, value in t3d_actor.properties.items():
+        match key:
+            case 'Location':
                 location = value.get('X', 0.0), -value.get('Y', 0.0), value.get('Z', 0.0)
-            elif key == 'Rotation':
+            case 'Rotation':
                 yaw = -value.get('Yaw', 0)
                 pitch = -value.get('Pitch', 0)
                 roll = value.get('Roll', 0)
                 rotation_euler = URotator(pitch, yaw, roll).get_radians()
-            elif key == 'DrawScale':
+            case 'DrawScale':
                 scale *= value
-            elif key == 'DrawScale3D':
+            case 'DrawScale3D':
                 scale *= mathutils.Vector((value.get('X', 1.0), value.get('Y', 1.0), value.get('Z', 1.0)))
-            if type(value) == T3dReference:
-                value = str(value)
-            elif type(value) == dict:
-                continue
-            elif type(value) == list:
-                continue
-            bpy_object[key] = value
 
-        bpy_object.location = location
-        bpy_object.rotation_euler = rotation_euler
-        bpy_object.scale = scale
+        if type(value) == T3dReference:
+            value = str(value)
+        elif type(value) in [dict, list]:
+            continue
 
-    def import_t3d_object(t3d_object: T3dObject, context: Context, collection: Collection) -> Optional[Object]:
-        if t3d_object.type_ == 'Map':
-            # TODO: these two should not be in the same function.
-            return import_t3d_map(t3d_object, context)
-        elif t3d_object.type_ == 'Actor':
-            return import_t3d_actor(t3d_object, context, collection)
+        bpy_object[key] = value
 
-    def import_t3d_actor(t3d_actor, context: Context, collection: Collection) -> Optional[Object]:
-        actor_class = t3d_actor.properties.get('Class', None)
+    bpy_object.location = location
+    bpy_object.rotation_euler = rotation_euler
+    bpy_object.scale = scale
 
-        if actor_class is None:
-            print('Failed to import actor: ' + str(t3d_actor['Name']) + ' (no class)')
-            return None
 
-        # Get the brush_object importer for this brush_object type.
-        actor_importer = get_actor_type_importer(actor_class)
-
-        bpy_object = actor_importer.create_object(t3d_actor, context)
-
-        if bpy_object is None:
-            print('Failed to import actor: ' + str(t3d_actor['Name']) + ' (' + str(actor_class) + ')')
-            return None
-
-        set_custom_properties(t3d_actor, bpy_object)
-
-        # Allow the brush_object importer to do any additional work after the properties have been set.
-        actor_importer.on_properties_hydrated(t3d_actor, bpy_object, context)
-
-        # Link the new object to the scene.
-        if collection is not None and bpy_object.name not in collection.objects:
-            collection.objects.link(bpy_object)
-
-        # Allow the brush_object importer to do any additional work after the object has been linked.
-        actor_importer.on_object_linked(t3d_actor, bpy_object, context)
-
-        bpy_object.select_set(True)
-
-        return bpy_object
-
-    def import_t3d_map(t3d_map, context: Context):
-        # For BSP brushes, we need to maintain the order of the brushes.
-        # Since Blender orders objects by their name, we must force the order of the brushes by prefixing them with
-        # their index into the list of brushes.
-        def is_t3d_object_a_brush(t3d_object):
-            return t3d_object.type_ == 'Actor' and t3d_object.properties.get('Class', None) == 'Brush'
-
-        has_brushes = any(child.type_ == 'Actor' and child.properties.get('Class', None) == 'Brush' for child in t3d_map.children)
-        brushes_collection = context.scene.collection
-        if has_brushes:
-            # Make a new collection for the brushes.
-            brushes_collection = bpy.data.collections.new('Brushes')
-            context.scene.collection.children.link(brushes_collection)
-
-        # Import all the objects in the T3D map.
-        # TODO: not very clean.
-        bsp_brush_sort_order = 0
-        for t3d_object in t3d_map.children:
-            is_brush = is_t3d_object_a_brush(t3d_object)
-            collection = brushes_collection if is_brush else context.collection
-            obj = import_t3d_object(t3d_object, context, collection)
-            if is_brush and obj is not None:
-                obj.bdk.bsp_brush.sort_order = bsp_brush_sort_order
-                bsp_brush_sort_order += 1
-
-    print(f'Reading T3DMap ({len(contents)})...')
-
+def import_t3d(window_manager: WindowManager, contents: str, context: Context):
     t3d_objects: List[T3dObject] = read_t3d(contents)
-
-    print(f'T3DMap reading completed')
-    print(f'Importing {len(t3d_objects)} objects...')
 
     window_manager.progress_begin(0, len(t3d_objects))
 
     for object_index, t3d_object in enumerate(t3d_objects):
-        import_t3d_object(t3d_object, context, None)
+        import_t3d_object(context, t3d_object, None)
         window_manager.progress_update(object_index)
 
     window_manager.progress_end()

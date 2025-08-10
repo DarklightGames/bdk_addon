@@ -42,7 +42,7 @@ class BDK_UL_terrain_doodad_paint_layers(UIList):
 
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
         if item.layer_type == 'PAINT':
-            layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='BRUSH_TEXFILL')
+            layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='BRUSH_DATA')
         elif item.layer_type == 'DECO':
             layout.label(text=item.deco_layer_name if item.deco_layer_name else '<no layer selected>', icon='MONKEY')
         elif item.layer_type == 'ATTRIBUTE':
@@ -959,6 +959,7 @@ class BDK_PT_terrain_doodad_paint_layer_debug(Panel):
     bl_region_type = 'UI'
     bl_parent_id = 'BDK_PT_terrain_doodad_paint_layers'
     bl_order = 100
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context: 'Context'):

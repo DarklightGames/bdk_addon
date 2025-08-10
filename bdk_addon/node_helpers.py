@@ -2,7 +2,7 @@ from typing import Optional, Iterable, Tuple, List, Callable, cast, Union, Dict,
 
 import bpy
 from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNodeRepeatOutput, \
-    NodeTreeInterfaceItem
+    NodeTreeInterfaceItem, NodeInputs, NodeOutputs
 
 from .data import map_range_interpolation_type_items
 
@@ -205,7 +205,7 @@ def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: 
 
 def ensure_node_tree(name: str,
                      node_group_type: str,
-                     items: Iterable[Union[Tuple[str, str, str], Tuple[str, str, str, Any]]],
+                     items: Iterable[Union[Tuple[str, str, str], Tuple[str, str, str, str], Tuple[str, str, str, str, str]]],
                      build_function: Callable[[NodeTree], None],
                      should_force_build: bool = False
                      ) -> NodeTree:
@@ -268,6 +268,7 @@ def ensure_node_tree(name: str,
         node_tree.bdk.build_hash = build_hash
 
         # If there are default values or subtypes, set them.
+        # TODO: The interface for this in totally inscrutible. Come up with something better.
         for item_index, item in enumerate(items):
             if len(item) < 4:
                 continue
@@ -306,6 +307,11 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
     output_node = node_tree.nodes.new(type='NodeGroupOutput') if output_node is None else output_node
 
     return input_node, output_node
+
+
+def ensure_inputs_and_outputs(node_tree: NodeTree) -> Tuple[NodeOutputs, NodeInputs]:
+    input_node, output_node = ensure_input_and_output_nodes(node_tree)
+    return (input_node.outputs, output_node.inputs)
 
 
 def ensure_curve_modifier_node_tree() -> NodeTree:
@@ -474,8 +480,8 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
 
-def add_bitwise_operation_node(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> NodeSocket:
-    operation_node = node_tree.nodes.new(type='FunctionNodeBitwiseOperation')
+def add_bit_math_node(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> NodeSocket:
+    operation_node = node_tree.nodes.new(type='FunctionNodeBitMath')
     operation_node.operation = operation
 
     for index, value_socket in enumerate(value_sockets):
@@ -484,12 +490,12 @@ def add_bitwise_operation_node(node_tree: NodeTree, operation: str, value_socket
     return operation_node.outputs[0]
 
 
-def add_chained_bitwise_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
+def add_chained_bit_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
     if not value_sockets:
         return None
     output_socket = value_sockets[0]
     for value_socket in value_sockets[1:]:
-        operation_node = node_tree.nodes.new(type='FunctionNodeBitwiseOperation')
+        operation_node = node_tree.nodes.new(type='FunctionNodeBitMath')
         operation_node.operation = operation
         node_tree.links.new(output_socket, operation_node.inputs[0])
         node_tree.links.new(value_socket, operation_node.inputs[1])
@@ -497,15 +503,21 @@ def add_chained_bitwise_operation_nodes(node_tree: NodeTree, operation: str, val
     return output_socket
 
 
-def add_chained_math_operation_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
-    if not value_sockets:
+def add_chained_math_nodes(node_tree: NodeTree, operation: str, values: List[NodeSocket | float | int]) -> Optional[NodeSocket]:
+    if not values:
         return None
-    output_socket = value_sockets[0]
-    for value_socket in value_sockets[1:]:
+    output_socket = values[0]
+    for value_socket in values[1:]:
         operation_node = node_tree.nodes.new(type='ShaderNodeMath')
         operation_node.operation = operation
-        node_tree.links.new(output_socket, operation_node.inputs[0])
-        node_tree.links.new(value_socket, operation_node.inputs[1])
+        if isinstance(output_socket, NodeSocket):
+            node_tree.links.new(output_socket, operation_node.inputs[0])
+        else:
+            operation_node.inputs[0].default_value = output_socket
+        if isinstance(value_socket, NodeSocket):
+            node_tree.links.new(value_socket, operation_node.inputs[1])
+        else:
+            operation_node.inputs[1].default_value = value_socket
         output_socket = operation_node.outputs[0]
     return output_socket
 
@@ -625,7 +637,7 @@ def add_boolean_math_operation_nodes(node_tree: NodeTree, operation: str, inputs
 def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Union[
         Dict[str, Union[int, float, Tuple[float, float, float], NodeSocket]],
         List[Union[int, float, Tuple[float, float, float], NodeSocket]]
-    ]) -> NodeSocket:
+    ], output_socket_name: str = 'Vector') -> NodeSocket:
     vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
     vector_math_node.operation = operation
 
@@ -635,17 +647,39 @@ def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs:
                 node_tree.links.new(input_, vector_math_node.inputs[key])
             else:
                 vector_math_node.inputs[key].default_value = input_
-    elif isinstance(inputs, list):
+    elif isinstance(inputs, list) or isinstance(inputs, tuple):
         for index, input_ in enumerate(inputs):
             if isinstance(input_, NodeSocket):
                 node_tree.links.new(input_, vector_math_node.inputs[index])
             else:
                 vector_math_node.inputs[index].default_value = input_
+    else:
+        raise ValueError(f'Invalid type for inputs ({type(inputs)})')
 
-    return vector_math_node.outputs['Vector']
+    return vector_math_node.outputs[output_socket_name]
+
+
+def add_index_node(node_tree: NodeTree) -> NodeSocket:
+    return node_tree.nodes.new('GeometryNodeInputIndex').outputs['Index']
+
+
+def add_integer_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, NodeSocket]]) -> NodeSocket:
+    math_node = node_tree.nodes.new(type='FunctionNodeIntegerMath')
+    math_node.operation = operation
+    math_node.inputs[0].default_value = 0
+    math_node.inputs[1].default_value = 0
+
+    for index, input in enumerate(inputs):
+        if isinstance(input, NodeSocket):
+            node_tree.links.new(input, math_node.inputs[index])
+        else:
+            math_node.inputs[index].default_value = input
+
+    return math_node.outputs['Value']
 
 
 def add_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterable[Union[int, float, NodeSocket]]) -> NodeSocket:
+    # TODO: choose the right math node type
     math_node = node_tree.nodes.new(type='ShaderNodeMath')
     math_node.operation = operation
     math_node.inputs[0].default_value = 0
@@ -658,6 +692,28 @@ def add_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Iterab
             math_node.inputs[index].default_value = input
 
     return math_node.outputs['Value']
+
+
+def add_switch_node(node_tree: NodeTree, input_type: str, switch_value: Union[bool, NodeSocket], false_value: Union[int, float, NodeSocket], true_value: Union[int, float, NodeSocket]) -> NodeSocket:
+    switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+    switch_node.input_type = input_type
+
+    if isinstance(switch_value, NodeSocket):
+        node_tree.links.new(switch_value, switch_node.inputs['Switch'])
+    else:
+        switch_node.inputs['Switch'].default_value = switch_value
+
+    if isinstance(false_value, NodeSocket):
+        node_tree.links.new(false_value, switch_node.inputs['False'])
+    else:
+        switch_node.inputs['False'].default_value = false_value
+
+    if isinstance(true_value, NodeSocket):
+        node_tree.links.new(true_value, switch_node.inputs['True'])
+    else:
+        switch_node.inputs['True'].default_value = true_value
+
+    return switch_node.outputs['Output']
 
 
 def add_comparison_nodes(node_tree: NodeTree, data_type: str, operation: str, a: Union[int, float, NodeSocket], b: Union[int, float, NodeSocket]) -> NodeSocket:
@@ -804,3 +860,44 @@ def add_project_point_node(node_tree: NodeTree, vector_socket: NodeSocket, trans
     node_tree.links.new(vector_socket, project_point_node.inputs['Vector'])
     node_tree.links.new(transform_socket, project_point_node.inputs['Transform'])
     return project_point_node.outputs['Vector']
+
+
+def add_float_to_integer_node(node_tree: NodeTree, rounding_mode: str, float_socket: NodeSocket) -> NodeSocket:
+    float_to_integer_node = node_tree.nodes.new(type='FunctionNodeFloatToInt')
+    float_to_integer_node.rounding_mode = rounding_mode
+    node_tree.links.new(float_socket, float_to_integer_node.inputs['Float'])
+    return float_to_integer_node.outputs['Integer']
+
+
+def add_invert_matrix_node(node_tree: NodeTree, matrix_socket: NodeSocket) -> NodeSocket:
+    node = node_tree.nodes.new('FunctionNodeInvertMatrix')
+    node_tree.links.new(matrix_socket, node.inputs['Matrix'])
+    return node.outputs['Matrix']
+
+
+def add_transform_point_node(node_tree: NodeTree, vector_socket: NodeSocket, transform_socket: NodeSocket) -> NodeSocket:
+    node = node_tree.nodes.new('FunctionNodeTransformPoint')
+    node_tree.links.new(vector_socket, node.inputs['Vector'])
+    node_tree.links.new(transform_socket, node.inputs['Transform'])
+    return node.outputs['Vector']
+
+
+def add_node(node_tree: NodeTree, type: str, inputs: Iterable[Tuple[str, NodeSocket | None]] = None):
+    node = node_tree.nodes.new(type)
+    if inputs:
+        for key, socket in inputs:
+            node_tree.links.new(node.inputs[key], socket)
+    return node
+
+
+def add_group_node(node_tree: NodeTree, node_tree_function, inputs: Iterable[Tuple[str, NodeSocket | None]] = None, **kwargs) -> Node:
+    node = node_tree.nodes.new('GeometryNodeGroup')
+    node.node_tree = node_tree_function(**kwargs)
+    if inputs:
+        for key, socket in inputs:
+            node_tree.links.new(node.inputs[key], socket)
+    return node
+
+
+def add_position_input_node(node_tree: NodeTree) -> NodeSocket:
+    return add_node(node_tree, 'GeometryNodeInputPosition').outputs['Position']

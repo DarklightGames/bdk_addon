@@ -3,7 +3,7 @@ from bpy.types import PropertyGroup, Object, Context
 
 from ....constants import RADIUS_EPSILON
 from ....data import map_range_interpolation_type_items
-from ....property_group_helpers import add_curve_modifier_properties
+from ....property_group_helpers import CurveModifierMixin
 from ....units import meters_to_unreal
 from ..data import terrain_doodad_noise_type_items, terrain_doodad_geometry_source_items
 from ..builder import ensure_terrain_info_modifiers
@@ -39,7 +39,7 @@ def terrain_doodad_scatter_layer_name_search_cb(self, context: Context, edit_tex
 
 # TODO: make sure that when a scatter layer is deleted, the sculpt layer is updated to reflect that
 
-class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
+class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup, CurveModifierMixin):
     id: StringProperty(name='ID', default='')
     name: StringProperty(name='Name', default='Sculpt Layer')
     operation: EnumProperty(name='Operation', items=terrain_doodad_sculpt_layer_operation_items)
@@ -81,9 +81,6 @@ class BDK_PG_terrain_doodad_sculpt_layer(PropertyGroup):
 
     frozen_attribute_id: StringProperty(name='Frozen Attribute ID', default='')
 
-
-add_curve_modifier_properties(BDK_PG_terrain_doodad_sculpt_layer)
-# TODO: add noise settings in the same manner so that we can use the same settings
 
 classes = (
     BDK_PG_terrain_doodad_sculpt_layer,

@@ -5,7 +5,7 @@ from bpy.types import Context, PropertyGroup, Object
 
 from ....constants import RADIUS_EPSILON
 from ....data import map_range_interpolation_type_items
-from ....property_group_helpers import add_curve_modifier_properties
+from ....property_group_helpers import CurveModifierMixin
 from ....units import meters_to_unreal
 from ..builder import ensure_terrain_info_modifiers
 from ..data import terrain_doodad_noise_type_items, terrain_doodad_operation_items, terrain_doodad_geometry_source_items
@@ -83,7 +83,7 @@ def terrain_doodad_scatter_layer_name_search_cb(self, context: Context, edit_tex
     return [scatter_layer.name for scatter_layer in self.terrain_doodad_object.bdk.terrain_doodad.scatter_layers]
 
 
-class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
+class BDK_PG_terrain_doodad_paint_layer(PropertyGroup, CurveModifierMixin):
     id: StringProperty(name='ID', options={'HIDDEN'})
     name: StringProperty(name='Name', default='Paint Layer')
     operation: EnumProperty(name='Operation', items=terrain_doodad_operation_items, default='ADD')
@@ -140,9 +140,6 @@ class BDK_PG_terrain_doodad_paint_layer(PropertyGroup):
                                        search=terrain_doodad_scatter_layer_name_search_cb)
 
     frozen_attribute_id: StringProperty(name='Frozen Attribute ID', default='', options={'HIDDEN'})
-
-
-add_curve_modifier_properties(BDK_PG_terrain_doodad_paint_layer)
 
 
 classes = (

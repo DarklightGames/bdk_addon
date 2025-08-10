@@ -50,12 +50,11 @@ class BDK_OT_terrain_paint_layer_remove(Operator):
         if paint_layers_index < 0:
             return {'CANCELLED'}
 
-        # Remove color attribute.
-        mesh_data = cast(Mesh, terrain_info_object.data)
-        paint_layer_id = paint_layers[paint_layers_index].id
-        if paint_layer_id in mesh_data.color_attributes:
-            color_attribute = mesh_data.color_attributes[paint_layer_id]
-            mesh_data.color_attributes.remove(color_attribute)
+        paint_layer = paint_layers[paint_layers_index]
+        paint_layer_id = paint_layer.id
+
+        # Remove all the nodes for this paint layer.
+        remove_terrain_layer_nodes(terrain_info_object, paint_layer.nodes)
 
         paint_layers.remove(paint_layers_index)
 
@@ -467,14 +466,15 @@ def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node.type = type
 
     if type == 'PAINT':
-        mesh_data = cast(Mesh, terrain_info_object.data)
+        # mesh_data = cast(Mesh, terrain_info_object.data)
         # TODO: when we can paint non-color data, rewrite this!
         # Add the density map attribute to the TerrainInfo mesh.
-        attribute = mesh_data.attributes.new(node.id, 'BYTE_COLOR', domain='POINT')
-        vertex_count = len(attribute.data)
-        color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
-        color_data[:] = (0.0, 0.0, 0.0, 0.0)
-        attribute.data.foreach_set('color', color_data.flatten())
+        terrain_info_object.vertex_groups.new(name=node.id)
+        # attribute = mesh_data.attributes.get(node.id, None)
+        # vertex_count = len(attribute.data)
+        # color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
+        # color_data[:] = (0.0, 0.0, 0.0, 0.0)
+        # attribute.data.foreach_set('color', color_data.flatten())
     elif type == 'FIELD':
         mesh_data = cast(Mesh, terrain_info_object.data)
         mesh_data.attributes.new(node.id, 'FLOAT', domain='POINT')
@@ -485,6 +485,11 @@ def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     return node
 
 
+def remove_terrain_layer_nodes(terrain_info_object: Object, nodes):
+    for node_index in reversed(range(len(nodes))):
+        remove_terrain_layer_node(terrain_info_object, nodes, node_index)
+
+
 def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: int):
     node = nodes[nodes_index]
 
@@ -493,6 +498,10 @@ def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: i
         if node.id in mesh_data.attributes:
             attribute = mesh_data.attributes[node.id]
             mesh_data.attributes.remove(attribute)
+        # Remove the vertex group.
+        vertex_group = terrain_info_object.vertex_groups.get(node.id)
+        if vertex_group is not None:
+            terrain_info_object.vertex_groups.remove(vertex_group)
 
     nodes.remove(nodes_index)
 

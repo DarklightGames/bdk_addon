@@ -42,6 +42,7 @@ if 'bpy' in locals():
     importlib.reload(fluid_surface_ui)
 
     # Terrain
+    importlib.reload(terrain_sample)
     importlib.reload(terrain_properties)
     importlib.reload(terrain_context)
     importlib.reload(terrain_kernel)
@@ -153,6 +154,7 @@ else:
     from .terrain.doodad.scatter import builder as terrain_doodad_scatter_builder
     from .terrain.doodad.scatter import properties as terrain_doodad_scatter_properties
     from .terrain.doodad.scatter import operators as terrain_doodad_scatter_operators
+    from .terrain import terrain_sample as terrain_sample
 
     # Terrain Doodad
     from .terrain.doodad import properties as terrain_doodad_properties

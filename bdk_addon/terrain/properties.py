@@ -132,6 +132,7 @@ class BDK_PG_terrain_layer_node(PropertyGroup):
 
 
 # Add the children property to the node property group (this must be done after the class is defined).
+# This is because the parent/child relationship is a circular reference.
 BDK_PG_terrain_layer_node.__annotations__["parent"] = PointerProperty(name='Parent', type=BDK_PG_terrain_layer_node,
                                                                        options={'HIDDEN'})
 BDK_PG_terrain_layer_node.__annotations__["children"] = CollectionProperty(name='Children',
@@ -168,9 +169,8 @@ def terrain_paint_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_paint_layer'
     node = self.nodes[self.nodes_index]
     if node.type == 'PAINT':
         pass
-    mesh_data: Mesh = self.terrain_info_object.data
     node: 'BDK_PG_terrain_layer_node' = self.nodes[self.nodes_index]
-    set_active_color_index_for_terrain_layer_node(node, mesh_data)
+    set_active_color_index_for_terrain_layer_node(node, self.terrain_info_object)
 
 
 class BDK_PG_terrain_paint_layer(PropertyGroup):
@@ -277,16 +277,16 @@ def deco_layer_name_update_cb(self, context):
                 paint_layer.deco_layer_name = self.name
 
 
-def set_active_color_index_for_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', mesh_data: Mesh):
+def set_active_color_index_for_terrain_layer_node(node: 'BDK_PG_terrain_layer_node', terrain_info_object: Object):
     if node.type != 'PAINT':
         return
-    color_attribute_index = -1
-    for i, color_attribute in enumerate(mesh_data.color_attributes):
-        if color_attribute.name == node.id:
-            color_attribute_index = i
+    active_vertex_group_index = -1
+    for i, vertex_group in enumerate(terrain_info_object.vertex_groups):
+        if vertex_group.name == node.id:
+            active_vertex_group_index = i
             break
-    if mesh_data.color_attributes.active_color_index != color_attribute_index:
-        mesh_data.color_attributes.active_color_index = color_attribute_index
+    if terrain_info_object.vertex_groups.active_index != active_vertex_group_index:
+        terrain_info_object.vertex_groups.active_index = active_vertex_group_index
         # Push an undo state.
         # This is needed so that if the user selects a new layer, does some operation, and then does an undo,
         # it won't wipe out the active painting layer.
@@ -296,9 +296,8 @@ def set_active_color_index_for_terrain_layer_node(node: 'BDK_PG_terrain_layer_no
 def terrain_deco_layer_nodes_index_update_cb(self: 'BDK_PG_terrain_deco_layer', _: Context):
     if not self.terrain_info_object or self.nodes_index < 0:
         return
-    mesh_data: Mesh = self.terrain_info_object.data
     node: 'BDK_PG_terrain_layer_node' = self.nodes[self.nodes_index]
-    set_active_color_index_for_terrain_layer_node(node, mesh_data)
+    set_active_color_index_for_terrain_layer_node(node, self.terrain_info_object)
 
 
 class BDK_PG_terrain_deco_layer(PropertyGroup):

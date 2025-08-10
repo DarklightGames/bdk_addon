@@ -3,7 +3,7 @@ from bpy.props import EnumProperty, BoolProperty
 from bpy.types import UIList, Menu
 from fnmatch import fnmatch
 
-from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_build, \
+from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_blend_open, BDK_OT_repository_package_build, \
     BDK_OT_repository_purge_orphaned_assets, BDK_OT_repository_set_default
 from .properties import repository_package_status_enum_items
 from ..operators import BDK_OT_scene_repository_set
@@ -17,7 +17,7 @@ def filter_packages(self, packages) -> list[int]:
     if self.filter_name:
         # Filter name is non-empty.
         for i, package in enumerate(packages):
-            if not fnmatch(package.path, f'*{self.filter_name}*'):
+            if not fnmatch(package.path.lower(), f'*{self.filter_name.lower()}*'):
                 flt_flags[i] &= ~bitflag_filter_item
 
     # Invert filter flags for all items.
@@ -107,7 +107,8 @@ class BDK_MT_repository_special(Menu):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator(BDK_OT_repository_delete.bl_idname, icon='TRASH')
+        layout.operator(BDK_OT_repository_package_blend_open.bl_idname, icon='BLENDER')
+        layout.separator()
         layout.operator_menu_enum(BDK_OT_repository_cache_invalidate.bl_idname, 'mode', icon='FILE_REFRESH')
         layout.operator(BDK_OT_repository_purge_orphaned_assets.bl_idname, icon='X')
         layout.separator()
@@ -141,8 +142,9 @@ class BDK_MT_repositories_special(Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator(BDK_OT_scene_repository_set.bl_idname, text='Set Scene Repository', icon='SCENE_DATA')
-        layout.separator()
         layout.operator(BDK_OT_repository_set_default.bl_idname, text='Make Default Repository', icon='DISK_DRIVE')
+        layout.separator()
+        layout.operator(BDK_OT_repository_delete.bl_idname, icon='TRASH')
 
 
 class BDK_UL_repository_rules(UIList):

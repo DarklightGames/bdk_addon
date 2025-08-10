@@ -35,17 +35,32 @@ class ConfigParserMultiOpt(configparser.RawConfigParser):
         e = None  # None, or an exception
         for lineno, line in enumerate(fp, start=1):
             comment_start = None
+            # TODO: There is some sort of screw-up between Linux and Windows versions of configparser where Windows doesn't have `_prefixes`.
             # strip inline comments
-            for prefix in self._inline_comment_prefixes:
-                index = line.find(prefix)
-                if index == 0 or (index > 0 and line[index - 1].isspace()):
-                    comment_start = index
-                    break
+            if hasattr(self, '_prefixes'):
+                for prefix in self._prefixes.inline:
+                    index = line.find(prefix)
+                    if index == 0 or (index > 0 and line[index - 1].isspace()):
+                        comment_start = index
+                        break
+                # strip full line comments
+                for prefix in self._prefixes.full:
+                    if line.strip().startswith(prefix):
+                        comment_start = 0
+                        break
+            # strip inline comments
+            if hasattr(self, '_inline_comment_prefixes'):
+                for prefix in self._inline_comment_prefixes:
+                    index = line.find(prefix)
+                    if index == 0 or (index > 0 and line[index - 1].isspace()):
+                        comment_start = index
+                        break
             # strip full line comments
-            for prefix in self._comment_prefixes:
-                if line.strip().startswith(prefix):
-                    comment_start = 0
-                    break
+            if hasattr(self, '_comment_prefixes'):
+                for prefix in self._comment_prefixes:
+                    if line.strip().startswith(prefix):
+                        comment_start = 0
+                        break
             value = line[:comment_start].strip()
             if not value:
                 if self._empty_lines_in_values:

@@ -10,7 +10,7 @@ from bpy.props import StringProperty, IntProperty, EnumProperty, BoolProperty
 from bpy.types import Operator, Context, Event
 from bpy_extras.io_utils import ImportHelper
 
-from .kernel import Manifest, repository_runtime_update, ensure_repository_asset_library, \
+from .kernel import Manifest, get_repository_package_asset_path, repository_runtime_update, ensure_repository_asset_library, \
     ensure_default_repository_id, repository_asset_library_unlink, repository_remove, repository_cache_delete, \
     repository_metadata_delete, repository_package_build, get_repository_package_dependency_graph, \
     layered_topographical_sort, repository_package_export, is_game_directory_and_mod_valid, repository_metadata_write, \
@@ -127,6 +127,40 @@ class BDK_OT_repository_package_build(Operator):
 
         # Update the runtime information.
         repository_runtime_update(repository)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_repository_package_blend_open(Operator):
+    bl_idname = 'bdk.repository_package_blend_open'
+    bl_label = 'Open .blend File'
+    bl_description = 'Open the .blend file for the selected package in another Blender instance'
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        if not poll_has_repository_package_selected(context):
+            cls.poll_message_set('No package selected')
+            return False
+        return True
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+        package = repository.runtime.packages[repository.runtime.packages_index]
+
+        # Build the export path.
+        context.window_manager.progress_begin(0, 1)
+
+        asset_path = get_repository_package_asset_path(repository, package.path)
+
+        if not asset_path.is_file():
+            self.report({'ERROR'}, f'Could not open .blend file. File does not exist.')
+            return {'CANCELLED'}
+
+        import subprocess
+
+        subprocess.Popen([bpy.app.binary_path, asset_path])
 
         return {'FINISHED'}
 
@@ -480,7 +514,8 @@ class BDK_OT_repository_create(Operator):
     bl_options = {'INTERNAL', 'UNDO'}
 
     game_directory: StringProperty(name='Game Directory', subtype='DIR_PATH', description='The game\'s root directory')
-    mod: StringProperty(name='Mod', description='The name of the mod directory (optional)')
+    use_mod: BoolProperty(name='Use Mod', default=False, description='Use a mod directory')
+    mod: StringProperty(name='Mod', description='The name of the mod directory, relative to the game directory')
     use_custom_cache_directory: BoolProperty(name='Custom Cache Directory', default=False)
     use_custom_id: BoolProperty(name='Use Custom Identifier', default=False, description='Use a custom identifier for the repository. Do not use this unless you know what you are doing')
     custom_id: StringProperty(name='Custom ID', default='', description='Custom ID for the repository')
@@ -497,8 +532,14 @@ class BDK_OT_repository_create(Operator):
         flow = layout.grid_flow()
         flow.use_property_split = True
         flow.prop(self, 'game_directory')
-        flow.prop(self, 'mod')
         flow.prop(self, 'use_defaults')
+
+        mod_header, mod_panel = layout.panel_prop(self, 'use_mod')
+        mod_header.prop(self, 'use_mod', text='Mod')
+        if mod_panel is not None:
+            flow = mod_panel.grid_flow()
+            flow.use_property_split = True
+            flow.prop(self, 'mod', text='Mod Directory')
 
         advanced_header, advanced_panel = layout.panel('Advanced', default_closed=True)
         advanced_header.label(text='Advanced')
@@ -529,10 +570,12 @@ class BDK_OT_repository_create(Operator):
 
         repository_name = game_directory.name
 
-        if self.mod:
-            repository_name += f' ({self.mod})'
+        mod = self.mod if self.use_mod else ''
 
-        if not is_game_directory_and_mod_valid(self.game_directory, self.mod):
+        if mod:
+            repository_name += f' ({mod})'
+
+        if not is_game_directory_and_mod_valid(self.game_directory, mod):
             self.report({'ERROR'},
                         'Invalid game directory or mode configuration. Please check the values and try again.')
             return {'CANCELLED'}
@@ -540,7 +583,8 @@ class BDK_OT_repository_create(Operator):
         repository = addon_prefs.repositories.add()
 
         # By default, the ID should be generated from the mod name, or the game directory if no mod is specified.
-        repository_id = self.mod if self.mod else game_directory.name
+        repository_id = mod if mod else game_directory.name
+
         if self.use_custom_id:
             repository_id = self.custom_id
 
@@ -550,7 +594,7 @@ class BDK_OT_repository_create(Operator):
 
         repository.id = repository_id
         repository.game_directory = self.game_directory
-        repository.mod = self.mod
+        repository.mod = mod
         repository.name = repository_name
 
         # Check for `bdk-repository-default.json` file in the game directory, then the mod directory.
@@ -558,8 +602,8 @@ class BDK_OT_repository_create(Operator):
         repository_default_file_paths = [
             game_directory / 'bdk-default.json'
         ]
-        if self.mod:
-            repository_default_file_paths.append(game_directory / self.mod / 'bdk-default.json')
+        if mod:
+            repository_default_file_paths.append(game_directory / mod / 'bdk-default.json')
 
         for repository_default_file_paths in repository_default_file_paths:
             if not repository_default_file_paths.is_file():
@@ -638,7 +682,7 @@ class BDK_OT_repository_unlink(Operator):
 
 class BDK_OT_repository_delete(Operator):
     bl_idname = 'bdk.repository_delete'
-    bl_label = 'Delete Repository'
+    bl_label = 'Delete Repository...'
     bl_description = 'Remove the selected repository and delete all associated data. This operation cannot be undone'
     bl_options = {'INTERNAL', 'UNDO'}
 
@@ -844,6 +888,7 @@ class BDK_OT_repository_purge_orphaned_assets(Operator):
 classes = (
     BDK_OT_repository_scan,
     BDK_OT_repository_cache_delete,
+    BDK_OT_repository_package_blend_open,
     BDK_OT_repository_package_build,
     BDK_OT_repository_package_cache_invalidate,
     BDK_OT_repository_build_asset_library,

@@ -10,7 +10,8 @@ from itertools import chain
 from ...units import meters_to_unreal
 from ...node_helpers import ensure_interpolation_node_tree, add_operation_switch_nodes, \
     add_noise_type_switch_nodes, ensure_geometry_node_tree, ensure_input_and_output_nodes, \
-    add_geometry_node_switch_nodes, ensure_curve_modifier_node_tree, add_clamp_node
+    add_geometry_node_switch_nodes, ensure_curve_modifier_node_tree, add_clamp_node, add_comparison_nodes, \
+    add_switch_node
 from ..kernel import ensure_paint_layers, ensure_deco_layers
 from .kernel import get_terrain_doodad_scatter_layer_by_id
 from .sculpt.builder import ensure_sculpt_value_node_group
@@ -226,6 +227,10 @@ def ensure_distance_to_points_node_group() -> NodeTree:
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
+        # If the input points are empty, return infinity.
+        domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
+        domain_size_node.component = 'POINTCLOUD'
+
         position_node = node_tree.nodes.new(type='GeometryNodeInputPosition')
         separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
         geometry_proximity_node = node_tree.nodes.new(type='GeometryNodeProximity')
@@ -243,6 +248,7 @@ def ensure_distance_to_points_node_group() -> NodeTree:
         # Input
         node_tree.links.new(input_node.outputs['Is 3D'], switch_node.inputs['Switch'])
         node_tree.links.new(input_node.outputs['Points'], transform_geometry_node.inputs['Geometry'])
+        node_tree.links.new(input_node.outputs['Points'], domain_size_node.inputs['Geometry'])
 
         # Internal
         node_tree.links.new(separate_xyz_node.outputs['X'], combine_xyz_node.inputs['X'])
@@ -253,8 +259,14 @@ def ensure_distance_to_points_node_group() -> NodeTree:
         node_tree.links.new(position_node.outputs['Position'], separate_xyz_node.inputs['Vector'])
         node_tree.links.new(transform_geometry_node.outputs['Geometry'], geometry_proximity_node.inputs['Target'])
 
+        distance_socket = add_switch_node(node_tree, 'FLOAT',
+                                          add_comparison_nodes(node_tree, 'INT', 'EQUAL', domain_size_node.outputs['Point Count'], 0),
+                                          geometry_proximity_node.outputs['Distance'],
+                                          float('inf')
+                                          )
+
         # Output
-        node_tree.links.new(geometry_proximity_node.outputs['Distance'], output_node.inputs['Distance'])
+        node_tree.links.new(distance_socket, output_node.inputs['Distance'])
 
     return ensure_geometry_node_tree('BDK Distance to Points', items, build_function)
 
@@ -771,12 +783,6 @@ def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree,
     geometry_object_info_node.transform_space = 'RELATIVE'
     geometry_object_info_node.inputs[0].default_value = geometry_object
 
-    element_mode_integer_node = node_tree.nodes.new(type='FunctionNodeInputInt')
-    element_mode_integer_node.label = 'Element Mode'
-    add_doodad_sculpt_layer_driver(element_mode_integer_node, sculpt_layer, 'element_mode', 'integer')
-
-    element_mode_socket = element_mode_integer_node.outputs['Integer']
-
     sculpt_value_node = node_tree.nodes.new(type='GeometryNodeGroup')
     sculpt_value_node.node_tree = ensure_sculpt_value_node_group()
 
@@ -785,6 +791,11 @@ def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree,
     # planter object.
     match sculpt_layer.geometry_source:
         case 'DOODAD':
+            element_mode_integer_node = node_tree.nodes.new(type='FunctionNodeInputInt')
+            element_mode_integer_node.label = 'Element Mode'
+            add_doodad_sculpt_layer_driver(element_mode_integer_node, sculpt_layer, 'element_mode', 'integer')
+
+            element_mode_socket = element_mode_integer_node.outputs['Integer']
             distance_socket = add_distance_to_doodad_layer_nodes(node_tree, sculpt_layer, 'SCULPT',
                                                                  geometry_object_info_node, element_mode_socket)
         case 'SCATTER_LAYER':
@@ -1179,8 +1190,13 @@ def _ensure_terrain_doodad_attribute_modifier_node_group(
     return ensure_geometry_node_tree(name, items, build_function, should_force_build=True)
 
 
-def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: Set[str]) -> (
-NodeTree, Dict[str, str]):
+class DoodadBakeResult:
+    def __init__(self, attribute_map: Dict[str, str], bake_node_tree: NodeTree):
+        self.attribute_map = attribute_map
+        self.bake_node_tree = bake_node_tree
+
+
+def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: Set[str]) -> DoodadBakeResult:
     """
     Creates a node tree for baking a terrain doodad.
     :param terrain_doodad: The terrain doodad to make a baking node tree for.
@@ -1245,7 +1261,10 @@ NodeTree, Dict[str, str]):
 
         node_tree.links.new(geometry_socket, output_node.inputs['Geometry'])
 
-    return ensure_geometry_node_tree(uuid.uuid4().hex, items, build_function, should_force_build=True), attribute_map
+    return DoodadBakeResult(
+        attribute_map=attribute_map,
+        bake_node_tree=ensure_geometry_node_tree(uuid.uuid4().hex, items, build_function, should_force_build=True)
+    )
 
 
 def ensure_terrain_doodad_freeze_attribute_ids(terrain_doodad: 'BDK_PG_terrain_doodad'):

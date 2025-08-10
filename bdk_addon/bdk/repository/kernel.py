@@ -1,6 +1,7 @@
 import fnmatch
 from uuid import uuid5, NAMESPACE_OID
 from datetime import datetime
+import sys
 
 import bpy
 import os.path
@@ -418,7 +419,8 @@ def repository_remove(context: Context, repositories_index: int):
 def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> networkx.DiGraph:
     """
     Returns the dependency graph of the packages in the repository.
-    Note that cycles are removed from the graph by severing all the edges that create the cycle.
+    Note that cycles are removed from the graph by severing all the edges that create the cycle. This is done to ensure
+    that the graph is a Directed Acyclic Graph (DAG) which is required for topological sorting.
     Note that the names of the packages are converted to uppercase for comparison since Unreal packages (and all names
     in Unreal) are case-insensitive.
     """
@@ -450,17 +452,6 @@ def get_repository_package_dependency_graph(repository: BDK_PG_repository) -> ne
         graph.remove_edge(u, v)
 
     return graph
-
-
-def _get_build_order_from_package_dependency_graph(repository: BDK_PG_repository, graph: networkx.DiGraph) -> \
-        list[BDK_PG_repository_package]:
-    topographical_order = list(reversed(list(networkx.topological_sort(graph))))
-
-    # Create a dictionary of case-insensitive package names to the package objects.
-    package_name_to_package = {os.path.splitext(os.path.basename(package.path))[0].upper(): package for package in
-                               repository.runtime.packages}
-
-    return [package_name_to_package[package_name.upper()] for package_name in topographical_order]
 
 
 def layered_topographical_sort(graph: networkx.DiGraph) -> list[set]:
@@ -500,7 +491,13 @@ def get_addon_path() -> Path:
 
 
 def get_umodel_path() -> Path:
-    return get_addon_path() / 'bin' / 'umodel_64.exe'
+    match sys.platform:
+        case 'win32':
+            return get_addon_path() / 'bin' / 'umodel.exe'
+        case 'linux':
+            return get_addon_path() / 'bin' / 'umodel'
+        case _:
+            raise ValueError(f'Unhandled platform "{sys.platform}"')
 
 
 def build_cube_map(cube_map_file_path: Path, exports_directory: Path):
@@ -560,6 +557,10 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     package_build_directory = os.path.join(str(exports_directory),
                                            os.path.dirname(os.path.relpath(str(package_path), str(game_directory))))
     umodel_path = str(get_umodel_path())
+
+    if not os.access(umodel_path, os.X_OK):
+        raise PermissionError('umodel executable is not executable')
+
     args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"',
             f'-path="{repository.game_directory}"', str(package_path)]
     process = subprocess.run(args, capture_output=True)
@@ -623,6 +624,8 @@ def get_repository_package_catalog_id(repository: BDK_PG_repository, package_pat
 def repository_package_build(repository: BDK_PG_repository, package_path: str):
     # TODO: do not allow this if the package is not up-to-date.
     script_path = get_addon_path() / 'bin' / 'blend.py'
+
+    # TODO: Refactor this to have just one function that takes the repository and package as arguments.
     input_directory = get_repository_package_export_directory(repository, package_path)
     assets_directory = get_repository_package_asset_directory(repository, package_path)
     output_path = get_repository_package_asset_path(repository, package_path)

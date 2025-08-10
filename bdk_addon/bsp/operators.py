@@ -4,7 +4,7 @@ from mathutils import Vector, Matrix
 
 from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping, \
     ensure_bdk_level_visibility_modifier
-from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects
+from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects, humanize_time
 from .data import bsp_optimization_items, ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     POLY_FLAGS_ATTRIBUTE_NAME, BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, \
     MATERIAL_INDEX_ATTRIBUTE_NAME, READ_ONLY_ATTRIBUTE_NAME, bsp_surface_attributes
@@ -91,7 +91,7 @@ class BDK_OT_bsp_brush_add(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_bsp_brush_set_sort_order(Operator):
+class BDK_OT_bsp_brush_sort_order_set(Operator):
     bl_idname = 'bdk.set_sort_order'
     bl_label = 'Set BSP Sort Order'
     bl_description = 'Set the sort order of selected BSP brushes'
@@ -106,15 +106,17 @@ class BDK_OT_bsp_brush_set_sort_order(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_bsp_brush_set_poly_flags(Operator):
+brush_poly_flags_operation_items = (('SET', 'Set', ''), ('ADD', 'Add', ''), ('REMOVE', 'Remove', ''))
+
+
+class BDK_OT_bsp_brush_poly_flags_set(Operator):
     bl_idname = 'bdk.set_poly_flags'
     bl_label = 'Set BSP Poly Flags'
     bl_description = 'Set the poly flags of selected BSP brushes'
     bl_options = {'REGISTER', 'UNDO'}
 
     poly_flags: EnumProperty(name='Poly Flags', items=poly_flags_items, options={'ENUM_FLAG'})
-    operation: EnumProperty(name='Operation', items=(('SET', 'Set', ''), ('ADD', 'Add', ''), ('REMOVE', 'Remove', '')),
-                            default='SET')
+    operation: EnumProperty(name='Operation', items=brush_poly_flags_operation_items, default='SET')
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
@@ -384,11 +386,21 @@ def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> List[Tuple[BspBru
     bm = bmesh.new()
     bm.from_object(evaluated_obj, depsgraph)
 
-    for edge_index, edge in enumerate(bm.edges):
-        if not edge.is_manifold:
-            errors.append((BspBrushError.NOT_MANIFOLD, edge_index))
-        if not edge.is_convex:
-            errors.append((BspBrushError.NOT_CONVEX, edge_index))
+    poly_flags = obj.bdk.bsp_brush.poly_flags
+
+    should_check_manifold = poly_flags.isdisjoint({'PORTAL'})
+    if should_check_manifold:
+        for edge_index, edge in enumerate(bm.edges):
+            if not edge.is_manifold:
+                errors.append((BspBrushError.NOT_MANIFOLD, edge_index))
+                break
+
+    should_check_convex = poly_flags.isdisjoint({'PORTAL', 'SEMI_SOLID'})
+    if should_check_convex:
+        for edge_index, edge in enumerate(bm.edges):
+            if not edge.is_convex:
+                errors.append((BspBrushError.NOT_CONVEX, edge_index))
+                break
 
     # This value is copied from the BSP build code.
     # TODO: Have these constants available to import from bdk_py.
@@ -428,6 +440,7 @@ def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> List[Tuple[BspBru
     for face_index, face in enumerate(bm.faces):
         if _is_face_twisted(face):
             errors.append((BspBrushError.TWISTED_FACE, face_index))
+            break
 
     bm.free()
 
@@ -633,11 +646,7 @@ class BDK_OT_bsp_build(Operator):
     bl_description = 'Build the level'
     bl_options = {'REGISTER', 'UNDO', 'PRESET'}
 
-    bsp_optimization: EnumProperty(
-        name='Optimization',
-        items=bsp_optimization_items,
-        default='LAME',
-    )
+    bsp_optimization: EnumProperty(name='Optimization', items=bsp_optimization_items, default='LAME')
     bsp_balance: IntProperty(name='Balance', default=15, min=0, max=100, description='Balance of the BSP tree')
     bsp_portal_bias: IntProperty(name='Portal Bias', default=70, min=0, max=100, description='Portal cutting strength')
 
@@ -729,8 +738,9 @@ class BDK_OT_bsp_build(Operator):
 
         level_object = scene.bdk.level_object
 
-        # Apply the texturing to the brushes, if the option is enabled.
+        # Apply the texturing to the brushes.
         result = apply_level_to_brush_mapping(level_object)
+        brush_faces_textured_count = result.face_count
         for error in result.errors:
             self.report({'WARNING'}, str(error))
 
@@ -761,11 +771,12 @@ class BDK_OT_bsp_build(Operator):
 
         # Add the brushes to the level object.
         level_object.bdk.level.brushes.clear()
-        # TODO: We can now have multiple brushes with the same object. We must only add the object once, and only if it
-        #  is not part of an instance collection.
-        # TODO: this may even need to be done at the level of the data pointer.
-        concrete_brush_objects = filter(lambda x: len(x[1]) == 0, brush_objects)
-        for brush_index, (brush_object, _, _) in enumerate(concrete_brush_objects):
+
+        for brush_index, (brush_object, instance_collections, _) in enumerate(brush_objects):
+            is_instanced_brush = len(instance_collections) > 0
+            if is_instanced_brush:
+                # Skip brushes that are instanced, as we cannot change their texturing.
+                continue
             level_brush = level_object.bdk.level.brushes.add()
             level_brush.index = brush_index
             level_brush.brush_object = brush_object
@@ -850,6 +861,12 @@ class BDK_OT_bsp_build(Operator):
                           )
 
             brushes.append(brush)
+
+        if not brushes:
+            self.report({'WARNING'}, 'No brushes to build')
+            return {'CANCELLED'}
+
+        # TODO: Display a warning if the first brush's operation is not a subtraction.
 
         level = level_object.bdk.level
         level.performance.object_serialization_duration = time.time() - timer
@@ -1004,8 +1021,7 @@ class BDK_OT_bsp_build(Operator):
         end_time = time.time()
         duration = end_time - start_time
 
-        # TODO: humanize the duration.
-        self.report({'INFO'}, f'Level built in {duration:.4f} seconds')
+        self.report({'INFO'}, f'Level built in {humanize_time(duration)} | {brush_faces_textured_count} brush faces changed')
 
         for region in context.area.regions:
             region.tag_redraw()
@@ -1129,8 +1145,8 @@ classes = (
     BDK_OT_bsp_brush_operation_toggle,
     BDK_OT_bsp_brush_select_similar,
     BDK_OT_bsp_brush_select_with_poly_flags,
-    BDK_OT_bsp_brush_set_poly_flags,
-    BDK_OT_bsp_brush_set_sort_order,
+    BDK_OT_bsp_brush_poly_flags_set,
+    BDK_OT_bsp_brush_sort_order_set,
     BDK_OT_bsp_brush_snap_to_grid,
     BDK_OT_bsp_build,
     BDK_OT_convert_to_bsp_brush,

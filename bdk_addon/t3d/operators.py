@@ -94,88 +94,84 @@ class TerrainDoodadToT3DConverter(ObjectToT3DConverter):
     def can_convert(self, obj: Object) -> bool:
         return obj.bdk.type == 'TERRAIN_DOODAD'
 
+    @staticmethod
+    def convert_scatter_layer_to_t3d_objects(context, scatter_layer):
+        # Get evaluated mesh data for the seed object.
+        mesh_data = scatter_layer.seed_object.evaluated_get(context.evaluated_depsgraph_get()).data
+        vertex_count = len(mesh_data.vertices)
+
+        # Position
+        attribute = mesh_data.attributes['position']
+        position_data = [0.0] * vertex_count * 3
+        attribute.data.foreach_get('vector', position_data)
+        positions = numpy.array(position_data).reshape((vertex_count, 3))
+
+        # Rotation
+        attribute = mesh_data.attributes['rotation']
+        rotation_data = [0.0] * vertex_count * 3
+        attribute.data.foreach_get('vector', rotation_data)
+        rotations = numpy.array(rotation_data).reshape((vertex_count, 3))
+
+        # Scale
+        attribute = mesh_data.attributes['scale']
+        scale_data = [0.0] * vertex_count * 3
+        attribute.data.foreach_get('vector', scale_data)
+        scales = numpy.array(scale_data).reshape((vertex_count, 3))
+
+        # Object Index
+        attribute = mesh_data.attributes['object_index']
+        object_index_data = [0] * vertex_count
+        attribute.data.foreach_get('value', object_index_data)
+        object_indices = numpy.array(object_index_data)
+
+        for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
+            matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(
+                scale).to_4x4()
+            scatter_layer_object = scatter_layer.objects[object_index]
+            scatter_layer_object_object = scatter_layer.objects[object_index].object
+
+            actor = T3DObject(type_name='Actor')
+            actor.properties['Name'] = scatter_layer_object_object.name
+            actor.properties['StaticMesh'] = scatter_layer_object_object.bdk.package_reference
+
+            # Skin Overrides
+            for material_slot_index, material_slot in enumerate(scatter_layer_object_object.material_slots):
+                if material_slot.link == 'OBJECT' \
+                        and material_slot.material is not None \
+                        and material_slot.material.bdk.package_reference is not None:
+                    actor.properties[f'Skins({material_slot_index})'] = material_slot.material.bdk.package_reference
+
+            location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
+            actor.properties['Location'] = location
+            actor.properties['Rotation'] = rotation
+            actor.properties['DrawScale3D'] = scale
+
+            actor_properties = scatter_layer_object.actor_properties
+            actor.properties['Class'] = scatter_layer_object_object['Class']
+            if actor_properties.should_use_cull_distance:
+                actor.properties['CullDistance'] = actor_properties.cull_distance
+
+            collision_flags = actor_properties.collision_flags
+            actor.properties['bBlockActors'] = 'BLOCK_ACTORS' in collision_flags
+            actor.properties['bBlockKarma'] = 'BLOCK_KARMA' in collision_flags
+            actor.properties['bBlockNonZeroExtentTraces'] = 'BLOCK_NON_ZERO_EXTENT_TRACES' in collision_flags
+            actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
+            actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
+
+            actor.properties['bAcceptsProjectors'] = actor_properties.accepts_projectors
+
+            # TODO: Individual actors should also have their own group. Just append the groups.
+            #  Also make sure that there are no commas, since it's used as a delimiter.
+            if scatter_layer.actor_group != '':
+                actor.properties['Group'] = scatter_layer.actor_group
+
+            yield actor
+
     def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
-        # Look up the seed object for the terrain doodad.
-        depsgraph = context.evaluated_depsgraph_get()
         terrain_doodad = obj.bdk.terrain_doodad
-
         actors = []
-
-        for scatter_layer in terrain_doodad.scatter_layers:
-            if scatter_layer.mute:
-                continue
-
-            # Get evaluated mesh data for the seed object.
-            mesh_data = scatter_layer.seed_object.evaluated_get(depsgraph).data
-            vertex_count = len(mesh_data.vertices)
-
-            # Position
-            attribute = mesh_data.attributes['position']
-            position_data = [0.0] * vertex_count * 3
-            attribute.data.foreach_get('vector', position_data)
-            positions = numpy.array(position_data).reshape((vertex_count, 3))
-
-            # Rotation
-            attribute = mesh_data.attributes['rotation']
-            rotation_data = [0.0] * vertex_count * 3
-            attribute.data.foreach_get('vector', rotation_data)
-            rotations = numpy.array(rotation_data).reshape((vertex_count, 3))
-
-            # Scale
-            attribute = mesh_data.attributes['scale']
-            scale_data = [0.0] * vertex_count * 3
-            attribute.data.foreach_get('vector', scale_data)
-            scales = numpy.array(scale_data).reshape((vertex_count, 3))
-
-            # Object Index
-            attribute = mesh_data.attributes['object_index']
-            object_index_data = [0] * vertex_count
-            attribute.data.foreach_get('value', object_index_data)
-            object_indices = numpy.array(object_index_data)
-
-            for position, rotation, scale, object_index in zip(positions, rotations, scales, object_indices):
-                matrix = Matrix.Translation(position) @ Euler(rotation).to_matrix().to_4x4() @ Matrix.Diagonal(
-                    scale).to_4x4()
-                scatter_layer_object = scatter_layer.objects[object_index]
-                static_mesh_object = scatter_layer.objects[object_index].object
-
-                actor = T3DObject(type_name='Actor')
-                actor.properties['Name'] = static_mesh_object.name
-                actor.properties['StaticMesh'] = static_mesh_object.bdk.package_reference
-
-                # Skin Overrides
-                for material_slot_index, material_slot in enumerate(static_mesh_object.material_slots):
-                    if material_slot.link == 'OBJECT' \
-                            and material_slot.material is not None \
-                            and material_slot.material.bdk.package_reference is not None:
-                        actor.properties[f'Skins({material_slot_index})'] = material_slot.material.bdk.package_reference
-
-                location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
-                actor.properties['Location'] = location
-                actor.properties['Rotation'] = rotation
-                actor.properties['DrawScale3D'] = scale
-
-                actor_properties = scatter_layer_object.actor_properties
-                actor.properties['Class'] = actor_properties.class_name
-                if actor_properties.should_use_cull_distance:
-                    actor.properties['CullDistance'] = actor_properties.cull_distance
-
-                collision_flags = actor_properties.collision_flags
-                actor.properties['bBlockActors'] = 'BLOCK_ACTORS' in collision_flags
-                actor.properties['bBlockKarma'] = 'BLOCK_KARMA' in collision_flags
-                actor.properties['bBlockNonZeroExtentTraces'] = 'BLOCK_NON_ZERO_EXTENT_TRACES' in collision_flags
-                actor.properties['bBlockZeroExtentTraces'] = 'BLOCK_ZERO_EXTENT_TRACES' in collision_flags
-                actor.properties['bCollideActors'] = 'COLLIDE_ACTORS' in collision_flags
-
-                actor.properties['bAcceptsProjectors'] = actor_properties.accepts_projectors
-
-                # TODO: Individual actors should also have their own group. Just append the groups.
-                #  Also make sure that there are no commas, since it's used as a delimiter.
-                if scatter_layer.actor_group != '':
-                    actor.properties['Group'] = scatter_layer.actor_group
-
-                actors.append(actor)
-
+        for scatter_layer in filter(lambda x: not x.mute, terrain_doodad.scatter_layers):
+            actors.extend(self.convert_scatter_layer_to_t3d_objects(context, scatter_layer))
         return actors
 
 
@@ -455,8 +451,9 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         else:
             self.report({'INFO'}, f'Copied {len(copy_actors)} actors to clipboard ({humanize_size(size)})')
 
-        # Copy the string to the clipboard.
-        bpy.context.window_manager.clipboard = string_io.read()
+        contents = string_io.read()
+
+        bpy.context.window_manager.clipboard = contents
 
         return {'FINISHED'}
 
