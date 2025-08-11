@@ -25,8 +25,8 @@ platforms = ["windows-x64", "linux-x64"]
 wheels = [
   "./wheels/bdk_py-0.1.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
   "./wheels/bdk_py-0.1.1-cp311-cp311-win_amd64.whl",
-  "./wheels/t3dpy-0.1.7-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-  "./wheels/t3dpy-0.1.7-cp311-cp311-win_amd64.whl",
+  "./wheels/t3dpy-0.1.8-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+  "./wheels/t3dpy-0.1.8-cp311-cp311-win_amd64.whl",
   "./wheels/networkx-3.3-py3-none-any.whl",
 ]
 
