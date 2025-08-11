@@ -197,7 +197,6 @@ def ensure_bdk_terrain_quad_triangle() -> NodeTree:
         ('OUTPUT', 'NodeSocketVector', 'A'),
         ('OUTPUT', 'NodeSocketVector', 'B'),
         ('OUTPUT', 'NodeSocketVector', 'C'),
-        ('OUTPUT', 'NodeSocketVector', 'D'),
     )
 
     def build_function(nt: NodeTree):
@@ -212,7 +211,7 @@ def ensure_bdk_terrain_quad_triangle() -> NodeTree:
         is_edge_turned = inputs['Is Edge Turned']
 
         # A
-        nt.links.new(outputs['A'], add_switch_node(nt, 'VECTOR', is_edge_turned, b, a))
+        nt.links.new(outputs['A'], add_switch_node(nt, 'VECTOR', is_edge_turned, a, b))
         
         # B
         nt.links.new(
@@ -230,8 +229,8 @@ def ensure_bdk_terrain_quad_triangle() -> NodeTree:
             add_switch_node(nt,
                             'VECTOR', 
                             is_edge_turned,
-                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'GREATER_THAN', qu, qv), d, b),
-                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', add_math_operation_nodes(nt, 'SUBTRACT', (1.0, qu)), qv), c, d)
+                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'GREATER_THAN', qu, qv), c, d),
+                            add_switch_node(nt, 'VECTOR', add_comparison_nodes(nt, 'FLOAT', 'LESS_THAN', add_math_operation_nodes(nt, 'SUBTRACT', (1.0, qu)), qv), a, c)
         ))
 
     return ensure_geometry_node_tree('BDK Terrain Quad Triangle', items, build_function)
