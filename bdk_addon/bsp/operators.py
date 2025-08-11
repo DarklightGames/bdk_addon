@@ -822,7 +822,7 @@ class BDK_OT_bsp_build(Operator):
             # Transform the origin and texture vectors to world-space.
             # TODO: extract this to a function so we can re-use it in the remapping operator.
 
-            point_transform_matrix = matrix_world @ brush_object.matrix_local
+            point_transform_matrix = matrix_world
             translation, rotation, scale = point_transform_matrix.decompose()
             vector_transform_matrix = rotation.to_matrix().to_4x4() @ Matrix.Diagonal(scale).inverted().to_4x4()
 
