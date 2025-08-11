@@ -62,6 +62,7 @@ class BDK_OT_t3d_import_from_file(Operator, ImportHelper):
     filter_glob: StringProperty(default='*.t3d', options={'HIDDEN'})
     filepath: StringProperty(
         name='File Path',
+        subtype='FILE_PATH',
         description='File path used for importing the T3DMap file',
         maxlen=1024,
         default='')

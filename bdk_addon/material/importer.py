@@ -874,6 +874,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
     filter_glob: StringProperty(default='*.props.txt', options={'HIDDEN'})
     filepath: StringProperty(
         name='File Path',
+        subtype='FILE_PATH',
         description='File path used for importing the PSA file',
         maxlen=1024,
         default='')
