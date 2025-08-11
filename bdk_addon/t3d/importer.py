@@ -220,7 +220,7 @@ def poly_list_to_mesh(context: Context, name: str, poly_list: T3dObject, pre_piv
     texture_v_attribute.data.foreach_set('vector', np.array(texture_vs).flatten())
 
     poly_flags_attribute = mesh_data.attributes.new(POLY_FLAGS_ATTRIBUTE_NAME, 'INT', 'FACE')
-    poly_flags_attribute.data.foreach_set('value', np.array(poly_flags).flatten())
+    poly_flags_attribute.data.foreach_set('value', np.array(poly_flags).astype(np.int32).flatten())
 
     return mesh_data
 
