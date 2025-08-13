@@ -3,6 +3,7 @@ import uuid
 import bpy
 from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
 
+from ....terrain.curve_to_equidistant_points import ensure_curve_to_equidistant_points_node_tree
 from ...terrain_sample import ensure_bdk_terrain_sample_node_tree
 from ....helpers import ensure_name_unique
 from ....node_helpers import add_group_node, add_position_input_node, ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
@@ -600,7 +601,7 @@ def ensure_fence_point_tangent_and_normal_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Fence Point Tangent and Normal', inputs, build_function)
 
 
-def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
+def ensure_bdk_curve_to_equidistant_points_node_tree() -> NodeTree:
     items = (
         ('INPUT', 'NodeSocketGeometry', 'Curve'),
         ('INPUT', 'NodeSocketFloat', 'Spacing Length'),
@@ -613,10 +614,7 @@ def ensure_curve_to_equidistant_points_node_tree() -> NodeTree:
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         def add_fence_mode_spline_loop_nodes(node_tree: NodeTree, loop_sockets: CurveSplineLoopSockets):
-            curve_to_points_node = node_tree.nodes.new(type='GeometryNodeCurveToPoints')
-            # TODO: This "EQUIDISTANT" mode was implemented in the BDK fork. Reimplement it in native nodes.
-            # curve_to_points_node.mode = 'EQUIDISTANT'
-            curve_to_points_node.mode = 'LENGTH'
+            curve_to_points_node = add_group_node(node_tree, ensure_curve_to_equidistant_points_node_tree)
 
             domain_size_node = node_tree.nodes.new(type='GeometryNodeAttributeDomainSize')
             domain_size_node.component = 'POINTCLOUD'
@@ -735,7 +733,7 @@ def ensure_curve_to_points_node_tree() -> NodeTree:
         curve_to_points_node.mode = 'LENGTH'
 
         curve_to_equidistant_points_node = node_tree.nodes.new(type='GeometryNodeGroup')
-        curve_to_equidistant_points_node.node_tree = ensure_curve_to_equidistant_points_node_tree()
+        curve_to_equidistant_points_node.node_tree = ensure_bdk_curve_to_equidistant_points_node_tree()
 
         points_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         points_switch_node.input_type = 'GEOMETRY'
