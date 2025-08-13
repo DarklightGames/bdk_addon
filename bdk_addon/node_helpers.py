@@ -700,17 +700,17 @@ def add_switch_node(node_tree: NodeTree, input_type: str, switch_value: Union[bo
 
     if isinstance(switch_value, NodeSocket):
         node_tree.links.new(switch_value, switch_node.inputs['Switch'])
-    else:
+    elif switch_node is not None:
         switch_node.inputs['Switch'].default_value = switch_value
 
     if isinstance(false_value, NodeSocket):
         node_tree.links.new(false_value, switch_node.inputs['False'])
-    else:
+    elif false_value is not None:
         switch_node.inputs['False'].default_value = false_value
 
     if isinstance(true_value, NodeSocket):
         node_tree.links.new(true_value, switch_node.inputs['True'])
-    else:
+    elif true_value is not None:
         switch_node.inputs['True'].default_value = true_value
 
     return switch_node.outputs['Output']
@@ -882,11 +882,16 @@ def add_transform_point_node(node_tree: NodeTree, vector_socket: NodeSocket, tra
     return node.outputs['Vector']
 
 
-def add_node(node_tree: NodeTree, type: str, inputs: Iterable[Tuple[str, NodeSocket | None]] = None):
+def add_node(node_tree: NodeTree, type: str, inputs: Iterable[Tuple[str, NodeSocket | int | float | None]] = None, **kwargs):
     node = node_tree.nodes.new(type)
     if inputs:
-        for key, socket in inputs:
-            node_tree.links.new(node.inputs[key], socket)
+        for key, input in inputs:
+            if isinstance(input, NodeSocket):
+                node_tree.links.new(node.inputs[key], input)
+            else:
+                node.inputs[key].default_value = input
+    for name, value in kwargs.items():
+        setattr(node, name, value)
     return node
 
 
@@ -901,3 +906,15 @@ def add_group_node(node_tree: NodeTree, node_tree_function, inputs: Iterable[Tup
 
 def add_position_input_node(node_tree: NodeTree) -> NodeSocket:
     return add_node(node_tree, 'GeometryNodeInputPosition').outputs['Position']
+
+
+def add_domain_size_node(node_tree: NodeTree, component: str, geometry: NodeSocket, output_socket_name: str) -> NodeSocket:
+    return add_node(node_tree, 'GeometryNodeAttributeDomainSize', [('Geometry', geometry)], component=component).outputs[output_socket_name]
+
+
+def join_geometry(node_tree: NodeTree, sockets: Iterable[NodeSocket]) -> NodeSocket:
+    node = add_node(node_tree, 'GeometryNodeJoinGeometry')
+    # For some reason, geometry joining is done in reverse order.
+    for socket in reversed(sockets):
+        node_tree.links.new(socket, node.inputs['Geometry'])
+    return node.outputs['Geometry']

@@ -50,6 +50,7 @@ if 'bpy' in locals():
     importlib.reload(terrain_exporter)
     importlib.reload(terrain_operators)
     importlib.reload(terrain_ui)
+    importlib.reload(curve_to_equidistant_points) # TODO: move elsewhere
 
     # Terrain Doodad Paint
     importlib.reload(terrain_doodad_paint_properties)
@@ -155,6 +156,7 @@ else:
     from .terrain.doodad.scatter import properties as terrain_doodad_scatter_properties
     from .terrain.doodad.scatter import operators as terrain_doodad_scatter_operators
     from .terrain import terrain_sample as terrain_sample
+    from .terrain import curve_to_equidistant_points as curve_to_equidistant_points
 
     # Terrain Doodad
     from .terrain.doodad import properties as terrain_doodad_properties
