@@ -1,8 +1,8 @@
-# bdk_addon
-
 ![bdk-logo-02](https://github.com/DarklightGames/bdk_addon/assets/5035660/c7d1d277-2c85-4e6f-8e9b-2afb0a658235)
 
 The Blender addon for the BDK (Blender Development Kit) project. The project is currently in a usable state for both Linux and Windows, although some features are not completed.
+
+Please follow the [Installation](https://github.com/DarklightGames/bdk_addon/wiki/Installation) guide to get started!
 
 # Motivation
 The primary motivation behind the BDK is to provide level artists a stable, feature-rich alternative to the Unreal SDK for creating maps for Darkest Hour: Europe '44-'45. There were two overarching reasons for doing so:
