@@ -144,9 +144,9 @@ class BDK_PG_level_statistics(PropertyGroup):
 
 
 class BDK_PG_level_visibility(PropertyGroup):
-    fake_backdrop: BoolProperty(name='Fake Backdrop', default=True)
-    invisible: BoolProperty(name='Invisible', default=True)
-    portal: BoolProperty(name='Portal', default=True)
+    fake_backdrop: BoolProperty(name='Fake Backdrop', default=False)
+    invisible: BoolProperty(name='Invisible', default=False)
+    portal: BoolProperty(name='Portal', default=False)
 
 
 class BDK_PG_level(PropertyGroup):
