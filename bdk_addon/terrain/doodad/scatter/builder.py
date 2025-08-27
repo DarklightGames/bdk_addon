@@ -59,12 +59,16 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
     # The places the "seeds" in the preliminary spots, before they are placed
     if scatter_layer.planter_object is None:
         scatter_layer.planter_object = create_scatter_layer_seed_object()
+        scatter_layer.planter_object.hide_viewport = True
+        scatter_layer.planter_object.hide_render = True
         seed_and_sprout_collection.objects.link(scatter_layer.planter_object)
 
     # Create the seed object. This is the object that will have vertices with instance attributes scattered on it.
     # This will be used by the sprout object, but also by the T3D exporter.
     if scatter_layer.seed_object is None:
         scatter_layer.seed_object = create_scatter_layer_seed_object()
+        scatter_layer.planter_object.hide_viewport = True
+        scatter_layer.planter_object.hide_render = True
         seed_and_sprout_collection.objects.link(scatter_layer.seed_object)
 
     # Create the sprout object. This is the object that will create the instances from the seed object.
