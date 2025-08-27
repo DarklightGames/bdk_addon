@@ -4,9 +4,8 @@ from bpy.props import CollectionProperty, IntProperty, BoolProperty
 from .repository.properties import BDK_PG_repository
 from .repository.ui import BDK_UL_repositories, BDK_UL_repository_packages, BDK_MT_repository_special, \
     BDK_MT_repository_add, BDK_MT_repository_remove, BDK_UL_repository_rules, BDK_MT_repositories_special
-from ..bdk.operators import BDK_OT_scene_repository_set
-from ..bdk.repository.operators import BDK_OT_repository_set_default, BDK_OT_repository_scan, \
-    BDK_OT_repository_build_asset_library, BDK_OT_repository_package_cache_invalidate, BDK_OT_repository_rule_add, \
+from ..bdk.repository.operators import BDK_OT_repository_scan, \
+    BDK_OT_repository_build_asset_library, BDK_OT_repository_rule_add, \
     BDK_OT_repository_rule_remove, BDK_OT_repository_rule_move
 
 from bpy.props import StringProperty
@@ -99,20 +98,20 @@ class BdkAddonPreferences(AddonPreferences):
 
                     col.menu(BDK_MT_repository_special.bl_idname, icon='DOWNARROW_HLT', text='')
 
-                    rules_header, rules_panel = repositories_panel.panel('Rules', default_closed=True)
-                    rules_header.label(text='Rules')
+                rules_header, rules_panel = repositories_panel.panel('Rules', default_closed=True)
+                rules_header.label(text='Rules')
 
-                    if rules_panel is not None:
-                        row = rules_panel.row()
-                        row.template_list(BDK_UL_repository_rules.bl_idname, '', repository, 'rules', repository, 'rules_index', rows=3)
-                        col = row.column(align=True)
-                        col.operator(BDK_OT_repository_rule_add.bl_idname, icon='ADD', text='')
-                        col.operator(BDK_OT_repository_rule_remove.bl_idname, icon='REMOVE', text='')
-                        col.separator()
-                        op = col.operator(BDK_OT_repository_rule_move.bl_idname, icon='TRIA_UP', text='')
-                        op.direction = 'UP'
-                        op = col.operator(BDK_OT_repository_rule_move.bl_idname, icon='TRIA_DOWN', text='')
-                        op.direction = 'DOWN'
+                if rules_panel is not None:
+                    row = rules_panel.row()
+                    row.template_list(BDK_UL_repository_rules.bl_idname, '', repository, 'rules', repository, 'rules_index', rows=3)
+                    col = row.column(align=True)
+                    col.operator(BDK_OT_repository_rule_add.bl_idname, icon='ADD', text='')
+                    col.operator(BDK_OT_repository_rule_remove.bl_idname, icon='REMOVE', text='')
+                    col.separator()
+                    op = col.operator(BDK_OT_repository_rule_move.bl_idname, icon='TRIA_UP', text='')
+                    op.direction = 'UP'
+                    op = col.operator(BDK_OT_repository_rule_move.bl_idname, icon='TRIA_DOWN', text='')
+                    op.direction = 'DOWN'
 
                 paths_header, paths_panel = repositories_panel.panel('Paths', default_closed=True)
                 paths_header.label(text='Paths')
