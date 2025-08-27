@@ -28,11 +28,14 @@ def poll_has_repository_selected(context):
             0 <= addon_prefs.repositories_index < len(addon_prefs.repositories))
 
 
-def poll_has_repository_package_selected(context):
+def poll_has_repository_package_selected(cls, context) -> bool:
     addon_prefs = get_addon_preferences(context)
-    return (poll_has_repository_selected(context) and
+    result = (poll_has_repository_selected(context) and
             0 <= addon_prefs.repositories[addon_prefs.repositories_index].runtime.packages_index < len(
                 addon_prefs.repositories[addon_prefs.repositories_index].runtime.packages))
+    if not result:
+        cls.poll_message_set('No package selected')
+    return result
 
 
 def poll_has_repository_rule_selected(context):
@@ -102,10 +105,7 @@ class BDK_OT_repository_package_build(Operator):
 
     @classmethod
     def poll(cls, context):
-        if not poll_has_repository_package_selected(context):
-            cls.poll_message_set('No package selected')
-            return False
-        return True
+        return poll_has_repository_package_selected(cls, context)
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
@@ -131,6 +131,41 @@ class BDK_OT_repository_package_build(Operator):
         return {'FINISHED'}
 
 
+repository_rule_type_enum_items = (
+    ('EXCLUDE', 'Exclude', 'Ignore the package'),
+    ('INCLUDE', 'Include', 'Include the package'),
+)
+
+class BDK_OT_repository_rule_package_add(Operator):
+    bl_idname = 'bdk.repository_package_rule_add'
+    bl_label = 'Add Include'
+    bl_description = ''
+    bl_options = {'INTERNAL'}
+
+    rule_type: EnumProperty(items=repository_rule_type_enum_items, name='Rule Type')
+
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_package_selected(cls, context)
+
+    def execute(self, context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
+        package = repository.runtime.packages[repository.runtime.packages_index]
+
+        rule = repository.rules.add()
+        rule.repository_id = repository.id
+        rule.type = self.rule_type
+        rule.pattern = package.path
+
+        repository_metadata_write(repository)
+        repository_runtime_packages_update_rule_exclusions(repository)
+
+        tag_redraw_all_windows(context)
+
+        return {'FINISHED'}
+
+
 class BDK_OT_repository_package_blend_open(Operator):
     bl_idname = 'bdk.repository_package_blend_open'
     bl_label = 'Open .blend File'
@@ -139,10 +174,7 @@ class BDK_OT_repository_package_blend_open(Operator):
 
     @classmethod
     def poll(cls, context):
-        if not poll_has_repository_package_selected(context):
-            cls.poll_message_set('No package selected')
-            return False
-        return True
+        return poll_has_repository_package_selected(cls, context)
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
@@ -713,16 +745,22 @@ class BDK_OT_repository_set_default(Operator):
     bl_idname = 'bdk.repository_set_default'
     bl_label = 'Set Default Repository'
     bl_description = 'Set the default repository to use when the addon is loaded'
-    bl_options = {'INTERNAL', 'UNDO'}
+    bl_options = {'INTERNAL'}
 
-    def execute(self, context):
+    @classmethod
+    def poll(cls, context: Context):
         addon_prefs = get_addon_preferences(context)
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
+        if addon_prefs.default_repository_id == repository.id:
+            cls.poll_message_set('Repository is already the default')
+            return False
+        return True
 
+    def execute(self, context: Context):
+        addon_prefs = get_addon_preferences(context)
+        repository = addon_prefs.repositories[addon_prefs.repositories_index]
         addon_prefs.default_repository_id = repository.id
-
         self.report({'INFO'}, f'Set default repository to {repository.name}')
-
         return {'FINISHED'}
 
 
@@ -800,6 +838,7 @@ class BDK_OT_repository_rule_move(Operator):
                 repository.rules_index += 1
 
         repository_metadata_write(repository)
+        repository_runtime_packages_update_rule_exclusions(repository)
 
         tag_redraw_all_windows(context)
 
@@ -891,6 +930,7 @@ classes = (
     BDK_OT_repository_package_blend_open,
     BDK_OT_repository_package_build,
     BDK_OT_repository_package_cache_invalidate,
+    BDK_OT_repository_rule_package_add,
     BDK_OT_repository_build_asset_library,
     BDK_OT_repository_cache_invalidate,
     BDK_OT_repository_purge_orphaned_assets,

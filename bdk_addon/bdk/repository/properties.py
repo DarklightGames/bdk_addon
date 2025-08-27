@@ -34,6 +34,8 @@ repository_rule_type_enum_items = (
                                                    'relative to the repository cache directory'),
 )
 
+# TODO: one of these things is not like the other! move asset directories to its own thing.
+
 
 def repository_rule_mute_update_cb(self, context):
     from .kernel import repository_runtime_packages_update_rule_exclusions, repository_metadata_write

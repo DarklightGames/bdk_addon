@@ -1,10 +1,10 @@
 import bpy
 from bpy.props import EnumProperty, BoolProperty
-from bpy.types import UIList, Menu
+from bpy.types import UIList, Menu, UILayout
 from fnmatch import fnmatch
 
 from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_blend_open, BDK_OT_repository_package_build, \
-    BDK_OT_repository_purge_orphaned_assets, BDK_OT_repository_set_default
+    BDK_OT_repository_purge_orphaned_assets, BDK_OT_repository_set_default, BDK_OT_repository_rule_package_add
 from .properties import repository_package_status_enum_items
 from ..operators import BDK_OT_scene_repository_set
 from ...helpers import get_addon_preferences
@@ -113,6 +113,8 @@ class BDK_MT_repository_special(Menu):
         layout.operator(BDK_OT_repository_purge_orphaned_assets.bl_idname, icon='X')
         layout.separator()
         layout.operator(BDK_OT_repository_package_build.bl_idname, text='Build Selected Package', icon='BLENDER')
+        layout.separator()
+        layout.operator_menu_enum(BDK_OT_repository_rule_package_add.bl_idname, 'rule_type', text='Add Package Rule')
 
 
 class BDK_MT_repository_add(Menu):
@@ -150,17 +152,15 @@ class BDK_MT_repositories_special(Menu):
 class BDK_UL_repository_rules(UIList):
     bl_idname = 'BDK_UL_repository_rules'
 
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, **kwargs):
-        row = layout.row(align=True)
-        row_left = row.row(align=True)
-        row_left.enabled = False
-        row_left.prop(item, 'type', text='', emboss=False)
-        row_left.prop(item, 'pattern', text='', emboss=False)
+    def draw_item(self, context, layout: UILayout, data, item, icon, active_data, active_propname, **kwargs):
+        split = layout.split(factor=0.3)
+        col_a = split.row()
+        col_a.label(text=item.type)
+        col_b = split.row(align=True)
+        col_b.label(text=item.pattern)
         if item.type == 'SET_ASSET_DIRECTORY':
-            row_left.prop(item, 'asset_directory', text='')
-        row_right = row.column(align=True)
-        row_right.alignment = 'RIGHT'
-        row_right.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
+            col_b.label(text=item.asset_directory)
+        col_b.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
 
 class BDK_UL_repository_orphaned_assets(UIList):
