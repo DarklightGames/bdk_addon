@@ -34,12 +34,17 @@ def _ensure_bsp_brush_object(obj: Object, csg_operation: str = 'ADD'):
     """
     Ensure that the given object is set up as a BSP brush object.
     """
-    # TODO: perhaps set these up as drivers instead!
     obj.display_type = 'WIRE'
     obj.show_in_front = True
     obj.show_all_edges = True
     obj.show_wire = True
     obj.display.show_shadows = False
+    obj.visible_camera = False
+    obj.visible_shadow = False
+    obj.hide_probe_volume = True
+    obj.hide_probe_sphere = True
+    obj.hide_probe_plane = True
+
     obj.bdk.type = 'BSP_BRUSH'
     obj.bdk.bsp_brush.object = obj
     obj.bdk.bsp_brush.csg_operation = csg_operation
