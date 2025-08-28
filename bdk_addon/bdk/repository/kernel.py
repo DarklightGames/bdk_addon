@@ -558,8 +558,11 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
                                            os.path.dirname(os.path.relpath(str(package_path), str(game_directory))))
     umodel_path = str(get_umodel_path())
 
-    if not os.access(umodel_path, os.X_OK):
-        raise PermissionError('umodel executable is not executable')
+    if sys.platform == 'linux' and not os.access(umodel_path, os.X_OK):
+        # In some cases, the executable file status can be lost, so set the executable flag on umodel.
+        process = subprocess.run(['chmod', '+x', umodel_path])
+        if process.returncode == 0:
+            raise PermissionError('umodel executable is not be made executable')
 
     args = [umodel_path, '-export', '-nolinked', f'-out="{package_build_directory}"',
             f'-path="{repository.game_directory}"', str(package_path)]
