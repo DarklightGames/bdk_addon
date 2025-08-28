@@ -15,7 +15,8 @@ jobs:
       ADDON_NAME: bdk_addon
     steps:
       - uses: actions/checkout@v4
-        lfs: true
+        with:
+          lfs: true
       - uses: SebRollen/toml-action@v1.2.0
         id: read_manifest
         with:
