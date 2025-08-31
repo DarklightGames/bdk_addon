@@ -30,14 +30,14 @@ axis_signed_enum_items = [
 empty_set = set()
 
 
-def terrain_doodad_scatter_layer_object_object_poll_cb(_self, bpy_object: Object):
-    # TODO: we also need to allow collection instances here.
-    if bpy_object is None:
+def terrain_doodad_scatter_layer_object_object_poll_cb(_self, obj: Object):
+    if obj is None:
         return False
-    if bpy_object.type == 'EMPTY' and bpy_object.instance_collection is not None:
-        return True
+    # TODO: in future, we would like to handle collection instances here!
+    # if obj.type == 'EMPTY' and obj.instance_collection is not None:
+    #     return True
     # Only allow objects that are static meshes.
-    return bpy_object.type == 'MESH' and bpy_object.get('Class', None) == 'StaticMeshActor'
+    return obj.type == 'MESH' and obj.get('Class', None) == 'StaticMeshActor'
 
 
 def terrain_doodad_scatter_layer_update_cb(self: 'BDK_PG_terrain_doodad_scatter_layer_object', context: Context):
