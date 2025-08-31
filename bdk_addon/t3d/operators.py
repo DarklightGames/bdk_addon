@@ -148,7 +148,9 @@ class TerrainDoodadToT3DConverter(ObjectToT3DConverter):
             actor.properties['DrawScale3D'] = scale
 
             actor_properties = scatter_layer_object.actor_properties
-            actor.properties['Class'] = scatter_layer_object_object['Class']
+
+            actor.properties['Class'] = actor_properties.class_name
+
             if actor_properties.should_use_cull_distance:
                 actor.properties['CullDistance'] = actor_properties.cull_distance
 
