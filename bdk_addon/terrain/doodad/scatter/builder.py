@@ -67,8 +67,8 @@ def ensure_scatter_layer(scatter_layer: 'BDK_PG_terrain_doodad_scatter_layer'):
     # This will be used by the sprout object, but also by the T3D exporter.
     if scatter_layer.seed_object is None:
         scatter_layer.seed_object = create_scatter_layer_seed_object()
-        scatter_layer.planter_object.hide_viewport = True
-        scatter_layer.planter_object.hide_render = True
+        scatter_layer.seed_object.hide_viewport = True
+        scatter_layer.seed_object.hide_render = True
         seed_and_sprout_collection.objects.link(scatter_layer.seed_object)
 
     # Create the sprout object. This is the object that will create the instances from the seed object.
