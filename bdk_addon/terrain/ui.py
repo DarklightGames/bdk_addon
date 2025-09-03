@@ -46,7 +46,8 @@ class BDK_PT_terrain_info_advanced(Panel):
         self.layout.operator(BDK_OT_terrain_info_repair.bl_idname, icon='FILE_REFRESH', text='Repair')
         self.layout.operator(BDK_OT_terrain_info_shift.bl_idname, icon='TRANSFORM_ORIGINS', text='Shift')
         self.layout.operator(BDK_OT_terrain_info_heightmap_import.bl_idname, icon='IMPORT', text='Import Heightmap')
-        self.layout.operator(BDK_OT_terrain_info_set_terrain_scale.bl_idname, icon='MOD_SOLIDIFY', text='Set Terrain Scale')
+        self.layout.operator(BDK_OT_terrain_info_scale_set.bl_idname, icon='MOD_SOLIDIFY', text='Set Terrain Scale')
+        self.layout.operator(BDK_OT_terrain_info_resolution_set.bl_idname, icon='MOD_SOLIDIFY', text='Set Terrain Resolution')
 
         # layout.operator(BDK_OT_terrain_info_.bl_idname, icon='FILE_REFRESH', text='Repair')
 

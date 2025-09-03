@@ -174,7 +174,7 @@ def get_terrain_info_vertex_xy_coordinates(resolution: int, terrain_scale: float
             yield terrain_scale * x - size_half, terrain_scale * y - size_half + terrain_scale
 
 
-def create_terrain_info_object(name: str, resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
+def create_terrain_info_mesh(resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Mesh:
     bm = bmesh.new()
 
     if heightmap is None:
@@ -223,9 +223,15 @@ def create_terrain_info_object(name: str, resolution: int, size: float, heightma
         vertex_index += 1
 
     mesh_data = bpy.data.meshes.new('TerrainInfo')
+
     bm.to_mesh(mesh_data)
     del bm
 
+    return mesh_data
+
+
+def create_terrain_info_object(name: str, resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
+    mesh_data = create_terrain_info_mesh(resolution, size, heightmap, edge_turn_bitmap)
     mesh_object = bpy.data.objects.new(name, mesh_data)
 
     # Set the BDK object type.

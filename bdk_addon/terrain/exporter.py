@@ -271,18 +271,18 @@ def create_image_from_attribute(terrain_info_object: Object, depsgraph: Depsgrap
     return image
 
 
-def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph) -> np.ndarray:
+def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Optional[Depsgraph] = None, should_quantize: bool = True) -> np.ndarray:
     terrain_info = get_terrain_info(terrain_info_object)
     if terrain_info is None:
         raise RuntimeError('Invalid object')
-
-    terrain_info_object = terrain_info_object.evaluated_get(depsgraph)
+    if depsgraph is not None:
+        terrain_info_object = terrain_info_object.evaluated_get(depsgraph)
     mesh_data = cast(Mesh, terrain_info_object.data)
-
     # TODO: support "multiple terrains"
     shape = (terrain_info.x_size, terrain_info.y_size)
     heightmap = np.array([v.co[2] for v in mesh_data.vertices], dtype=float)
-    heightmap = quantize_heightmap(heightmap, terrain_info.terrain_scale_z)
+    if should_quantize:
+        heightmap = quantize_heightmap(heightmap, terrain_info.terrain_scale_z)
     return heightmap.reshape(shape)
 
 

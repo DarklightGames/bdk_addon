@@ -8,7 +8,7 @@ import bpy
 import mathutils
 import numpy
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
-from bpy.types import Operator, Context, Mesh, Object, Event
+from bpy.types import Operator, Context, Mesh, Object, Event, VertexGroup
 from bpy_extras.io_utils import ExportHelper
 
 from ..io.g16 import read_bmp_g16
@@ -17,14 +17,15 @@ from .context import get_selected_terrain_paint_layer_node
 from .layers import add_terrain_deco_layer
 from .kernel import ensure_deco_layers, ensure_terrain_layer_node_group, ensure_paint_layers, \
     create_terrain_paint_layer_node_convert_to_paint_layer_node_tree
-from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_terrain_deco_layers, write_terrain_t3d
+from .exporter import export_terrain_heightmap, export_terrain_paint_layers, export_terrain_deco_layers, get_terrain_heightmap, write_terrain_t3d
 from .layers import add_terrain_paint_layer
-from .doodad.builder import ensure_terrain_info_modifiers
+from .doodad.builder import ensure_terrain_info_modifiers, get_terrain_doodads_for_terrain_info_object
+from .doodad.scatter.builder import ensure_scatter_layer_modifiers
 
 from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte_color_attribute_data, \
     invert_byte_color_attribute_data, accumulate_byte_color_attribute_data, copy_simple_property_group, \
     ensure_name_unique, padded_roll, sanitize_name_for_unreal
-from .builder import build_terrain_material, create_terrain_info_object, get_terrain_quad_size, \
+from .builder import build_terrain_material, create_terrain_info_mesh, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_xy_coordinates
 from .properties import node_type_items, node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, \
     BDK_PG_terrain_layer_node, BDK_PG_terrain_deco_layer, get_terrain_info_paint_layer_by_id
@@ -219,25 +220,25 @@ class BDK_OT_terrain_paint_layer_add(Operator):
 def quad_size_get(self):
     return get_terrain_quad_size(self.size, int(self.resolution))
 
+resolution_items = (
+    ('2', '2', '1 quad'),
+    ('4', '4', '3 quads'),
+    ('8', '8', '7 quads'),
+    ('16', '16', '16 quads'),
+    ('32', '32', '31 quads'),
+    ('64', '64', '63 quads'),
+    ('128', '128', '127 quads'),
+    ('256', '256', '255 quads'),
+    ('512', '512', '511 quads'),
+    ('1024', '1024', '1023 quads'),
+)
 
 class BDK_OT_terrain_info_add(Operator):
     bl_idname = 'bdk.terrain_info_add'
     bl_label = 'Add Terrain Info'
     bl_options = {'REGISTER', 'UNDO'}
 
-    resolution: EnumProperty(name='Resolution', items=(
-        ('1', '1', '1 quad'),
-        ('2', '2', '2 quads'),
-        ('4', '4', '4 quads'),
-        ('8', '8', '8 quads'),
-        ('16', '16', '16 quads'),
-        ('32', '32', '32 quads'),
-        ('64', '64', '64 quads'),
-        ('128', '128', '128 quads'),
-        ('256', '256', '256 quads'),
-        ('512', '512', '512 quads'),
-        ('1024', '1024', '1024 quads'),
-    ), default='512')
+    resolution: EnumProperty(name='Resolution', items=resolution_items, default='512')
     size: FloatProperty(name='Size', default=500 * 60.352, subtype='DISTANCE',
                         description='The length and width of the terrain')
     quad_size: FloatProperty(name='Quad Size', get=quad_size_get, set=None, subtype='DISTANCE')
@@ -1162,8 +1163,95 @@ class BDK_OT_terrain_info_shift(Operator):
         return {'FINISHED'}
 
 
-class BDK_OT_terrain_info_set_terrain_scale(Operator):
-    bl_idname = 'bdk.terrain_info_set_terrain_scale'
+class BDK_OT_terrain_info_resolution_set(Operator):
+    bl_idname = 'bdk.terrain_info_resolution_set'
+    bl_label = 'Set Terrain Resolution'
+    bl_description = 'Set terrain resolution'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    resolution: EnumProperty(name='Resolution', items=resolution_items)
+
+    @classmethod
+    def poll(cls, context: Context):
+        return is_active_object_terrain_info(context)
+    
+    def invoke(self, context: Context, event: Event):
+        terrain_info_object = context.active_object
+        terrain_info = get_terrain_info(terrain_info_object)
+        self.resolution = str(terrain_info.x_size)
+        return context.window_manager.invoke_props_dialog(self)
+    
+    def execute(self, context: Context):
+        terrain_info_object = context.active_object
+        terrain_info = get_terrain_info(terrain_info_object)
+
+        if terrain_info.x_size == self.resolution:
+            self.report({'WARNING'}, f'Current resolution and target resolution are the same ({self.resolution})')
+            return {'CANCELLED'}
+    
+        mesh_data_old = cast(Mesh, terrain_info_object.data)
+        resolution = int(self.resolution)
+        step = int(terrain_info.x_size / resolution)
+
+        heightmap = get_terrain_heightmap(terrain_info_object, should_quantize=False)
+        
+        vertex_group_data = dict()
+
+        vertex_count = len(mesh_data_old.vertices)
+        for vertex_group in terrain_info_object.vertex_groups:
+            weights = numpy.zeros(len(mesh_data_old.vertices), dtype=numpy.float32)
+            # TODO: This is MASSIVELY inefficient but as far as I can tell there's no way to just dump out
+            #  a nice flat list of indexed vertex weights.
+            for i in range(vertex_count):
+                try:
+                    weights[i] = vertex_group.weight(i)
+                except RuntimeError:
+                    continue
+            weights = weights.reshape((terrain_info.x_size, terrain_info.x_size))
+            vertex_group_data[vertex_group.name] = weights
+
+        # Extract out every attribute that is on the current heightmap.
+        if step < 1:
+            self.report({'WARNING'}, 'Upscaling is not yet supported')
+            return {'CANCELLED'}
+        else:
+            # Downscaling
+            # Delete every second row and column starting at index 1.
+            # Alternatively, make a copy using the indices to use for each axis.
+            heightmap = heightmap[::step,::step]
+            for name, data in vertex_group_data.items():
+                vertex_group_data[name] = data[::step,::step]
+    
+        # Get heightmap and from existing terrain info. Edge turn information will be LOST.
+        mesh_data = create_terrain_info_mesh(resolution, terrain_info.terrain_scale * resolution * step, heightmap.flatten())
+        terrain_info_object.data = mesh_data
+        terrain_info.x_size = resolution
+        terrain_info.y_size = resolution
+
+        # Restore the materials.
+        for material in mesh_data_old.materials:
+            mesh_data.materials.append(material)
+
+        # Add the new vertex group info.
+        for name, weights in vertex_group_data.items():
+            vertex_group: VertexGroup = terrain_info_object.vertex_groups.new(name=name)
+            weights = weights.flatten()
+            for index, weight in enumerate(weights):
+                if weight != 0.0:
+                    vertex_group.add([index], weight, 'REPLACE')
+        
+        # All terrain info modifiers need to be recreated since the dimensions have changed.
+        ensure_terrain_info_modifiers(context, terrain_info)
+
+        # All the terrain doodads must also have scatter layer geometry node trees rebuilt.
+        for terrain_doodad in get_terrain_doodads_for_terrain_info_object(context, terrain_info_object):
+            ensure_scatter_layer_modifiers(context, terrain_doodad)
+
+        return {'FINISHED'}
+
+
+class BDK_OT_terrain_info_scale_set(Operator):
+    bl_idname = 'bdk.terrain_info_scale_set'
     bl_label = 'Set Terrain Scale'
     bl_description = 'Set the terrain scale'
     bl_options = {'REGISTER', 'UNDO'}
@@ -1175,6 +1263,8 @@ class BDK_OT_terrain_info_set_terrain_scale(Operator):
         return is_active_object_terrain_info(context)
 
     def invoke(self, context: Context, event: Event):
+        terrain_info = get_terrain_info(context.active_object)
+        self.terrain_scale = terrain_info.terrain_scale
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context: Context):
@@ -1319,7 +1409,8 @@ classes = (
     BDK_OT_terrain_info_repair,
     BDK_OT_terrain_info_shift,
     BDK_OT_terrain_info_heightmap_import,
-    BDK_OT_terrain_info_set_terrain_scale,
+    BDK_OT_terrain_info_scale_set,
+    BDK_OT_terrain_info_resolution_set,
 
     BDK_OT_terrain_paint_layer_add,
     BDK_OT_terrain_paint_layer_remove,
