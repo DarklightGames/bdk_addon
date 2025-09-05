@@ -1455,7 +1455,6 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
 
                         curve_modifier_node = node_tree.nodes.new(type='GeometryNodeGroup')
                         curve_modifier_node.node_tree = ensure_curve_modifier_node_tree()
-
                         add_scatter_layer_driver(curve_modifier_node.inputs['Is Curve Reversed'], 'is_curve_reversed')
                         add_scatter_layer_driver(curve_modifier_node.inputs['Trim Mode'], 'curve_trim_mode')
                         add_scatter_layer_driver(curve_modifier_node.inputs['Trim Factor Start'], 'curve_trim_factor_start')
@@ -1466,7 +1465,6 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
 
                         curve_to_points_node = node_tree.nodes.new(type='GeometryNodeGroup')
                         curve_to_points_node.node_tree = ensure_scatter_layer_curve_to_points_node_tree()
-
                         add_scatter_layer_driver(curve_to_points_node.inputs['Normal Offset Max'], 'curve_normal_offset_max')
                         add_scatter_layer_driver(curve_to_points_node.inputs['Normal Offset Seed'], 'curve_normal_offset_seed')
                         add_scatter_layer_driver(curve_to_points_node.inputs['Tangent Offset Max'], 'curve_tangent_offset_max')
@@ -1486,17 +1484,17 @@ def ensure_scatter_layer_planter_node_tree(scatter_layer: 'BDK_PG_terrain_doodad
                         terrain_info_object_node = node_tree.nodes.new(type='GeometryNodeObjectInfo')
                         terrain_info_object_node.inputs['Object'].default_value = terrain_info.terrain_info_object
 
-                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_node.inputs['Curve'])
+                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], curve_modifier_node.inputs['Curve'])
+                        node_tree.links.new(curve_switch_node.outputs['Output'], shrinkwrap_curve_to_terrain_node.inputs['Curve'])
                         node_tree.links.new(terrain_info_object_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_node.inputs['Terrain Geometry'])
                         node_tree.links.new(terrain_info_object_node.outputs['Transform'], shrinkwrap_curve_to_terrain_node.inputs['Terrain Transform'])
 
                         node_tree.links.new(shrinkwrap_curve_to_terrain_node.outputs['Curve'], shrinkwrap_curve_to_terrain_switch_node.inputs['True'])
-                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], shrinkwrap_curve_to_terrain_switch_node.inputs['False'])
+                        node_tree.links.new(curve_switch_node.outputs['Output'], shrinkwrap_curve_to_terrain_switch_node.inputs['False'])
 
-                        node_tree.links.new(shrinkwrap_curve_to_terrain_switch_node.outputs['Output'], curve_modifier_node.inputs['Curve'])
-                        node_tree.links.new(shrinkwrap_curve_to_terrain_switch_node.outputs['Output'], curve_switch_node.inputs['False'])
+                        node_tree.links.new(terrain_doodad_object_info_node.outputs['Geometry'], curve_switch_node.inputs['False'])
                         node_tree.links.new(curve_modifier_node.outputs['Curve'], curve_switch_node.inputs['True'])
-                        node_tree.links.new(curve_switch_node.outputs['Output'], curve_to_points_node.inputs['Curve'])
+                        node_tree.links.new(shrinkwrap_curve_to_terrain_switch_node.outputs['Output'], curve_to_points_node.inputs['Curve'])
 
                         if spacing_length_socket is not None:
                             node_tree.links.new(spacing_length_socket, curve_to_points_node.inputs['Spacing Length'])
