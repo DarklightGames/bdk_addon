@@ -58,7 +58,9 @@ class BDK_PG_terrain_doodad_scatter_layer_object(PropertyGroup, CurveModifierMix
     random_weight: FloatProperty(name='Random Weight', default=1.0, min=0.0, soft_max=10.0, subtype='FACTOR')
 
     is_cap: BoolProperty(name='Is Cap', default=False, options=empty_set,
-                         description='The object may only be placed at the end of the curve')
+                         description='The object may only be placed at the end of the curve',
+                         update=terrain_doodad_scatter_layer_update_cb
+                         )
 
     is_aligned_to_curve: BoolProperty(name='Aligned to Curve', default=False)
     align_axis: EnumProperty(name='Align Axis', items=axis_signed_enum_items, default='Z')
