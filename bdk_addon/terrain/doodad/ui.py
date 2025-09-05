@@ -1039,7 +1039,7 @@ class BDK_PT_terrain_doodad_scatter_layer_object_actor_properties(Panel):
         scatter_layer_object = get_selected_terrain_doodad_scatter_layer_object(context)
         actor_properties = scatter_layer_object.actor_properties
 
-        flow = layout.grid_flow(align=True, columns=1)
+        flow = layout.column_flow(columns=1)
         flow.use_property_split = True
         flow.use_property_decorate = False
 

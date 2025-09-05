@@ -132,14 +132,13 @@ class BDK_OT_bsp_brush_poly_flags_set(Operator):
         layout.use_property_decorate = False
         layout.prop(self, 'operation')
 
-        poly_flags_header, poly_flags_panel = layout.panel('Poly Flags', default_closed=True)
+        poly_flags_header, poly_flags_panel = layout.panel('Poly Flags', default_closed=False)
         poly_flags_header.label(text='Poly Flags')
 
         if poly_flags_panel is not None:
-            flow = poly_flags_panel.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
+            flow = poly_flags_panel.column_flow(columns=True)
             flow.use_property_split = True
             flow.use_property_decorate = False
-
             flow.prop(self, 'poly_flags')
 
     def execute(self, context):
@@ -351,24 +350,22 @@ class BDK_OT_bsp_brush_select_similar(Operator):
         active_object = context.object
         bsp_brush = active_object.bdk.bsp_brush
 
-        if self.property == 'CSG_OPERATION':
-            def filter_csg_operation(obj: Object):
-                return obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
-
-            filter_function = filter_csg_operation
-        elif self.property == 'POLY_FLAGS':
-            def filter_poly_flags(obj: Object):
-                return obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
-
-            filter_function = filter_poly_flags
-        elif self.property == 'SORT_ORDER':
-            def filter_sort_order(obj: Object):
-                return obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
-
-            filter_function = filter_sort_order
-        else:
-            self.report({'ERROR'}, f'Invalid property: {self.property}')
-            return {'CANCELLED'}
+        match self.property:
+            case 'CSG_OPERATION':
+                def filter_csg_operation(obj: Object):
+                    return obj.bdk.bsp_brush.csg_operation == bsp_brush.csg_operation
+                filter_function = filter_csg_operation
+            case 'POLY_FLAGS':
+                def filter_poly_flags(obj: Object):
+                    return obj.bdk.bsp_brush.poly_flags == bsp_brush.poly_flags
+                filter_function = filter_poly_flags
+            case 'SORT_ORDER':
+                def filter_sort_order(obj: Object):
+                    return obj.bdk.bsp_brush.sort_order == bsp_brush.sort_order
+                filter_function = filter_sort_order
+            case _:
+                self.report({'ERROR'}, f'Invalid property: {self.property}')
+                return {'CANCELLED'}
 
         for obj in filter(filter_function, filter(lambda x: x.bdk.type == 'BSP_BRUSH', context.scene.objects)):
             obj.select_set(True)
@@ -1097,11 +1094,11 @@ class BDK_OT_bsp_brush_select_with_poly_flags(Operator):
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, 'mode')
 
-        flow = layout.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
+        flow = layout.column_flow(columns=1)
         flow.use_property_split = True
         flow.use_property_decorate = False
+        flow.prop(self, 'mode')
         flow.prop(self, 'poly_flags')
 
     def execute(self, context: Context):

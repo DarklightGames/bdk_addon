@@ -1047,7 +1047,7 @@ class BDK_OT_terrain_info_shift(Operator):
     def draw(self, context: Context):
         layout = self.layout
 
-        flow = layout.grid_flow(columns=1, align=True)
+        flow = layout.column_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
         flow.prop(self, 'x_distance', text='Distance X')
@@ -1210,6 +1210,7 @@ class BDK_OT_terrain_info_resolution_set(Operator):
             weights = weights.reshape((terrain_info.x_size, terrain_info.x_size))
             vertex_group_data[vertex_group.name] = weights
 
+        # TODO: Turn this into a resampling operation, then there's no difference between upscaling or downscaling.
         # Extract out every attribute that is on the current heightmap.
         if step < 1:
             self.report({'WARNING'}, 'Upscaling is not yet supported')
