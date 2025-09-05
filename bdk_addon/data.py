@@ -68,7 +68,7 @@ class URotator:
         self.Yaw = yaw
         self.Roll = roll
 
-    def get_radians(self) -> (float, float, float):
+    def get_radians(self) -> tuple[float, float, float]:
         return (
             unreal_to_radians(self.Roll),
             unreal_to_radians(self.Pitch),

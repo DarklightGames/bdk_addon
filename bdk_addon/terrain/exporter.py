@@ -25,7 +25,7 @@ def get_instance_offset(asset_instance: Object) -> Matrix:  # TODO: move to gene
         return Matrix()
 
 
-def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> (Vector, Euler, Vector):
+def convert_blender_matrix_to_unreal_movement_units(matrix: Matrix) -> tuple[Vector, Euler, Vector]:
     """
     Converts a Blender world matrix to units suitable for exporting to Unreal Engine.
     :param matrix: The Blender world matrix.

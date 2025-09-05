@@ -41,8 +41,6 @@ def create_projector(context, name: str = 'Projector'):
 
 
 def ensure_projector_uv_scale_node_tree() -> NodeTree:
-    # TODO: Once we confirm that this is correct and stable, move it to the native code so we don't have to maintain it
-    #  here.
     items = (
         ('INPUT', 'NodeSocketMaterial', 'ProjTexture'),
         ('INPUT', 'NodeSocketVector', 'UV Map'),

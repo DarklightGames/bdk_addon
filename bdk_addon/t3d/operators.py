@@ -10,6 +10,8 @@ from bpy.types import Operator, Context, Object
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
+from ..units import radians_to_unreal
+
 from ..data import UReference
 from ..bsp.properties import get_poly_flags_value_from_keys
 from ..bsp.data import POLY_FLAGS_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
@@ -143,9 +145,15 @@ class TerrainDoodadToT3DConverter(ObjectToT3DConverter):
                     actor.properties[f'Skins({material_slot_index})'] = material_slot.material.bdk.package_reference
 
             location, rotation, scale = convert_blender_matrix_to_unreal_movement_units(matrix)
-            actor.properties['Location'] = location
-            actor.properties['Rotation'] = rotation
-            actor.properties['DrawScale3D'] = scale
+            actor.properties['Location'] = {'X': location.x, 'Y': location.y, 'Z': location.z}
+            actor.properties['Rotation'] = {
+                'Pitch': -radians_to_unreal(rotation.y),
+                'Yaw': -radians_to_unreal(rotation.z),
+                'Roll': radians_to_unreal(rotation.x)
+                }
+            actor.properties['DrawScale3D'] = {'X': scale.x, 'Z': scale.y, 'Z': scale.z}
+
+            print(actor.properties['Rotation'])
 
             actor_properties = scatter_layer_object.actor_properties
 

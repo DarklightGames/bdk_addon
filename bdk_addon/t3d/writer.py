@@ -58,7 +58,7 @@ class T3DWriter:
             return ','.join(map(lambda element: '%+013.6f' % element, vector))
 
         # Begin
-        first_line = f'Begin {object.type_name}'
+        first_line = f'Begin {object.type_}'
 
         type_inline_properties = {
             'Polygon': ('Texture', 'Flags', 'Link')
@@ -67,8 +67,8 @@ class T3DWriter:
         inline_properties = list()
 
         # Gather the inline properties for this object type.
-        if object.type_name in type_inline_properties:
-            inline_properties.extend(type_inline_properties[object.type_name])
+        if object.type_ in type_inline_properties:
+            inline_properties.extend(type_inline_properties[object.type_])
         inline_properties.extend(universal_inline_properties)
 
         # Inline Properties
@@ -102,4 +102,4 @@ class T3DWriter:
 
         # End
         self._dedent()
-        self._write_line(f'End {object.type_name}')
+        self._write_line(f'End {object.type_}')
