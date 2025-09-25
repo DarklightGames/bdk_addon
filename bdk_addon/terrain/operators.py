@@ -955,6 +955,9 @@ class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
         # TODO: get the index of the sculpt modifier and add one? (wouldn't that just be the first one?)
         bake_modifier_index = 1
 
+        mesh_data = cast(Mesh, terrain_info_object.data)
+        terrain_info_object.vertex_groups.new(name=str(node.id))
+
         # Insert the modifier at the appropriate place.
         bpy.ops.object.modifier_move_to_index(modifier=modifier.name, index=bake_modifier_index)
 

@@ -530,7 +530,7 @@ def _create_convert_node_to_paint_node_node_tree(node, target_id: ID, dataptr_na
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         store_named_attribute_node = node_tree.nodes.new('GeometryNodeStoreNamedAttribute')
-        store_named_attribute_node.data_type = 'BYTE_COLOR'
+        store_named_attribute_node.data_type = 'FLOAT'
         store_named_attribute_node.domain = 'POINT'
         store_named_attribute_node.inputs['Name'].default_value = node.id
 
