@@ -357,6 +357,47 @@ def padded_roll(array, shift):
 
     return array
 
+def dfs_collection_objects(
+        collection: Collection,
+        visited: Set[Tuple[Object, Optional[Object]]],
+        instance_objects: Optional[List[Object]] = None,
+        matrix_world: Matrix = Matrix.Identity(4)
+        ):
+    # TODO: We want to also yield the top-level instance object so that callers can inspect the selection status etc.
+    if instance_objects is None:
+        instance_objects = list()
+
+    # Sort the objects in the collection to return non-BSP brushes first.
+    # Next, return the BSP brushes in ascending order of their sort order.
+    collection_objects = list(collection.objects)
+    collection_objects.sort(
+        key=lambda obj: (obj.bdk.type != 'BSP_BRUSH', obj.bdk.bsp_brush.sort_order if obj.bdk.type == 'BSP_BRUSH' else 0))
+
+    for obj in collection_objects:
+        if obj.parent is None or obj.parent not in set(collection.objects) and obj not in visited:
+            # If this an instance, we need to recurse into it.
+            if obj.instance_collection is not None:
+                # Calculate the instance transform.
+                instance_offset_matrix = Matrix.Translation(-obj.instance_collection.instance_offset)
+                # Recurse into the instance collection.
+                yield from dfs_collection_objects(
+                    collection=obj.instance_collection,
+                    visited=visited,
+                    instance_objects=instance_objects + [obj],
+                    matrix_world=matrix_world @ (obj.matrix_local @ instance_offset_matrix)
+                    )
+            else:
+                yield (obj, instance_objects, matrix_world @ obj.matrix_local)
+                visited.add((obj, instance_objects[0] if instance_objects else None))
+                # `children_recursive` returns objects regardless of collection, so we need to make sure
+                # that the children are in this collection.
+                # TODO: this needs to be changed so that we walk the hierarchy. this may have instances inside.
+                #  Also, the obj.matrix_local is only relevant for direct descendants of `obj`.
+                for child_obj in obj.children_recursive:
+                    if child_obj not in visited and child_obj in set(collection.objects):
+                        yield (child_obj, instance_objects, matrix_world @ obj.matrix_local @ child_obj.matrix_local)
+                        visited.add((child_obj, instance_objects[0] if instance_objects else None))
+
 
 def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List[Object], Matrix]]:
     """
@@ -379,44 +420,7 @@ def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List
         for child in layer_collection.children:
             yield from layer_collection_objects_recursive(child)
         # Iterate only the top-level objects in this collection first.
-        def collection_fn(
-                collection: Collection,
-                instance_objects: Optional[List[Object]] = None,
-                matrix_world: Matrix = Matrix.Identity(4)
-        ):
-            # TODO: We want to also yield the top-level instance object so that callers can inspect the selection status etc.
-            if instance_objects is None:
-                instance_objects = list()
-
-            # Sort the objects in the collection to return non-BSP brushes first.
-            # Next, return the BSP brushes in ascending order of their sort order.
-            collection_objects = list(collection.objects)
-            collection_objects.sort(
-                key=lambda obj: (obj.bdk.type != 'BSP_BRUSH', obj.bdk.bsp_brush.sort_order if obj.bdk.type == 'BSP_BRUSH' else 0))
-
-            for obj in collection_objects:
-                if obj.parent is None or obj.parent not in set(collection.objects) and obj not in visited:
-                    # If this an instance, we need to recurse into it.
-                    if obj.instance_collection is not None:
-                        # Calculate the instance transform.
-                        instance_offset_matrix = Matrix.Translation(-obj.instance_collection.instance_offset)
-                        # Recurse into the instance collection.
-                        yield from collection_fn(collection=obj.instance_collection,
-                                                 instance_objects=instance_objects + [obj],
-                                                 matrix_world=matrix_world @ (obj.matrix_local @ instance_offset_matrix))
-                    else:
-                        yield (obj, instance_objects, matrix_world @ obj.matrix_local)
-                        visited.add((obj, instance_objects[0] if instance_objects else None))
-                        # `children_recursive` returns objects regardless of collection, so we need to make sure
-                        # that the children are in this collection.
-                        # TODO: this needs to be changed so that we walk the hierarchy. this may have instances inside.
-                        #  Also, the obj.matrix_local is only relevant for direct descendants of `obj`.
-                        for child_obj in obj.children_recursive:
-                            if child_obj not in visited and child_obj in set(collection.objects):
-                                yield (child_obj, instance_objects, matrix_world @ obj.matrix_local @ child_obj.matrix_local)
-                                visited.add((child_obj, instance_objects[0] if instance_objects else None))
-
-        yield from collection_fn(layer_collection.collection)
+        yield from dfs_collection_objects(layer_collection.collection, visited)
 
     yield from layer_collection_objects_recursive(view_layer.layer_collection)
 
