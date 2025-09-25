@@ -37,14 +37,7 @@ def filter_packages(self, packages) -> list[int]:
 class BDK_UL_repository_packages(UIList):
     bl_idname = 'BDK_UL_repository_packages'
 
-    filter_enabled: EnumProperty(
-        name='Enabled',
-        items=(
-            ('ENABLED', 'Enabled', 'Show enabled packages'),
-            ('DISABLED', 'Disabled', 'Show disabled packages'),
-        ), options={'ENUM_FLAG'}, default={'ENABLED'}
-    )
-    filter_up_to_date: BoolProperty(name='Up to Date', default=False)
+    filter_up_to_date: BoolProperty(name='Up-to-Date', default=False)
     filter_excluded: BoolProperty(name='Excluded', default=False, description='Show packages excluded by rules')
     use_filter_show: BoolProperty(default=True)
 
@@ -54,8 +47,6 @@ class BDK_UL_repository_packages(UIList):
         col.prop(self, 'filter_name', text='Pattern')
         col.prop(self, 'filter_excluded', text='Show Excluded')
         col.prop(self, 'filter_up_to_date', text='Show Up-to-Date')
-        row = col.row(align=True)
-        row.prop(self, 'filter_enabled')
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, **kwargs):
         col = layout.column(align=True)

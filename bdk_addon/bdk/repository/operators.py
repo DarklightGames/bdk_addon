@@ -139,7 +139,7 @@ repository_rule_type_enum_items = (
 class BDK_OT_repository_rule_package_add(Operator):
     bl_idname = 'bdk.repository_package_rule_add'
     bl_label = 'Add Include'
-    bl_description = ''
+    bl_description = 'Add a rule for the selected package'
     bl_options = {'INTERNAL'}
 
     rule_type: EnumProperty(items=repository_rule_type_enum_items, name='Rule Type')
@@ -178,6 +178,8 @@ class BDK_OT_repository_package_blend_open(Operator):
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
+        if addon_prefs is None:
+            return {'CANCELLED'}
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
         package = repository.runtime.packages[repository.runtime.packages_index]
 
@@ -244,7 +246,7 @@ class BDK_OT_repository_build_asset_library(Operator):
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
         count = repository.runtime.need_export_package_count + repository.runtime.need_build_package_count
         if count == 0:
-            cls.poll_message_set('All packages are up to date')
+            cls.poll_message_set('All packages are up-to-date')
             return False
         # TODO: Make sure that the PSK/PSA addon is installed and enabled (and meets version requirements)
         return True
@@ -254,6 +256,8 @@ class BDK_OT_repository_build_asset_library(Operator):
 
     def draw(self, context):
         flow = self.layout
+        if flow is None:
+            return
         flow.use_property_split = True
         flow.prop(self, 'max_workers_mode')
         match self.max_workers_mode:
@@ -314,7 +318,7 @@ class BDK_OT_repository_build_asset_library(Operator):
         command_count = len(packages_to_export) + len(packages_to_build)
 
         if command_count == 0:
-            self.report({'INFO'}, 'All packages are up to date')
+            self.report({'INFO'}, 'All packages are up-to-date')
             return {'CANCELLED'}
 
         progress = 0

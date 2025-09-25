@@ -11,7 +11,7 @@ class BDK_PG_repository_package_pattern(PropertyGroup):
 repository_package_status_enum_items = (
     ('NEEDS_EXPORT', 'Export Pending', 'The package contents need to be exported', 'EXPORT', 0),
     ('NEEDS_BUILD', 'Build Pending', 'The package library needs to be built', 'MOD_BUILD', 1),
-    ('UP_TO_DATE', 'Up To Date', 'The package is up to date', 'CHECKMARK', 2),
+    ('UP_TO_DATE', 'Up-To-Date', 'The package is up-to-date', 'CHECKMARK', 2),
 )
 
 
@@ -69,7 +69,7 @@ class BDK_PG_repository_runtime(PropertyGroup):
     package_patterns_index: IntProperty(name='Index', default=-1)
 
     excluded_package_count: IntProperty(name='Excluded Package Count', default=0)
-    up_to_date_package_count: IntProperty(name='Up To Date Package Count', default=0)
+    up_to_date_package_count: IntProperty(name='Up-To-Date Package Count', default=0)
     need_export_package_count: IntProperty(name='Need Export Package Count', default=0)
     need_build_package_count: IntProperty(name='Need Build Package Count', default=0)
     orphaned_assets: CollectionProperty(type=BDK_PG_repository_orphaned_asset, name='Orphaned Assets')

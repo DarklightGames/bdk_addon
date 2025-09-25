@@ -1,5 +1,5 @@
-from bpy.types import AddonPreferences
-from bpy.props import CollectionProperty, IntProperty, BoolProperty
+from bpy.types import AddonPreferences, Context
+from bpy.props import CollectionProperty, IntProperty, BoolProperty, StringProperty
 
 from .repository.properties import BDK_PG_repository
 from .repository.ui import BDK_UL_repositories, BDK_UL_repository_packages, BDK_MT_repository_special, \
@@ -7,9 +7,6 @@ from .repository.ui import BDK_UL_repositories, BDK_UL_repository_packages, BDK_
 from ..bdk.repository.operators import BDK_OT_repository_scan, \
     BDK_OT_repository_build_asset_library, BDK_OT_repository_rule_add, \
     BDK_OT_repository_rule_remove, BDK_OT_repository_rule_move
-
-from bpy.props import StringProperty
-from bpy.types import Context
 
 
 class BdkAddonPreferences(AddonPreferences):
@@ -77,7 +74,7 @@ class BdkAddonPreferences(AddonPreferences):
                     if repository.runtime.need_build_package_count > 0:
                         row.label(text=f'{repository.runtime.need_build_package_count} Pending Build', icon='MOD_BUILD')
                     if repository.runtime.up_to_date_package_count > 0:
-                        row.label(text=f'{repository.runtime.up_to_date_package_count} Up to Date', icon='CHECKMARK')
+                        row.label(text=f'{repository.runtime.up_to_date_package_count} Up-to-Date', icon='CHECKMARK')
                     if len(repository.runtime.orphaned_assets) > 0:
                         row.label(text=f'{len(repository.runtime.orphaned_assets)} Orphaned Assets', icon='ERROR')
 
