@@ -196,12 +196,13 @@ class BDK_MT_terrain_layer_nodes_context_menu(Menu):
     bl_label = "Nodes Specials"
 
     def draw(self, context: Context):
-        layout: UILayout = self.layout
+        layout = self.layout
+        assert layout
         layout.operator(BDK_OT_terrain_paint_layer_node_duplicate.bl_idname, text='Duplicate', icon='DUPLICATE')
         layout.separator()
         layout.operator(BDK_OT_terrain_layer_node_merge_down.bl_idname, text='Merge Down', icon='TRIA_DOWN_BAR')
         layout.operator(BDK_OT_terrain_layer_node_convert_to_paint_node.bl_idname, text='Convert to Paint Node', icon='BRUSH_DATA')
-        layout.operator(BDK_OT_terrain_layer_paint_node_move_to_group.bl_idname, text='Move to Group', icon='FOLDER_REDIRECT')
+        # layout.operator(BDK_OT_terrain_layer_paint_node_move_to_group.bl_idname, text='Move to Group', icon='FOLDER_REDIRECT')
         layout.operator(BDK_OT_terrain_paint_layer_node_transfer.bl_idname, text='Move to Terrain Layer', icon='MODIFIER')
         layout.separator()
         layout.operator(BDK_OT_terrain_paint_layer_node_fill.bl_idname, text='Fill', icon='BRUSH_DATA')
@@ -225,11 +226,12 @@ class BDK_PT_terrain_paint_layer_debug(Panel):
     def draw(self, context: Context):
         paint_layer = get_selected_terrain_paint_layer(context)
         layout = self.layout
+        assert layout
         flow = layout.grid_flow(columns=1)
+        flow.use_property_decorate = True
         flow.use_property_split = True
-        flow.use_property_decorate = False
-
-        flow.prop(paint_layer, 'id')
+        flow.prop(paint_layer, 'id', text='ID', emboss=False)
+        flow.enabled = False
 
         depsgraph = context.evaluated_depsgraph_get()
         object_eval = context.active_object.evaluated_get(depsgraph)
@@ -243,7 +245,8 @@ class BDK_MT_terrain_deco_layers_context_menu(Menu):
     bl_label = "Deco Layers Specials"
 
     def draw(self, context: Context):
-        layout: UILayout = self.layout
+        layout = self.layout
+        assert layout
 
         operator = layout.operator(BDK_OT_terrain_deco_layers_show.bl_idname, text='Show All', icon='HIDE_OFF')
         operator.mode = 'ALL'
@@ -407,7 +410,7 @@ class BDK_PT_terrain_deco_layer_debug(Panel):
         flow = layout.grid_flow(columns=1)
         flow.use_property_split = True
         flow.use_property_decorate = False
-        flow.prop(deco_layer, 'id', emboss=False)
+        flow.label(text=deco_layer.id)
 
         # Get the modifier on the deco layer object and get the execution time.
         # This is a bit hacky, but it works.

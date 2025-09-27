@@ -271,38 +271,51 @@ def ensure_terrain_layer_node_density_node_group() -> NodeTree:
     return ensure_geometry_node_tree('BDK Terrain Layer Node Density', items, build_function)
 
 
+def add_map_ranged_density_from_terrain_layer_node(
+        node: 'BDK_PG_terrain_layer_node',
+        node_tree: NodeTree,
+        target_id: ID,
+        dataptr_name: str,
+        dataptr_index: int,
+        node_index: int,
+        data_path_function: NodeDataPathFunctionType
+        ) -> Optional[NodeSocket]:
+    density_socket = add_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
+
+    if density_socket is None:
+        return None
+
+    # Density Node
+    density_node = node_tree.nodes.new('GeometryNodeGroup')
+    density_node.node_tree = ensure_terrain_layer_node_density_node_group()
+
+    node_tree.links.new(density_socket, density_node.inputs['Value'])
+
+    def add_terrain_layer_density_driver(struct: bpy_struct, property_name: str, invert: bool = False):
+        add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, struct,
+                                        'default_value', property_name, data_path_function, invert=invert)
+
+    add_terrain_layer_density_driver(density_node.inputs['Map Range From Min'], 'map_range_from_min')
+    add_terrain_layer_density_driver(density_node.inputs['Map Range From Max'], 'map_range_from_max')
+    add_terrain_layer_density_driver(density_node.inputs['Use Map Range'], 'use_map_range')
+    add_terrain_layer_density_driver(density_node.inputs['Factor'], 'factor')
+
+    return density_node.outputs['Value']
+
+
 def add_density_from_terrain_layer_nodes(node_tree: NodeTree, target_id: ID, dataptr_name: str, dataptr_index: int, nodes: Iterable, data_path_function: NodeDataPathFunctionType) -> Optional[NodeSocket]:
     last_density_socket = None
 
     for node_index, node in reversed(list(enumerate(nodes))):
-        density_socket = add_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
-
-        if density_socket is None:
-            continue
-
-        # Density Node
-        terrain_layer_node_density_node_group_node = node_tree.nodes.new('GeometryNodeGroup')
-        terrain_layer_node_density_node_group_node.node_tree = ensure_terrain_layer_node_density_node_group()
-
-        node_tree.links.new(density_socket, terrain_layer_node_density_node_group_node.inputs['Value'])
-
-        def add_terrain_layer_density_driver(struct: bpy_struct, property_name: str, invert: bool = False):
-            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, struct,
-                                          'default_value', property_name, data_path_function, invert=invert)
-
-        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Map Range From Min'],
-                                         'map_range_from_min')
-        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Map Range From Max'],
-                                         'map_range_from_max')
-        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Use Map Range'],
-                                         'use_map_range')
-        add_terrain_layer_density_driver(terrain_layer_node_density_node_group_node.inputs['Factor'], 'factor')
-
-        density_socket = terrain_layer_node_density_node_group_node.outputs['Value']
+        density_socket = add_map_ranged_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
 
         # Operation Node
         operation_node_group_node = node_tree.nodes.new('GeometryNodeGroup')
         operation_node_group_node.node_tree = ensure_terrain_layer_node_operation_node_tree()
+
+        def add_terrain_layer_density_driver(struct: bpy_struct, property_name: str, invert: bool = False):
+            add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, node.terrain_info_object, struct,
+                                            'default_value', property_name, data_path_function, invert=invert)
 
         add_terrain_layer_density_driver(operation_node_group_node.inputs['Operation'], 'operation')
 
@@ -535,7 +548,8 @@ def _create_convert_node_to_paint_node_node_tree(node, target_id: ID, dataptr_na
         store_named_attribute_node.inputs['Name'].default_value = node.id
 
         node_tree.links.new(input_node.outputs['Geometry'], store_named_attribute_node.inputs['Geometry'])
-        density_socket = add_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
+
+        density_socket = add_map_ranged_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
 
         if density_socket is not None:
             node_tree.links.new(density_socket, store_named_attribute_node.inputs['Value'])

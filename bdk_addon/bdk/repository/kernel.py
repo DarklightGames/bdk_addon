@@ -579,9 +579,10 @@ def repository_package_export(repository: BDK_PG_repository, package: BDK_PG_rep
     for cubemap_file_path in Path(package_exports_directory).glob('**/Cubemap/*.props.txt'):
         cubemap_file_paths.append(cubemap_file_path)
 
-    print(f'Building {len(cubemap_file_paths)} cubemaps')
-    for cubemap_file_path in cubemap_file_paths:
-        process, output = build_cube_map(cubemap_file_path, package_exports_directory)
+    if cubemap_file_paths:
+        print(f'Building {len(cubemap_file_paths)} cubemaps in {package.filename}')
+        for cubemap_file_path in cubemap_file_paths:
+            process, _ = build_cube_map(cubemap_file_path, package_exports_directory)
 
     return process, package
 

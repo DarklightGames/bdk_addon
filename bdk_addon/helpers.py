@@ -1,9 +1,9 @@
 from mathutils import Matrix
 
 from .data import UReference
-from bpy.types import Material, Object, Context, ByteColorAttribute, ViewLayer, LayerCollection, Collection
+from bpy.types import Material, Object, Context, ByteColorAttribute, ViewLayer, LayerCollection, Collection, Mesh
 from pathlib import Path
-from typing import Iterable, Optional, Tuple, Set, List
+from typing import Iterable, Optional, Tuple, Set, List, cast as typing_cast
 import bpy
 import numpy
 import re
@@ -469,3 +469,18 @@ def humanize_time(seconds: float):
         minutes = int(seconds // 60)
         seconds = seconds % 60
         return f"{hours}h {minutes}m {seconds:.2f}s"
+
+
+def get_vertex_group_weights(obj: Object, vertex_group_name: str):
+    vertex_group = obj.vertex_groups.get(vertex_group_name)
+    assert vertex_group
+    mesh_data = typing_cast(Mesh, obj.data)
+    weights = numpy.zeros(len(mesh_data.vertices), dtype=float)
+    # TODO: This is MASSIVELY inefficient but as far as I can tell there's no way to just dump out
+    #  a nice flat list of indexed vertex weights.
+    for i in range(len(mesh_data.vertices)):
+        try:
+            weights[i] = vertex_group.weight(i)
+        except RuntimeError:
+            continue
+    return vertex_group, weights

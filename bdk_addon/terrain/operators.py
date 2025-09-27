@@ -8,7 +8,7 @@ import bpy
 import mathutils
 import numpy
 from bpy.props import IntProperty, FloatProperty, FloatVectorProperty, BoolProperty, StringProperty, EnumProperty
-from bpy.types import Operator, Context, Mesh, Object, Event, VertexGroup
+from bpy.types import Operator, Context, Mesh, Object, Event, VertexGroup, NodesModifier
 from bpy_extras.io_utils import ExportHelper
 
 from ..io.g16 import read_bmp_g16
@@ -22,9 +22,8 @@ from .layers import add_terrain_paint_layer
 from .doodad.builder import ensure_terrain_info_modifiers, get_terrain_doodads_for_terrain_info_object
 from .doodad.scatter.builder import ensure_scatter_layer_modifiers
 
-from ..helpers import get_terrain_info, is_active_object_terrain_info, fill_byte_color_attribute_data, \
-    invert_byte_color_attribute_data, accumulate_byte_color_attribute_data, copy_simple_property_group, \
-    ensure_name_unique, padded_roll, sanitize_name_for_unreal
+from ..helpers import get_terrain_info, get_vertex_group_weights, is_active_object_terrain_info, accumulate_byte_color_attribute_data, \
+    copy_simple_property_group, ensure_name_unique, padded_roll, sanitize_name_for_unreal
 from .builder import build_terrain_material, create_terrain_info_mesh, create_terrain_info_object, get_terrain_quad_size, \
     get_terrain_info_vertex_xy_coordinates
 from .properties import node_type_items, node_type_item_names, BDK_PG_terrain_info, BDK_PG_terrain_paint_layer, \
@@ -716,8 +715,8 @@ def poll_selected_terrain_layer_node_is_paint(cls, context):
     if node.type != 'PAINT':
         cls.poll_message_set('Selected node is not a paint layer node')
         return False
-    if node.id not in node.terrain_info_object.data.attributes:
-        cls.poll_message_set(f'Layer node attribute {node.id} does not exist')
+    if node.id not in node.terrain_info_object.vertex_groups:
+        cls.poll_message_set(f'Vertex group {node.id} does not exist')
         return False
     return True
 
@@ -728,19 +727,27 @@ class BDK_OT_terrain_paint_layer_node_fill(Operator):
     bl_description = 'Fill the selected paint layer node with the selected value'
     bl_options = {'REGISTER', 'UNDO'}
 
-    value: FloatProperty(name='Value', default=1.0, min=0.0, max=1.0)
+    value: FloatProperty(name='Value', default=1.0, min=0.0, max=1.0, subtype='FACTOR')
 
     @classmethod
     def poll(cls, context: Context):
         return poll_selected_terrain_layer_node_is_paint(cls, context)
 
+    def invoke(self, context, event):
+        assert context.window_manager
+        return context.window_manager.invoke_props_dialog(self)
+
     def execute(self, context: Context):
         node = get_selected_terrain_paint_layer_node(context)
-        attribute = node.terrain_info_object.data.attributes[node.id]
-        fill_color = (self.value, self.value, self.value, 0.0)
-        fill_byte_color_attribute_data(attribute, fill_color)
+        assert node
+        terrain_info_object = cast(Object, node.terrain_info_object)
+        mesh_data = cast(Mesh, terrain_info_object.data)
+        vertex_group = terrain_info_object.vertex_groups.get(node.id)
+        assert vertex_group
+        vertex_group.add(range(len(mesh_data.vertices)), self.value, 'REPLACE')
         # Tag the object to be updated and redraw all regions.
-        context.active_object.update_tag()
+        terrain_info_object.update_tag()
+        assert context.window_manager
         for window in context.window_manager.windows:
             for area in window.screen.areas:
                 area.tag_redraw()
@@ -759,10 +766,17 @@ class BDK_OT_terrain_paint_layer_node_invert(Operator):
 
     def execute(self, context: Context):
         node = get_selected_terrain_paint_layer_node(context)
-        attribute = node.terrain_info_object.data.attributes[node.id]
-        invert_byte_color_attribute_data(attribute)
-        # Tag the object to be updated and redraw all regions.
-        context.active_object.update_tag()
+
+        assert node
+        terrain_info_object = cast(Object, node.terrain_info_object)
+        vertex_group, weights = get_vertex_group_weights(terrain_info_object, node.id)
+        
+        for index, weight in enumerate(weights):
+            vertex_group.add((index,), 1.0 - weight, 'REPLACE')
+
+        terrain_info_object.update_tag()
+
+        assert context.window_manager
         for window in context.window_manager.windows:
             for area in window.screen.areas:
                 area.tag_redraw()
@@ -856,6 +870,7 @@ def poll_has_selected_terrain_layer_node(cls, context):
     if not is_active_object_terrain_info(context):
         cls.poll_message_set('Active object is not a terrain info object')
         return False
+    assert context.active_object
     terrain_info: BDK_PG_terrain_info = get_terrain_info(context.active_object)
     paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
     nodes = paint_layer.nodes
@@ -877,7 +892,10 @@ class BDK_OT_terrain_paint_layer_node_duplicate(Operator):
         return poll_has_selected_terrain_layer_node(cls, context)
 
     def execute(self, context: Context):
-        terrain_info = get_terrain_info(context.active_object)
+        terrain_info_object = context.active_object
+        assert terrain_info_object
+        terrain_info = get_terrain_info(terrain_info_object)
+        assert terrain_info
         paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
         nodes = paint_layer.nodes
         node = nodes[paint_layer.nodes_index]
@@ -892,20 +910,28 @@ class BDK_OT_terrain_paint_layer_node_duplicate(Operator):
 
         if node.type == 'PAINT':
             # Duplicate the attribute.
-            mesh_data = node.terrain_info_object.data
-            attribute = mesh_data.attributes[node.id]
-            duplicate_attribute = mesh_data.attributes.new(duplicate_node.id, 'BYTE_COLOR', domain='POINT')
-            duplicate_attribute.data.foreach_set('color', attribute.data.foreach_get('color'))
+            vertex_count = len(cast(Mesh, node.terrain_info_object.data).vertices)
+            vertex_group_old = terrain_info_object.vertex_groups.get(node.id)
+            assert vertex_group_old
+            vertex_group_new = terrain_info_object.vertex_groups.new(name=duplicate_node.id)
+            assert vertex_group_new
+            for i in range(vertex_count):
+                try:
+                    weight = vertex_group_old.weight(i)
+                except RuntimeError:
+                    continue
+                vertex_group_new.add((i,), weight, 'REPLACE')
 
         # Move the node to below the selected node.
         nodes.move(len(nodes) - 1, paint_layer.nodes_index + 1)
-
-        # TODO: check the ordering as well? or does the modifier stack fn take care of that?
 
         # Rebuild the modifier stack.
         ensure_terrain_info_modifiers(context, terrain_info)
 
         return {'FINISHED'}
+
+
+terrain_layer_node_convertible_to_paint_node_types = {'CONSTANT', 'NOISE', 'NORMAL', 'FIELD'}
 
 
 # TODO: this only works for paint layers atm
@@ -930,8 +956,8 @@ class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
         if node.type == 'PAINT':
             cls.poll_message_set('Selected node is already a paint node')
             return False
-        convertible_types = {'CONSTANT', 'NOISE', 'NORMAL', 'FIELD'}
-        if node.type not in convertible_types:
+        
+        if node.type not in terrain_layer_node_convertible_to_paint_node_types:
             cls.poll_message_set(f'Cannot convert node of type {node.type} to a paint node')
             return False
         return True
@@ -943,19 +969,21 @@ class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
         # the correct data. We will have a similar scheme to the other baking where we bake to a new
         # attribute and create a new paint node with that attribute.
         terrain_info_object = context.active_object
+        assert terrain_info_object
         terrain_info = get_terrain_info(terrain_info_object)
         paint_layer: BDK_PG_terrain_paint_layer = terrain_info.paint_layers[terrain_info.paint_layers_index]
         nodes = paint_layer.nodes
         node: 'BDK_PG_terrain_layer_node' = nodes[paint_layer.nodes_index] if len(nodes) > paint_layer.nodes_index else None
 
-        modifier = terrain_info_object.modifiers.new(node.id, 'NODES')
+        # Get the index where the bake modifier should be inserted!
+        modifier_names = [modifier.name for modifier in terrain_info_object.modifiers]
+        bake_modifier_index = modifier_names.index(paint_layer.id) + 1
+
+        modifier = cast(NodesModifier, terrain_info_object.modifiers.new(node.id, 'NODES'))
         bake_node_tree = create_terrain_paint_layer_node_convert_to_paint_layer_node_tree(node, terrain_info_object, terrain_info.paint_layers_index, paint_layer.nodes_index)
         modifier.node_group = bake_node_tree
 
-        # TODO: get the index of the sculpt modifier and add one? (wouldn't that just be the first one?)
-        bake_modifier_index = 1
-
-        mesh_data = cast(Mesh, terrain_info_object.data)
+        # Add the vertex group for the node.
         terrain_info_object.vertex_groups.new(name=str(node.id))
 
         # Insert the modifier at the appropriate place.
@@ -969,6 +997,10 @@ class BDK_OT_terrain_layer_node_convert_to_paint_node(Operator):
 
         # Change the type of the node to a paint node.
         node.type = 'PAINT'
+        # Disable map range and reset settings.
+        node.use_map_range = False
+        node.map_range_from_min = 0.0
+        node.map_range_from_max = 1.0
 
         # Rebuild the modifier stack.
         ensure_terrain_info_modifiers(context, terrain_info)
