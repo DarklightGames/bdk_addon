@@ -74,13 +74,13 @@ class BDK_PT_bdk(Panel):
     def draw(self, context):
         layout = self.layout
 
-        # Projectors
-        projectors_header, projectors_panel = layout.panel('Projectors', default_closed=True)
-        projectors_header.label(text='Projectors')
-        if projectors_panel:
-            row = projectors_panel.row(align=True)
-            row.operator(BDK_OT_projectors_bake.bl_idname, text='Bake')
-            row.operator(BDK_OT_projectors_unbake.bl_idname, text='Unbake')
+        # # Projectors
+        # projectors_header, projectors_panel = layout.panel('Projectors', default_closed=True)
+        # projectors_header.label(text='Projectors')
+        # if projectors_panel:
+        #     row = projectors_panel.row(align=True)
+        #     row.operator(BDK_OT_projectors_bake.bl_idname, text='Bake')
+        #     row.operator(BDK_OT_projectors_unbake.bl_idname, text='Unbake')
 
         # T3D
         t3d_header, t3d_panel = layout.panel('T3D', default_closed=True)
