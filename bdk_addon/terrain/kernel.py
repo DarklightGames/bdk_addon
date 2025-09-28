@@ -165,72 +165,73 @@ def add_density_from_terrain_layer_node(
     def _add_terrain_layer_node_driver(struct: bpy_struct, property_name: str):
         add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, target_id, struct, 'default_value', property_name, data_path_function)
 
-    if node.type in ['PAINT', 'FIELD']:
-        paint_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-        paint_named_attribute_node.data_type = 'FLOAT'
-        paint_named_attribute_node.inputs['Name'].default_value = node.id
-        return paint_named_attribute_node.outputs['Attribute']
-    elif node.type == 'PAINT_LAYER':
-        layer_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
-        layer_named_attribute_node.data_type = 'FLOAT'
-        layer_named_attribute_node.inputs['Name'].default_value = node.paint_layer_id
+    match node.type:
+        case 'PAINT' | 'FIELD':
+            paint_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+            paint_named_attribute_node.data_type = 'FLOAT'
+            paint_named_attribute_node.inputs['Name'].default_value = node.id
+            return paint_named_attribute_node.outputs['Attribute']
+        case 'PAINT_LAYER':
+            layer_named_attribute_node = node_tree.nodes.new('GeometryNodeInputNamedAttribute')
+            layer_named_attribute_node.data_type = 'FLOAT'
+            layer_named_attribute_node.inputs['Name'].default_value = node.paint_layer_id
 
-        blur_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
-        blur_switch_node.input_type = 'FLOAT'
-        _add_terrain_layer_node_driver(blur_switch_node.inputs['Switch'], 'blur')
+            blur_switch_node = node_tree.nodes.new('GeometryNodeSwitch')
+            blur_switch_node.input_type = 'FLOAT'
+            _add_terrain_layer_node_driver(blur_switch_node.inputs['Switch'], 'blur')
 
-        # Add a modifier that turns any non-zero value into 1.0.
-        blur_attribute_node = node_tree.nodes.new('GeometryNodeBlurAttribute')
-        blur_attribute_node.data_type = 'FLOAT'
-        _add_terrain_layer_node_driver(blur_attribute_node.inputs['Iterations'], 'blur_iterations')
+            # Add a modifier that turns any non-zero value into 1.0.
+            blur_attribute_node = node_tree.nodes.new('GeometryNodeBlurAttribute')
+            blur_attribute_node.data_type = 'FLOAT'
+            _add_terrain_layer_node_driver(blur_attribute_node.inputs['Iterations'], 'blur_iterations')
 
-        node_tree.links.new(layer_named_attribute_node.outputs['Attribute'], blur_attribute_node.inputs['Value'])
-        node_tree.links.new(layer_named_attribute_node.outputs['Attribute'], blur_switch_node.inputs['False'])
-        node_tree.links.new(blur_attribute_node.outputs['Value'], blur_switch_node.inputs['True'])
+            node_tree.links.new(layer_named_attribute_node.outputs['Attribute'], blur_attribute_node.inputs['Value'])
+            node_tree.links.new(layer_named_attribute_node.outputs['Attribute'], blur_switch_node.inputs['False'])
+            node_tree.links.new(blur_attribute_node.outputs['Value'], blur_switch_node.inputs['True'])
 
-        return blur_switch_node.outputs['Output']
-    elif node.type == 'CONSTANT':
-        value_node = node_tree.nodes.new('ShaderNodeValue')
-        value_node.outputs['Value'].default_value = 1.0
-        return value_node.outputs['Value']
-    elif node.type == 'GROUP':
-        if len(node.children) == 0:
-            # Group is empty, skip it.
-            return None
-        return add_density_from_terrain_layer_nodes(node_tree, target_id, dataptr_name, dataptr_index, node.children, data_path_function)
-    elif node.type == 'NOISE':
-        noise_node_group_node = node_tree.nodes.new('GeometryNodeGroup')
-        noise_node_group_node.node_tree = ensure_noise_node_group()
+            return blur_switch_node.outputs['Output']
+        case 'CONSTANT':
+            value_node = node_tree.nodes.new('ShaderNodeValue')
+            value_node.outputs['Value'].default_value = 1.0
+            return value_node.outputs['Value']
+        case 'GROUP':
+            if len(node.children) == 0:
+                # Group is empty, skip it.
+                return None
+            return add_density_from_terrain_layer_nodes(node_tree, target_id, dataptr_name, dataptr_index, node.children, data_path_function)
+        case 'NOISE':
+            noise_node_group_node = node_tree.nodes.new('GeometryNodeGroup')
+            noise_node_group_node.node_tree = ensure_noise_node_group()
 
-        _add_terrain_layer_node_driver(noise_node_group_node.inputs['Noise Type'], 'noise_type')
-        _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Scale'], 'noise_perlin_scale')
-        _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Detail'], 'noise_perlin_detail')
-        _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Roughness'], 'noise_perlin_roughness')
-        _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Lacunarity'], 'noise_perlin_lacunarity')
-        _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Distortion'], 'noise_perlin_distortion')
+            _add_terrain_layer_node_driver(noise_node_group_node.inputs['Noise Type'], 'noise_type')
+            _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Scale'], 'noise_perlin_scale')
+            _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Detail'], 'noise_perlin_detail')
+            _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Roughness'], 'noise_perlin_roughness')
+            _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Lacunarity'], 'noise_perlin_lacunarity')
+            _add_terrain_layer_node_driver(noise_node_group_node.inputs['Perlin Noise Distortion'], 'noise_perlin_distortion')
 
-        return noise_node_group_node.outputs['Value']
-    elif node.type == 'NORMAL':
-        normal_node = node_tree.nodes.new('GeometryNodeInputNormal')
+            return noise_node_group_node.outputs['Value']
+        case 'NORMAL':
+            normal_node = node_tree.nodes.new('GeometryNodeInputNormal')
 
-        dot_product_node = node_tree.nodes.new('ShaderNodeVectorMath')
-        dot_product_node.operation = 'DOT_PRODUCT'
-        dot_product_node.inputs[1].default_value = (0.0, 0.0, 1.0)
+            dot_product_node = node_tree.nodes.new('ShaderNodeVectorMath')
+            dot_product_node.operation = 'DOT_PRODUCT'
+            dot_product_node.inputs[1].default_value = (0.0, 0.0, 1.0)
 
-        arccosine_node = node_tree.nodes.new('ShaderNodeMath')
-        arccosine_node.operation = 'ARCCOSINE'
+            arccosine_node = node_tree.nodes.new('ShaderNodeMath')
+            arccosine_node.operation = 'ARCCOSINE'
 
-        map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
-        _add_terrain_layer_node_driver(map_range_node.inputs['From Min'], 'normal_angle_min')
-        _add_terrain_layer_node_driver(map_range_node.inputs['From Max'], 'normal_angle_max')
+            map_range_node = node_tree.nodes.new('ShaderNodeMapRange')
+            _add_terrain_layer_node_driver(map_range_node.inputs['From Min'], 'normal_angle_min')
+            _add_terrain_layer_node_driver(map_range_node.inputs['From Max'], 'normal_angle_max')
 
-        node_tree.links.new(normal_node.outputs['Normal'], dot_product_node.inputs[0])
-        node_tree.links.new(dot_product_node.outputs['Value'], arccosine_node.inputs[0])
-        node_tree.links.new(arccosine_node.outputs['Value'], map_range_node.inputs['Value'])
+            node_tree.links.new(normal_node.outputs['Normal'], dot_product_node.inputs[0])
+            node_tree.links.new(dot_product_node.outputs['Value'], arccosine_node.inputs[0])
+            node_tree.links.new(arccosine_node.outputs['Value'], map_range_node.inputs['Value'])
 
-        return map_range_node.outputs['Result']
-    else:
-        raise RuntimeError(f'Unknown node type: {node.type}')
+            return map_range_node.outputs['Result']
+        case _:
+            raise RuntimeError(f'Unknown node type: {node.type}')
 
 
 def ensure_terrain_layer_node_density_node_group() -> NodeTree:
