@@ -42,7 +42,7 @@ def terrain_paint_layer_name_update_cb(self, context: Context):
 
 
 node_type_icons = {
-    'GROUP': 'FILE_FOLDER',
+    # 'GROUP': 'FILE_FOLDER',
     'PAINT': 'BRUSH_DATA',
     'NOISE': 'MOD_NOISE',
     'PAINT_LAYER': 'TEXTURE',
@@ -52,7 +52,7 @@ node_type_icons = {
 }
 
 node_type_items = (
-    ('GROUP', 'Group', 'Group', node_type_icons['GROUP'], 0),
+    # ('GROUP', 'Group', 'Group', node_type_icons['GROUP'], 0),
     ('PAINT', 'Paint', 'Paint', node_type_icons['PAINT'], 1),
     ('NOISE', 'Noise', 'Noise', node_type_icons['NOISE'], 2),
     ('PAINT_LAYER', 'Paint Layer', 'Paint Layer', node_type_icons['PAINT_LAYER'], 3),
