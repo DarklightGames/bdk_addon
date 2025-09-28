@@ -414,13 +414,14 @@ def create_terrain_doodad_object(context: Context, terrain_info_object: Object, 
 
     bpy_object = bpy.data.objects.new(name='Doodad', object_data=object_data)
 
-    if object_type == 'EMPTY':
-        bpy_object.empty_display_type = 'SPHERE'
-        bpy_object.empty_display_size = meters_to_unreal(1.0)
-        # Set the delta transform to the terrain info object's rotation.
-        bpy_object.delta_rotation_euler = (0, 0, 0)
-    elif object_type == 'MESH':
-        bpy_object.display_type = 'WIRE'
+    match object_type:
+        case 'EMPTY':
+            bpy_object.empty_display_type = 'SPHERE'
+            bpy_object.empty_display_size = meters_to_unreal(1.0)
+            # Set the delta transform to the terrain info object's rotation.
+            bpy_object.delta_rotation_euler = (0, 0, 0)
+        case 'MESH':
+            bpy_object.display_type = 'WIRE'
 
     # Set the location of the curve object to the 3D cursor.
     bpy_object.location = context.scene.cursor.location
@@ -692,14 +693,15 @@ def add_doodad_layer_driver(
     var.type = 'SINGLE_PROP'
     var.targets[0].id = layer.terrain_doodad_object
 
-    if layer_type == 'SCULPT':
-        data_path = f"bdk.terrain_doodad.sculpt_layers[{layer.index}].{data_path}"
-    elif layer_type == 'PAINT':
-        data_path = f"bdk.terrain_doodad.paint_layers[{layer.index}].{data_path}"
-    elif layer_type == 'DECO':
-        data_path = f"bdk.terrain_doodad.deco_layers[{layer.index}].{data_path}"
-    else:
-        raise Exception(f"Unknown layer type: {layer_type}")
+    match layer_type:
+        case 'SCULPT':
+            data_path = f"bdk.terrain_doodad.sculpt_layers[{layer.index}].{data_path}"
+        case 'PAINT':
+            data_path = f"bdk.terrain_doodad.paint_layers[{layer.index}].{data_path}"
+        case 'DECO':
+            data_path = f"bdk.terrain_doodad.deco_layers[{layer.index}].{data_path}"
+        case _:
+            raise Exception(f"Unknown layer type: {layer_type}")
 
     var.targets[0].data_path = data_path
 

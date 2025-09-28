@@ -99,14 +99,17 @@ class BDK_OT_terrain_paint_layer_move(Operator):
         paint_layers = terrain_info.paint_layers
         paint_layers_index = terrain_info.paint_layers_index
 
-        if self.direction == 'UP' and paint_layers_index > 0:
-            paint_layers.move(paint_layers_index, paint_layers_index - 1)
-            terrain_info.paint_layers_index -= 1
-            build_terrain_material(active_object)
-        elif self.direction == 'DOWN' and paint_layers_index < len(paint_layers) - 1:
-            paint_layers.move(paint_layers_index, paint_layers_index + 1)
-            terrain_info.paint_layers_index += 1
-            build_terrain_material(active_object)
+        match self.direction:
+            case 'UP':
+                if paint_layers_index > 0:
+                    paint_layers.move(paint_layers_index, paint_layers_index - 1)
+                    terrain_info.paint_layers_index -= 1
+                    build_terrain_material(active_object)
+            case 'DOWN':
+                if paint_layers_index < len(paint_layers) - 1:
+                    paint_layers.move(paint_layers_index, paint_layers_index + 1)
+                    terrain_info.paint_layers_index += 1
+                    build_terrain_material(active_object)
 
         # The order of the paint layers changed. Therefore, we need to:
         # 1. Rebuild the paint layer node groups.
@@ -465,19 +468,20 @@ def add_terrain_layer_node(terrain_info_object: Object, nodes, type: str):
     node.terrain_info_object = terrain_info_object
     node.type = type
 
-    if type == 'PAINT':
-        # mesh_data = cast(Mesh, terrain_info_object.data)
-        # TODO: when we can paint non-color data, rewrite this!
-        # Add the density map attribute to the TerrainInfo mesh.
-        terrain_info_object.vertex_groups.new(name=node.id)
-        # attribute = mesh_data.attributes.get(node.id, None)
-        # vertex_count = len(attribute.data)
-        # color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
-        # color_data[:] = (0.0, 0.0, 0.0, 0.0)
-        # attribute.data.foreach_set('color', color_data.flatten())
-    elif type == 'FIELD':
-        mesh_data = cast(Mesh, terrain_info_object.data)
-        mesh_data.attributes.new(node.id, 'FLOAT', domain='POINT')
+    match type:
+        case 'PAINT':
+            # mesh_data = cast(Mesh, terrain_info_object.data)
+            # TODO: when we can paint non-color data, rewrite this!
+            # Add the density map attribute to the TerrainInfo mesh.
+            terrain_info_object.vertex_groups.new(name=node.id)
+            # attribute = mesh_data.attributes.get(node.id, None)
+            # vertex_count = len(attribute.data)
+            # color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
+            # color_data[:] = (0.0, 0.0, 0.0, 0.0)
+            # attribute.data.foreach_set('color', color_data.flatten())
+        case 'FIELD':
+            mesh_data = cast(Mesh, terrain_info_object.data)
+            mesh_data.attributes.new(node.id, 'FLOAT', domain='POINT')
 
     # Move the node to the top of the list.
     nodes.move(len(nodes) - 1, 0)
@@ -507,14 +511,15 @@ def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: i
 
 
 def move_terrain_layer_node(direction: str, nodes, nodes_index: int) -> int:
-    if direction == 'UP':
-        if nodes_index > 0:
-            nodes.move(nodes_index, nodes_index - 1)
-            nodes_index -= 1
-    elif direction == 'DOWN':
-        if nodes_index < len(nodes) - 1:
-            nodes.move(nodes_index, nodes_index + 1)
-            nodes_index += 1
+    match direction:
+        case'UP':
+            if nodes_index > 0:
+                nodes.move(nodes_index, nodes_index - 1)
+                nodes_index -= 1
+        case 'DOWN':
+            if nodes_index < len(nodes) - 1:
+                nodes.move(nodes_index, nodes_index + 1)
+                nodes_index += 1
     return nodes_index
 
 

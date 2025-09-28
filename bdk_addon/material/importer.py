@@ -155,68 +155,70 @@ class MaterialBuilder:
             return mix_node
 
         # Color Operation
-        if combiner.CombineOperation == EColorOperation.CO_Use_Color_From_Material1:
-            outputs.color_socket = material1_outputs.color_socket
-        elif combiner.CombineOperation == EColorOperation.CO_Use_Color_From_Material2:
-            outputs.color_socket = material2_outputs.color_socket
-        elif combiner.CombineOperation == EColorOperation.CO_Multiply:
-            mix_node = create_color_combiner_mix_node('MULTIPLY')
-            if combiner.Modulate2x or combiner.Modulate4x:
-                modulate_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
-                modulate_node.operation = 'SCALE'
-                modulate_node.inputs['Scale'].default_value = 4.0 if combiner.Modulate4x else 2.0
-                self._node_tree.links.new(modulate_node.inputs['Vector'], mix_node.outputs[2])
-                outputs.color_socket = modulate_node.outputs['Vector']
-            else:
+        match combiner.CombineOperation:
+            case EColorOperation.CO_Use_Color_From_Material1:
+                outputs.color_socket = material1_outputs.color_socket
+            case EColorOperation.CO_Use_Color_From_Material2:
+                outputs.color_socket = material2_outputs.color_socket
+            case EColorOperation.CO_Multiply:
+                mix_node = create_color_combiner_mix_node('MULTIPLY')
+                if combiner.Modulate2x or combiner.Modulate4x:
+                    modulate_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
+                    modulate_node.operation = 'SCALE'
+                    modulate_node.inputs['Scale'].default_value = 4.0 if combiner.Modulate4x else 2.0
+                    self._node_tree.links.new(modulate_node.inputs['Vector'], mix_node.outputs[2])
+                    outputs.color_socket = modulate_node.outputs['Vector']
+                else:
+                    outputs.color_socket = mix_node.outputs[0]
+            case EColorOperation.CO_Add:
+                mix_node = create_color_combiner_mix_node('ADD')
                 outputs.color_socket = mix_node.outputs[0]
-        elif combiner.CombineOperation == EColorOperation.CO_Add:
-            mix_node = create_color_combiner_mix_node('ADD')
-            outputs.color_socket = mix_node.outputs[0]
-        elif combiner.CombineOperation == EColorOperation.CO_Subtract:
-            mix_node = create_color_combiner_mix_node('SUBTRACT')
-            outputs.color_socket = mix_node.outputs[2]
-        elif combiner.CombineOperation == EColorOperation.CO_AlphaBlend_With_Mask:
-            mix_node = create_color_combiner_mix_node('MIX')
-            if mask_outputs and mask_outputs.alpha_socket:
-                self._node_tree.links.new(mix_node.inputs['Fac'], mask_outputs.alpha_socket)
-            outputs.color_socket = mix_node.outputs[0]
-        elif combiner.CombineOperation == EColorOperation.CO_Add_With_Mask_Modulation:
-            mix_node = create_color_combiner_mix_node('ADD')
-            outputs.color_socket = mix_node.outputs[0]
-            # This doesn't use the Mask, but instead uses the alpha channel of Material 2, or if it hasn't got one,
-            # modulates it on Material1.
-            if material2_outputs is not None and material2_outputs.alpha_socket is not None:
-                self._node_tree.links.new(mix_node.inputs['Fac'], material2_outputs.alpha_socket)
-            elif material1_outputs is not None and material1_outputs.alpha_socket is not None:
-                self._node_tree.links.new(mix_node.inputs['Fac'], material1_outputs.alpha_socket)
-        elif combiner.CombineOperation == EColorOperation.CO_Use_Color_From_Mask:  # dropped in UE3, apparently
-            if mask_outputs and mask_outputs.color_socket:
-                outputs.color_socket = mask_outputs.color_socket
+            case EColorOperation.CO_Subtract:
+                mix_node = create_color_combiner_mix_node('SUBTRACT')
+                outputs.color_socket = mix_node.outputs[2]
+            case EColorOperation.CO_AlphaBlend_With_Mask:
+                mix_node = create_color_combiner_mix_node('MIX')
+                if mask_outputs and mask_outputs.alpha_socket:
+                    self._node_tree.links.new(mix_node.inputs['Fac'], mask_outputs.alpha_socket)
+                outputs.color_socket = mix_node.outputs[0]
+            case EColorOperation.CO_Add_With_Mask_Modulation:
+                mix_node = create_color_combiner_mix_node('ADD')
+                outputs.color_socket = mix_node.outputs[0]
+                # This doesn't use the Mask, but instead uses the alpha channel of Material 2, or if it hasn't got one,
+                # modulates it on Material1.
+                if material2_outputs is not None and material2_outputs.alpha_socket is not None:
+                    self._node_tree.links.new(mix_node.inputs['Fac'], material2_outputs.alpha_socket)
+                elif material1_outputs is not None and material1_outputs.alpha_socket is not None:
+                    self._node_tree.links.new(mix_node.inputs['Fac'], material1_outputs.alpha_socket)
+            case EColorOperation.CO_Use_Color_From_Mask:  # dropped in UE3, apparently
+                if mask_outputs and mask_outputs.color_socket:
+                    outputs.color_socket = mask_outputs.color_socket
 
         # Alpha Operation
-        if combiner.AlphaOperation == EAlphaOperation.AO_Use_Mask:
-            outputs.alpha_socket = mask_outputs.alpha_socket if mask_outputs else None
-        elif combiner.AlphaOperation == EAlphaOperation.AO_Multiply:
-            mix_node = self._node_tree.nodes.new('ShaderNodeMixRGB')
-            mix_node.blend_type = 'MULTIPLY'
-            if material1_outputs is not None and material1_outputs.alpha_socket:
-                self._node_tree.links.new(mix_node.inputs[1], material1_outputs.alpha_socket)
-            if material2_outputs is not None and material2_outputs.alpha_socket:
-                self._node_tree.links.new(mix_node.inputs[2], material2_outputs.alpha_socket)
-            outputs.alpha_socket = mix_node.outputs[0]
-        elif combiner.AlphaOperation == EAlphaOperation.AO_Add:
-            mix_node = self._node_tree.nodes.new('ShaderNodeMixRGB')
-            mix_node.blend_type = 'ADD'
-            if material1_outputs.alpha_socket:
+        match combiner.AlphaOperation:
+            case EAlphaOperation.AO_Use_Mask:
+                outputs.alpha_socket = mask_outputs.alpha_socket if mask_outputs else None
+            case EAlphaOperation.AO_Multiply:
+                mix_node = self._node_tree.nodes.new('ShaderNodeMixRGB')
+                mix_node.blend_type = 'MULTIPLY'
                 if material1_outputs is not None and material1_outputs.alpha_socket:
-                    self._node_tree.links.new(mix_node.inputs[6], material1_outputs.alpha_socket)
+                    self._node_tree.links.new(mix_node.inputs[1], material1_outputs.alpha_socket)
                 if material2_outputs is not None and material2_outputs.alpha_socket:
-                    self._node_tree.links.new(mix_node.inputs[7], material2_outputs.alpha_socket)
-            outputs.alpha_socket = mix_node.outputs[2]
-        elif combiner.AlphaOperation == EAlphaOperation.AO_Use_Alpha_From_Material1:
-            outputs.alpha_socket = material1_outputs.alpha_socket if material1_outputs else None
-        elif combiner.AlphaOperation == EAlphaOperation.AO_Use_Alpha_From_Material2:
-            outputs.alpha_socket = material2_outputs.alpha_socket if material2_outputs else None
+                    self._node_tree.links.new(mix_node.inputs[2], material2_outputs.alpha_socket)
+                outputs.alpha_socket = mix_node.outputs[0]
+            case EAlphaOperation.AO_Add:
+                mix_node = self._node_tree.nodes.new('ShaderNodeMixRGB')
+                mix_node.blend_type = 'ADD'
+                if material1_outputs.alpha_socket:
+                    if material1_outputs is not None and material1_outputs.alpha_socket:
+                        self._node_tree.links.new(mix_node.inputs[6], material1_outputs.alpha_socket)
+                    if material2_outputs is not None and material2_outputs.alpha_socket:
+                        self._node_tree.links.new(mix_node.inputs[7], material2_outputs.alpha_socket)
+                outputs.alpha_socket = mix_node.outputs[2]
+            case EAlphaOperation.AO_Use_Alpha_From_Material1:
+                outputs.alpha_socket = material1_outputs.alpha_socket if material1_outputs else None
+            case EAlphaOperation.AO_Use_Alpha_From_Material2:
+                outputs.alpha_socket = material2_outputs.alpha_socket if material2_outputs else None
 
         # NOTE: This is a bit of guess. Maybe investigate how this is actually determined.
         if material1_outputs is not None:
@@ -284,46 +286,49 @@ class MaterialBuilder:
 
         factor_socket = None
 
-        if fade_color.ColorFadeType == EColorFadeType.FC_Linear:
-            time_multiply_node = node_tree.nodes.new('ShaderNodeMath')
-            time_multiply_node.operation = 'MULTIPLY'
-            time_multiply_node.inputs[1].default_value = 2.0
-            node_tree.links.new(time_value_node.outputs[0], time_multiply_node.inputs[0])
+        match fade_color.ColorFadeType:
+            case EColorFadeType.FC_Linear:
+                time_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+                time_multiply_node.operation = 'MULTIPLY'
+                time_multiply_node.inputs[1].default_value = 2.0
+                node_tree.links.new(time_value_node.outputs[0], time_multiply_node.inputs[0])
 
-            frequency_divide_node = node_tree.nodes.new('ShaderNodeMath')
-            frequency_divide_node.operation = 'DIVIDE'
-            frequency_divide_node.label = 'Frequency'
-            frequency_divide_node.inputs[0].default_value = 1.0
-            node_tree.links.new(fade_period_value_node.outputs['Value'], frequency_divide_node.inputs[1])
+                frequency_divide_node = node_tree.nodes.new('ShaderNodeMath')
+                frequency_divide_node.operation = 'DIVIDE'
+                frequency_divide_node.label = 'Frequency'
+                frequency_divide_node.inputs[0].default_value = 1.0
+                node_tree.links.new(fade_period_value_node.outputs['Value'], frequency_divide_node.inputs[1])
 
-            frequency_multiply_node = node_tree.nodes.new('ShaderNodeMath')
-            frequency_multiply_node.operation = 'MULTIPLY'
-            node_tree.links.new(time_multiply_node.outputs[0], frequency_multiply_node.inputs[0])
-            node_tree.links.new(frequency_divide_node.outputs[0], frequency_multiply_node.inputs[1])
+                frequency_multiply_node = node_tree.nodes.new('ShaderNodeMath')
+                frequency_multiply_node.operation = 'MULTIPLY'
+                node_tree.links.new(time_multiply_node.outputs[0], frequency_multiply_node.inputs[0])
+                node_tree.links.new(frequency_divide_node.outputs[0], frequency_multiply_node.inputs[1])
 
-            phase_add_node = node_tree.nodes.new('ShaderNodeMath')
-            phase_add_node.operation = 'ADD'
-            node_tree.links.new(frequency_multiply_node.outputs[0], phase_add_node.inputs[0])
-            node_tree.links.new(fade_offset_value_node.outputs['Value'], phase_add_node.inputs[1])
+                phase_add_node = node_tree.nodes.new('ShaderNodeMath')
+                phase_add_node.operation = 'ADD'
+                node_tree.links.new(frequency_multiply_node.outputs[0], phase_add_node.inputs[0])
+                node_tree.links.new(fade_offset_value_node.outputs['Value'], phase_add_node.inputs[1])
 
-            ping_pong_node = node_tree.nodes.new('ShaderNodeMath')
-            ping_pong_node.operation = 'PINGPONG'
-            ping_pong_node.inputs[1].default_value = 1.0
-            node_tree.links.new(phase_add_node.outputs[0], ping_pong_node.inputs[0])
+                ping_pong_node = node_tree.nodes.new('ShaderNodeMath')
+                ping_pong_node.operation = 'PINGPONG'
+                ping_pong_node.inputs[1].default_value = 1.0
+                node_tree.links.new(phase_add_node.outputs[0], ping_pong_node.inputs[0])
 
-            factor_socket = ping_pong_node.outputs[0]
-        elif fade_color.ColorFadeType == EColorFadeType.FC_Sinusoidal:
-            def get_sinusoidal_driver_expression(phase: float, period: float) -> str:
-                return f'(cos({phase}+(1/{period})*2*pi*(frame/bpy.context.scene.render.fps))+1)/2'
+                factor_socket = ping_pong_node.outputs[0]
+            case EColorFadeType.FC_Sinusoidal:
+                def get_sinusoidal_driver_expression(phase: float, period: float) -> str:
+                    return f'(cos({phase}+(1/{period})*2*pi*(frame/bpy.context.scene.render.fps))+1)/2'
 
-            sinusoidal_factor_value_node = node_tree.nodes.new('ShaderNodeValue')
-            sinusoidal_factor_value_node.outputs[0].driver_add('default_value').driver.expression = get_sinusoidal_driver_expression(fade_color.FadeOffset, fade_color.FadePeriod)
+                sinusoidal_factor_value_node = node_tree.nodes.new('ShaderNodeValue')
+                sinusoidal_factor_value_node.outputs[0].driver_add('default_value').driver.expression = get_sinusoidal_driver_expression(fade_color.FadeOffset, fade_color.FadePeriod)
 
-            # TODO: For consistency, we should not be using a driver for the whole expression.
-            #  Make this a series of nodes instead. (sure would be nice to have code that could take a math expression
-            #  and turn it into a node tree)
+                # TODO: For consistency, we should not be using a driver for the whole expression.
+                #  Make this a series of nodes instead. (sure would be nice to have code that could take a math expression
+                #  and turn it into a node tree)
 
-            factor_socket = sinusoidal_factor_value_node.outputs[0]
+                factor_socket = sinusoidal_factor_value_node.outputs[0]
+            case _:
+                raise ValueError(f'Unknown color fade type {fade_color.ColorFadeType}')
 
         mix_alpha_node = node_tree.nodes.new('ShaderNodeMix')
         mix_alpha_node.data_type = 'FLOAT'
@@ -465,46 +470,48 @@ class MaterialBuilder:
     def _import_tex_env_map(self, tex_env_map: UTexEnvMap, _: MaterialSocketInputs) -> MaterialSocketOutputs:
         inputs = MaterialSocketInputs()
 
-        if tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream0:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'VTXW0000'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream1:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'EXTRAUV0'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream2:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'EXTRAUV1'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream3:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'EXTRAUV2'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream4:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'EXTRAUV3'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream5:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'EXTRAUV4'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream6:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'EXTRAUV5'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_Stream7:
-            uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
-            uv_map_node.uv_map = 'EXTRAUV6'
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_WorldCoords:
-            geometry_node = self._node_tree.nodes.new('ShaderNodeNewGeometry')
-            inputs.uv_socket = geometry_node.outputs['Position']
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_CameraCoords:
-            tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
-            inputs.uv_socket = tex_coord_node.outputs['Camera']
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_WorldEnvMapCoords:
-            tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
-            if tex_env_map.EnvMapType == ETexEnvMapType.EM_WorldSpace:
-                inputs.uv_socket = tex_coord_node.outputs['Reflection']
-            elif tex_env_map.EnvMapType == ETexEnvMapType.EM_CameraSpace:
-                inputs.uv_socket = tex_coord_node.outputs['Reflection']
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_CameraEnvMapCoords:
-            pass
-        elif tex_env_map.TexCoordSource == ETexCoordSrc.TCS_ProjectorCoords:
-            pass
+        match tex_env_map.TexCoordSource:
+            case ETexCoordSrc.TCS_Stream0:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'VTXW0000'
+            case ETexCoordSrc.TCS_Stream1:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'EXTRAUV0'
+            case ETexCoordSrc.TCS_Stream2:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'EXTRAUV1'
+            case ETexCoordSrc.TCS_Stream3:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'EXTRAUV2'
+            case ETexCoordSrc.TCS_Stream4:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'EXTRAUV3'
+            case ETexCoordSrc.TCS_Stream5:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'EXTRAUV4'
+            case ETexCoordSrc.TCS_Stream6:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'EXTRAUV5'
+            case ETexCoordSrc.TCS_Stream7:
+                uv_map_node = self._node_tree.nodes.new('ShaderNodeUVMap')
+                uv_map_node.uv_map = 'EXTRAUV6'
+            case ETexCoordSrc.TCS_WorldCoords:
+                geometry_node = self._node_tree.nodes.new('ShaderNodeNewGeometry')
+                inputs.uv_socket = geometry_node.outputs['Position']
+            case ETexCoordSrc.TCS_CameraCoords:
+                tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
+                inputs.uv_socket = tex_coord_node.outputs['Camera']
+            case ETexCoordSrc.TCS_WorldEnvMapCoords:
+                tex_coord_node = self._node_tree.nodes.new('ShaderNodeTexCoord')
+                match tex_env_map.EnvMapType:
+                    case ETexEnvMapType.EM_WorldSpace:
+                        inputs.uv_socket = tex_coord_node.outputs['Reflection']
+                    case ETexEnvMapType.EM_CameraSpace:
+                        inputs.uv_socket = tex_coord_node.outputs['Reflection']
+            case ETexCoordSrc.TCS_CameraEnvMapCoords:
+                pass
+            case ETexCoordSrc.TCS_ProjectorCoords:
+                pass
 
         material = self.load_material(tex_env_map.Material)
 
@@ -546,34 +553,35 @@ class MaterialBuilder:
             fcurve = vector_transform_node.inputs[1].driver_add('default_value', index)
             fcurve.driver.expression = expression
 
-        if tex_oscillator.UOscillationType == ETexOscillationType.OT_Pan:
-            vector_transform_node.operation = 'ADD'
-            if tex_oscillator.UOscillationRate != 0 and tex_oscillator.UOscillationAmplitude != 0:
-                add_driver_to_vector_transform_input(
-                    get_driver_expression_for_pan(tex_oscillator.UOscillationRate,
-                                                  tex_oscillator.UOscillationAmplitude), 0)
-            if tex_oscillator.VOscillationRate != 0 and tex_oscillator.VOscillationAmplitude != 0:
-                add_driver_to_vector_transform_input(
-                    get_driver_expression_for_pan(tex_oscillator.VOscillationRate,
-                                                  tex_oscillator.VOscillationAmplitude), 1)
-        elif tex_oscillator.UOscillationType == ETexOscillationType.OT_Jitter:
-            vector_transform_node.operation = 'ADD'
-            # same as add, but weird
-            pass
-        elif tex_oscillator.UOscillationType == ETexOscillationType.OT_Stretch:
-            vector_transform_node.operation = 'MULTIPLY'
-            if tex_oscillator.UOscillationRate != 0 and tex_oscillator.UOscillationAmplitude != 0:
-                add_driver_to_vector_transform_input(
-                    get_driver_expression_for_stretch(tex_oscillator.UOscillationRate,
-                                                      tex_oscillator.UOscillationAmplitude), 0)
-            if tex_oscillator.VOscillationRate != 0 and tex_oscillator.VOscillationAmplitude != 0:
-                add_driver_to_vector_transform_input(
-                    get_driver_expression_for_stretch(tex_oscillator.VOscillationRate,
-                                                      tex_oscillator.VOscillationAmplitude), 1)
-        elif tex_oscillator.UOscillationType == ETexOscillationType.OT_StretchRepeat:
-            vector_transform_node.operation = 'MULTIPLY'
-            # same as stretch, but weird...
-            pass
+        match tex_oscillator.UOscillationType:
+            case ETexOscillationType.OT_Pan:
+                vector_transform_node.operation = 'ADD'
+                if tex_oscillator.UOscillationRate != 0 and tex_oscillator.UOscillationAmplitude != 0:
+                    add_driver_to_vector_transform_input(
+                        get_driver_expression_for_pan(tex_oscillator.UOscillationRate,
+                                                    tex_oscillator.UOscillationAmplitude), 0)
+                if tex_oscillator.VOscillationRate != 0 and tex_oscillator.VOscillationAmplitude != 0:
+                    add_driver_to_vector_transform_input(
+                        get_driver_expression_for_pan(tex_oscillator.VOscillationRate,
+                                                    tex_oscillator.VOscillationAmplitude), 1)
+            case ETexOscillationType.OT_Jitter:
+                vector_transform_node.operation = 'ADD'
+                # same as add, but weird
+                pass
+            case ETexOscillationType.OT_Stretch:
+                vector_transform_node.operation = 'MULTIPLY'
+                if tex_oscillator.UOscillationRate != 0 and tex_oscillator.UOscillationAmplitude != 0:
+                    add_driver_to_vector_transform_input(
+                        get_driver_expression_for_stretch(tex_oscillator.UOscillationRate,
+                                                        tex_oscillator.UOscillationAmplitude), 0)
+                if tex_oscillator.VOscillationRate != 0 and tex_oscillator.VOscillationAmplitude != 0:
+                    add_driver_to_vector_transform_input(
+                        get_driver_expression_for_stretch(tex_oscillator.VOscillationRate,
+                                                        tex_oscillator.VOscillationAmplitude), 1)
+            case ETexOscillationType.OT_StretchRepeat:
+                vector_transform_node.operation = 'MULTIPLY'
+                # same as stretch, but weird...
+                pass
 
         return material_outputs
 
@@ -624,19 +632,20 @@ class MaterialBuilder:
             fcurve = vector_rotate_node.inputs['Rotation'].driver_add('default_value', index)
             fcurve.driver.expression = expression
 
-        if tex_rotator.TexRotationType == ETexRotationType.TR_FixedRotation:
-            vector_rotate_node.inputs['Rotation'].default_value = rotation_radians
-        elif tex_rotator.TexRotationType == ETexRotationType.TR_OscillatingRotation:
-            amplitude_radians = tex_rotator.OscillationAmplitude.get_radians()
-            rate_radians = tex_rotator.OscillationRate.get_radians()
-            for i, (amplitude, rate) in enumerate(zip(amplitude_radians, rate_radians)):
-                if amplitude != 0 or rate != 0:
-                    add_driver_to_vector_rotate_rotation_input(
-                        f'sin(frame / bpy.context.scene.render.fps * {rate}) * {amplitude}', i)
-        elif tex_rotator.TexRotationType == ETexRotationType.TR_ConstantlyRotating:
-            for i, radians in enumerate(rotation_radians):
-                if radians != 0:
-                    add_driver_to_vector_rotate_rotation_input(f'(frame / bpy.context.scene.render.fps) * {radians}', i)
+        match tex_rotator.TexRotationType:
+            case ETexRotationType.TR_FixedRotation:
+                vector_rotate_node.inputs['Rotation'].default_value = rotation_radians
+            case ETexRotationType.TR_OscillatingRotation:
+                amplitude_radians = tex_rotator.OscillationAmplitude.get_radians()
+                rate_radians = tex_rotator.OscillationRate.get_radians()
+                for i, (amplitude, rate) in enumerate(zip(amplitude_radians, rate_radians)):
+                    if amplitude != 0 or rate != 0:
+                        add_driver_to_vector_rotate_rotation_input(
+                            f'sin(frame / bpy.context.scene.render.fps * {rate}) * {amplitude}', i)
+            case ETexRotationType.TR_ConstantlyRotating:
+                for i, radians in enumerate(rotation_radians):
+                    if radians != 0:
+                        add_driver_to_vector_rotate_rotation_input(f'(frame / bpy.context.scene.render.fps) * {radians}', i)
 
         self._node_tree.links.new(vector_rotate_node.inputs['Vector'], socket_inputs.uv_source_socket)
 
@@ -686,10 +695,11 @@ class MaterialBuilder:
         elif socket_inputs.uv_source_socket is not None:
             self._node_tree.links.new(image_node.inputs['Vector'], socket_inputs.uv_source_socket)
 
-        if texture.UClampMode == ETexClampMode.TC_Clamp:
-            image_node.extension = 'EXTEND'
-        elif texture.UClampMode == ETexClampMode.TC_Wrap:
-            image_node.extension = 'REPEAT'
+        match texture.UClampMode:
+            case ETexClampMode.TC_Clamp:
+                image_node.extension = 'EXTEND'
+            case ETexClampMode.TC_Wrap:
+                image_node.extension = 'REPEAT'
 
         # Detail texture
         detail_material = None if texture.Detail is None else self.load_material(texture.Detail)

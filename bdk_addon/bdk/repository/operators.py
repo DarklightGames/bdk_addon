@@ -832,14 +832,15 @@ class BDK_OT_repository_rule_move(Operator):
         addon_prefs = get_addon_preferences(context)
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
 
-        if self.direction == 'UP':
-            if repository.rules_index > 0:
-                repository.rules.move(repository.rules_index, repository.rules_index - 1)
-                repository.rules_index -= 1
-        elif self.direction == 'DOWN':
-            if repository.rules_index < len(repository.rules) - 1:
-                repository.rules.move(repository.rules_index, repository.rules_index + 1)
-                repository.rules_index += 1
+        match self.direction:
+            case 'UP':
+                if repository.rules_index > 0:
+                    repository.rules.move(repository.rules_index, repository.rules_index - 1)
+                    repository.rules_index -= 1
+            case 'DOWN':
+                if repository.rules_index < len(repository.rules) - 1:
+                    repository.rules.move(repository.rules_index, repository.rules_index + 1)
+                    repository.rules_index += 1
 
         repository_metadata_write(repository)
         repository_runtime_packages_update_rule_exclusions(repository)

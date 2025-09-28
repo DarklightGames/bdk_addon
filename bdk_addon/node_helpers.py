@@ -151,29 +151,30 @@ def add_noise_type_switch_nodes(
         index_switch_node.index_switch_items.new()
 
     for index, noise_type in enumerate(noise_types):
-        if noise_type == 'PERLIN':
-            noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
-            noise_node.noise_dimensions = '2D'
-            # NOTE: There is a bug with using normal fDM noise where values end up as NaN. Use multi-fractal instead.
-            noise_node.noise_type = 'MULTIFRACTAL'
-            noise_node.inputs['Scale'].default_value = 0.5
-            noise_node.inputs['Detail'].default_value = 16
-            noise_node.inputs['Distortion'].default_value = 0.5
+        match noise_type:
+            case 'PERLIN':
+                noise_node = node_tree.nodes.new(type='ShaderNodeTexNoise')
+                noise_node.noise_dimensions = '2D'
+                # NOTE: There is a bug with using normal fDM noise where values end up as NaN. Use multi-fractal instead.
+                noise_node.noise_type = 'MULTIFRACTAL'
+                noise_node.inputs['Scale'].default_value = 0.5
+                noise_node.inputs['Detail'].default_value = 16
+                noise_node.inputs['Distortion'].default_value = 0.5
 
-            if noise_distortion_socket:
-                node_tree.links.new(noise_distortion_socket, noise_node.inputs['Distortion'])
+                if noise_distortion_socket:
+                    node_tree.links.new(noise_distortion_socket, noise_node.inputs['Distortion'])
 
-            if noise_roughness_socket:
-                node_tree.links.new(noise_roughness_socket, noise_node.inputs['Roughness'])
+                if noise_roughness_socket:
+                    node_tree.links.new(noise_roughness_socket, noise_node.inputs['Roughness'])
 
-            node_tree.links.new(vector_socket, noise_node.inputs['Vector'])
-            noise_value_socket = noise_node.outputs['Fac']
-        elif noise_type == 'WHITE':
-            noise_node = node_tree.nodes.new(type='ShaderNodeTexWhiteNoise')
-            noise_node.noise_dimensions = '2D'
-            noise_value_socket = noise_node.outputs['Value']
-        else:
-            raise ValueError(f'Unknown noise type {noise_type}')
+                node_tree.links.new(vector_socket, noise_node.inputs['Vector'])
+                noise_value_socket = noise_node.outputs['Fac']
+            case 'WHITE':
+                noise_node = node_tree.nodes.new(type='ShaderNodeTexWhiteNoise')
+                noise_node.noise_dimensions = '2D'
+                noise_value_socket = noise_node.outputs['Value']
+            case _:
+                raise ValueError(f'Unknown noise type {noise_type}')
 
         node_tree.links.new(noise_value_socket, index_switch_node.inputs[f'{index}'])
 
@@ -298,10 +299,11 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
     input_node = None
     output_node = None
     for node in node_tree.nodes:
-        if node.bl_idname == 'NodeGroupInput':
-            input_node = node
-        elif node.bl_idname == 'NodeGroupOutput':
-            output_node = node
+        match node.bl_idname:
+            case 'NodeGroupInput':
+                input_node = node
+            case 'NodeGroupOutput':
+                output_node = node
 
     input_node = node_tree.nodes.new(type='NodeGroupInput') if input_node is None else input_node
     output_node = node_tree.nodes.new(type='NodeGroupOutput') if output_node is None else output_node

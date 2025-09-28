@@ -131,14 +131,15 @@ class BDK_OT_terrain_doodad_duplicate(Operator):
 
 def get_terrain_doodad_paint_layer_nodes(doodad_paint_layer: 'BDK_PG_terrain_doodad_paint_layer'):
     terrain_info = doodad_paint_layer.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info
-    if doodad_paint_layer.layer_type == 'PAINT':
-        # Get the terrain layer from the paint layer ID.
-        terrain_info_paint_layer = get_terrain_info_paint_layer_by_id(terrain_info, doodad_paint_layer.paint_layer_id)
-        return terrain_info_paint_layer.nodes if terrain_info_paint_layer is not None else None
-    elif doodad_paint_layer.layer_type == 'DECO':
-        # Get the terrain layer from the deco layer ID.
-        terrain_info_deco_layer = get_terrain_info_deco_layer_by_id(terrain_info, doodad_paint_layer.deco_layer_id)
-        return terrain_info_deco_layer.nodes if terrain_info_deco_layer is not None else None
+    match doodad_paint_layer.layer_type:
+        case 'PAINT':
+            # Get the terrain layer from the paint layer ID.
+            terrain_info_paint_layer = get_terrain_info_paint_layer_by_id(terrain_info, doodad_paint_layer.paint_layer_id)
+            return terrain_info_paint_layer.nodes if terrain_info_paint_layer is not None else None
+        case 'DECO':
+            # Get the terrain layer from the deco layer ID.
+            terrain_info_deco_layer = get_terrain_info_deco_layer_by_id(terrain_info, doodad_paint_layer.deco_layer_id)
+            return terrain_info_deco_layer.nodes if terrain_info_deco_layer is not None else None
     return None
 
 

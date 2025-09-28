@@ -487,13 +487,13 @@ class BDK_OT_bsp_brush_check_for_errors(Operator):
             self.report({'ERROR'}, f'Found {len(object_errors)} brush(es) with errors')
             for obj, errors in object_errors.items():
                 for (error, index) in errors:
-                    print(error, index)
-                    if error == BspBrushError.NOT_MANIFOLD:
-                        self.report({'ERROR'}, f'{obj.name}: Edge {index} is not manifold')
-                    elif error == BspBrushError.NOT_CONVEX:
-                        self.report({'ERROR'}, f'{obj.name}: Edge {index} is not convex')
-                    elif error == BspBrushError.TWISTED_FACE:
-                        self.report({'ERROR'}, f'{obj.name}: Face {index} is twisted')
+                    match error:
+                        case BspBrushError.NOT_MANIFOLD:
+                            self.report({'ERROR'}, f'{obj.name}: Edge {index} is not manifold')
+                        case BspBrushError.NOT_CONVEX:
+                            self.report({'ERROR'}, f'{obj.name}: Edge {index} is not convex')
+                        case BspBrushError.TWISTED_FACE:
+                            self.report({'ERROR'}, f'{obj.name}: Face {index} is twisted')
             if self.deselect_ok:
                 # Go through all selected objects and deselect those that don't have errors.
                 for obj in context.selected_objects:

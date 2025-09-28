@@ -41,12 +41,13 @@ class BDK_UL_terrain_doodad_sculpt_layers(UIList):
 class BDK_UL_terrain_doodad_paint_layers(UIList):
 
     def draw_item(self, context: Context, layout, data, item, icon, active_data, active_propname, index):
-        if item.layer_type == 'PAINT':
-            layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='BRUSH_DATA')
-        elif item.layer_type == 'DECO':
-            layout.label(text=item.deco_layer_name if item.deco_layer_name else '<no layer selected>', icon='MONKEY')
-        elif item.layer_type == 'ATTRIBUTE':
-            layout.label(text=item.attribute_layer_id if item.attribute_layer_id else '<no attribute>', icon='MODIFIER_DATA')
+        match item.layer_type:
+            case 'PAINT':
+                layout.label(text=item.paint_layer_name if item.paint_layer_name else '<no layer selected>', icon='BRUSH_DATA')
+            case 'DECO':
+                layout.label(text=item.deco_layer_name if item.deco_layer_name else '<no layer selected>', icon='MONKEY')
+            case 'ATTRIBUTE':
+                layout.label(text=item.attribute_layer_id if item.attribute_layer_id else '<no attribute>', icon='MODIFIER_DATA')
         layout.prop(item, 'operation', emboss=False, text='')
         layout.prop(item, 'mute', text='', icon='HIDE_ON' if item.mute else 'HIDE_OFF', emboss=False)
 
@@ -733,19 +734,21 @@ class BDK_PT_terrain_doodad_scatter_layer_object_scale(Panel):
 
         flow.separator()
 
-        if scatter_layer_object.scale_mode == 'UNIFORM':
-            flow.prop(scatter_layer_object, 'scale_uniform', text='Scale')
-        elif scatter_layer_object.scale_mode == 'NON_UNIFORM':
-            flow.prop(scatter_layer_object, 'scale', text='Scale')
+        match scatter_layer_object.scale_mode:
+            case 'UNIFORM':
+                flow.prop(scatter_layer_object, 'scale_uniform', text='Scale')
+            case 'NON_UNIFORM':
+                flow.prop(scatter_layer_object, 'scale', text='Scale')
 
         flow.separator()
 
-        if scatter_layer_object.scale_mode == 'UNIFORM':
-            flow.prop(scatter_layer_object, 'scale_random_uniform_min', text='Random Scale Min')
-            flow.prop(scatter_layer_object, 'scale_random_uniform_max', text='Max')
-        elif scatter_layer_object.scale_mode == 'NON_UNIFORM':
-            flow.prop(scatter_layer_object, 'scale_random_min', text='Random Scale Min')
-            flow.prop(scatter_layer_object, 'scale_random_max', text='Max')
+        match scatter_layer_object.scale_mode:
+            case 'UNIFORM':
+                flow.prop(scatter_layer_object, 'scale_random_uniform_min', text='Random Scale Min')
+                flow.prop(scatter_layer_object, 'scale_random_uniform_max', text='Max')
+            case 'NON_UNIFORM':
+                flow.prop(scatter_layer_object, 'scale_random_min', text='Random Scale Min')
+                flow.prop(scatter_layer_object, 'scale_random_max', text='Max')
 
         flow.prop(scatter_layer_object, 'scale_seed', text='Seed')
 
