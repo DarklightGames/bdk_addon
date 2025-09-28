@@ -37,7 +37,7 @@ class BDK_PT_terrain_info_advanced(Panel):
 
         terrain_info = get_terrain_info(context.active_object)
         layout = self.layout
-        flow = layout.grid_flow(columns=1)
+        flow = layout.grid_flow(columns=1, align=True)
         flow.use_property_split = True
         flow.use_property_decorate = False
         flow.prop(terrain_info, 'terrain_scale_z')
@@ -287,21 +287,22 @@ def draw_terrain_layer_node_settings(layout: 'UILayout', node: 'BDK_PG_terrain_l
     flow.prop(node, 'factor')
     flow.separator()
 
-    if node.type == 'PAINT_LAYER':
-        flow.column().prop(node, 'paint_layer_name')
-    elif node.type == 'NORMAL':
-        col = flow.column(align=True)
-        col.prop(node, 'normal_angle_min')
-        col.prop(node, 'normal_angle_max', text='Max')
-    elif node.type == 'NOISE':
-        flow.prop(node, 'noise_type')
-        if node.noise_type == 'PERLIN':
+    match node.type:
+        case 'PAINT_LAYER':
+            flow.column().prop(node, 'paint_layer_name')
+        case 'NORMAL':
             col = flow.column(align=True)
-            col.prop(node, 'noise_perlin_scale', text='Scale')
-            col.prop(node, 'noise_perlin_detail', text='Detail')
-            col.prop(node, 'noise_perlin_roughness', text='Roughness')
-            col.prop(node, 'noise_perlin_lacunarity', text='Lacunarity')
-            col.prop(node, 'noise_perlin_distortion', text='Distortion')
+            col.prop(node, 'normal_angle_min')
+            col.prop(node, 'normal_angle_max', text='Max')
+        case 'NOISE':
+            flow.prop(node, 'noise_type')
+            if node.noise_type == 'PERLIN':
+                col = flow.column(align=True)
+                col.prop(node, 'noise_perlin_scale', text='Scale')
+                col.prop(node, 'noise_perlin_detail', text='Detail')
+                col.prop(node, 'noise_perlin_roughness', text='Roughness')
+                col.prop(node, 'noise_perlin_lacunarity', text='Lacunarity')
+                col.prop(node, 'noise_perlin_distortion', text='Distortion')
 
     if node.type not in {'CONSTANT'}:
         flow.prop(node, 'use_map_range')

@@ -1049,6 +1049,8 @@ def terrain_shift_y_get(self):
     terrain_info = get_terrain_info(bpy.context.active_object)
     return int(self.y_distance / terrain_info.terrain_scale)
 
+data_types_default = {'OBJECTS', 'HEIGHTMAP', 'PAINT_LAYERS', 'QUAD_TESSELATION', 'TERRAIN_HOLES', 'ATTRIBUTES'}
+
 
 class BDK_OT_terrain_info_shift(Operator):
     bl_idname = 'bdk.terrain_info_shift'
@@ -1069,7 +1071,8 @@ class BDK_OT_terrain_info_shift(Operator):
         ('PAINT_LAYERS', 'Paint Layers', 'Shift the paint layers'),
         ('QUAD_TESSELATION', 'Quad Tesselation', 'Shift the quad tesselation'),
         ('TERRAIN_HOLES', 'Terrain Holes', 'Shift the terrain holes'),
-    ), default={'OBJECTS', 'HEIGHTMAP', 'PAINT_LAYERS', 'QUAD_TESSELATION', 'TERRAIN_HOLES'}, options={'ENUM_FLAG'})
+        ('ATTRIBUTES', 'Attributes', 'Shift generic attributes'),
+    ), default=data_types_default, options={'ENUM_FLAG'})
 
     @classmethod
     def poll(cls, context: Context):
@@ -1100,6 +1103,7 @@ class BDK_OT_terrain_info_shift(Operator):
             return {'FINISHED'}
 
         terrain_info_object = context.active_object
+        assert terrain_info_object
         terrain_info = get_terrain_info(terrain_info_object)
         mesh_data: Mesh = cast(Mesh, terrain_info_object.data)
 
@@ -1126,26 +1130,38 @@ class BDK_OT_terrain_info_shift(Operator):
             # Reassign the z-values to the terrain info vertices.
             for (vertex, z) in zip(mesh_data.vertices, z_values.flat):
                 vertex.co.z = z
+            
+        if 'PAINT_LAYERS':
+            shape = (terrain_info.x_size, terrain_info.y_size)
+            for paint_layer in terrain_info.paint_layers:
+                for node in filter(lambda x: x.type == 'PAINT', paint_layer.nodes):
+                    vertex_group, weights = get_vertex_group_weights(terrain_info_object, node.id)
+                    count = terrain_info.x_size * terrain_info.y_size
+                    weights = numpy.fromiter(iter(weights), dtype=float, count=count).reshape(shape)
+                    weights = numpy.roll(weights, (self.x, self.y), axis=(1, 0))
+                    weights = weights.flatten()
+                    for index, weight in enumerate(weights):
+                        vertex_group.add((index,), weight, 'REPLACE')
 
-        if 'PAINT_LAYERS' in self.data_types:
+        if 'ATTRIBUTES' in self.data_types:
             for attribute in mesh_data.attributes:
                 match attribute.data_type:
                     case 'BYTE_COLOR':
                         # Convert the attribute values to a numpy array.
                         shape = (terrain_info.x_size, terrain_info.y_size, 4)
                         count = terrain_info.x_size * terrain_info.y_size
-                        attribute_values = numpy.fromiter(map(lambda v: v.color, attribute.data), dtype=(float, 4), count=count).reshape(shape)
-                        attribute_values = numpy.roll(attribute_values, (self.x, self.y), axis=(1, 0))
+                        weights = numpy.fromiter(map(lambda v: v.color, attribute.data), dtype=(float, 4), count=count).reshape(shape)
+                        weights = numpy.roll(weights, (self.x, self.y), axis=(1, 0))
                         # Reassign the attribute values.
-                        attribute.data.foreach_set('color', attribute_values.flatten())
+                        attribute.data.foreach_set('color', weights.flatten())
                     case 'FLOAT':
                         shape = terrain_info.x_size, terrain_info.y_size
                         count = terrain_info.x_size * terrain_info.y_size
-                        attribute_values = numpy.fromiter(map(lambda v: v.value, attribute.data), dtype=float,
+                        weights = numpy.fromiter(map(lambda v: v.value, attribute.data), dtype=float,
                                                           count=count).reshape(shape)
-                        attribute_values = numpy.roll(attribute_values, (self.x, self.y), axis=(1, 0))
+                        weights = numpy.roll(weights, (self.x, self.y), axis=(1, 0))
                         # Reassign the attribute values.
-                        attribute.data.foreach_set('value', attribute_values.flatten())
+                        attribute.data.foreach_set('value', weights.flatten())
 
         # Shift the quad tesselation.
         if 'QUAD_TESSELATION' in self.data_types:

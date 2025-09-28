@@ -6,7 +6,7 @@ from bpy.types import PropertyGroup, Object, Context, Mesh, Material
 from bpy.props import PointerProperty, BoolProperty, FloatProperty, CollectionProperty, IntProperty, StringProperty, \
     FloatVectorProperty, EnumProperty
 
-from .kernel import ensure_deco_layers
+from .kernel import ensure_deco_layers, ensure_paint_layers
 from ..helpers import is_bdk_material, is_bdk_static_mesh_actor, get_terrain_info
 from .builder import build_terrain_material
 
@@ -79,6 +79,7 @@ def terrain_layer_node_terrain_paint_layer_name_update_cb(self: 'BDK_PG_terrain_
         self.paint_layer_id = ''
 
     # Rebuild the deco node setup.
+    ensure_paint_layers(self.terrain_info_object)
     ensure_deco_layers(self.terrain_info_object)
 
 
