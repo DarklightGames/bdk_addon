@@ -23,11 +23,13 @@ platforms = ["windows-x64", "linux-x64"]
 # For some bizarre reason, Blender 4.5 shipped with two different versions of Python
 # for Linux (3.13) and Windows (3.11).
 wheels = [
-  "./wheels/bdk_py-0.1.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+  "./wheels/bdk_py-0.1.0-cp311-cp311-manylinux_2_34_x86_64.whl",
   "./wheels/bdk_py-0.1.1-cp311-cp311-win_amd64.whl",
-  "./wheels/t3dpy-0.1.8-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-  "./wheels/t3dpy-0.1.8-cp311-cp311-win_amd64.whl",
+  "./wheels/bdk_py-0.1.1-cp313-cp313-manylinux2014_x86_64.whl",
   "./wheels/networkx-3.3-py3-none-any.whl",
+  "./wheels/t3dpy-0.1.4-cp311-cp311-manylinux_2_34_x86_64.whl",
+  "./wheels/t3dpy-0.1.8-cp311-cp311-win_amd64.whl",
+  "./wheels/t3dpy-0.1.8-cp313-cp313-manylinux2014_x86_64.whl"
 ]
 
 # Optional: build setting.
