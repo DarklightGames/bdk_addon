@@ -381,7 +381,7 @@ def ensure_curve_normal_offset_node_tree() -> NodeTree:
 
         # Add Resample Curve node.
         resample_curve_node = node_tree.nodes.new(type='GeometryNodeResampleCurve')
-        resample_curve_node.mode = 'EVALUATED'
+        resample_curve_node.inputs['Mode'].default_value = 'Evaluated'
 
         # Add Vector Scale node.
         vector_scale_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
