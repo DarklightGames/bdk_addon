@@ -2,9 +2,11 @@ import numpy as np
 from bmesh.types import BMFace
 from mathutils import Vector, Matrix
 
+from ..dfs import dfs_view_layer_objects
+
 from .builder import ensure_bdk_brush_uv_node_tree, create_bsp_brush_polygon, apply_level_to_brush_mapping, \
     ensure_bdk_level_visibility_modifier
-from ..helpers import should_show_bdk_developer_extras, dfs_view_layer_objects, humanize_time
+from ..helpers import should_show_bdk_developer_extras, humanize_time
 from .data import bsp_optimization_items, ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
     POLY_FLAGS_ATTRIBUTE_NAME, BRUSH_INDEX_ATTRIBUTE_NAME, BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME, \
     MATERIAL_INDEX_ATTRIBUTE_NAME, READ_ONLY_ATTRIBUTE_NAME, bsp_surface_attributes
@@ -756,9 +758,10 @@ class BDK_OT_bsp_build(Operator):
                 elif not obj.visible_get():
                     return False
             return True
+    
+        assert context.view_layer is not None
 
-        brush_objects = [(obj, instance_objects, matrix_world) for (obj, instance_objects, matrix_world) in
-                         dfs_view_layer_objects(context.view_layer) if brush_object_filter(obj, instance_objects)]
+        brush_objects = [x for x in dfs_view_layer_objects(context.view_layer) if brush_object_filter(x.obj, x.instance_objects)]
 
         # This is a list of the materials used for the brushes. It is populated as we iterate over the brush objects.
         # We then use this at the end to create the materials for the level object.
@@ -774,8 +777,10 @@ class BDK_OT_bsp_build(Operator):
         # Add the brushes to the level object.
         level_object.bdk.level.brushes.clear()
 
-        for brush_index, (brush_object, instance_collections, _) in enumerate(brush_objects):
-            is_instanced_brush = len(instance_collections) > 0
+        for brush_index, dfs_object in enumerate(brush_objects):
+            brush_object = dfs_object.obj
+            instance_objects = dfs_object.instance_objects
+            is_instanced_brush = len(instance_objects) > 0
             if is_instanced_brush:
                 # Skip brushes that are instanced, as we cannot change their texturing.
                 continue
@@ -791,10 +796,13 @@ class BDK_OT_bsp_build(Operator):
         instanced_brush_indices = []
 
         brushes: list[Brush] = []
-        for brush_index, (brush_object, asset_instances, matrix_world) in enumerate(brush_objects):
+        for brush_index, dfs_object in enumerate(brush_objects):
 
-            if asset_instances:
+            if dfs_object.instance_objects:
                 instanced_brush_indices.append(brush_index)
+            
+            brush_object = dfs_object.obj
+            matrix_world = dfs_object.matrix_world
 
             # Create a new Poly object for each face of the brush.
             polys = []

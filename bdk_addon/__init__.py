@@ -6,6 +6,7 @@ if 'bpy' in locals():
     importlib.reload(constants)
     importlib.reload(property_group_helpers)
     importlib.reload(node_helpers)
+    importlib.reload(dfs)
 
     importlib.reload(actor_properties)
 
@@ -91,6 +92,7 @@ if 'bpy' in locals():
 else:
     from . import data as bdk_data
     from . import helpers as bdk_helpers
+    from . import dfs as dfs
 
     from .actor import properties as actor_properties
 

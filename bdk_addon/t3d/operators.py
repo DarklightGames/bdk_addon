@@ -22,7 +22,8 @@ from .data import T3DObject, Polygon
 from pathlib import Path
 from .importer import import_t3d
 from .writer import T3DWriter
-from ..helpers import dfs_view_layer_objects, sanitize_name_for_unreal, humanize_size
+from ..helpers import sanitize_name_for_unreal, humanize_size
+from ..dfs import dfs_view_layer_objects
 
 
 class BDK_OT_t3d_import_from_clipboard(Operator):
@@ -40,6 +41,7 @@ class BDK_OT_t3d_import_from_clipboard(Operator):
         return True
 
     def execute(self, context: Context):
+        assert context.window_manager is not None
         try:
             import_t3d(context.window_manager, context.window_manager.clipboard, context)
             self.report({'INFO'}, f'Imported actors from clipboard')
@@ -407,19 +409,13 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
 
     def execute(self, context: Context):
         # Use the depth-first iterator to get all the objects in the view layer.
+        assert context.view_layer is not None
         dfs_objects = list(dfs_view_layer_objects(context.view_layer))
 
         # Filter only the selected objects.
         selected_objects: list[tuple[Object, Matrix]] = list()
-        for obj, instance_objects, matrix_world in dfs_objects:
-            if instance_objects:
-                if instance_objects[0].select_get():
-                    selected_objects.append((obj, matrix_world))
-            else:
-                if obj.select_get():
-                    selected_objects.append((obj, matrix_world))
-
-        # selected_objects = list(filter(lambda obj: obj[0].select_get() or (obj[1] is not None and obj[1].select_get()), dfs_objects))
+        for dfs_object in filter(lambda x: x.is_selected, dfs_objects):
+            selected_objects.append((dfs_object.obj, dfs_object.matrix_world))
 
         # Start a progress bar.
         wm = context.window_manager
