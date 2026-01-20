@@ -38,7 +38,7 @@ def build(args):
     # are in the .blend file before it evaluates any static meshes.
     material_files = []
     static_mesh_files = []
-    new_ids: List[bpy.types.ID] = []
+    new_ids: list[bpy.types.ID] = []
 
     for file in glob.glob('**/*.props.txt', root_dir=args.input_directory):
         # The class type of the object is the directory name of the parent folder.

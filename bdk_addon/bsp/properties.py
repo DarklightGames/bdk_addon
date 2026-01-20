@@ -3,7 +3,6 @@ from bpy.props import EnumProperty, PointerProperty, IntProperty, CollectionProp
      BoolProperty, StringProperty
 from bpy.types import PropertyGroup, Object, Context
 from enum import Enum
-from typing import Set
 
 
 class BrushColors(Enum):
@@ -15,7 +14,7 @@ class BrushColors(Enum):
     SemiSolid = (0.875, 0.6, 0.6, 1.0)
 
 
-def get_brush_color(csg_operation: str, poly_flags: Set[str]) -> tuple[float, float, float, float]:
+def get_brush_color(csg_operation: str, poly_flags: set[str]) -> tuple[float, float, float, float]:
     match csg_operation:
         case 'ADD':
             if 'PORTAL' in poly_flags:
@@ -67,15 +66,15 @@ __poly_flag_keys_to_values__ = {key: value for key, _, _, _, value in poly_flags
 __poly_flag_values_to_keys__ = {value: key for key, _, _, _, value in poly_flags_items}
 
 
-def get_poly_flags_value_from_keys(keys: Set[str]) -> int:
+def get_poly_flags_value_from_keys(keys: set[str]) -> int:
     poly_flags: int = 0
     for key in keys:
         poly_flags |= __poly_flag_keys_to_values__[key]
     return poly_flags
 
 
-def get_poly_flags_keys_from_value(values: int) -> Set[str]:
-    poly_flags: Set[str] = set()
+def get_poly_flags_keys_from_value(values: int) -> set[str]:
+    poly_flags: set[str] = set()
     for value, key in __poly_flag_values_to_keys__.items():
         if values & value:
             poly_flags.add(key)

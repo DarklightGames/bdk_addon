@@ -1,4 +1,4 @@
-from typing import Callable, List
+from typing import Callable
 
 from bpy.types import NodeTree, NodeSocket
 
@@ -1481,7 +1481,7 @@ def ensure_bdk_screen_space_mouse_position_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Screen Space Mouse Position', items, build_function)
 
 
-ensure_functions: List[Callable[[], NodeTree]] = [
+ensure_functions: list[Callable[[], NodeTree]] = [
     ensure_bdk_axes_to_matrix_node_tree,
     ensure_bdk_duplicate_active_face_node_tree,
     ensure_bdk_move_edge_to_origin_node_tree,

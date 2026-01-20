@@ -266,7 +266,7 @@ def has_selected_deco_layer_node(context: Context) -> bool:
     return 0 <= deco_layer_nodes_index < len(deco_layer_nodes)
 
 
-def get_selected_deco_layer_node(context: Context) -> Optional[BDK_PG_terrain_layer_node]:
+def get_selected_deco_layer_node(context: Context) -> BDK_PG_terrain_layer_node | None:
     if not has_selected_deco_layer_node(context):
         return None
     deco_layer = get_selected_deco_layer(context)

@@ -3,7 +3,7 @@
 
 from ctypes import Structure, c_uint32, c_uint16, sizeof
 import struct
-from typing import BinaryIO, List
+from typing import BinaryIO
 from enum import Enum
 
 
@@ -113,7 +113,7 @@ def name_from_buffer(package_version: int, stream: BinaryIO) -> str:
     return name.decode('windows-1252')
 
 
-def read_package_dependencies(path: str):
+def read_package_dependencies(path: str) -> set[str]:
     """
     Load an Unreal package file.
     """
@@ -125,8 +125,8 @@ def read_package_dependencies(path: str):
         # Read the name table.
         stream.seek(header.name_offset)
 
-        name_table: List[str] = []
-        for i in range(header.name_count):
+        name_table: list[str] = []
+        for _ in range(header.name_count):
             name = name_from_buffer(header.version, stream)
             _flags = struct.unpack('I', stream.read(4))[0]
             name_table.append(name)
@@ -134,17 +134,17 @@ def read_package_dependencies(path: str):
         # Read the import table.
         stream.seek(header.import_offset)
 
-        import_table: List[UnrealPackageImport] = []
-        for i in range(header.import_count):
+        import_table: list[UnrealPackageImport] = []
+        for _ in range(header.import_count):
             entry = UnrealPackageImport.from_buffer_copy(stream)
             import_table.append(entry)
 
-        import_packages = set()
+        import_packages: set[str] = set()
 
         for entry in import_table:
             # Recurse through the package hierarchy.
             if entry.package.type == ObjectReferenceType.IMPORT_TABLE:
-                def recurse_import_table(import_table: List[UnrealPackageImport], index: int) -> UnrealPackageImport:
+                def recurse_import_table(import_table: list[UnrealPackageImport], index: int) -> UnrealPackageImport:
                     entry = import_table[index]
                     if entry.package.type == ObjectReferenceType.IMPORT_TABLE:
                         return recurse_import_table(import_table, entry.package.index)

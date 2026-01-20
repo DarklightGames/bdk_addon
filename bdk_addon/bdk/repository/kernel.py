@@ -15,7 +15,6 @@ from bpy.types import Context
 
 from .properties import BDK_PG_repository, BDK_PG_repository_package
 from pathlib import Path
-from typing import Optional, List, Dict
 
 from ...data import UReference
 from ...helpers import get_addon_preferences
@@ -23,7 +22,7 @@ from ...io.config import ConfigParserMultiOpt
 import json
 
 
-def is_game_directory_and_mod_valid(game_directory: Path, mod: Optional[str]) -> bool:
+def is_game_directory_and_mod_valid(game_directory: Path, mod: str | None) -> bool:
     try:
         read_repository_package_patterns(game_directory, mod)
         return True
@@ -31,7 +30,7 @@ def is_game_directory_and_mod_valid(game_directory: Path, mod: Optional[str]) ->
         return False
 
 
-def read_repository_package_patterns(game_directory: Path, mod: Optional[str]) -> List[Path]:
+def read_repository_package_patterns(game_directory: Path, mod: str | None) -> list[Path]:
     # Determine the asset paths.
     game_directory = Path(game_directory)
     game_system_directory = game_directory / 'System'
@@ -93,12 +92,12 @@ def read_repository_package_patterns(game_directory: Path, mod: Optional[str]) -
 class Manifest:
     class Package:
         def __init__(self):
-            self.exported_time: Optional[datetime] = None
-            self.build_time: Optional[datetime] = None
+            self.exported_time: datetime | None = None
+            self.build_time: datetime | None = None
 
     def __init__(self, path: str):
         self.path = path
-        self.packages: Dict[str, Manifest.Package] = dict()
+        self.packages: dict[str, Manifest.Package] = dict()
 
     def has_package(self, package_path: str) -> bool:
         return package_path in self.packages

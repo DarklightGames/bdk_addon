@@ -271,7 +271,7 @@ def create_image_from_attribute(terrain_info_object: Object, depsgraph: Depsgrap
     return image
 
 
-def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Optional[Depsgraph] = None, should_quantize: bool = True) -> np.ndarray:
+def get_terrain_heightmap(terrain_info_object: Object, depsgraph: Depsgraph | None = None, should_quantize: bool = True) -> np.ndarray:
     terrain_info = get_terrain_info(terrain_info_object)
     if terrain_info is None:
         raise RuntimeError('Invalid object')

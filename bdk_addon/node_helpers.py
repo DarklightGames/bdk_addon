@@ -1,4 +1,4 @@
-from typing import Optional, Iterable, Tuple, List, Callable, cast, Union, Dict, Any
+from typing import Iterable, Callable, cast, Union
 
 import bpy
 from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNodeRepeatOutput, \
@@ -7,10 +7,12 @@ from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, Geome
 from .data import map_range_interpolation_type_items
 
 
-def get_socket_identifier_from_name(node_tree: NodeTree, socket_name: str) -> Optional[str]:
+def get_socket_identifier_from_name(node_tree: NodeTree, socket_name: str) -> str | None:
     """
     Gets the socket identifier from the given node tree and socket name.
     """
+    if node_tree.interface is None:
+        return None
     for name, socket in node_tree.interface.items_tree.items():
         if name == socket_name:
             return socket.identifier
@@ -58,8 +60,8 @@ def add_clamp_node(node_tree: NodeTree, value_socket: NodeSocket, min_value: Nod
 def add_operation_switch_nodes(
         node_tree: NodeTree,
         operation_socket: NodeSocket,
-        value_1_socket: Optional[NodeSocket],
-        value_2_socket: Optional[NodeSocket],
+        value_1_socket: NodeSocket | None,
+        value_2_socket: NodeSocket | None,
         operations: Iterable[str]
 ) -> NodeSocket:
 
@@ -126,8 +128,8 @@ def add_noise_type_switch_nodes(
         node_tree: NodeTree,
         vector_socket: NodeSocket,
         noise_type_socket: NodeSocket,
-        noise_distortion_socket: Optional[NodeSocket],
-        noise_roughness_socket: Optional[NodeSocket],
+        noise_distortion_socket: NodeSocket | None,
+        noise_roughness_socket: NodeSocket | None,
 ) -> NodeSocket:
 
     """
@@ -181,14 +183,14 @@ def add_noise_type_switch_nodes(
     return index_switch_node.outputs['Output']
 
 
-def ensure_geometry_node_tree(name: str, items: Iterable[Tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
+def ensure_geometry_node_tree(name: str, items: Iterable[tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
     """
     Ensures that a geometry node tree with the given name, inputs and outputs exists.
     """
     return ensure_node_tree(name, 'GeometryNodeTree', items, build_function, should_force_build)
 
 
-def ensure_shader_node_tree(name: str, items: Iterable[Tuple[str, str, str]],
+def ensure_shader_node_tree(name: str, items: Iterable[tuple[str, str, str]],
                             build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
     """
     Ensures that a shader node tree with the given name, inputs and outputs exists.
@@ -197,7 +199,7 @@ def ensure_shader_node_tree(name: str, items: Iterable[Tuple[str, str, str]],
 
 
 def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: str,
-                                        socket_type: str) -> Optional[NodeTreeInterfaceItem]:
+                                        socket_type: str) -> NodeTreeInterfaceItem | None:
     for index, item in enumerate(node_tree.interface.items_tree):
         if item.item_type == 'SOCKET' and item.in_out == in_out and item.name == name and item.socket_type == socket_type:
             return item
@@ -206,7 +208,7 @@ def get_node_tree_socket_interface_item(node_tree: NodeTree, in_out: str, name: 
 
 def ensure_node_tree(name: str,
                      node_group_type: str,
-                     items: Iterable[Union[Tuple[str, str, str], Tuple[str, str, str, str], Tuple[str, str, str, str, str]]],
+                     items: Iterable[Union[tuple[str, str, str], tuple[str, str, str, str], tuple[str, str, str, str, str]]],
                      build_function: Callable[[NodeTree], None],
                      should_force_build: bool = False
                      ) -> NodeTree:
@@ -287,7 +289,7 @@ def ensure_node_tree(name: str,
     return node_tree
 
 
-def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
+def ensure_input_and_output_nodes(node_tree: NodeTree) -> tuple[Node, Node]:
     """
     Ensures that the node tree has input and output nodes.
     :param node_tree: The node tree to check and potentially add input and output nodes to.
@@ -311,7 +313,7 @@ def ensure_input_and_output_nodes(node_tree: NodeTree) -> Tuple[Node, Node]:
     return input_node, output_node
 
 
-def ensure_inputs_and_outputs(node_tree: NodeTree) -> Tuple[NodeOutputs, NodeInputs]:
+def ensure_inputs_and_outputs(node_tree: NodeTree) -> tuple[NodeOutputs, NodeInputs]:
     input_node, output_node = ensure_input_and_output_nodes(node_tree)
     return (input_node.outputs, output_node.inputs)
 
@@ -482,7 +484,7 @@ def ensure_trim_curve_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Curve Trim', items, build_function)
 
 
-def add_bit_math_node(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> NodeSocket:
+def add_bit_math_node(node_tree: NodeTree, operation: str, value_sockets: list[NodeSocket]) -> NodeSocket:
     operation_node = node_tree.nodes.new(type='FunctionNodeBitMath')
     operation_node.operation = operation
 
@@ -492,7 +494,7 @@ def add_bit_math_node(node_tree: NodeTree, operation: str, value_sockets: List[N
     return operation_node.outputs[0]
 
 
-def add_chained_bit_math_nodes(node_tree: NodeTree, operation: str, value_sockets: List[NodeSocket]) -> Optional[NodeSocket]:
+def add_chained_bit_math_nodes(node_tree: NodeTree, operation: str, value_sockets: list[NodeSocket]) -> NodeSocket | None:
     if not value_sockets:
         return None
     output_socket = value_sockets[0]
@@ -505,7 +507,7 @@ def add_chained_bit_math_nodes(node_tree: NodeTree, operation: str, value_socket
     return output_socket
 
 
-def add_chained_math_nodes(node_tree: NodeTree, operation: str, values: List[NodeSocket | float | int]) -> Optional[NodeSocket]:
+def add_chained_math_nodes(node_tree: NodeTree, operation: str, values: list[NodeSocket | float | int]) -> NodeSocket | None:
     if not values:
         return None
     output_socket = values[0]
@@ -524,7 +526,7 @@ def add_chained_math_nodes(node_tree: NodeTree, operation: str, values: List[Nod
     return output_socket
 
 
-def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: NodeSocket, output_value_sockets: Iterable[NodeSocket], input_type: str = 'INT') -> Optional[NodeSocket]:
+def add_geometry_node_switch_nodes(node_tree: NodeTree, switch_value_socket: NodeSocket, output_value_sockets: Iterable[NodeSocket], input_type: str = 'INT') -> NodeSocket | None:
     valid_input_types = {'INT', 'GEOMETRY', 'VECTOR', 'FLOAT'}
     if input_type not in valid_input_types:
         raise ValueError(f'input_type must be {valid_input_types}, got {input_type}')
@@ -612,7 +614,7 @@ def ensure_weighted_index_node_tree() -> NodeTree:
     return ensure_geometry_node_tree('BDK Weighted Index', inputs, build_function)
 
 
-def add_repeat_zone_nodes(node_tree: NodeTree, repeat_items: Iterable[Tuple[str, str]]):
+def add_repeat_zone_nodes(node_tree: NodeTree, repeat_items: Iterable[tuple[str, str]]):
     input_node = cast(GeometryNodeRepeatInput, node_tree.nodes.new(type='GeometryNodeRepeatInput'))
     output_node = cast(GeometryNodeRepeatOutput, node_tree.nodes.new(type='GeometryNodeRepeatOutput'))
     input_node.pair_with_output(output_node)
@@ -637,8 +639,8 @@ def add_boolean_math_operation_nodes(node_tree: NodeTree, operation: str, inputs
 
 
 def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Union[
-        Dict[str, Union[int, float, Tuple[float, float, float], NodeSocket]],
-        List[Union[int, float, Tuple[float, float, float], NodeSocket]]
+        dict[str, Union[int, float, tuple[float, float, float], NodeSocket]],
+        list[Union[int, float, tuple[float, float, float], NodeSocket]]
     ], output_socket_name: str = 'Vector') -> NodeSocket:
     vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
     vector_math_node.operation = operation
@@ -803,9 +805,9 @@ def link_sockets_or_set_default_value(node_tree: NodeTree, value: NodeSocket | f
         input_socket.default_value = value
 
 def add_combine_xyz_node(node_tree: NodeTree,
-                         x_socket: Optional[NodeSocket | float] = None,
-                         y_socket: Optional[NodeSocket | float] = None,
-                         z_socket: Optional[NodeSocket | float] = None) -> NodeSocket:
+                         x_socket: NodeSocket | float | None = None,
+                         y_socket: NodeSocket | float | None = None,
+                         z_socket: NodeSocket | float | None = None) -> NodeSocket:
     combine_xyz_node = node_tree.nodes.new(type='ShaderNodeCombineXYZ')
     if x_socket:
         link_sockets_or_set_default_value(node_tree, x_socket, combine_xyz_node.inputs['X'])
@@ -816,13 +818,13 @@ def add_combine_xyz_node(node_tree: NodeTree,
     return combine_xyz_node.outputs['Vector']
 
 
-def add_separate_xyz_node(node_tree: NodeTree, vector_socket: NodeSocket) -> Tuple[NodeSocket, NodeSocket, NodeSocket]:
+def add_separate_xyz_node(node_tree: NodeTree, vector_socket: NodeSocket) -> tuple[NodeSocket, NodeSocket, NodeSocket]:
     separate_xyz_node = node_tree.nodes.new(type='ShaderNodeSeparateXYZ')
     node_tree.links.new(vector_socket, separate_xyz_node.inputs['Vector'])
     return separate_xyz_node.outputs['X'], separate_xyz_node.outputs['Y'], separate_xyz_node.outputs['Z']
 
 
-def add_vector_node(node_tree: NodeTree, vector: Tuple[float, float, float]) -> NodeSocket:
+def add_vector_node(node_tree: NodeTree, vector: tuple[float, float, float]) -> NodeSocket:
     vector_node = node_tree.nodes.new(type='ShaderNodeVector')
     vector_node.outputs['Vector'].default_value = vector
     return vector_node.outputs['Vector']
@@ -847,7 +849,7 @@ def add_multiply_matrices_operation_node(node_tree: NodeTree, lhs: NodeSocket, r
     return multiply_matrices_node.outputs['Matrix']
 
 
-def add_separate_transform_node(node_tree: NodeTree, transform_socket: NodeSocket) -> Tuple[NodeSocket, NodeSocket, NodeSocket]:
+def add_separate_transform_node(node_tree: NodeTree, transform_socket: NodeSocket) -> tuple[NodeSocket, NodeSocket, NodeSocket]:
     separate_transform_node = node_tree.nodes.new(type='FunctionNodeSeparateTransform')
     node_tree.links.new(transform_socket, separate_transform_node.inputs['Transform'])
     return (
@@ -884,7 +886,7 @@ def add_transform_point_node(node_tree: NodeTree, vector_socket: NodeSocket, tra
     return node.outputs['Vector']
 
 
-def add_node(node_tree: NodeTree, type: str, inputs: Iterable[Tuple[str, NodeSocket | int | float | None]] = None, **kwargs):
+def add_node(node_tree: NodeTree, type: str, inputs: Iterable[tuple[str, NodeSocket | int | float | None]] = None, **kwargs):
     node = node_tree.nodes.new(type)
     if inputs:
         for key, input in inputs:
@@ -897,7 +899,7 @@ def add_node(node_tree: NodeTree, type: str, inputs: Iterable[Tuple[str, NodeSoc
     return node
 
 
-def add_group_node(node_tree: NodeTree, node_tree_function, inputs: Iterable[Tuple[str, NodeSocket | None]] = None, **kwargs) -> Node:
+def add_group_node(node_tree: NodeTree, node_tree_function, inputs: Iterable[tuple[str, NodeSocket | None]] = None, **kwargs) -> Node:
     node = node_tree.nodes.new('GeometryNodeGroup')
     node.node_tree = node_tree_function(**kwargs)
     if inputs:

@@ -9,7 +9,7 @@ import numpy as np
 from t3dpy import T3dObject, T3dReference, read_t3d
 from bpy.types import Context, Object, Mesh, Image, Camera, WindowManager, Collection
 from mathutils import Matrix
-from typing import List, Optional, Dict, Any, cast, Type
+from typing import Optional, Any, cast, Type
 
 from ..fluid_surface.operators import create_fluid_surface_object
 from ..bsp.data import ORIGIN_ATTRIBUTE_NAME, TEXTURE_U_ATTRIBUTE_NAME, TEXTURE_V_ATTRIBUTE_NAME, \
@@ -32,7 +32,7 @@ from ..units import unreal_to_radians
 class ActorImporter:
 
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         """
         Creates a new Blender object for the given T3DMap brush_object.
         """
@@ -58,7 +58,7 @@ class DefaultActorImporter(ActorImporter):
     Default brush_object importer used when no other importer is found.
     """
     @classmethod
-    def _create_static_mesh_object(cls, context: Context, t3d_actor: T3dObject) -> Optional[Object]:
+    def _create_static_mesh_object(cls, context: Context, t3d_actor: T3dObject) -> Object | None:
         static_mesh_reference = t3d_actor['StaticMesh']
 
         # Load the static mesh data from the BDK asset library.
@@ -76,7 +76,7 @@ class DefaultActorImporter(ActorImporter):
         return bpy_object
 
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         """
         Creates a new Blender object for the given T3DMap brush_object.
         """
@@ -244,7 +244,7 @@ class BrushImporter(ActorImporter):
 
 
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         pre_pivot = cls._get_pre_pivot(t3d_actor)
         pre_pivot.y = -pre_pivot.y
 
@@ -317,7 +317,7 @@ class BrushImporter(ActorImporter):
 
 class VolumeImporter(BrushImporter):
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         pre_pivot = cls._get_pre_pivot(t3d_actor)
         pre_pivot.y = -pre_pivot.y
 
@@ -348,7 +348,7 @@ class VolumeImporter(BrushImporter):
 
 class FluidSurfaceInfoImporter(ActorImporter):
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         return create_fluid_surface_object(t3d_actor.properties.get('Name'))
 
     @classmethod
@@ -372,7 +372,7 @@ class FluidSurfaceInfoImporter(ActorImporter):
 
 class ProjectorImporter(ActorImporter):
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         name = t3d_actor.properties.get('Name')
         obj = create_projector(context, name)
         projector = obj.bdk.projector
@@ -391,14 +391,14 @@ class ProjectorImporter(ActorImporter):
 
 class TerrainInfoImporter(ActorImporter):
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         terrain_map_reference = UReference.from_string(str(t3d_actor.properties.get('TerrainMap', 'None')))
-        terrain_scale: Dict[str, float] = t3d_actor.properties.get('TerrainScale', {'X': 64.0, 'Y': 64.0, 'Z': 64.0})
-        layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('Layers', [])
-        deco_layers: List[(int, Dict[str, Any])] = t3d_actor.properties.get('DecoLayers', [])
+        terrain_scale: dict[str, float] = t3d_actor.properties.get('TerrainScale', {'X': 64.0, 'Y': 64.0, 'Z': 64.0})
+        layers: list[tuple[int, dict[str, Any]]] = t3d_actor.properties.get('Layers', [])
+        deco_layers: list[tuple[int, dict[str, Any]]] = t3d_actor.properties.get('DecoLayers', [])
         deco_layer_offset: float = t3d_actor.properties.get('DecoLayerOffset', 0.0)
-        quad_visibility_bitmap_entries: List[(int, int)] = t3d_actor.properties.get('QuadVisibilityBitmap', [])
-        edge_turn_bitmap_entries: List[(int, int)] = t3d_actor.properties.get('EdgeTurnBitmap', [])
+        quad_visibility_bitmap_entries: list[tuple[int, int]] = t3d_actor.properties.get('QuadVisibilityBitmap', [])
+        edge_turn_bitmap_entries: list[tuple[int, int]] = t3d_actor.properties.get('EdgeTurnBitmap', [])
 
         size = terrain_scale.get('X', 1.0)
         terrain_scale_z = terrain_scale.get('Z', 64.0)
@@ -479,7 +479,7 @@ class TerrainInfoImporter(ActorImporter):
             if texture_reference is not None:
                 paint_layer.material = load_bdk_material(context, str(texture_reference))
 
-        deco_density_maps: Dict[str, bpy.types.Attribute] = {}
+        deco_density_maps: dict[str, bpy.types.Attribute] = {}
 
         # Deco Layers
         for deco_layer_index, deco_layer_data in deco_layers:
@@ -602,7 +602,7 @@ class TerrainInfoImporter(ActorImporter):
 
 class SpectatorCamImporter(ActorImporter):
     @classmethod
-    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Optional[Object]:
+    def create_object(cls, t3d_actor: T3dObject, context: Context) -> Object | None:
         name = t3d_actor.properties.get('Name')
         camera_data: Camera = cast(Camera, bpy.data.cameras.new(name))
         camera_data.clip_start = 4
@@ -660,7 +660,7 @@ def get_alpha_data_from_image(image: Image) -> np.array:
     return np.array(list(image.pixels)[3::4], dtype=float)
 
 
-def import_t3d_object(context: Context, t3d_object: T3dObject, collection: Optional[Collection]) -> Optional[Object]:
+def import_t3d_object(context: Context, t3d_object: T3dObject, collection: Collection | None) -> Object | None:
     match t3d_object.type_:
         case 'Map':
             return import_t3d_map(context, t3d_object)
@@ -668,7 +668,7 @@ def import_t3d_object(context: Context, t3d_object: T3dObject, collection: Optio
             return import_t3d_actor(context, t3d_object, collection)
 
 
-def import_t3d_actor(context: Context, t3d_actor, collection: Optional[Collection]) -> Optional[Object]:
+def import_t3d_actor(context: Context, t3d_actor, collection: Collection | None) -> Object | None:
     actor_class = t3d_actor.properties.get('Class', None)
 
     if actor_class is None:
@@ -757,7 +757,7 @@ def set_custom_properties(t3d_actor: T3dObject, bpy_object: Object):
 
 
 def import_t3d(window_manager: WindowManager, contents: str, context: Context):
-    t3d_objects: List[T3dObject] = read_t3d(contents)
+    t3d_objects: list[T3dObject] = read_t3d(contents)
 
     window_manager.progress_begin(0, len(t3d_objects))
 

@@ -1,7 +1,7 @@
 import bpy
 from bpy.types import Operator, Context
 from bpy.props import StringProperty, FloatProperty
-from typing import Union, Set
+from typing import Union
 
 from .builder import create_projector
 
@@ -47,7 +47,7 @@ class BDK_OT_projector_bake(Operator):
             return False
         return True
 
-    def execute(self, context: Context) -> Set[str]:
+    def execute(self, context: Context) -> set[str]:
         bake_projector(context.active_object)
         self.report({'INFO'}, 'Baked projector')
         return {'FINISHED'}
@@ -68,7 +68,7 @@ class BDK_OT_projector_unbake(Operator):
             return False
         return True
 
-    def execute(self, context: Context) -> Set[str]:
+    def execute(self, context: Context) -> set[str]:
         unbake_projector(context.active_object)
         self.report({'INFO'}, 'Unbaked projector')
         return {'FINISHED'}
@@ -94,7 +94,7 @@ class BDK_OT_projector_add(Operator):
     def invoke(self, context: 'Context', event: 'Event'):
         return context.window_manager.invoke_props_dialog(self)
 
-    def execute(self, context: Context) -> Union[Set[int], Set[str]]:
+    def execute(self, context: Context) -> Union[set[int], set[str]]:
 
         obj = create_projector(context)
         obj.bdk.projector.material = bpy.data.materials.get(self.material_name, None)
@@ -117,7 +117,7 @@ class BDK_OT_projectors_bake(Operator):
     bl_label = 'Bake Projectors'
     bl_options = {'REGISTER', 'UNDO'}
 
-    def execute(self, context: Context) -> Set[str]:
+    def execute(self, context: Context) -> set[str]:
         count = 0
         for obj in context.selected_objects:
             if obj.bdk.type == 'PROJECTOR' and not obj.bdk.projector.is_baked:
@@ -135,7 +135,7 @@ class BDK_OT_projectors_unbake(Operator):
     bl_label = 'Unbake Projectors'
     bl_options = {'REGISTER', 'UNDO'}
 
-    def execute(self, context: Context) -> Set[str]:
+    def execute(self, context: Context) -> set[str]:
         count = 0
         for obj in context.selected_objects:
             if obj.bdk.type == 'PROJECTOR' and obj.bdk.projector.is_baked:

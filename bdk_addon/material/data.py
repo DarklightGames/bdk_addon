@@ -1,6 +1,5 @@
-import typing
 from enum import Enum
-from typing import Optional, List
+from typing import get_type_hints
 from ..data import UReference, UColor, URotator
 
 
@@ -33,8 +32,8 @@ class ETexClampMode(Enum):
 
 class UMaterial:
     Reference: UReference
-    FallbackMaterial: Optional[UReference] = None
-    DefaultMaterial: Optional[UReference] = None
+    FallbackMaterial: UReference | None = None
+    DefaultMaterial: UReference | None = None
     SurfaceType: int = 0
 
     def __init__(self, reference: UReference):
@@ -42,7 +41,7 @@ class UMaterial:
 
     def __repr__(self):
         lines = []
-        type_hints = typing.get_type_hints(self)
+        type_hints = get_type_hints(self)
         for key, value in type_hints.items():
             lines.append(f'{key} = {getattr(self, key)}')
         return '\n'.join(lines)
@@ -102,7 +101,7 @@ class UBitmapMaterial(URenderedMaterial):
 
 
 class UTexture(UBitmapMaterial):
-    Detail: Optional[UReference] = None
+    Detail: UReference | None = None
     DetailScale: float = 1.0
     bMasked: bool = False
     bAlphaTexture: bool = False
@@ -110,7 +109,7 @@ class UTexture(UBitmapMaterial):
 
 
 class UCubemap(UTexture):
-    Faces: List[Optional[UReference]] = []
+    Faces: list[UReference | None] = []
 
 
 class UVertexColor(URenderedMaterial):
@@ -128,13 +127,13 @@ class EOutputBlending(Enum):
 
 
 class UShader(URenderedMaterial):
-    Diffuse: Optional[UReference] = None
-    Opacity: Optional[UReference] = None
-    Specular: Optional[UReference] = None
-    SpecularityMask: Optional[UReference] = None
-    SelfIllumination: Optional[UReference] = None
-    SelfIlluminationMask: Optional[UReference] = None
-    Detail: Optional[UReference] = None
+    Diffuse: UReference | None = None
+    Opacity: UReference | None = None
+    Specular: UReference | None = None
+    SpecularityMask: UReference | None = None
+    SelfIllumination: UReference | None = None
+    SelfIlluminationMask: UReference | None = None
+    Detail: UReference | None = None
     DetailScale: float = 8.0
     OutputBlending: EOutputBlending = EOutputBlending.OB_Normal
     TwoSided: bool = False
@@ -145,7 +144,7 @@ class UShader(URenderedMaterial):
 
 
 class UModifier(UMaterial):
-    Material: Optional[UReference] = None
+    Material: UReference | None = None
 
 
 class UColorModifier(UModifier):
@@ -184,10 +183,10 @@ class EAlphaOperation(Enum):
 
 class UCombiner(UMaterial):
     CombineOperation: EColorOperation = EColorOperation.CO_Use_Color_From_Material1
-    AlphaOperation: EAlphaOperation = EAlphaOperation.AO_Use_Mask,
-    Material1: Optional[UReference] = None
-    Material2: Optional[UReference] = None
-    Mask: Optional[UReference] = None
+    AlphaOperation: EAlphaOperation = EAlphaOperation.AO_Use_Mask
+    Material1: UReference | None = None
+    Material2: UReference | None = None
+    Mask: UReference | None = None
     InvertMask: bool = False
     Modulate2x: bool = False
     Modulate4x: bool = False
@@ -217,7 +216,7 @@ class ETexCoordCount(Enum):
 
 
 class UTexModifier(UModifier):
-    TexCoordSource: ETexCoordSrc = ETexCoordSrc.TCS_Stream0,
+    TexCoordSource: ETexCoordSrc = ETexCoordSrc.TCS_Stream0
     TexCoordCount: ETexCoordCount = ETexCoordCount.TCN_2DCoords
     TexCoordProjected: bool = False
 
@@ -290,7 +289,7 @@ class UVariableTexPanner(UTexModifier):
 
 class UMaterialSwitch(UMaterial):
     Current: int = 0
-    Materials: List[UReference] = []
+    Materials: list[UReference] = []
 
 
 class EEMaterialSequenceAction(Enum):
@@ -306,13 +305,13 @@ class EMaterialSequenceTriggerActon(Enum):
 
 
 class FMaterialSequenceItem:
-    Material: Optional[UReference] = None
+    Material: UReference | None = None
     Time: float
     Action: EEMaterialSequenceAction = EEMaterialSequenceAction.MSA_ShowMaterial
 
 
 class UMaterialSequence(UMaterial):
-    SequenceItems: List[FMaterialSequenceItem] = []
+    SequenceItems: list[FMaterialSequenceItem] = []
     TriggerAction: EMaterialSequenceTriggerActon = EMaterialSequenceTriggerActon.MSTA_Ignore
     bLoop: bool = False
     bPaused: bool = False
@@ -323,7 +322,7 @@ class UMaterialSequence(UMaterial):
 
 class MaterialTypeRegistry:
 
-    _material_type_map: typing.Dict[str, type] = {
+    _material_type_map: dict[str, type] = {
         'ColorModifier': UColorModifier,
         'Combiner': UCombiner,
         'ConstantColor': UConstantColor,
@@ -344,5 +343,5 @@ class MaterialTypeRegistry:
     }
 
     @classmethod
-    def get_type_from_string(cls, string: str) -> type:
+    def get_type_from_string(cls, string: str) -> type | None:
         return cls._material_type_map.get(string)

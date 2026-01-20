@@ -13,7 +13,7 @@ from bpy.props import FloatProperty, EnumProperty, BoolProperty, IntProperty
 from bpy.types import Operator, Object, Context, Depsgraph, Mesh, Material, Event
 from collections import OrderedDict
 from enum import Enum
-from typing import cast, List, Optional, Tuple, Set
+from typing import cast
 from bdk_py import Poly, Brush, csg_rebuild, BspBuildOptions
 import bmesh
 import bpy
@@ -142,13 +142,13 @@ class BDK_OT_bsp_brush_poly_flags_set(Operator):
             flow.prop(self, 'poly_flags')
 
     def execute(self, context):
-        def set_flags(bsp_brush: BDK_PG_bsp_brush, flags: Set[str]):
+        def set_flags(bsp_brush: BDK_PG_bsp_brush, flags: set[str]):
             bsp_brush.poly_flags = flags
 
-        def add_flags(bsp_brush: BDK_PG_bsp_brush, flags: Set[str]):
+        def add_flags(bsp_brush: BDK_PG_bsp_brush, flags: set[str]):
             bsp_brush.poly_flags |= flags
 
-        def remove_flags(bsp_brush: BDK_PG_bsp_brush, flags: Set[str]):
+        def remove_flags(bsp_brush: BDK_PG_bsp_brush, flags: set[str]):
             bsp_brush.poly_flags -= flags
 
         def get_operation_function(operation: str):
@@ -379,7 +379,7 @@ class BspBrushError(Enum):
     TWISTED_FACE = 3
 
 
-def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> List[Tuple[BspBrushError, int]]:
+def get_bsp_brush_errors(obj: Object, depsgraph: Depsgraph) -> list[tuple[BspBrushError, int]]:
     """
     Check the given object for errors and return a set of all the errors that were found.
     """
@@ -746,7 +746,7 @@ class BDK_OT_bsp_build(Operator):
         for error in result.errors:
             self.report({'WARNING'}, str(error))
 
-        def brush_object_filter(obj: Object, instance_objects: List[Object]):
+        def brush_object_filter(obj: Object, instance_objects: list[Object]):
             if not obj.bdk.type == 'BSP_BRUSH':
                 return False
             if self.should_do_only_visible:
@@ -762,9 +762,9 @@ class BDK_OT_bsp_build(Operator):
 
         # This is a list of the materials used for the brushes. It is populated as we iterate over the brush objects.
         # We then use this at the end to create the materials for the level object.
-        materials: List[Optional[Material]] = []
+        materials: list[Material | None] = []
 
-        def _get_or_add_material(material: Optional[Material]) -> int:
+        def _get_or_add_material(material: Material | None) -> int:
             try:
                 return materials.index(material)
             except ValueError:
@@ -790,7 +790,7 @@ class BDK_OT_bsp_build(Operator):
         # level object and exclude them from BSP surface tool operations.
         instanced_brush_indices = []
 
-        brushes: List[Brush] = []
+        brushes: list[Brush] = []
         for brush_index, (brush_object, asset_instances, matrix_world) in enumerate(brush_objects):
 
             if asset_instances:

@@ -1,6 +1,6 @@
 import io
 from types import NoneType
-from typing import Any, OrderedDict, List, Iterable
+from typing import Any, OrderedDict, Iterable
 
 from mathutils import Vector, Euler
 
@@ -46,7 +46,7 @@ class T3DWriter:
         else:
             raise ValueError(f'Unhandled data type: {type(value)}')
 
-    def _write_list(self, key: str, value_list: List):
+    def _write_list(self, key: str, value_list: list):
         for index, value in enumerate(value_list):
             self._write_line(f'{key}({index})={self._value_to_string(value)}')
 

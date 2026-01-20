@@ -6,7 +6,7 @@ from ..convert_props_txt_to_json import parse_props_txt_file_content
 from .data import UMaterial, URotator, MaterialTypeRegistry, UReference, UColor
 
 
-def transform_value(property_type: type, value: Any) -> typing.Optional[Any]:
+def transform_value(property_type: type, value: Any) -> typing.Any | None:
     if property_type == int:
         return int(value)
     elif property_type == bool:

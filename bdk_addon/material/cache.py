@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Dict, Optional
 
 from .data import UMaterial
 from .reader import read_material
@@ -13,8 +12,8 @@ from ..data import UReference
 class MaterialCache:
     def __init__(self, root_directory: Path):
         self._root_directory = root_directory
-        self._materials: Dict[str, UMaterial] = {}
-        self._package_paths: Dict[str, Path] = {}
+        self._materials: dict[str, UMaterial] = {}
+        self._package_paths: dict[str, Path] = {}
 
         self._build_package_paths()
 
@@ -27,7 +26,7 @@ class MaterialCache:
             package_name = os.path.splitext(os.path.basename(package_path))[0].upper()
             self._package_paths[package_name] = Path(package_path)
 
-    def resolve_path_for_reference(self, reference: UReference) -> Optional[Path]:
+    def resolve_path_for_reference(self, reference: UReference) -> Path | None:
         try:
             package_path = self._package_paths[reference.package_name.upper()]
             return (self._root_directory / 'exports' / os.path.splitext(package_path)[0] / reference.type_name / f'{reference.object_name}.props.txt').resolve()
@@ -39,7 +38,7 @@ class MaterialCache:
             pass
         return None
 
-    def load_material(self, reference: UReference) -> Optional[UMaterial]:
+    def load_material(self, reference: UReference) -> UMaterial | None:
         if reference is None:
             return None
         key = str(reference)

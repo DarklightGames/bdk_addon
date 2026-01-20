@@ -12,7 +12,7 @@ from ..data import terrain_doodad_noise_type_items, terrain_doodad_operation_ite
 
 
 def terrain_doodad_paint_layer_paint_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context: Context,
-                                                          edit_text: str) -> List[str]:
+                                                          edit_text: str) -> list[str]:
     # Get a list of terrain layer names for the selected terrain info object.
     # TODO: This is insanely verbose.
     paint_layers = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info.paint_layers
@@ -20,7 +20,7 @@ def terrain_doodad_paint_layer_paint_layer_name_search_cb(self: 'BDK_PG_terrain_
 
 
 def terrain_doodad_paint_layer_deco_layer_name_search_cb(self: 'BDK_PG_terrain_doodad_paint_layer', context: Context,
-                                                         edit_text: str) -> List[str]:
+                                                         edit_text: str) -> list[str]:
     # Get a list of deco layer names for the selected terrain info object.
     deco_layers = self.terrain_doodad_object.bdk.terrain_doodad.terrain_info_object.bdk.terrain_info.deco_layers
     return [deco_layer.name for deco_layer in deco_layers]

@@ -1,7 +1,7 @@
 import math
 import copy
 import os
-from typing import Dict, cast, Tuple, Callable, Any, List, Optional
+from typing import cast, Callable, Any
 
 import bpy
 from bpy.props import StringProperty
@@ -25,7 +25,7 @@ class MaterialSocketOutputs:
     alpha_socket: NodeSocket = None
     blend_method: str = 'OPAQUE'
     use_backface_culling: bool = False
-    size: Tuple[int, int] = (1, 1)
+    size: tuple[int, int] = (1, 1)
 
 
 class MaterialSocketInputs:
@@ -34,11 +34,11 @@ class MaterialSocketInputs:
 
 
 class MaterialBuilder:
-    def __init__(self, material_caches: List[MaterialCache], node_tree: NodeTree):
+    def __init__(self, material_caches: list[MaterialCache], node_tree: NodeTree):
         self._material_caches = material_caches
         self._node_tree = node_tree
-        self._material_type_importers: Dict[
-            type, Callable[[Any, MaterialSocketInputs], Optional[MaterialSocketOutputs]]] = {}
+        self._material_type_importers: dict[
+            type, Callable[[Any, MaterialSocketInputs], MaterialSocketOutputs | None]] = {}
 
         self._register_material_importers()
 
@@ -88,7 +88,7 @@ class MaterialBuilder:
                     return image
         raise RuntimeError(f'Could not find file for reference {reference} in {len(self._material_caches)} material caches')
 
-    def load_material(self, reference: Optional[UReference]):
+    def load_material(self, reference: UReference | None):
         if reference is None:
             return None
         for material_cache in self._material_caches:
@@ -354,7 +354,7 @@ class MaterialBuilder:
         return outputs
 
     def _import_detail_material(self, detail_material: UMaterial, detail_scale: float,
-                                color_socket: NodeSocket, uv_source_socket: Optional[NodeSocket]) -> NodeSocket:
+                                color_socket: NodeSocket, uv_source_socket: NodeSocket | None) -> NodeSocket:
         # Create UV scaling sockets.
         scale_node = self._node_tree.nodes.new('ShaderNodeVectorMath')
         scale_node.operation = 'SCALE'
@@ -742,8 +742,8 @@ class MaterialBuilder:
         node_tree.links.new(modulo_node.inputs[0], truncate_node.outputs['Value'])
 
         current_socket = modulo_node.outputs['Value']
-        last_color_socket: Optional[NodeSocket] = None
-        last_alpha_socket: Optional[NodeSocket] = None
+        last_color_socket: NodeSocket | None = None
+        last_alpha_socket: NodeSocket | None = None
 
         materials = []
         material_outputs = []
@@ -792,7 +792,7 @@ class MaterialBuilder:
 
 
     def _import_variable_tex_panner(self, variable_tex_panner: UVariableTexPanner,
-                                    socket_inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
+                                    socket_inputs: MaterialSocketInputs) -> MaterialSocketOutputs | None:
         vector_rotate_node = self._node_tree.nodes.new('ShaderNodeVectorRotate')
         vector_rotate_node.rotation_type = 'EULER_XYZ'
         vector_rotate_node.inputs['Rotation'].default_value = variable_tex_panner.PanDirection.get_radians()
@@ -846,7 +846,7 @@ class MaterialBuilder:
 
         return outputs
 
-    def _import_material(self, material: UMaterial, inputs: MaterialSocketInputs) -> Optional[MaterialSocketOutputs]:
+    def _import_material(self, material: UMaterial, inputs: MaterialSocketInputs) -> MaterialSocketOutputs | None:
         if material is None:
             return None
         material_import_function = self._material_type_importers.get(type(material), None)
@@ -854,13 +854,13 @@ class MaterialBuilder:
             raise NotImplementedError(f'No importer registered for type "{type(material)}"')
         return material_import_function(material, inputs)
 
-    def build(self, material: UMaterial, uv_source_socket: Optional[NodeSocket]) -> Optional[MaterialSocketOutputs]:
+    def build(self, material: UMaterial, uv_source_socket: NodeSocket | None) -> MaterialSocketOutputs | None:
         inputs = MaterialSocketInputs()
         inputs.uv_source_socket = uv_source_socket
         return self._import_material(material, inputs=inputs)
 
 
-def _add_shader_from_outputs(node_tree: NodeTree, outputs: MaterialSocketOutputs) -> Optional[NodeSocket]:
+def _add_shader_from_outputs(node_tree: NodeTree, outputs: MaterialSocketOutputs) -> NodeSocket | None:
     diffuse_node = node_tree.nodes.new('ShaderNodeBsdfDiffuse')
     if outputs.color_socket:
         node_tree.links.new(diffuse_node.inputs['Color'], outputs.color_socket)
@@ -902,7 +902,7 @@ class BDK_OT_material_import(Operator, ImportHelper):
         addon_prefs = get_addon_preferences(context)
         repositories = getattr(addon_prefs, 'repositories')
 
-        def find_repository_by_id(repository_id: str) -> Optional[BDK_PG_repository]:
+        def find_repository_by_id(repository_id: str) -> BDK_PG_repository | None:
             for repository in repositories:
                 if repository.id == repository_id:
                     return repository

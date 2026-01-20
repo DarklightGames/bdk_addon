@@ -21,7 +21,7 @@ def material_poll(_: Context, material: Material) -> bool:
 
 def terrain_paint_layer_name_update_cb(self, context: Context):
     # Find all terrain doodad in the file.
-    terrain_doodad_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
+    terrain_doodad_objects: list[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
 
     # Update terrain doodad paint layer names if the terrain layer's color attribute name matches.
     for terrain_doodad_object in terrain_doodad_objects:
@@ -67,7 +67,7 @@ empty_set = set()
 
 
 def terrain_layer_node_terrain_paint_layer_name_search_cb(self: 'BDK_PG_terrain_layer_node', context: Context,
-                                                          edit_text: str) -> List[str]:
+                                                          edit_text: str) -> list[str]:
     return [paint_layer.name for paint_layer in self.terrain_info_object.bdk.terrain_info.paint_layers]
 
 
@@ -227,7 +227,7 @@ def static_mesh_poll(_: Context, obj: Object) -> bool:
     return is_bdk_static_mesh_actor(obj)
 
 
-def deco_layer_linked_layer_name_search(self: 'BDK_PG_terrain_deco_layer', context: Context, edit_text: str) -> List[
+def deco_layer_linked_layer_name_search(self: 'BDK_PG_terrain_deco_layer', context: Context, edit_text: str) -> list[
     str]:
     # Get a list of terrain layer names for the selected terrain info object.
     terrain_info = get_terrain_info(context.active_object)
@@ -265,7 +265,7 @@ empty_set = set()
 
 def deco_layer_name_update_cb(self, context):
     # Find all terrain doodad in the file.
-    terrain_doodad_objects: List[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
+    terrain_doodad_objects: list[Object] = list(filter(lambda o: o.bdk.type == 'TERRAIN_DOODAD', bpy.data.objects))
 
     # TODO: add handling for nodes system, once implemented
     # Update terrain doodad paint layer names if the terrain layer's color attribute name matches.
@@ -407,7 +407,7 @@ class BDK_PG_terrain_info(PropertyGroup):
     is_deco_modifier_muted: BoolProperty(options={'HIDDEN'}, name='Mute Deco Modifier')
 
 
-def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> Optional[BDK_PG_terrain_paint_layer]:
+def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> BDK_PG_terrain_paint_layer | None:
     """
     Gets the paint layer with the given id, or None if no such layer exists.
     :param terrain_info:
@@ -419,7 +419,7 @@ def get_terrain_info_paint_layer_by_id(terrain_info: 'BDK_PG_terrain_info', laye
             return paint_layer
     return None
 
-def get_terrain_info_paint_layer_by_name(terrain_info: 'BDK_PG_terrain_info', layer_name: str) -> Optional[BDK_PG_terrain_paint_layer]:
+def get_terrain_info_paint_layer_by_name(terrain_info: 'BDK_PG_terrain_info', layer_name: str) -> BDK_PG_terrain_paint_layer | None:
     """
     Gets the paint layer with the given name, or None if no such layer exists.
     :param terrain_info:
@@ -432,7 +432,7 @@ def get_terrain_info_paint_layer_by_name(terrain_info: 'BDK_PG_terrain_info', la
     return None
 
 
-def get_terrain_info_deco_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> Optional[BDK_PG_terrain_deco_layer]:
+def get_terrain_info_deco_layer_by_id(terrain_info: 'BDK_PG_terrain_info', layer_id: str) -> BDK_PG_terrain_deco_layer | None:
     """
     Gets the deco layer with the given id, or None if no such layer exists.
     :param terrain_info:

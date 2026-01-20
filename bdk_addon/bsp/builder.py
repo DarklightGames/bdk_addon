@@ -16,7 +16,7 @@ from mathutils import Vector, Quaternion, Matrix
 from bmesh.types import BMFace
 from bpy.types import Object, Mesh, NodeTree, bpy_struct
 from math import isnan
-from typing import Optional, Dict, Tuple, List, cast
+from typing import cast
 import mathutils
 import numpy as np
 
@@ -92,8 +92,8 @@ class BrushMappingErrorType(Enum):
 
 
 class BrushMappingError:
-    def __init__(self, brush_index: int, error_type: BrushMappingErrorType, level_polygon_index: Optional[int] = None,
-                 brush_polygon_index: Optional[int] = None) -> None:
+    def __init__(self, brush_index: int, error_type: BrushMappingErrorType, level_polygon_index: int | None = None,
+                 brush_polygon_index: int | None = None) -> None:
         self.brush_index = brush_index
         self.error_type = error_type
         self.level_polygon_index = level_polygon_index
@@ -111,7 +111,7 @@ class BrushMappingResult:
         self.face_count = 0
         self.brush_count = 0
         self.missing_brush_count = 0
-        self.errors: List[BrushMappingError] = []
+        self.errors: list[BrushMappingError] = []
         self.duration = 0.0
 
 
@@ -223,7 +223,7 @@ def apply_level_to_brush_mapping(level_object: Object) -> BrushMappingResult:
     return result
 
 
-def build_level_polygon_to_brush_polygon_mapping(level_object: Object) -> Dict[int, Dict[int, int]]:
+def build_level_polygon_to_brush_polygon_mapping(level_object: Object) -> dict[int, dict[int, int]]:
     """
     Build a mapping from the level object's polygons to the brush object's polygons.
     """
@@ -238,7 +238,7 @@ def build_level_polygon_to_brush_polygon_mapping(level_object: Object) -> Dict[i
     if BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME in mesh_data.attributes:
         mesh_data.attributes[BRUSH_POLYGON_INDEX_ATTRIBUTE_NAME].data.foreach_get('value', brush_polygon_indices)
 
-    mapping: Dict[int, Dict[int, int]] = {}
+    mapping: dict[int, dict[int, int]] = {}
 
     for polygon_index, (brush_index, brush_polygon_index) in enumerate(zip(brush_indices, brush_polygon_indices)):
         if brush_index not in mapping:
@@ -501,7 +501,7 @@ def create_bsp_brush_polygon(
         texture_height: int, 
         uv_layer,
         face: BMFace,
-        transform_matrix: Matrix) -> Tuple[Vector, Quaternion, Vector]:
+        transform_matrix: Matrix) -> tuple[Vector, Quaternion, Vector]:
     texture_coordinates = [loop[uv_layer].uv for loop in face.loops[0:3]]
 
     u_tiling = 1

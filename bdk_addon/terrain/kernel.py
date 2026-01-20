@@ -13,20 +13,20 @@ def add_terrain_deco_layer_node_driver(
         struct: bpy_struct,
         path: str,
         property_name: str,
-        index: Optional[int] = None,
+        index: int | None = None,
         invert: bool = False
 ):
     add_terrain_layer_node_driver('deco_layers', dataptr_index, node_index, terrain_info_object, struct, path, property_name, index, invert)
 
 
-def _terrain_layer_node_data_path_get(dataptr_name: str, dataptr_index: int, node_index: int, property_name: str, index: Optional[int] = None) -> str:
+def _terrain_layer_node_data_path_get(dataptr_name: str, dataptr_index: int, node_index: int, property_name: str, index: int | None = None) -> str:
     if index is not None:
         return f'bdk.terrain_info.{dataptr_name}[{dataptr_index}].nodes[{node_index}].{property_name}[{index}]'
     else:
         return f'bdk.terrain_info.{dataptr_name}[{dataptr_index}].nodes[{node_index}].{property_name}'
 
 
-NodeDataPathFunctionType = Callable[[str, int, int, str, Optional[int]], str]
+NodeDataPathFunctionType = Callable[[str, int, int, str, int | None], str]
 
 
 def add_terrain_layer_node_driver(
@@ -38,7 +38,7 @@ def add_terrain_layer_node_driver(
         path: str,
         property_name: str,
         data_path_function: NodeDataPathFunctionType,
-        index: Optional[int] = None,
+        index: int | None = None,
         invert: bool = False
 ):
     if index is None:
@@ -161,7 +161,7 @@ def add_density_from_terrain_layer_node(
         dataptr_index: int,
         node_index: int,
         data_path_function: NodeDataPathFunctionType
-) -> Optional[NodeSocket]:
+) -> NodeSocket | None:
     def _add_terrain_layer_node_driver(struct: bpy_struct, property_name: str):
         add_terrain_layer_node_driver(dataptr_name, dataptr_index, node_index, target_id, struct, 'default_value', property_name, data_path_function)
 
@@ -280,7 +280,7 @@ def add_map_ranged_density_from_terrain_layer_node(
         dataptr_index: int,
         node_index: int,
         data_path_function: NodeDataPathFunctionType
-        ) -> Optional[NodeSocket]:
+        ) -> NodeSocket | None:
     density_socket = add_density_from_terrain_layer_node(node, node_tree, target_id, dataptr_name, dataptr_index, node_index, data_path_function)
 
     if density_socket is None:
@@ -304,7 +304,7 @@ def add_map_ranged_density_from_terrain_layer_node(
     return density_node.outputs['Value']
 
 
-def add_density_from_terrain_layer_nodes(node_tree: NodeTree, target_id: ID, dataptr_name: str, dataptr_index: int, nodes: Iterable, data_path_function: NodeDataPathFunctionType) -> Optional[NodeSocket]:
+def add_density_from_terrain_layer_nodes(node_tree: NodeTree, target_id: ID, dataptr_name: str, dataptr_index: int, nodes: Iterable, data_path_function: NodeDataPathFunctionType) -> NodeSocket | None:
     last_density_socket = None
 
     for node_index, node in reversed(list(enumerate(nodes))):
@@ -411,13 +411,13 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
         instance_on_points_node = node_tree.nodes.new('GeometryNodeInstanceOnPoints')
 
         # Drivers
-        def get_deco_layer_target_data_path(property_name: str, index: Optional[int] = None) -> str:
+        def get_deco_layer_target_data_path(property_name: str, index: int | None = None) -> str:
             target_data_path = f'bdk.terrain_info.deco_layers[{deco_layer_index}].{property_name}'
             if index is not None:
                 target_data_path += f'[{index}]'
             return target_data_path
 
-        def get_terrain_info_target_data_path(property_name: str, index: Optional[int] = None) -> str:
+        def get_terrain_info_target_data_path(property_name: str, index: int | None = None) -> str:
             target_data_path = f'bdk.terrain_info.{property_name}'
             if index is not None:
                 target_data_path += f'[{index}]'
@@ -425,7 +425,7 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
 
         # TODO: move this to a helper file that can be used elsewhere (this pattern is very common!)
         def add_driver_ex(struct: bpy_struct, target_id: ID, target_data_path: str, path: str = 'default_value',
-                          index: Optional[int] = None):
+                          index: int | None = None):
             fcurve = struct.driver_add(path, index) if index is not None else struct.driver_add(path)
             fcurve.driver.type = 'AVERAGE'
             variable = fcurve.driver.variables.new()
@@ -436,18 +436,18 @@ def build_deco_layer_node_group(terrain_info_object: Object, deco_layer) -> Node
             target.data_path = target_data_path
 
         def add_deco_layer_driver_ex(struct: bpy_struct, target_id: ID, property_name: str, path: str = 'default_value',
-                                     index: Optional[int] = None):
+                                     index: int | None = None):
             add_driver_ex(struct, target_id, get_deco_layer_target_data_path(property_name, index), path, index)
 
         def add_terrain_info_driver_ex(struct: bpy_struct, property_name: str, path: str = 'default_value',
-                                       index: Optional[int] = None):
+                                       index: int | None = None):
             add_driver_ex(struct, terrain_info_object, get_terrain_info_target_data_path(property_name, index), path, index)
 
-        def add_deco_layer_driver(input_name: str, property_name: str, index: Optional[int] = None):
+        def add_deco_layer_driver(input_name: str, property_name: str, index: int | None = None):
             add_deco_layer_driver_ex(deco_layer_node.inputs[input_name], target_id=terrain_info_object,
                                      property_name=property_name, index=index)
 
-        def add_terrain_info_driver(input_name: str, property_name: str, index: Optional[int] = None):
+        def add_terrain_info_driver(input_name: str, property_name: str, index: int | None = None):
             add_terrain_info_driver_ex(deco_layer_node.inputs[input_name], property_name, index=index)
 
         add_terrain_info_driver('Offset', 'deco_layer_offset')

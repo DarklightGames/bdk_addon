@@ -1009,15 +1009,15 @@ class BDK_PT_terrain_doodad_sculpt_layer_debug(Panel):
 class BDK_UL_terrain_doodad_scatter_layer_nodes(UIList):
 
     def draw_item(self,
-                  context: Optional['Context'],
+                  context: Context | None,
                   layout: 'UILayout',
-                  data: Optional[AnyType],
-                  item: Optional[AnyType],
-                  icon: Optional[int],
+                  data: AnyType | None,
+                  item: AnyType | None,
+                  icon: int | None,
                   active_data: 'AnyType',
                   active_property: str,
-                  index: Optional[Any] = 0,
-                  flt_flag: Optional[Any] = 0):
+                  index: Any | None = 0,
+                  flt_flag: Any | None = 0):
         terrain_doodad = get_terrain_doodad(context.active_object)
         mesh = terrain_doodad.terrain_info_object.data
         draw_terrain_layer_node_item(layout, item, mesh)

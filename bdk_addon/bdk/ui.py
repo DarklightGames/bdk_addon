@@ -14,6 +14,8 @@ class BDK_MT_object_add_menu(Menu):
     bl_label = 'BDK'
 
     def draw(self, context):
+        if self.layout is None:
+            return
         self.layout.operator(terrain_operators.BDK_OT_terrain_info_add.bl_idname, text='Terrain Info', icon='GRID')
         self.layout.operator_menu_enum(terrain_doodad_operators.BDK_OT_terrain_doodad_add.bl_idname, 'object_type',
                                        text='Terrain Doodad', icon='CURVE_DATA')
@@ -39,6 +41,8 @@ class BDK_PT_node_tree(Panel):
     def draw(self, context):
         node_tree = context.space_data.edit_tree
         layout = self.layout
+        if layout is None:
+            return
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.prop(node_tree.bdk, 'build_hash', text='Build Hash', icon='KEYINGSET', emboss=False)

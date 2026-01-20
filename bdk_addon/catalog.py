@@ -1,7 +1,7 @@
 # https://github.com/strike-digital/asset_bridge/blob/main/asset_bridge/helpers/catalog.py
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 from uuid import uuid4
 
 """A module for working with blender_assets.cats.txt files, and the asset catalogs that they contain"""
@@ -100,7 +100,7 @@ class AssetCatalogFile:
         """Read and set the catalogs from the file"""
         self.catalogs = self.get_catalogs_from_file()
 
-    def get_catalogs_from_file(self) -> Dict[str, AssetCatalog]:
+    def get_catalogs_from_file(self) -> dict[str, AssetCatalog]:
         """Read the catalogs from the file"""
         catalogs = {}
         with open(self.catalog_file, "r") as f:

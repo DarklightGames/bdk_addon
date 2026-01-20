@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Iterable, Optional, Dict, Set
+from typing import Iterable
 
 import bmesh
 import bpy
@@ -457,7 +457,7 @@ def convert_object_to_terrain_doodad(obj: Object, terrain_info_object: Object):
 
 
 def get_terrain_doodads_for_terrain_info_object(context: Context, terrain_info_object: Object) ->\
-        List['BDK_PG_terrain_doodad']:
+        list['BDK_PG_terrain_doodad']:
     return [obj.bdk.terrain_doodad for obj in context.scene.objects if
             obj.bdk.type == 'TERRAIN_DOODAD' and obj.bdk.terrain_doodad.terrain_info_object == terrain_info_object]
 
@@ -773,9 +773,9 @@ def get_terrain_doodad_layer_geometry_object(terrain_doodad_layer):
             raise Exception(f"Unknown geometry source: {terrain_doodad_layer.geometry_source}")
 
 
-def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree,
-                                                sculpt_layer: 'BDK_PG_terrain_doodad_sculpt_layer') -> Optional[
-    NodeSocket]:
+def add_terrain_doodad_sculpt_layer_value_nodes(
+        node_tree: NodeTree,
+        sculpt_layer: 'BDK_PG_terrain_doodad_sculpt_layer') -> NodeSocket | None:
     geometry_object = get_terrain_doodad_layer_geometry_object(sculpt_layer)
 
     if geometry_object is None:
@@ -827,7 +827,7 @@ def add_terrain_doodad_sculpt_layer_value_nodes(node_tree: NodeTree,
     return sculpt_value_node.outputs['Value']
 
 
-def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: Optional[NodeSocket], terrain_doodad) -> NodeSocket:
+def _add_sculpt_layers_to_node_tree(node_tree: NodeTree, z_socket: NodeSocket | None, terrain_doodad) -> NodeSocket:
     """
     Adds the nodes for a doodad's sculpt layers.
     :param node_tree: The node tree to add the nodes to.
@@ -930,8 +930,7 @@ def add_paint_layer_driver(struct: bpy_struct, paint_layer: 'BDK_PG_terrain_dood
 
 
 def _add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree,
-                                                paint_layer: 'BDK_PG_terrain_doodad_paint_layer') -> Optional[
-    NodeSocket]:
+                                                paint_layer: 'BDK_PG_terrain_doodad_paint_layer') -> NodeSocket | None:
     geometry_object = get_terrain_doodad_layer_geometry_object(paint_layer)
 
     if geometry_object is None:
@@ -975,8 +974,8 @@ def _add_terrain_doodad_paint_layer_value_nodes(node_tree: NodeTree,
 
 def _add_terrain_doodad_paint_layer_to_node_tree(node_tree: NodeTree,
                                                  terrain_doodad_paint_layer: 'BDK_PG_terrain_doodad_paint_layer',
-                                                 operand_value_socket: Optional[NodeSocket] = None,
-                                                 operation_override: Optional[str] = None) -> NodeSocket:
+                                                 operand_value_socket: NodeSocket | None = None,
+                                                 operation_override: str | None = None) -> NodeSocket:
     paint_value_socket = _add_terrain_doodad_paint_layer_value_nodes(node_tree, terrain_doodad_paint_layer)
 
     if paint_value_socket is None:
@@ -1193,12 +1192,12 @@ def _ensure_terrain_doodad_attribute_modifier_node_group(
 
 
 class DoodadBakeResult:
-    def __init__(self, attribute_map: Dict[str, str], bake_node_tree: NodeTree):
+    def __init__(self, attribute_map: dict[str, str], bake_node_tree: NodeTree):
         self.attribute_map = attribute_map
         self.bake_node_tree = bake_node_tree
 
 
-def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: Set[str]) -> DoodadBakeResult:
+def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad', layers: set[str]) -> DoodadBakeResult:
     """
     Creates a node tree for baking a terrain doodad.
     :param terrain_doodad: The terrain doodad to make a baking node tree for.
@@ -1211,7 +1210,7 @@ def create_terrain_doodad_bake_node_tree(terrain_doodad: 'BDK_PG_terrain_doodad'
     )
 
     # Build a mapping of the paint layer IDs to the baked attribute names.
-    attribute_map: Dict[str, str] = {paint_layer.id: uuid4().hex for paint_layer in terrain_doodad.paint_layers}
+    attribute_map: dict[str, str] = {paint_layer.id: uuid4().hex for paint_layer in terrain_doodad.paint_layers}
 
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)

@@ -5,6 +5,8 @@ from .properties import BDK_PG_terrain_deco_layer, BDK_PG_terrain_paint_layer, B
 from ..helpers import get_terrain_info
 
 def has_deco_layer_selected(context: Context) -> bool:
+    if context.active_object is None:
+        return False
     terrain_info = get_terrain_info(context.active_object)
     return terrain_info and 0 <= terrain_info.deco_layers_index < len(terrain_info.deco_layers)
 
@@ -24,7 +26,7 @@ def get_selected_terrain_paint_layer(context: Context) -> BDK_PG_terrain_paint_l
     return terrain_info.paint_layers[terrain_info.paint_layers_index]
 
 
-def get_selected_terrain_paint_layer_node(context: Context) -> Optional[BDK_PG_terrain_layer_node]:
+def get_selected_terrain_paint_layer_node(context: Context) -> BDK_PG_terrain_layer_node | None:
     if not has_terrain_paint_layer_selected(context):
         return None
     paint_layer = get_selected_terrain_paint_layer(context)

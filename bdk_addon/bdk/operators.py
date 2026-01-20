@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from pathlib import Path
-from typing import Set, cast
+from typing import cast
 
 import bpy
 from bpy.types import Operator, Context, Node, Event, Armature, Mesh
@@ -377,7 +377,7 @@ class BDK_OT_asset_import_data_linked(Operator):
             return False
         return True
 
-    def execute(self, context: Context) -> Set[str]:
+    def execute(self, context: Context) -> set[str]:
         library_path: Path
         assets = context.selected_assets
 

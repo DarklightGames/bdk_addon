@@ -1,13 +1,13 @@
 from collections import OrderedDict
-from typing import List, Optional, OrderedDict as OrderedDictType, Any, Tuple
+from typing import OrderedDict as OrderedDictType, Any
 
 
 class T3DObject:
     def __init__(self, type_name: str):
         self.type_ = type_name
         self.properties: OrderedDictType[str, Any] = OrderedDict()
-        self.children: List['T3DObject'] = []
-        self.polygon: Optional[Polygon] = None  # Slightly janky, but will work for now (blame the crappy T3D format)
+        self.children: list['T3DObject'] = []
+        self.polygon: Polygon | None = None  # Slightly janky, but will work for now (blame the crappy T3D format)
 
     def __getitem__(self, key: str):
         return self.properties[key]
@@ -21,11 +21,11 @@ class T3DObject:
 
 class Polygon:
     def __init__(self, link: int,
-                 origin: Tuple[float, float, float],
-                 normal: Tuple[float, float, float],
-                 texture_u: Tuple[float, float, float],
-                 texture_v: Tuple[float, float, float],
-                 vertices: List[Tuple[float, float, float]]
+                 origin: tuple[float, float, float],
+                 normal: tuple[float, float, float],
+                 texture_u: tuple[float, float, float],
+                 texture_v: tuple[float, float, float],
+                 vertices: list[tuple[float, float, float]]
                  ):
         self.link = link
         self.origin = origin

@@ -1,6 +1,5 @@
 import math
 from io import StringIO
-from typing import List, Tuple
 
 import bmesh
 import bpy
@@ -89,7 +88,7 @@ class ObjectToT3DConverter:
     def can_convert(self, _obj: Object) -> bool:
         return False
 
-    def convert(self, _context: Context, _obj: Object, _matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, _context: Context, _obj: Object, _matrix_world: Matrix) -> list[T3DObject]:
         raise NotImplementedError
 
 
@@ -178,7 +177,7 @@ class TerrainDoodadToT3DConverter(ObjectToT3DConverter):
 
             yield actor
 
-    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> list[T3DObject]:
         terrain_doodad = obj.bdk.terrain_doodad
         actors = []
         for scatter_layer in filter(lambda x: not x.mute, terrain_doodad.scatter_layers):
@@ -190,7 +189,7 @@ class ProjectorToT3DConverter(ObjectToT3DConverter):
     def can_convert(self, obj: Object) -> bool:
         return obj.bdk.type == 'PROJECTOR'
 
-    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> list[T3DObject]:
         projector = obj.bdk.projector
 
         actor = T3DObject('Actor')
@@ -214,7 +213,7 @@ class FluidSurfaceToT3DConverter(ObjectToT3DConverter):
     def can_convert(self, obj: Object) -> bool:
         return obj.bdk.type == 'FLUID_SURFACE'
 
-    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> list[T3DObject]:
         fluid_surface = obj.bdk.fluid_surface
         actor = T3DObject(type_name='Actor')
         add_movement_properties_to_actor(actor, matrix_world, do_scale=False)
@@ -235,7 +234,7 @@ class TerrainInfoToT3DConverter(ObjectToT3DConverter):
     def can_convert(self, obj: Object) -> bool:
         return obj.bdk.type == 'TERRAIN_INFO'
 
-    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> list[T3DObject]:
         actor = terrain_info_to_t3d_object(obj, matrix_world)
         return [actor]
 
@@ -244,7 +243,7 @@ class CameraToT3DConverter(ObjectToT3DConverter):
     def can_convert(self, obj: Object) -> bool:
         return obj.type == 'CAMERA'
 
-    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> list[T3DObject]:
         # Create a SpectatorCam brush_object
         actor = T3DObject('Actor')
         actor.properties['Class'] = 'SpectatorCam'
@@ -263,7 +262,7 @@ class StaticMeshToT3DConverter(ObjectToT3DConverter):
     def can_convert(self, obj: Object) -> bool:
         return obj.type == 'MESH' and obj.get('Class', None) == 'StaticMeshActor'
 
-    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> list[T3DObject]:
         actor = T3DObject('Actor')
         actor.properties['Class'] = 'StaticMeshActor'
         actor.properties['Name'] = obj.name
@@ -285,7 +284,7 @@ class BspBrushToT3DConverter(ObjectToT3DConverter):
     def can_convert(self, obj: Object) -> bool:
         return obj.bdk.type == 'BSP_BRUSH'
 
-    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> List[T3DObject]:
+    def convert(self, context: Context, obj: Object, matrix_world: Matrix) -> list[T3DObject]:
         object_name = sanitize_name_for_unreal(obj.name)
 
         bsp_brush = obj.bdk.bsp_brush
@@ -382,7 +381,7 @@ class BspBrushToT3DConverter(ObjectToT3DConverter):
         return [actor]
 
 
-object_to_t3d_converters: List[ObjectToT3DConverter] = [
+object_to_t3d_converters: list[ObjectToT3DConverter] = [
     TerrainDoodadToT3DConverter(),
     ProjectorToT3DConverter(),
     FluidSurfaceToT3DConverter(),
@@ -411,7 +410,7 @@ class BDK_OT_t3d_copy_to_clipboard(Operator):
         dfs_objects = list(dfs_view_layer_objects(context.view_layer))
 
         # Filter only the selected objects.
-        selected_objects: List[Tuple[Object, Matrix]] = list()
+        selected_objects: list[tuple[Object, Matrix]] = list()
         for obj, instance_objects, matrix_world in dfs_objects:
             if instance_objects:
                 if instance_objects[0].select_get():

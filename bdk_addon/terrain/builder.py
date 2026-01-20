@@ -2,14 +2,13 @@ from pathlib import Path
 
 import bmesh
 import bpy
-from bpy.types import Mesh, Object, NodeTree, Context
-from typing import cast, Union, Optional, Tuple, Iterator
+from bpy.types import Mesh, Object, NodeTree
+from typing import cast, Union, Iterator
 import uuid
 import numpy as np
 
 from ..bdk.repository.kernel import get_repository_cache_directory
-from ..bdk.repository.properties import BDK_PG_repository
-from ..helpers import get_terrain_info, get_addon_preferences, get_active_repository
+from ..helpers import get_terrain_info, get_active_repository
 from ..node_helpers import ensure_shader_node_tree, ensure_input_and_output_nodes
 from ..data import UReference
 from ..material.cache import MaterialCache
@@ -161,7 +160,7 @@ def get_terrain_quad_size(size: float, resolution: int) -> float:
     return size / (resolution - 1)
 
 
-def get_terrain_info_vertex_xy_coordinates(resolution: int, terrain_scale: float) -> Iterator[Tuple[float, float]]:
+def get_terrain_info_vertex_xy_coordinates(resolution: int, terrain_scale: float) -> Iterator[tuple[float, float]]:
     """
     Gets the horizontal (X,Y) coordinates of the vertices for a terrain info object given the resolution and size.
     """
@@ -174,7 +173,7 @@ def get_terrain_info_vertex_xy_coordinates(resolution: int, terrain_scale: float
             yield terrain_scale * x - size_half, terrain_scale * y - size_half + terrain_scale
 
 
-def create_terrain_info_mesh(resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Mesh:
+def create_terrain_info_mesh(resolution: int, size: float, heightmap: np.ndarray | None = None, edge_turn_bitmap: np.ndarray | None = None) -> Mesh:
     bm = bmesh.new()
 
     if heightmap is None:
@@ -230,7 +229,7 @@ def create_terrain_info_mesh(resolution: int, size: float, heightmap: Optional[n
     return mesh_data
 
 
-def create_terrain_info_object(name: str, resolution: int, size: float, heightmap: Optional[np.array] = None, edge_turn_bitmap: Optional[np.array] = None) -> Object:
+def create_terrain_info_object(name: str, resolution: int, size: float, heightmap: np.ndarray | None = None, edge_turn_bitmap: np.ndarray | None = None) -> Object:
     mesh_data = create_terrain_info_mesh(resolution, size, heightmap, edge_turn_bitmap)
     mesh_object = bpy.data.objects.new(name, mesh_data)
 

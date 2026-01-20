@@ -3,7 +3,7 @@ from mathutils import Matrix
 from .data import UReference
 from bpy.types import Material, Object, Context, ByteColorAttribute, ViewLayer, LayerCollection, Collection, Mesh
 from pathlib import Path
-from typing import Iterable, Optional, Tuple, Set, List, cast as typing_cast
+from typing import Iterable, Optional, cast as typing_cast
 import bpy
 import numpy
 import re
@@ -89,7 +89,7 @@ def is_repository_id_valid(context: Context, repository_id: str) -> bool:
     return False
 
 
-def get_repository_index_by_id(context: Context, repository_id: str) -> Optional[int]:
+def get_repository_index_by_id(context: Context, repository_id: str) -> int | None:
     addon_prefs = get_addon_preferences(context)
     for i, repository in enumerate(addon_prefs.repositories):
         if repository.id == repository_id:
@@ -105,7 +105,7 @@ def get_repository_by_id(context: Context, repository_id: str) -> Optional['BDK_
     return None
 
 
-def get_blend_file_for_package(context: Context, package_name: str, repository_id: Optional[str] = None) -> Optional[str]:
+def get_blend_file_for_package(context: Context, package_name: str, repository_id: str | None = None) -> str | None:
     from .bdk.repository.kernel import get_repository_cache_directory
     if repository_id is None:
         repository_id = get_active_repository_id(context)
@@ -128,7 +128,7 @@ def get_addon_preferences(context: Context):
     return addon_prefs
 
 
-def get_active_repository_id(context: Context) -> Optional[str]:
+def get_active_repository_id(context: Context) -> str | None:
     """
     Get the active repository ID from the scene, or the default repository ID from the addon preferences if the scene
     repository ID is not set or invalid.
@@ -149,14 +149,14 @@ def get_active_repository(context: Context) -> Optional['BDK_PG_repository']:
     return get_repository_by_id(context, repository_id)
 
 
-def load_bdk_material(context: Context, reference: str, repository_id: Optional[str] = None) -> Optional[Material]:
+def load_bdk_material(context: Context, reference_string: str, repository_id: str | None = None) -> Material | None:
     """
     Loads a material from a BDK repository.
     :param context: The Blender context.
     :param reference: The reference to the material.
     :param repository_id: The ID of the repository to load the material from. If None, the repository ID from the scene.
     """
-    reference = UReference.from_string(reference)
+    reference = UReference.from_string(reference_string)
 
     if reference is None:
         return None
@@ -223,8 +223,8 @@ def load_bdk_material(context: Context, reference: str, repository_id: Optional[
 
 
 # TODO: should actually do the object, not the mesh data
-def load_bdk_static_mesh(context: Context, reference: str, repository_id: Optional[str] = None) -> Optional[Collection]:
-    reference = UReference.from_string(reference)
+def load_bdk_static_mesh(context: Context, reference_string: str, repository_id: str | None = None) -> Collection | None:
+    reference = UReference.from_string(reference_string)
 
     if reference is None:
         return None
@@ -258,7 +258,7 @@ def load_bdk_static_mesh(context: Context, reference: str, repository_id: Option
 
 
 # https://blenderartists.org/t/duplicating-pointerproperty-propertygroup-and-collectionproperty/1419096/2
-def copy_simple_property_group(source, target, ignore: Optional[Set[str]] = None):
+def copy_simple_property_group(source, target, ignore: set[str] | None = None):
     if ignore is None:
         ignore = set()
     if not hasattr(source, "__annotations__"):
@@ -282,7 +282,7 @@ def should_show_bdk_developer_extras(context: Context):
 
 # TODO: maybe put all these attribute functions in their own file?
 
-def fill_byte_color_attribute_data(attribute: ByteColorAttribute, color: Tuple[float, float, float, float]):
+def fill_byte_color_attribute_data(attribute: ByteColorAttribute, color: tuple[float, float, float, float]):
     vertex_count = len(attribute.data)
     color_data = numpy.ndarray(shape=(vertex_count, 4), dtype=float)
     color_data[:] = color
@@ -359,8 +359,8 @@ def padded_roll(array, shift):
 
 def dfs_collection_objects(
         collection: Collection,
-        visited: Set[Tuple[Object, Optional[Object]]],
-        instance_objects: Optional[List[Object]] = None,
+        visited: set[tuple[Object, Object | None]],
+        instance_objects: list[Object] | None = None,
         matrix_world: Matrix = Matrix.Identity(4)
         ):
     # TODO: We want to also yield the top-level instance object so that callers can inspect the selection status etc.
@@ -399,7 +399,7 @@ def dfs_collection_objects(
                         visited.add((child_obj, instance_objects[0] if instance_objects else None))
 
 
-def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List[Object], Matrix]]:
+def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[tuple[Object, list[Object], Matrix]]:
     """
     A BDK-specific depth-first iterator of objects in a view layer meant to provide a means
     for level authors to create and maintain stable CSG brush ordering.
@@ -408,7 +408,7 @@ def dfs_view_layer_objects(view_layer: ViewLayer) -> Iterable[Tuple[Object, List
     recursively).
     Note that all sibling objects within a hierarchy level will be returned in an unpredictable order.
     """
-    visited: Set[Tuple[Object, Optional[Object]]] = set()
+    visited: set[tuple[Object, Object | None]] = set()
 
     # TODO: Handle instance collections.
     # In order to do this, we will need to also output the instance in the iterator. It is then the responsibility of

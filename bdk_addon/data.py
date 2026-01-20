@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Self
 from pathlib import Path
 import re
 from .units import unreal_to_radians
@@ -13,14 +13,14 @@ class UColor:
 
 
 class UReference:
-    def __init__(self, package_name: str, object_name: str, type_name: Optional[str], group_name: Optional[str] = None):
+    def __init__(self, package_name: str, object_name: str, type_name: str | None, group_name: str | None = None):
         self.type_name = type_name
         self.package_name = package_name
         self.object_name = object_name
         self.group_name = group_name
 
-    @staticmethod
-    def from_string(string: str) -> Optional['UReference']:
+    @classmethod
+    def from_string(cls,string: str) -> Self | None:
         if string == 'None' or string == '':
             return None
 
@@ -44,15 +44,15 @@ class UReference:
         package_name = values[0]
         object_name = values[-1]
 
-        return UReference(package_name, object_name, type_name=type_name, group_name=group_name)
+        return cls(package_name, object_name, type_name=type_name, group_name=group_name)
 
-    @staticmethod
-    def from_path(path: Path):
+    @classmethod
+    def from_path(cls, path: Path) -> Self:
         parts = path.parts[-3:]
         package_name = parts[0]
         type_name = parts[1]
         object_name = parts[2][0:parts[2].index('.')]
-        return UReference(package_name, object_name, type_name)
+        return cls(package_name, object_name, type_name)
 
     def __str__(self):
         string = f"{self.type_name}'{self.package_name}"
