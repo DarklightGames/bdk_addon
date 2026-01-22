@@ -7,6 +7,7 @@ from .data import UMaterial, URotator, MaterialTypeRegistry, UReference, UColor
 
 
 def transform_value(property_type: type, value: Any) -> typing.Any | None:
+    # TODO: this function is a catastrophe and needs to be reworked.
     if property_type == int:
         return int(value)
     elif property_type == bool:
@@ -28,7 +29,9 @@ def transform_value(property_type: type, value: Any) -> typing.Any | None:
         rotator.Pitch = value['Pitch']
         rotator.Yaw = value['Yaw']
         return rotator
-    elif property_type == UReference:
+    elif property_type == UReference | None:
+        if value is None:
+            return None
         return UReference.from_string(value)
     elif property_type == UColor:
         return UColor(r=value['R'], g=value['G'], b=value['B'], a=value['A'])
