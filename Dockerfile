@@ -14,8 +14,9 @@ RUN rustup target add x86_64-pc-windows-gnu
 RUN rustup toolchain install nightly
 RUN rustup default nightly
 
-# Install Maturin
+# Install Maturin and Zig (for cross-compilation)
 RUN pip install maturin
+RUN pip install ziglang
 
 # Install Blender
 RUN apt-get update -y && \
@@ -41,6 +42,7 @@ ENV BLENDER_EXECUTABLE /tmp/blender_executable_path_env
 RUN apt-get install -y libsdl2-dev
 
 RUN rustup target add x86_64-unknown-linux-gnu
+RUN rustup target add x86_64-pc-windows-gnu
 
 # ARG BLENDER_PATH="blender-4.2.0-beta+v42.4bde68cdd672-linux.x86_64-release"
 # ARG BLENDER_URL=https://cdn.builder.blender.org/download/daily/${BLENDER_PATH}.tar.xz
@@ -62,3 +64,4 @@ ADD . /bdk_addon
 # Build the addon.
 WORKDIR /bdk_addon
 ENTRYPOINT ["./build.sh"]
+CMD ["linux"]

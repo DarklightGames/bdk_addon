@@ -23,11 +23,45 @@ fi
 
 echo "Using container CLI: $CONTAINER_CLI"
 
-# Build the image and capture its ID
 # The '-q' flag is supported by both podman and docker build to suppress output and return only the image ID.
-# IMAGE_ID=$($CONTAINER_CLI build -q .)
+# Build the Docker image once
+echo "Building Docker image..."
+IMAGE_ID=$($CONTAINER_CLI build -q .)
 
-$CONTAINER_CLI run -it \
+# Build for Linux
+echo ""
+echo "========================================"
+echo "Building dependencies for Linux..."
+echo "========================================"
+if ! $CONTAINER_CLI run -it \
     --volume ./bdk_addon/wheels:/bdk_addon/bdk_addon/wheels:z \
     --volume ./bdk_addon/bin:/bdk_addon/bdk_addon/bin:z \
-    $($CONTAINER_CLI build -q .)
+    "$IMAGE_ID" \
+    linux; then
+    echo ""
+    echo "========================================"
+    echo "ERROR: Linux build failed!"
+    echo "========================================"
+    exit 1
+fi
+
+# Build for Windows
+echo ""
+echo "========================================"
+echo "Building dependencies for Windows..."
+echo "========================================"
+if ! $CONTAINER_CLI run -it \
+    --volume ./bdk_addon/wheels:/bdk_addon/bdk_addon/wheels:z \
+    "$IMAGE_ID" \
+    windows; then
+    echo ""
+    echo "========================================"
+    echo "ERROR: Windows build failed!"
+    echo "========================================"
+    exit 1
+fi
+
+echo ""
+echo "========================================"
+echo "All dependencies built successfully!"
+echo "========================================"
