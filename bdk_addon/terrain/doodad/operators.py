@@ -380,7 +380,7 @@ class BDK_OT_terrain_doodad_bake(Operator):
                 # The node ID is synonymous with the attribute ID.
                 # Set this new node's name to the attribute ID of the baked paint layer.
                 node.id = bake_result.attribute_map[doodad_paint_layer.id]
-                node.type = 'PAINT'
+                node.type = 'FIELD'
                 node.operation = doodad_paint_layer.operation
                 node.name = terrain_doodad_object.name
                 node.paint_layer_name = doodad_paint_layer.paint_layer_name
