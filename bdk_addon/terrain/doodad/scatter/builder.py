@@ -1190,7 +1190,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
         # Input
         node_tree.links.new(input_node.outputs['Scale Min'], scale_mix_node.inputs[4])
         node_tree.links.new(input_node.outputs['Scale Max'], scale_mix_node.inputs[5])
-        node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs[1])
+        node_tree.links.new(input_node.outputs['Mute'], mute_switch_node.inputs['Switch'])
         node_tree.links.new(input_node.outputs['Align to Terrain Factor'],
                             align_to_terrain_node_group_node.inputs['Factor'])
         node_tree.links.new(input_node.outputs['Terrain Geometry'],
