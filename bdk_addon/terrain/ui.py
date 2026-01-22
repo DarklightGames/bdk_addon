@@ -351,6 +351,9 @@ class BDK_PT_terrain_paint_layer_nodes(Panel):
     def draw(self, context: 'Context'):
         layout = self.layout
 
+        if layout is None:
+            return
+
         paint_layer = get_selected_terrain_paint_layer(context)
         draw_terrain_layer_node_list(layout,
                                      'BDK_UL_terrain_layer_nodes',
@@ -361,7 +364,22 @@ class BDK_PT_terrain_paint_layer_nodes(Panel):
                                      remove_operator_idname=BDK_OT_terrain_paint_layer_nodes_remove.bl_idname,
                                      move_operator_idname=BDK_OT_terrain_paint_layer_nodes_move.bl_idname)
         node = get_selected_terrain_paint_layer_node(context)
+
+        if node is None:
+            return
+
         draw_terrain_layer_node_settings(layout, node)
+
+        if should_show_bdk_developer_extras(context):
+            debug_header, debug_panel = layout.panel('Debug', default_closed=True)
+            debug_header.label(text='Debug')
+            if not debug_panel:
+                debug_panel = layout.grid_flow(columns=1)
+                debug_panel.use_property_split = True
+                debug_panel.use_property_decorate = False
+                debug_panel.enabled = False
+                if node:
+                    debug_panel.prop(node, 'id', text='Node ID', emboss=False)
 
 
 class BDK_PT_terrain_deco_layer_nodes(Panel):
