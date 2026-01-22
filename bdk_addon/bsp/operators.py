@@ -778,15 +778,12 @@ class BDK_OT_bsp_build(Operator):
         level_object.bdk.level.brushes.clear()
 
         for brush_index, dfs_object in enumerate(brush_objects):
-            brush_object = dfs_object.obj
-            instance_objects = dfs_object.instance_objects
-            is_instanced_brush = len(instance_objects) > 0
-            if is_instanced_brush:
+            if dfs_object.is_instanced:
                 # Skip brushes that are instanced, as we cannot change their texturing.
                 continue
             level_brush = level_object.bdk.level.brushes.add()
             level_brush.index = brush_index
-            level_brush.brush_object = brush_object
+            level_brush.brush_object = dfs_object.obj
 
         timer = time.time()
 
@@ -797,8 +794,7 @@ class BDK_OT_bsp_build(Operator):
 
         brushes: list[Brush] = []
         for brush_index, dfs_object in enumerate(brush_objects):
-
-            if dfs_object.instance_objects:
+            if dfs_object.is_instanced:
                 instanced_brush_indices.append(brush_index)
             
             brush_object = dfs_object.obj

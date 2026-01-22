@@ -23,9 +23,7 @@ class DfsObject:
     @property
     def is_visible(self) -> bool:
         """
-        Check if the object is visible.
-
-        @return: True if the object is visible, False otherwise.
+        Return whether the object is visible.
         """
         if self.instance_objects:
             return self.instance_objects[-1].visible_get()
@@ -34,12 +32,18 @@ class DfsObject:
     @property
     def is_selected(self) -> bool:
         """
-        Check if the object is selected.
-        @return: True if the object is selected, False otherwise.
+        Return whether the object is selected.
         """
         if self.instance_objects:
             return self.instance_objects[-1].select_get()
         return self.obj.select_get()
+
+    @property
+    def is_instanced(self) -> bool:
+        """
+        Return whether the object is part of an instance.
+        """
+        return len(self.instance_objects) > 0
 
 
 def _dfs_object_children(obj: Object, collection: Collection) -> Iterable[Object]:
@@ -85,9 +89,9 @@ def dfs_collection_objects(collection: Collection) -> Iterable[DfsObject]:
 
 def _dfs_collection_objects_recursive(
         collection: Collection,
-        instance_objects: Optional[List[Object]] = None,
+        instance_objects: list[Object] | None = None,
         matrix_world: Matrix = Matrix.Identity(4),
-        visited: Optional[Set[Object]]=None
+        visited: set[Object] | None = None
 ) -> Iterable[DfsObject]:
     """
     Depth-first search of objects in a collection, including recursing into instances.
