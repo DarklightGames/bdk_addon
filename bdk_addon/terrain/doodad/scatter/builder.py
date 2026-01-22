@@ -1,7 +1,8 @@
 import uuid
 
 import bpy
-from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID
+from bpy.types import Context, NodeTree, NodeSocket, Object, bpy_struct, ID, GeometryNodeBake
+from typing import cast as typing_cast
 
 from ....terrain.curve_to_equidistant_points import ensure_curve_to_equidistant_points_node_tree
 from ...terrain_sample import ensure_bdk_terrain_sample_node_tree
@@ -1783,7 +1784,8 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         _add_terrain_doodad_driver(is_frozen_switch_node.inputs['Switch'],
                                    scatter_layer.terrain_doodad_object.bdk.terrain_doodad, 'is_frozen')
 
-        bake_node = node_tree.nodes.new(type='GeometryNodeBake')
+        bake_node = typing_cast(GeometryNodeBake, node_tree.nodes.new(type='GeometryNodeBake'))
+        bake_node.bake_items.new('GEOMETRY', 'Geometry')
 
         node_tree.links.new(mask_switch_node.outputs['Output'], is_frozen_switch_node.inputs['False'])
         node_tree.links.new(mask_switch_node.outputs['Output'], bake_node.inputs['Geometry'])

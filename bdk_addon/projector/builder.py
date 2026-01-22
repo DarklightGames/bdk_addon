@@ -1,7 +1,8 @@
 import bpy
 import uuid
 import math
-from bpy.types import NodeTree
+from bpy.types import GeometryNodeBake, NodeTree
+from typing import cast as typing_cast
 
 from ..bsp.tools import ensure_bdk_object_material_size_node_tree
 
@@ -171,7 +172,8 @@ def ensure_projector_node_tree() -> NodeTree:
         material_size_node = node_tree.nodes.new('GeometryNodeGroup')
         material_size_node.node_tree = ensure_bdk_object_material_size_node_tree()
 
-        bake_node = node_tree.nodes.new(type='GeometryNodeBake')
+        bake_node = typing_cast(GeometryNodeBake, node_tree.nodes.new(type='GeometryNodeBake'))
+        bake_node.bake_items.new('GEOMETRY', 'Geometry')
 
         # Note that the self node is only here so that the geometry is recalculated when the projector object is moved.
         _self_node = node_tree.nodes.new(type='GeometryNodeSelfObject')
