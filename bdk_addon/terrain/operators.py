@@ -494,7 +494,10 @@ def remove_terrain_layer_nodes(terrain_info_object: Object, nodes):
         remove_terrain_layer_node(terrain_info_object, nodes, node_index)
 
 
-def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: int):
+def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: int) -> bool:
+    if nodes_index < 0 or nodes_index >= len(nodes):
+        return False
+
     node = nodes[nodes_index]
 
     if node.type == 'PAINT':
@@ -508,6 +511,8 @@ def remove_terrain_layer_node(terrain_info_object: Object, nodes, nodes_index: i
             terrain_info_object.vertex_groups.remove(vertex_group)
 
     nodes.remove(nodes_index)
+
+    return True
 
 
 def move_terrain_layer_node(direction: str, nodes, nodes_index: int) -> int:
@@ -574,7 +579,8 @@ class BDK_OT_terrain_deco_layer_nodes_remove(Operator):
         deco_layers_index = terrain_info.deco_layers_index
         deco_layer: 'BDK_PG_terrain_deco_layer' = deco_layers[deco_layers_index]
 
-        remove_terrain_layer_node(context.active_object, deco_layer.nodes, deco_layer.nodes_index)
+        if not remove_terrain_layer_node(context.active_object, deco_layer.nodes, deco_layer.nodes_index):
+            return {'CANCELLED'}
 
         ensure_deco_layers(context.active_object)
 
@@ -646,7 +652,8 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
         paint_layers_index = terrain_info.paint_layers_index
         paint_layer = paint_layers[paint_layers_index]
 
-        remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index)
+        if not remove_terrain_layer_node(context.active_object, paint_layer.nodes, paint_layer.nodes_index):
+            return {'CANCELLED'}
 
         ensure_terrain_layer_node_group(paint_layer.id, 'paint_layers', paint_layers_index, paint_layer.id, paint_layer.nodes, context.active_object)
 
