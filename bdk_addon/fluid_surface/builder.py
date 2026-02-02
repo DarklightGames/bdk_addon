@@ -42,8 +42,8 @@ def ensure_bdk_fluid_surface_hexagonal_node_tree() -> NodeTree:
         input_node, output_node = ensure_input_and_output_nodes(nt)
 
         triangulate_node = nt.nodes.new('GeometryNodeTriangulate')
-        triangulate_node.quad_method = 'SHORTEST_DIAGONAL'
-        triangulate_node.ngon_method = 'CLIP'
+        triangulate_node.inputs['Quad Method'].default_value = 'Shortest Diagonal'
+        triangulate_node.inputs['N-gon Method'].default_value = 'Clip'
 
         set_position_node = nt.nodes.new('GeometryNodeSetPosition')
 
