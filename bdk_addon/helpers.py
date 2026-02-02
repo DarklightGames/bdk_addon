@@ -9,6 +9,10 @@ import numpy
 import re
 
 
+# For some reason, values below <=0.0001 will result in Blender treating it as zero.
+MESH_FACE_DISTRIBUTE_POISSON_DENSITY_MAX_EPSILON = 0.00011
+
+
 def ensure_name_unique(name, names: Iterable[str]):
     while name in names:
         match = re.match(r'(.+)\.(\d+)', name)

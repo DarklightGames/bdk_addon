@@ -6,7 +6,7 @@ from typing import cast as typing_cast
 
 from ....terrain.curve_to_equidistant_points import ensure_curve_to_equidistant_points_node_tree
 from ...terrain_sample import ensure_bdk_terrain_sample_node_tree
-from ....helpers import ensure_name_unique
+from ....helpers import ensure_name_unique, MESH_FACE_DISTRIBUTE_POISSON_DENSITY_MAX_EPSILON
 from ....node_helpers import add_group_node, add_position_input_node, ensure_geometry_node_tree, ensure_input_and_output_nodes, add_chained_math_nodes, \
     ensure_curve_modifier_node_tree, ensure_weighted_index_node_tree, add_geometry_node_switch_nodes, \
     add_repeat_zone_nodes, add_math_operation_nodes, add_comparison_nodes, add_curve_spline_loop_nodes, \
@@ -1265,17 +1265,20 @@ def ensure_scatter_layer_mesh_to_points_node_tree() -> NodeTree:
         ('INPUT', 'NodeSocketInt', 'Global Seed'),
     )
 
+
     def build_function(node_tree: NodeTree):
         input_node, output_node = ensure_input_and_output_nodes(node_tree)
 
         seed_socket = add_math_operation_nodes(node_tree, 'ADD', [input_node.outputs['Face Distribute Seed'],
                                                                   input_node.outputs['Global Seed']])
-
+        
         distribute_points_on_faces_random_node = node_tree.nodes.new(type='GeometryNodeDistributePointsOnFaces')
         distribute_points_on_faces_random_node.distribute_method = 'RANDOM'
 
         distribute_points_on_faces_poisson_node = node_tree.nodes.new(type='GeometryNodeDistributePointsOnFaces')
         distribute_points_on_faces_poisson_node.distribute_method = 'POISSON'
+        # For safety, set a very low default density max to avoid performance issues when debugging.
+        distribute_points_on_faces_poisson_node.inputs['Density Max'].default_value = MESH_FACE_DISTRIBUTE_POISSON_DENSITY_MAX_EPSILON
 
         mesh_to_points_node = node_tree.nodes.new(type='GeometryNodeMeshToPoints')
 

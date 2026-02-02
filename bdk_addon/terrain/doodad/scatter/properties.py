@@ -6,7 +6,7 @@ from bpy.types import PropertyGroup, Object, Context
 
 from ..data import terrain_doodad_geometry_source_items
 from ....actor.properties import BDK_PG_actor_properties
-from ....helpers import get_terrain_doodad
+from ....helpers import get_terrain_doodad, MESH_FACE_DISTRIBUTE_POISSON_DENSITY_MAX_EPSILON
 from ....property_group_helpers import CurveModifierMixin
 from ....units import meters_to_unreal
 from ...properties import get_terrain_info_paint_layer_by_name
@@ -238,13 +238,17 @@ class BDK_PG_terrain_doodad_scatter_layer(PropertyGroup, CurveModifierMixin):
                                          'to each other than a specified minimum distance, resulting in a more '
                                          'natural pattern'),
     ), default='POISSON_DISK')
+
     mesh_face_distribute_random_density: FloatProperty(name='Density', default=0.001, min=0.0, soft_max=0.1)
     mesh_face_distribute_poisson_distance_min: FloatProperty(name='Distance Min', default=meters_to_unreal(2.0),
                                                              min=0.0, subtype='DISTANCE')
     # TODO:  We could make this a more sensible unit. IIRC, the current unit is the number of points per square meter.
     #  This causes issues when the object is scaled, causing the program to freeze even with small increases to this
     #  number.
-    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density', default=0.0001, min=0.0, max=0.001,
+    mesh_face_distribute_poisson_density_max: FloatProperty(name='Density',
+                                                            default=MESH_FACE_DISTRIBUTE_POISSON_DENSITY_MAX_EPSILON,
+                                                            min=0.0,
+                                                            max=MESH_FACE_DISTRIBUTE_POISSON_DENSITY_MAX_EPSILON,
                                                             options={'HIDDEN'})
     mesh_face_distribute_poisson_density_factor: FloatProperty(name='Density Factor', default=1.0, min=0.0, max=1.0,
                                                                subtype='FACTOR')

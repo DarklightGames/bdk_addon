@@ -536,11 +536,12 @@ class BDK_PT_terrain_doodad_scatter_layer_mesh_settings(Panel):
         if scatter_layer.mesh_element_mode == 'FACE':
             flow.prop(scatter_layer, 'mesh_face_distribute_method')
 
-            if scatter_layer.mesh_face_distribute_method == 'RANDOM':
-                flow.prop(scatter_layer, 'mesh_face_distribute_random_density')
-            elif scatter_layer.mesh_face_distribute_method == 'POISSON_DISK':
-                flow.prop(scatter_layer, 'mesh_face_distribute_poisson_distance_min')
-                flow.prop(scatter_layer, 'mesh_face_distribute_poisson_density_factor')
+            match scatter_layer.mesh_face_distribute_method:
+                case 'RANDOM':
+                    flow.prop(scatter_layer, 'mesh_face_distribute_random_density')
+                case 'POISSON_DISK':
+                    flow.prop(scatter_layer, 'mesh_face_distribute_poisson_distance_min')
+                    flow.prop(scatter_layer, 'mesh_face_distribute_poisson_density_factor')
 
 
 def poll_has_terrain_doodad_scatter_layer_selected(cls, context: Context):
