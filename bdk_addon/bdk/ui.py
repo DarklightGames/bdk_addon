@@ -77,6 +77,7 @@ class BDK_PT_bdk(Panel):
 
     def draw(self, context):
         layout = self.layout
+        assert layout
 
         # # Projectors
         # projectors_header, projectors_panel = layout.panel('Projectors', default_closed=True)

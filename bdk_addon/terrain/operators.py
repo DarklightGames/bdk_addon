@@ -600,6 +600,7 @@ class BDK_OT_terrain_deco_layer_nodes_move(Operator):
         return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
+        assert context.active_object is not None
         terrain_info = get_terrain_info(context.active_object)
         deco_layers = terrain_info.deco_layers
         deco_layers_index = terrain_info.deco_layers_index
@@ -647,6 +648,7 @@ class BDK_OT_terrain_paint_layer_nodes_remove(Operator):
         return poll_is_active_object_terrain_info(cls, context)
 
     def execute(self, context: Context):
+        assert context.active_object is not None
         terrain_info = get_terrain_info(context.active_object)
         paint_layers = terrain_info.paint_layers
         paint_layers_index = terrain_info.paint_layers_index
