@@ -6,6 +6,7 @@ from ..projector.properties import BDK_PG_projector
 from ..terrain.properties import BDK_PG_terrain_info
 from ..terrain.doodad.properties import BDK_PG_terrain_doodad
 from ..bsp.properties import BDK_PG_bsp_brush, BDK_PG_level
+from ..fog.properties import BDK_PG_fog
 
 # NOTE: Do not change the order of these items. If you do, you will break existing projects.
 bdk_object_type_items = (
@@ -58,6 +59,8 @@ class BDK_PG_scene(PropertyGroup):
     repository_id: StringProperty(name='Repository ID', default='')
     terrain_doodad_presets: CollectionProperty(name='Terrain Doodad Presets', type=BDK_PG_terrain_doodad_preset)
     terrain_doodad_presets_index: IntProperty(options={'HIDDEN'})
+
+    fog: PointerProperty(type=BDK_PG_fog, name='Fog Properties')
 
 
 classes = (
