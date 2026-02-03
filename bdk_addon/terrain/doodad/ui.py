@@ -1,7 +1,7 @@
-from typing import cast, Optional, Any
+from typing import cast, Any
 
 import bpy
-from bpy.types import Panel, Context, UIList, UILayout, Curve, AnyType
+from bpy.types import Panel, Context, UIList, UILayout, AnyType
 
 from .sculpt.operators import BDK_OT_terrain_doodad_sculpt_layer_add, BDK_OT_terrain_doodad_sculpt_layer_remove, \
     BDK_OT_terrain_doodad_sculpt_layer_duplicate, BDK_OT_terrain_doodad_sculpt_layer_move

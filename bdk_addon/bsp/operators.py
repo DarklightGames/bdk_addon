@@ -674,6 +674,8 @@ class BDK_OT_bsp_build(Operator):
     def draw(self, context):
         layout = self.layout
 
+        assert layout is not None
+
         geometry_header, geometry_panel = layout.panel_prop(self, 'should_do_geometry')
         geometry_header.prop(self, 'should_do_geometry', text='Geometry')
         if geometry_panel is not None:
@@ -708,7 +710,9 @@ class BDK_OT_bsp_build(Operator):
                 debug_panel.prop(self, 'should_optimize_geometry')
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
+        if context.window_manager:
+            return context.window_manager.invoke_props_dialog(self)
+        return {'CANCELLED'}
 
     def execute(self, context):
         # Go to object mode, if we are not already in object mode.

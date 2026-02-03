@@ -1,7 +1,8 @@
 from bpy.types import Panel, Context
 
-from ..helpers import should_show_bdk_developer_extras
-from ..bsp.operators import BDK_OT_ensure_tool_operators, BDK_OT_bsp_build
+from ..fog.ui import draw_fog_settings
+
+from ..bsp.operators import BDK_OT_bsp_build
 
 
 def poll_is_active_object_bsp_brush(cls, context: Context):
@@ -74,6 +75,7 @@ class BDK_PT_level(Panel):
 
     def draw(self, context):
         layout = self.layout
+        assert layout
         layout.use_property_split = True
         layout.use_property_decorate = False
 
@@ -81,6 +83,8 @@ class BDK_PT_level(Panel):
         statistics = level.statistics
 
         layout.operator(BDK_OT_bsp_build.bl_idname, text='Build')
+
+        draw_fog_settings(layout, context)
 
         visibility_header, visibility_panel = layout.panel('Visibility', default_closed=True)
         visibility_header.label(text='Visibility')

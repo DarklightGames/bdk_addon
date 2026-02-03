@@ -39,8 +39,6 @@ class MaterialCache:
         return None
 
     def load_material(self, reference: UReference) -> UMaterial | None:
-        if reference is None:
-            return None
         key = str(reference)
         if key in self._materials:
             return self._materials[str(reference)]

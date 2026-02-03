@@ -12,7 +12,9 @@ def ensure_length_squared_node_tree():
         inputs, outputs = ensure_inputs_and_outputs(nt)
         x, y, z = add_separate_xyz_node(
             nt, add_vector_math_operation_nodes(nt, 'MULTIPLY', (inputs['Vector'], inputs['Vector'])))
-        nt.links.new(outputs['Value'], add_chained_math_nodes(nt, 'ADD', (x, y, z)))
+        sum_node = add_chained_math_nodes(nt, 'ADD', (x, y, z))
+        if sum_node:
+            nt.links.new(outputs['Value'], sum_node)
     
     return ensure_geometry_node_tree('Length Squared', inputs, build_function)
 
@@ -26,7 +28,9 @@ def ensure_vector_sum_node_tree():
     def build_function(nt: NodeTree):
         inputs, outputs = ensure_inputs_and_outputs(nt)
         x, y, z = add_separate_xyz_node(nt, inputs['Vector'])
-        nt.links.new(outputs['Value'], add_chained_math_nodes(nt, 'ADD', (x, y, z)))
+        sum_node = add_chained_math_nodes(nt, 'ADD', (x, y, z))
+        if sum_node:
+            nt.links.new(outputs['Value'], sum_node)
 
     return ensure_geometry_node_tree('Vector Sum', inputs, build_function)
 

@@ -22,6 +22,11 @@ if 'bpy' in locals():
     importlib.reload(bdk_preferences)
     importlib.reload(bdk_operators)
 
+    # Fog
+    importlib.reload(fog_builder)
+    importlib.reload(fog_properties)
+    importlib.reload(fog_ui)
+
     importlib.reload(g16)
 
     importlib.reload(material_data)
@@ -119,6 +124,11 @@ else:
     from .material import operators as material_operators
     from .material import ui as material_ui
 
+    # Fog
+    from .fog import builder as fog_builder
+    from .fog import properties as fog_properties
+    from .fog import ui as fog_ui
+
     # Projector
     from .projector import builder as projector_builder
     from .projector import properties as projector_properties
@@ -192,6 +202,7 @@ classes = actor_properties.classes + \
           projector_properties.classes + \
           projector_operators.classes + \
           projector_ui.classes + \
+          fog_properties.classes + \
           fluid_surface_properties.classes + \
           fluid_surface_operators.classes + \
           fluid_surface_ui.classes + \
