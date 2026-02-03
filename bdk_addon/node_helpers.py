@@ -1,4 +1,4 @@
-from typing import Iterable, Callable, cast, Union
+from typing import Iterable, Callable, Sequence, cast, Union
 
 import bpy
 from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNodeRepeatOutput, \
@@ -514,7 +514,7 @@ def add_chained_bit_math_nodes(node_tree: NodeTree, operation: str, value_socket
     return output_socket
 
 
-def add_chained_math_nodes(node_tree: NodeTree, operation: str, values: list[NodeSocket | float | int]) -> NodeSocket | None:
+def add_chained_math_nodes(node_tree: NodeTree, operation: str, values: Sequence[NodeSocket | float | int]) -> NodeSocket | None:
     if not values:
         return None
     output_socket = values[0]
@@ -647,7 +647,7 @@ def add_boolean_math_operation_nodes(node_tree: NodeTree, operation: str, inputs
 
 def add_vector_math_operation_nodes(node_tree: NodeTree, operation: str, inputs: Union[
         dict[str, Union[int, float, tuple[float, float, float], NodeSocket]],
-        list[Union[int, float, tuple[float, float, float], NodeSocket]]
+        Sequence[Union[int, float, tuple[float, float, float], NodeSocket]]
     ], output_socket_name: str = 'Vector') -> NodeSocket:
     vector_math_node = node_tree.nodes.new(type='ShaderNodeVectorMath')
     vector_math_node.operation = operation

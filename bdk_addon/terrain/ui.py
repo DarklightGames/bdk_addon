@@ -365,10 +365,8 @@ class BDK_PT_terrain_paint_layer_nodes(Panel):
                                      move_operator_idname=BDK_OT_terrain_paint_layer_nodes_move.bl_idname)
         node = get_selected_terrain_paint_layer_node(context)
 
-        if node is None:
-            return
-
-        draw_terrain_layer_node_settings(layout, node)
+        if node is not None:
+            draw_terrain_layer_node_settings(layout, node)
 
         if should_show_bdk_developer_extras(context):
             debug_header, debug_panel = layout.panel('Debug', default_closed=True)
