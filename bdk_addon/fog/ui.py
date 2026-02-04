@@ -3,6 +3,8 @@ from bpy.types import Context, UILayout
 def draw_fog_settings(layout: UILayout, context: Context):
     scene = context.scene
     fog_props = scene.bdk.fog
+    
+    layout.use_property_decorate = False
 
     fog_header, fog_panel = layout.panel('Fog')
     fog_header.use_property_split = False

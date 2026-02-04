@@ -22,7 +22,7 @@ def _add_fog_driver(struct: bpy_struct, target_id: ID, data_path: str, index: in
     var.targets[0].data_path = full_data_path
 
 
-def ensure_bdk_scene_compositor_node_tree():
+def ensure_bdk_scene_compositor_node_tree(name: str):
     items = (
         ('OUTPUT', 'NodeSocketColor', 'Image'),
     )
@@ -58,7 +58,7 @@ def ensure_bdk_scene_compositor_node_tree():
         _add_fog_driver(combine_color_node.inputs['Green'], scene, 'color', index=1)
         _add_fog_driver(combine_color_node.inputs['Blue'], scene, 'color', index=2)
 
-    return ensure_compositor_node_tree('BDK Scene Compositor', items, build_function)
+    return ensure_compositor_node_tree(name, items, build_function, should_force_build=True)
 
 
 def ensure_opengl_fog_node_tree():
@@ -94,4 +94,4 @@ def ensure_opengl_fog_node_tree():
 
         nt.links.new(mix_node.outputs['Result'], outputs['Image'])
     
-    return ensure_compositor_node_tree('BDK OpenGL Fog', items, build_function, should_force_build=True)
+    return ensure_compositor_node_tree('BDK OpenGL Fog', items, build_function)

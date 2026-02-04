@@ -1,7 +1,5 @@
 from bpy.types import Panel, Context
 
-from ..fog.ui import draw_fog_settings
-
 from ..bsp.operators import BDK_OT_bsp_build
 
 
@@ -83,8 +81,6 @@ class BDK_PT_level(Panel):
         statistics = level.statistics
 
         layout.operator(BDK_OT_bsp_build.bl_idname, text='Build')
-
-        draw_fog_settings(layout, context)
 
         visibility_header, visibility_panel = layout.panel('Visibility', default_closed=True)
         visibility_header.label(text='Visibility')

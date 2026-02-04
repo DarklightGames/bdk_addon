@@ -1,5 +1,7 @@
 from bpy.types import Menu, Panel
 
+from ..fog.ui import draw_fog_settings
+
 from ..bsp import operators as bsp_operators
 from ..fluid_surface import operators as fluid_surface_operators
 from ..projector import operators as projector_operators
@@ -86,6 +88,8 @@ class BDK_PT_bdk(Panel):
         #     row = projectors_panel.row(align=True)
         #     row.operator(BDK_OT_projectors_bake.bl_idname, text='Bake')
         #     row.operator(BDK_OT_projectors_unbake.bl_idname, text='Unbake')
+
+        draw_fog_settings(layout, context)
 
         # T3D
         t3d_header, t3d_panel = layout.panel('T3D', default_closed=True)
