@@ -520,7 +520,9 @@ def build_cube_map(cube_map_file_path: Path, exports_directory: Path):
             cube2sphere_script_path,
             '--'
         ]
-        args.extend([str(face_path) for face_path in face_paths])
+        face_args =['front', 'back', 'right', 'left', 'top', 'bottom']
+        for face_arg, face_path in zip(face_args, face_paths):
+            args.extend([f'--{face_arg}', str(face_path)])
         args.extend(['--output', str(output_path)])
         process = subprocess.run(args, capture_output=True)
         print(process.stdout.decode())
