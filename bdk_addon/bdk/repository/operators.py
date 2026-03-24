@@ -922,9 +922,9 @@ class BDK_OT_repository_purge_orphaned_assets(Operator):
             asset_file = get_repository_default_asset_library_directory(repository) / orphaned_asset.file_name
             asset_file.unlink(missing_ok=True)
 
-        repository.runtime.orphaned_assets.clear()
-
         self.report({'INFO'}, f'Purged {len(repository.runtime.orphaned_assets)} orphaned assets')
+
+        repository.runtime.orphaned_assets.clear()
 
         return {'FINISHED'}
 
