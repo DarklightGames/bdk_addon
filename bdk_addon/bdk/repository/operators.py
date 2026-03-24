@@ -97,6 +97,7 @@ class BDK_OT_repository_cache_delete(Operator):
         return {'FINISHED'}
 
 
+
 class BDK_OT_repository_package_build(Operator):
     bl_idname = 'bdk.repository_package_build'
     bl_label = 'Build Package'
@@ -206,12 +207,14 @@ class BDK_OT_repository_package_cache_invalidate(Operator):
                      'exported and built, but will not delete any files. This action cannot be undone'
     bl_options = {'INTERNAL'}
 
-    index: IntProperty(name='Index', default=-1)
+    @classmethod
+    def poll(cls, context):
+        return poll_has_repository_package_selected(cls, context)
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
         repository = addon_prefs.repositories[addon_prefs.repositories_index]
-        package = repository.runtime.packages[self.index]
+        package = repository.runtime.packages[repository.runtime.packages_index]
 
         manifest = Manifest.from_repository(repository)
         manifest.invalidate_package(package.path)

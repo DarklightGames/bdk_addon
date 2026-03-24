@@ -4,7 +4,7 @@ from bpy.types import UIList, Menu, UILayout
 from fnmatch import fnmatch
 
 from .operators import BDK_OT_repository_delete, BDK_OT_repository_cache_invalidate, BDK_OT_repository_package_blend_open, BDK_OT_repository_package_build, \
-    BDK_OT_repository_purge_orphaned_assets, BDK_OT_repository_set_default, BDK_OT_repository_rule_package_add
+    BDK_OT_repository_purge_orphaned_assets, BDK_OT_repository_set_default, BDK_OT_repository_rule_package_add, BDK_OT_repository_package_cache_invalidate
 from .properties import repository_package_status_enum_items
 from ..operators import BDK_OT_scene_repository_set
 from ...helpers import get_addon_preferences
@@ -104,6 +104,7 @@ class BDK_MT_repository_special(Menu):
         layout.operator(BDK_OT_repository_purge_orphaned_assets.bl_idname, icon='X')
         layout.separator()
         layout.operator(BDK_OT_repository_package_build.bl_idname, text='Build Selected Package', icon='BLENDER')
+        layout.operator(BDK_OT_repository_package_cache_invalidate.bl_idname, text='Invalidate Selected Package', icon='FILE_REFRESH')
         layout.separator()
         layout.operator_menu_enum(BDK_OT_repository_rule_package_add.bl_idname, 'rule_type', text='Add Package Rule')
 
