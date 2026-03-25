@@ -44,21 +44,8 @@ RUN apt-get install -y libsdl2-dev
 RUN rustup target add x86_64-unknown-linux-gnu
 RUN rustup target add x86_64-pc-windows-gnu
 
-# ARG BLENDER_PATH="blender-4.2.0-beta+v42.4bde68cdd672-linux.x86_64-release"
-# ARG BLENDER_URL=https://cdn.builder.blender.org/download/daily/${BLENDER_PATH}.tar.xz
-# RUN mkdir blender
-# RUN curl -L $BLENDER_URL -o blender.tar.xz
-# RUN tar -xf blender.tar.xz
-# RUN apt install libxxf86vm-dev -y
-# RUN apt install libxfixes3 -y
-# RUN apt install libxi-dev -y
-# RUN apt install libxkbcommon-x11-0 -y
-# RUN apt install libgl1-mesa-glx -y
-#ENV PATH="/bdk_addon/${BLENDER_PATH}:${PATH}"
 ENV PATH="${BLENDER_EXECUTABLE}:${PATH}"
 
-# VOLUME /bdk_addon/wheels
-# VOLUME /bdk_addon/bin
 ADD . /bdk_addon
 
 # Build the addon.

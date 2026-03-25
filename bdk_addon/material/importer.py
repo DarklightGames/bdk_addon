@@ -21,16 +21,16 @@ from ..helpers import get_addon_preferences
 
 
 class MaterialSocketOutputs:
-    color_socket: NodeSocket = None
-    alpha_socket: NodeSocket = None
+    color_socket: NodeSocket | None = None
+    alpha_socket: NodeSocket | None = None
     blend_method: str = 'OPAQUE'
     use_backface_culling: bool = False
     size: tuple[int, int] = (1, 1)
 
 
 class MaterialSocketInputs:
-    uv_source_socket: NodeSocket = None
-    uv_socket: NodeSocket = None
+    uv_source_socket: NodeSocket | None = None
+    uv_socket: NodeSocket | None = None
 
 
 class MaterialBuilder:

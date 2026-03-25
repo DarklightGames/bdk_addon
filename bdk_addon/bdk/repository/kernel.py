@@ -84,9 +84,7 @@ def read_repository_package_patterns(game_directory: Path, mod: str | None) -> l
         parse_config_package_patterns(config_path)
 
     # Sort the package patterns alphabetically so that we have a predictable order.
-    package_patterns = sorted(list(package_patterns))
-
-    return package_patterns
+    return sorted(list(package_patterns))
 
 
 class Manifest:
