@@ -1,6 +1,8 @@
 from bpy.types import AddonPreferences, Context
 from bpy.props import CollectionProperty, IntProperty, BoolProperty, StringProperty
 
+from .operators import BDK_OT_print_umodel_version
+
 from .repository.properties import BDK_PG_repository
 from .repository.ui import BDK_UL_repositories, BDK_UL_repository_packages, BDK_MT_repository_special, \
     BDK_MT_repository_add, BDK_MT_repository_remove, BDK_UL_repository_rules, BDK_MT_repositories_special
@@ -145,6 +147,13 @@ class BdkAddonPreferences(AddonPreferences):
                     op.filepath = repository.cache_directory
 
         layout.prop(self, 'developer_extras')
+
+        if self.developer_extras:
+            debug_header, debug_panel = layout.panel('Debug', default_closed=True)
+            debug_header.label(text='Debug')
+
+            if debug_panel is not None:
+                debug_panel.operator(BDK_OT_print_umodel_version.bl_idname, icon='INFO', text='Print UModel Version')
 
 
 classes = (

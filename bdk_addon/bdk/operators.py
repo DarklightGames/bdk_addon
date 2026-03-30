@@ -6,6 +6,8 @@ import bpy
 from bpy.types import Operator, Context, Node, Event, Armature, Mesh
 from bpy.props import StringProperty
 
+from .repository.kernel import get_umodel_path
+
 from ..helpers import get_addon_preferences, tag_redraw_all_windows
 
 
@@ -421,6 +423,25 @@ class BDK_OT_scene_repository_set(Operator):
         return {'FINISHED'}
 
 
+class BDK_OT_print_umodel_version(Operator):
+    bl_idname = 'bdk.print_umodel_version'
+    bl_label = 'Print UModel Version'
+    bl_description = 'Print the version of UModel that is being used by the addon'
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context: Context):
+        umodel_path = get_umodel_path()
+        args = [umodel_path, '-version']
+
+        # Get the output of the command.
+        import subprocess
+        result = subprocess.run(args, capture_output=True, text=True)
+
+        self.report({'INFO'}, f'UModel version: {result.stdout.strip()}')
+
+        return {'FINISHED'}
+
+
 classes = (
     BDK_OT_select_all_of_active_class,
     BDK_OT_generate_node_code,
@@ -431,4 +452,5 @@ classes = (
     BDK_OT_asset_import_data_linked,
     BDK_OT_toggle_level_visibility,
     BDK_OT_scene_repository_set,
+    BDK_OT_print_umodel_version,
 )
