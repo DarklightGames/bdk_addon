@@ -1763,6 +1763,7 @@ def ensure_scatter_layer_seed_node_tree(scatter_layer: 'BDK_PG_terrain_doodad_sc
         add_scatter_layer_driver(mask_node.inputs['Threshold'], 'mask_threshold')
 
         mask_switch_node = node_tree.nodes.new(type='GeometryNodeSwitch')
+        mask_switch_node.input_type = 'GEOMETRY'
         mask_switch_node.label = 'Mask Switch'
         add_scatter_layer_driver(mask_switch_node.inputs['Switch'], 'use_mask')
 
