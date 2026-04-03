@@ -241,6 +241,8 @@ class BDK_OT_repository_build_asset_library(Operator):
     )
     max_workers: IntProperty(name='Max Workers', default=8, min=1, soft_max=8)
 
+    max_workers_auto: IntProperty(set=None)
+
     @classmethod
     def poll(cls, context):
         addon_prefs = get_addon_preferences(context)
@@ -255,6 +257,7 @@ class BDK_OT_repository_build_asset_library(Operator):
         return True
 
     def invoke(self, context, event):
+        self.max_workers_auto = os.cpu_count() // 2
         return context.window_manager.invoke_props_dialog(self)
 
     def draw(self, context):
@@ -269,7 +272,9 @@ class BDK_OT_repository_build_asset_library(Operator):
                 if self.max_workers > os.cpu_count():
                     flow.label(text='Worker count exceeds CPU core count', icon='ERROR')
             case _:
-                pass
+                row = flow.row()
+                row.enabled = False
+                row.prop(self, 'max_workers_auto', text=' ')
 
     def execute(self, context):
         addon_prefs = get_addon_preferences(context)
@@ -362,7 +367,7 @@ class BDK_OT_repository_build_asset_library(Operator):
 
         match self.max_workers_mode:
             case 'AUTO':
-                max_workers = os.cpu_count() / 2
+                max_workers = self.max_workers_auto
             case 'MANUAL':
                 max_workers = self.max_workers
 
