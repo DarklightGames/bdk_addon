@@ -257,7 +257,7 @@ class BDK_OT_repository_build_asset_library(Operator):
         return True
 
     def invoke(self, context, event):
-        self.max_workers_auto = os.cpu_count() // 2
+        self.max_workers_auto = max(1, os.cpu_count() // 4)
         return context.window_manager.invoke_props_dialog(self)
 
     def draw(self, context):
