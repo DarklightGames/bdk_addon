@@ -376,6 +376,16 @@ class BDK_OT_repository_build_asset_library(Operator):
         with ThreadPoolExecutor(max_workers) as executor:
             jobs = []
             for package in packages_to_export:
+                # Check if the package is actually empty and mark it as built, if so.
+                game_directory = Path(repository.game_directory).resolve()
+                package_path = game_directory / package.path
+                # NOTE: Empty packages are 64 bytes.
+                if os.path.getsize(package_path) == 64:
+                    # Check the first 4 bytes to make sure it's actually package
+                    with open(package_path, 'rb') as fp:
+                        if fp.read(4) == bytearray([0xC1, 0x83, 0x2a, 0x9e]):
+                            manifest.mark_package_as_built(package.path)
+                            continue
                 jobs.append(executor.submit(repository_package_export, repository, package))
             for future in as_completed(jobs):
                 process, package = future.result()
