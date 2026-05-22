@@ -1,5 +1,6 @@
-from bpy.types import NodeTree, bpy_struct, ID
+from bpy.types import CompositorNodeGroup, CompositorNodeTree, NodeTree, bpy_struct, ID
 from ..node_helpers import ensure_compositor_node_tree, ensure_inputs_and_outputs
+from typing import cast
 
 
 def _add_fog_driver(struct: bpy_struct, target_id: ID, data_path: str, index: int | None = None, path: str = 'default_value'):
@@ -36,7 +37,7 @@ def ensure_bdk_scene_compositor_node_tree(name: str):
 
         combine_color_node = nt.nodes.new('CompositorNodeCombineColor')
 
-        opengl_fog_node = nt.nodes.new('CompositorNodeGroup')
+        opengl_fog_node = cast(CompositorNodeGroup, nt.nodes.new('CompositorNodeGroup'))
         opengl_fog_node.node_tree = ensure_opengl_fog_node_tree()
 
         nt.links.new(render_layers_node.outputs['Image'], opengl_fog_node.inputs['Image'])
@@ -61,7 +62,7 @@ def ensure_bdk_scene_compositor_node_tree(name: str):
     return ensure_compositor_node_tree(name, items, build_function, should_force_build=True)
 
 
-def ensure_opengl_fog_node_tree():
+def ensure_opengl_fog_node_tree() -> CompositorNodeTree:
     items = (
         ('INPUT', 'NodeSocketFloat', 'Depth'),
         ('INPUT', 'NodeSocketColor', 'Image'),

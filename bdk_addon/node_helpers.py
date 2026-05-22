@@ -1,7 +1,7 @@
 from typing import Iterable, Callable, Sequence, cast, Union
 
 import bpy
-from bpy.types import NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNodeRepeatOutput, \
+from bpy.types import CompositorNodeTree, NodeTree, NodeSocket, Node, GeometryNodeRepeatInput, GeometryNodeRepeatOutput, \
     NodeTreeInterfaceItem, NodeInputs, NodeOutputs
 
 from .data import map_range_interpolation_type_items
@@ -183,11 +183,11 @@ def add_noise_type_switch_nodes(
     return index_switch_node.outputs['Output']
 
 
-def ensure_compositor_node_tree(name: str, items: Iterable[tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:
+def ensure_compositor_node_tree(name: str, items: Iterable[tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> CompositorNodeTree:
     """
     Ensures that a geometry node tree with the given name, inputs and outputs exists.
     """
-    return ensure_node_tree(name, 'CompositorNodeTree', items, build_function, should_force_build)
+    return cast(CompositorNodeTree, ensure_node_tree(name, 'CompositorNodeTree', items, build_function, should_force_build))
 
 
 def ensure_geometry_node_tree(name: str, items: Iterable[tuple[str, str, str]], build_function: Callable[[NodeTree], None], should_force_build: bool = False) -> NodeTree:

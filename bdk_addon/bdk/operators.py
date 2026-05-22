@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import cast
 
 import bpy
-from bpy.types import Operator, Context, Node, Event, Armature, Mesh
+from bpy.types import ArmatureModifier, Operator, Context, Node, Event, Armature, Mesh
 from bpy.props import StringProperty
 
 from .repository.kernel import get_umodel_path
@@ -21,9 +21,10 @@ class BDK_OT_select_all_of_active_class(Operator):
     @classmethod
     def poll(cls, context):
         # Return false if no doodad are selected.
-        if len(context.selected_objects) == 0:
+        if context.selected_objects is not None and len(context.selected_objects) == 0:
             cls.poll_message_set('No doodad selected')
             return False
+        assert context.object is not None
         # Return false if the active object does not have a class.
         if 'Class' not in context.object:
             cls.poll_message_set('Active object does not have a class')
@@ -32,6 +33,7 @@ class BDK_OT_select_all_of_active_class(Operator):
 
     def execute(self, context):
         # Get the class of the active object.
+        assert context.object is not None
         actor_class = context.object['Class']
         for obj in context.scene.objects:
             if obj.type == 'MESH' and obj.get('Class', None) == actor_class:
@@ -67,6 +69,7 @@ class BDK_OT_generate_node_code(Operator):
 
     def execute(self, context: Context):
         selected_nodes = context.selected_nodes
+        assert selected_nodes is not None
         nodes: OrderedDict[str, Node] = OrderedDict()
 
         for node in selected_nodes:
@@ -205,6 +208,8 @@ class BDK_OT_generate_node_code(Operator):
 def vertex_group_name_search_cb(self, context: Context, edit_text: str):
     # List all the bones in the armature.
     armature_object = context.object
+    if armature_object is None or armature_object.type != 'ARMATURE' or armature_object.data is None:
+        return []
     armature_data: Armature = cast(Armature, armature_object.data)
     return [bone.name for bone in armature_data.bones if edit_text.lower() in bone.name.lower()]
 
@@ -233,11 +238,14 @@ class BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier(Opera
 
     def draw(self, context: 'Context'):
         layout = self.layout
+        if layout is None:
+            return
         layout.prop(self, 'vertex_group_name')
 
     def execute(self, context):
         # For all selected objects:
         armature_object = context.object
+        assert context.selected_objects is not None
         for bpy_object in context.selected_objects:
             if bpy_object.type != 'MESH':
                 continue
@@ -251,7 +259,7 @@ class BDK_OT_assign_all_vertices_to_vertex_group_and_add_armature_modifier(Opera
             # Add an armature modifier if it doesn't exist.
             armature_modifier = bpy_object.modifiers.get('Armature', None)
             if armature_modifier is None:
-                armature_modifier = bpy_object.modifiers.new(name='Armature', type='ARMATURE')
+                armature_modifier = cast(ArmatureModifier, bpy_object.modifiers.new(name='Armature', type='ARMATURE'))
                 armature_modifier.object = armature_object
         return {'FINISHED'}
 
