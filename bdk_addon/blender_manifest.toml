@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "bdk_addon"
-version = "2.2.0"
+version = "2.2.1"
 name = "Unreal BDK"
 tagline = "Makes Blender a level editor for games running on Unreal 1 and 2"
 maintainer = "Colin Basnett <cmbasnett@proton.me>"
@@ -11,7 +11,7 @@ website = "https://github.com/DarklightGames/bdk_addon/"
 
 tags = ["Game Engine"]
 
-blender_version_min = "5.0.0"
+blender_version_min = "5.2.0"
 
 license = [
   "SPDX:GPL-3.0-or-later",
