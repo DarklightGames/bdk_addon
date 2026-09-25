@@ -450,7 +450,7 @@ def ensure_vector_component_node_tree() -> NodeTree:
         compare_index_y_node = node_tree.nodes.new(type='FunctionNodeCompare')
         compare_index_y_node.data_type = 'INT'
         compare_index_y_node.operation = 'EQUAL'
-        compare_index_y_node.inputs[3].default_value = 1
+        compare_index_y_node.inputs['B'].default_value = 1
 
         switch_yz_node = node_tree.nodes.new(type='GeometryNodeSwitch')
         switch_yz_node.input_type = 'FLOAT'
@@ -494,13 +494,13 @@ def ensure_select_random_node_tree() -> NodeTree:
                                                [input_node.outputs['Seed'], input_node.outputs['Global Seed']])
 
         # Input
-        node_tree.links.new(input_node.outputs['Factor'], random_value_node.inputs[6])  # Probability
+        node_tree.links.new(input_node.outputs['Factor'], random_value_node.inputs['Probability'])
 
         # Internal
         node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
 
         # Output
-        node_tree.links.new(random_value_node.outputs[3], output_node.inputs['Selection'])
+        node_tree.links.new(random_value_node.outputs['Value'], output_node.inputs['Selection'])
 
     return ensure_geometry_node_tree('BDK Select Random Points', inputs, build_function)
 
@@ -953,7 +953,7 @@ def ensure_scatter_layer_curve_to_points_node_tree() -> NodeTree:
         node_tree.links.new(normal_offset_seed_socket, normal_offset_random_value_node.inputs['Seed'])
         node_tree.links.new(curve_to_points_node.outputs['Normal'], normal_scale_node.inputs[0])  # Normal -> Vector
         node_tree.links.new(normal_offset_negate_node.outputs['Value'], normal_offset_random_value_node.inputs['Min'])
-        node_tree.links.new(normal_offset_random_value_node.outputs[1], normal_scale_node.inputs['Scale'])
+        node_tree.links.new(normal_offset_random_value_node.outputs['Value'], normal_scale_node.inputs['Scale'])
         node_tree.links.new(curve_to_points_node.outputs['Tangent'], tangent_scale_node.inputs[0])  # Tangent -> Vector
         node_tree.links.new(tangent_offset_negate_node.outputs['Value'], tangent_offset_random_value_node.inputs['Min'])
         node_tree.links.new(tangent_offset_random_value_node.outputs['Value'], tangent_scale_node.inputs['Scale'])
@@ -1014,7 +1014,7 @@ def ensure_select_object_index_node_tree() -> NodeTree:
         weighted_index_node_group_node.node_tree = ensure_weighted_index_node_tree()
 
         mode_value_sockets = [
-            random_value_node.outputs[2],  # Random,
+            random_value_node.outputs['Value'],
             math_node.outputs['Value'],  # Cyclic
             weighted_index_node_group_node.outputs['Index'],  # Weighted Random
         ]
@@ -1079,12 +1079,12 @@ def ensure_terrain_normal_offset_node_tree() -> NodeTree:
         set_position_node = node_tree.nodes.new(type='GeometryNodeSetPosition')
 
         # Input
-        node_tree.links.new(input_node.outputs['Terrain Normal Offset Min'], random_value_node.inputs[2])  # Min
-        node_tree.links.new(input_node.outputs['Terrain Normal Offset Max'], random_value_node.inputs[3])  # Max
+        node_tree.links.new(input_node.outputs['Terrain Normal Offset Min'], random_value_node.inputs['Min'])
+        node_tree.links.new(input_node.outputs['Terrain Normal Offset Max'], random_value_node.inputs['Max'])
         node_tree.links.new(input_node.outputs['Geometry'], set_position_node.inputs['Geometry'])
 
         # Internal Links
-        node_tree.links.new(random_value_node.outputs[1], vector_math_node.inputs[3])  # Value -> Scale
+        node_tree.links.new(random_value_node.outputs['Value'], vector_math_node.inputs[3])  # Value -> Scale
         node_tree.links.new(vector_math_node.outputs[0], set_position_node.inputs[3])  # Vector -> Offset
         node_tree.links.new(named_attribute_node.outputs[0], vector_math_node.inputs[0])  # Attribute -> Vector
         node_tree.links.new(seed_socket, random_value_node.inputs['Seed'])
@@ -1197,7 +1197,7 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
                             snap_to_terrain_group_node.inputs['Terrain Geometry'])
         node_tree.links.new(input_node.outputs['Terrain Resolution'], snap_to_terrain_group_node.inputs['Terrain Resolution'])
         node_tree.links.new(input_node.outputs['Snap to Terrain'], snap_to_terrain_group_node.inputs['Mute'])
-        node_tree.links.new(input_node.outputs['Object Index'], compare_node.inputs[3])
+        node_tree.links.new(input_node.outputs['Object Index'], compare_node.inputs['B'])
         node_tree.links.new(input_node.outputs['Points'], separate_geometry_node.inputs['Geometry'])
         node_tree.links.new(input_node.outputs['Terrain Normal Offset Min'],
                             terrain_normal_offset_node_group_node.inputs['Terrain Normal Offset Min'])
@@ -1239,8 +1239,8 @@ def ensure_scatter_layer_object_node_tree() -> NodeTree:
                             store_scale_attribute_node.inputs['Geometry'])
         node_tree.links.new(store_scale_attribute_node.outputs['Geometry'], origin_offset_node.inputs['Geometry'])
         node_tree.links.new(origin_offset_node.outputs['Geometry'], mute_switch_node.inputs['False'])
-        node_tree.links.new(scale_random_value_node.outputs[1], scale_mix_node.inputs['Factor'])
-        node_tree.links.new(scale_random_value_node.outputs[1], scale_uniform_mix_node.inputs['Factor'])
+        node_tree.links.new(scale_random_value_node.outputs['Value'], scale_mix_node.inputs['Factor'])
+        node_tree.links.new(scale_random_value_node.outputs['Value'], scale_uniform_mix_node.inputs['Factor'])
         node_tree.links.new(separate_geometry_node.outputs['Selection'], snap_to_terrain_group_node.inputs['Geometry'])
         node_tree.links.new(scale_uniform_mix_node.outputs['Result'], scale_uniform_multiply_node.inputs[0])
         node_tree.links.new(scale_mix_node.outputs['Result'], scale_multiply_node.inputs[0])
