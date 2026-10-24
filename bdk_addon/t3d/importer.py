@@ -572,16 +572,18 @@ class TerrainInfoImporter(ActorImporter):
         terrain_info.deco_layer_offset = deco_layer_offset
 
         # Quad Visibility Bitmap.
-        quad_visibility_bitmap = np.zeros(shape=int(math.ceil((resolution * resolution) / 32)), dtype=np.int32)
+        quad_visibility_bitmap = np.zeros(shape=math.ceil((resolution * resolution) / 32), dtype=np.int32)
         for index, value in quad_visibility_bitmap_entries:
             quad_visibility_bitmap[index] = value
+
+        quad_visibility_bitmap = quad_visibility_bitmap.view(np.uint32)
 
         bitmap_index = 0
         for y in reversed(range(resolution - 1)):
             for x in range(resolution - 1):
                 polygon_index = (y * resolution) - y + x
                 array_index = bitmap_index >> 5
-                bit_mask = bitmap_index & 0x1F
+                bit_mask = bitmap_index & 31
                 if (quad_visibility_bitmap[array_index] & (1 << bit_mask)) == 0:
                     mesh_data.polygons[polygon_index].material_index = 1
                 bitmap_index += 1

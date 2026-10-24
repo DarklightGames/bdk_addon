@@ -124,7 +124,7 @@ def terrain_info_to_t3d_object(terrain_info_object: Object, matrix_world: Matrix
             loop_vertex_index = face.loops[0].vert.index
             if loop_vertex_index == vertex_index or loop_vertex_index == vertex_index + terrain_info.x_size + 1:
                 array_index = bitmap_index >> 5
-                bit_mask = bitmap_index & 0x1F
+                bit_mask = bitmap_index & 31
                 edge_turn_bitmap[array_index] |= (np.int32(1) << bit_mask)
             vertex_index += 1
             bitmap_index += 1

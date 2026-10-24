@@ -194,12 +194,13 @@ def create_terrain_info_mesh(resolution: int, size: float, heightmap: np.ndarray
     # and then flip it over Y so that the indexing of the edge turn bitmap and the quads lines up.
     edge_turn_face_indices = set()
     if edge_turn_bitmap is not None:
+        edge_turn_bitmap = edge_turn_bitmap.view(np.uint32)
         edge_turn_bitmap_index = 0
         for y in reversed(range(resolution - 1)):
             for x in range(resolution - 1):
                 face_index = (y * resolution) - y + x
                 array_index = edge_turn_bitmap_index >> 5
-                bit_mask = edge_turn_bitmap_index & 0x1F
+                bit_mask = edge_turn_bitmap_index & 31
                 if (edge_turn_bitmap[array_index] & (1 << bit_mask)) == 0:
                     edge_turn_face_indices.add(face_index)
                 edge_turn_bitmap_index += 1
